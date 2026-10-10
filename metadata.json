@@ -1,0 +1,6 @@
+{
+  "name": "Digital Badgoti CRM",
+  "description": "A production-ready, household-first CRM tailored for India Post-style field operations, managing properties, members, products, and leads with role-based access control.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

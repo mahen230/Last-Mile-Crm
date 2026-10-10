@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() { return request.auth != null; }
+    
+    // Users & Staff profiles and permissions
+    match /users/{document=**} {
+      allow read, write: if true;
+    }
+
+    match /staff_permissions/{document=**} {
+      allow read, write: if true;
+    }
+
+    // Customers collection
+    match /customers/{document=**} {
+      allow read, write: if true;
+    }
+    
+    // Inquiries collection (public can submit inquiries, authenticated can manage)
+    match /inquiries/{document=**} {
+      allow read, write: if true;
+    }
+    
+    // Support tickets
+    match /support_tickets/{document=**} {
+      allow read, write: if true;
+    }
+
+    // Leads collection
+    match /leads/{document=**} {
+      allow read, write: if true;
+    }
+
+    // Follow-ups collection
+    match /follow_ups/{document=**} {
+      allow read, write: if true;
+    }
+
+    // Products collection
+    match /products/{document=**} {
+      allow read, write: if true;
+    }
+
+    // Households collection
+    match /households/{document=**} {
+      allow read, write: if true;
+    }
+    
+    // Properties collection
+    match /properties/{document=**} {
+      allow read, write: if true;
+    }
+
+    // Tasks collection
+    match /tasks/{document=**} {
+      allow read, write: if true;
+    }
+
+    // Conflicts & Data Quality
+    match /conflicts/{document=**} {
+      allow read, write: if true;
+    }
+
+    // Audit logs
+    match /audit_logs/{document=**} {
+      allow read, write: if true;
+    }
+
+    // Settings & Master sync
+    match /settings/{document=**} {
+      allow read, write: if true;
+    }
+
+    // Pending Approvals
+    match /pending_approvals/{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

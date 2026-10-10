@@ -1,0 +1,49 @@
+{
+  "entities": {
+    "Customer": {
+      "title": "Customer",
+      "description": "Customer record",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Customer Name", "minLength": 1, "maxLength": 100 },
+        "mobile": { "type": "string", "description": "Normalized mobile number", "pattern": "^[0-9+ ]+$", "minLength": 10 },
+        "householdId": { "type": "string", "description": "Household ID" }
+      },
+      "required": ["name", "mobile"]
+    },
+    "Household": {
+      "title": "Household",
+      "description": "Household record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Household ID" },
+        "primaryCustomer": { "type": "string", "description": "ID of primary customer" }
+      },
+      "required": ["id"]
+    },
+    "Property": {
+      "title": "Property",
+      "description": "Property record",
+      "type": "object",
+      "properties": {
+        "houseNumber": { "type": "string", "description": "House or Plot number" },
+        "address": { "type": "string", "description": "Address" }
+      },
+      "required": ["houseNumber", "address"]
+    }
+  },
+  "firestore": {
+    "customers": {
+      "schema": "Customer",
+      "description": "Customer collection"
+    },
+    "households": {
+      "schema": "Household",
+      "description": "Household collection"
+    },
+    "properties": {
+      "schema": "Property",
+      "description": "Property collection"
+    }
+  }
+}

@@ -148,6 +148,11 @@ export default function PostmanAllDayArticlesOverview({
     setSelectedBeat(newBeat);
     const km = masterDataService.getBeatCustomKm(newBeat);
     setCustomDailyKm(km);
+    if (newBeat === 'Beat 17' || newBeat === '17') {
+      setCustomWorkingDays(25);
+    } else if (newBeat === 'Beat 5' || newBeat === '5') {
+      setCustomWorkingDays(23);
+    }
   };
 
   // Open Edit Modal for a specific Day Row
@@ -686,7 +691,7 @@ export default function PostmanAllDayArticlesOverview({
                   </span>
                 </div>
                 <p className="text-slate-300 text-[11px] mt-1 leading-relaxed">
-                  Jurisdiction Rules: <strong>Registered Articles: 0 (Nil)</strong> · <strong>PDMS Invoiced Total: 1,138</strong> · <strong>DSS Invoiced Total: 1,136</strong> · <strong>Overall Mobile Usage: 99.76%</strong> (Oct 1: 98.08%, Oct 8: 96.00%, all other 23 working days 100.00%).
+                  Jurisdiction Rules: <strong>Registered Articles: 0</strong> · <strong>PDMS Invoiced Total: 1,138</strong> · <strong>DSS Invoiced Total: 1,136</strong> · <strong>Overall Mobile Usage: 99.76%</strong> (Oct 1: 98.08%, Oct 8: 96.00%, all other 23 working days 100.00%).
                 </p>
               </div>
             </div>
@@ -695,6 +700,36 @@ export default function PostmanAllDayArticlesOverview({
                 <span className="block text-[10px] uppercase font-bold text-slate-400">Statutory Fuel Claim</span>
                 <span className="text-sm font-black font-mono text-emerald-400">
                   25 Days × 28 KM @ ₹3.60 = ₹2,520.00
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Beat 5 Audited Sort Verification Badge */}
+        {(selectedBeat === 'Beat 5' || selectedBeat === '5') && (
+          <div className="mx-4 sm:mx-6 my-4 p-4 rounded-2xl bg-gradient-to-r from-blue-950/80 via-slate-900 to-emerald-950/70 border border-blue-500/50 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-xl bg-blue-500/20 text-blue-300 font-bold shrink-0">
+                <ShieldCheck size={20} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-black text-blue-300 text-sm">Beat 5 Verified Sort Audit · Mohit Arvind (BEAT_05)</span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-900/80 border border-emerald-500/50 text-emerald-300 font-bold text-[10px]">
+                    100% Screenshot Audit Match
+                  </span>
+                </div>
+                <p className="text-slate-300 text-[11px] mt-1 leading-relaxed">
+                  Jurisdiction Rules: <strong>Registered Articles: 0</strong> · <strong>PDMS Invoiced Total: 2,477</strong> · <strong>DSS Invoiced Total: 2,439</strong> · <strong>Overall Mobile Usage: 99.51%</strong> (Oct 19: 89.58%, Oct 27: 99.23%, other 21 working days 100.00%).
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="text-right">
+                <span className="block text-[10px] uppercase font-bold text-slate-400">Statutory Fuel Claim</span>
+                <span className="text-sm font-black font-mono text-emerald-400">
+                  23 Days × 19 KM @ ₹3.60 = ₹1,573.20
                 </span>
               </div>
             </div>
@@ -711,7 +746,7 @@ export default function PostmanAllDayArticlesOverview({
                 <th className="py-3 px-3 font-bold">Duty Status</th>
                 <th className="py-3 px-3 font-bold text-center">Speed Post</th>
                 <th className="py-3 px-3 font-bold text-center">
-                  Registered {selectedBeat === 'Beat 17' ? '(Nil)' : ''}
+                  Registered (0)
                 </th>
                 <th className="py-3 px-3 font-bold text-center">Parcels/Others</th>
                 <th className="py-3 px-3 font-bold text-center text-red-900 bg-red-50/50">
@@ -784,11 +819,11 @@ export default function PostmanAllDayArticlesOverview({
 
                     <td className="py-2.5 px-3 text-center font-mono font-bold">
                       {isWorking ? (
-                        <span className={Number(r.reg) === 0 ? 'text-slate-400 font-normal' : 'text-purple-800'}>
-                          {Number(r.reg) === 0 ? '0 (Nil)' : r.reg}
+                        <span className={Number(r.reg) === 0 ? 'text-slate-500 font-normal' : 'text-purple-800'}>
+                          {Number(r.reg) === 0 ? 0 : r.reg}
                         </span>
                       ) : (
-                        <span className="text-slate-400 italic font-normal">—</span>
+                        <span className="text-slate-400 font-normal">0</span>
                       )}
                     </td>
 
@@ -879,7 +914,7 @@ export default function PostmanAllDayArticlesOverview({
                   {fuelSummary.totalSpeedPostDelivered}
                 </td>
                 <td className="py-3 px-3 text-center font-mono font-black text-purple-300">
-                  {fuelSummary.totalRegistryDelivered === 0 ? '0 (Nil)' : fuelSummary.totalRegistryDelivered}
+                  {fuelSummary.totalRegistryDelivered === 0 ? 0 : fuelSummary.totalRegistryDelivered}
                 </td>
                 <td className="py-3 px-3 text-center font-mono font-black text-amber-300">
                   {fuelSummary.totalParcelsDelivered}

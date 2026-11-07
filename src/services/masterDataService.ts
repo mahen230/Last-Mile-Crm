@@ -24,6 +24,7 @@ import {
   downloadOfficialFuelBillPDF,
   formatIsoToDDMMYYYY,
   PRIYANSHU_BEAT_17_OCTOBER_2026_ROWS,
+  MOHIT_BEAT_5_OCTOBER_2026_ROWS,
 } from '../utils/fuelBillPdfGenerator';
 import { downloadOfficialAcg61Pdf } from '../utils/acg61PdfGenerator';
 
@@ -2072,7 +2073,57 @@ class MasterDataService {
           }
           workingDaysCount++;
           const spDeliv = typeof refRow.sp === 'number' ? refRow.sp : 0;
-          const regDeliv = 0; // Strictly nil for Beat 17
+          const regDeliv = 0; // Strictly zero as instructed
+          const parDeliv = typeof refRow.others === 'number' ? refRow.others : 0;
+          const dayTotal = typeof refRow.total === 'number' ? refRow.total : 0;
+          const pmaHandled = typeof refRow.pmaHandled === 'number' ? refRow.pmaHandled : dayTotal;
+          const pmaPercent = refRow.pmaPercent !== undefined ? refRow.pmaPercent : 100;
+
+          totalSp += spDeliv;
+          totalReg += 0;
+          totalPar += parDeliv;
+          totalPma += pmaHandled;
+
+          dailyRows.push({
+            sn: day,
+            date: formatIsoToDDMMYYYY(isoDate),
+            isoDate,
+            status: 'WORKING',
+            sp: spDeliv,
+            reg: 0,
+            others: parDeliv,
+            total: dayTotal,
+            pmaHandled,
+            pmaPercent,
+            pdmsInvoicedCount: refRow.pdmsInvoicedCount !== undefined ? refRow.pdmsInvoicedCount : dayTotal,
+            dssInvoicedCount: refRow.dssInvoicedCount !== undefined ? refRow.dssInvoicedCount : dayTotal,
+            mobileUsagePercent: refRow.mobileUsagePercent !== undefined ? refRow.mobileUsagePercent : pmaPercent,
+          });
+          continue;
+        }
+      }
+
+      // Check Beat 5 verified audit row for October 2026 (Mohit Arvind)
+      if (cleanBeat === 'Beat 5' && targetMonthYear === '2026-10') {
+        const refRow = MOHIT_BEAT_5_OCTOBER_2026_ROWS.find((r) => r.sn === day);
+        if (refRow) {
+          if (refRow.status === 'SUNDAY') {
+            sundaysAndHolidays++;
+            dailyRows.push({ ...refRow });
+            continue;
+          }
+          if (refRow.status === 'HOLIDAY') {
+            sundaysAndHolidays++;
+            dailyRows.push({ ...refRow });
+            continue;
+          }
+          if (refRow.status === 'LEAVE') {
+            dailyRows.push({ ...refRow });
+            continue;
+          }
+          workingDaysCount++;
+          const spDeliv = typeof refRow.sp === 'number' ? refRow.sp : 0;
+          const regDeliv = 0; // Strictly zero as instructed
           const parDeliv = typeof refRow.others === 'number' ? refRow.others : 0;
           const dayTotal = typeof refRow.total === 'number' ? refRow.total : 0;
           const pmaHandled = typeof refRow.pmaHandled === 'number' ? refRow.pmaHandled : dayTotal;

@@ -9,6 +9,7 @@ import { staffPermissionService } from './services/staffPermissionService';
 import { ServiceModulePermissions } from './types/models';
 import LoginPage from './pages/LoginPage';
 import LoginModal from './components/auth/LoginModal';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { OTAUpdateNotification } from './components/common/OTAUpdateNotification';
 
 // Lazy-load CRM & administrative modules for instant 0ms initial load on Public Home & Dashboard
@@ -126,7 +127,7 @@ function AuthenticatedApp() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isPublicRoute = location.pathname === '/' || location.pathname === '/home';
+  const isPublicRoute = location.pathname === '/' || location.pathname === '/home' || location.pathname === '/portal';
 
   if (location.pathname === '/login' || (!user && !userProfile && !isPublicRoute)) {
     return <LoginPage />;
@@ -193,114 +194,247 @@ function AuthenticatedApp() {
           />
           <Route
             path="/dashboard"
-            element={<Dashboard onSwitchToCustomerPortal={() => navigate('/')} />}
+            element={
+              <ProtectedRoute requiredTier="STAFF">
+                <Dashboard onSwitchToCustomerPortal={() => navigate('/')} />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/crm"
-            element={<Dashboard onSwitchToCustomerPortal={() => navigate('/')} />}
+            element={
+              <ProtectedRoute requiredTier="STAFF">
+                <Dashboard onSwitchToCustomerPortal={() => navigate('/')} />
+              </ProtectedRoute>
+            }
           />
 
         {/* Staff Directory, Auto-Managed Office Master & Colony-Beat Address Engine */}
-        <Route path="/staff-master" element={<StaffMasterView />} />
-        <Route path="/staff" element={<StaffView />} />
-        <Route path="/office-master" element={<OfficeMasterView />} />
-        <Route path="/address-resolution" element={<AddressResolutionView />} />
-        <Route path="/beats" element={<BeatManagementView />} />
-        <Route path="/beat-management" element={<BeatManagementView />} />
-        <Route path="/beats-overview" element={<BeatsView />} />
-        <Route path="/beats-map" element={<BeatMap />} />
+        <Route
+          path="/staff-master"
+          element={
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN']}>
+              <StaffMasterView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/staff"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <StaffView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/office-master"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <OfficeMasterView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/address-resolution"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <AddressResolutionView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/beats"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <BeatManagementView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/beat-management"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <BeatManagementView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/beats-overview"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <BeatsView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/beats-map"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <BeatMap />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Role-Based Workspaces & Administration */}
-        <Route path="/staff-registrations" element={<StaffRegistrationsView />} />
-        <Route path="/profile-approvals" element={<ProfileApprovalsView />} />
-        <Route path="/verifications" element={<AdminVerificationsView />} />
-        <Route path="/daily-verification" element={<DailyVerificationView />} />
-        <Route path="/my-submissions" element={<MySubmissionsView />} />
-        <Route path="/my-beat" element={<MyBeatDirectoryView />} />
-        <Route path="/my-profile" element={<MyProfileView />} />
+        <Route
+          path="/staff-registrations"
+          element={
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN']}>
+              <StaffRegistrationsView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile-approvals"
+          element={
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN']}>
+              <ProfileApprovalsView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/verifications"
+          element={
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN']}>
+              <AdminVerificationsView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/daily-verification"
+          element={
+            <ProtectedRoute requiredTier="STAFF" allowedRoles={['POSTMAN', 'GDS', 'STAFF', 'ADMIN', 'MASTER_ADMIN']}>
+              <DailyVerificationView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my-submissions"
+          element={
+            <ProtectedRoute requiredTier="STAFF" allowedRoles={['POSTMAN', 'GDS', 'STAFF', 'ADMIN', 'MASTER_ADMIN']}>
+              <MySubmissionsView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my-beat"
+          element={
+            <ProtectedRoute requiredTier="STAFF" allowedRoles={['POSTMAN', 'GDS', 'STAFF', 'ADMIN', 'MASTER_ADMIN']}>
+              <MyBeatDirectoryView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my-profile"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <MyProfileView />
+            </ProtectedRoute>
+          }
+        />
 
         {/* 1. CRM Section (Customer & Property Management) */}
         <Route
           path="/customers"
           element={
-            <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
-              <CustomerList
-                onAddLead={(customer) => navigate('/leads', { state: { initialCustomer: customer } })}
-                onAddFollowUp={(customer) => navigate('/follow-ups', { state: { initialCustomer: customer } })}
-              />
-            </ServiceModuleGuard>
+            <ProtectedRoute requiredTier="STAFF">
+              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+                <CustomerList
+                  onAddLead={(customer) => navigate('/leads', { state: { initialCustomer: customer } })}
+                  onAddFollowUp={(customer) => navigate('/follow-ups', { state: { initialCustomer: customer } })}
+                />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/households"
           element={
-            <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
-              <HouseholdsView />
-            </ServiceModuleGuard>
+            <ProtectedRoute requiredTier="STAFF">
+              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+                <HouseholdsView />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/properties"
           element={
-            <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
-              <PropertiesView />
-            </ServiceModuleGuard>
+            <ProtectedRoute requiredTier="STAFF">
+              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+                <PropertiesView />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/sequence-properties"
           element={
-            <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
-              <SequenceWisePropertyHub />
-            </ServiceModuleGuard>
+            <ProtectedRoute requiredTier="STAFF">
+              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+                <SequenceWisePropertyHub />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/property-sequence"
           element={
-            <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
-              <SequenceWisePropertyHub />
-            </ServiceModuleGuard>
+            <ProtectedRoute requiredTier="STAFF">
+              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+                <SequenceWisePropertyHub />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/unified-properties"
           element={
-            <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
-              <UnifiedPropertyFamilyHub />
-            </ServiceModuleGuard>
+            <ProtectedRoute requiredTier="STAFF">
+              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+                <UnifiedPropertyFamilyHub />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/unified-family"
           element={
-            <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
-              <UnifiedPropertyFamilyHub />
-            </ServiceModuleGuard>
+            <ProtectedRoute requiredTier="STAFF">
+              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+                <UnifiedPropertyFamilyHub />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/family"
           element={
-            <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
-              <FamilyView />
-            </ServiceModuleGuard>
+            <ProtectedRoute requiredTier="STAFF">
+              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+                <FamilyView />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/businesses"
           element={
-            <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
-              <BusinessesView />
-            </ServiceModuleGuard>
+            <ProtectedRoute requiredTier="STAFF">
+              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+                <BusinessesView />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/tasks"
           element={
-            <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Field Tasks & Operations)">
-              <TasksView />
-            </ServiceModuleGuard>
+            <ProtectedRoute requiredTier="STAFF">
+              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Field Tasks & Operations)">
+                <TasksView />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
           }
         />
 
@@ -308,23 +442,27 @@ function AuthenticatedApp() {
         <Route
           path="/special-forms"
           element={
-            <ServiceModuleGuard
-              moduleKey="specialBillsSection"
-              moduleTitle="Special Bills Section (Fuel Bill, Charge Report, Outsider Bill, BYOD)"
-            >
-              <SpecialFormsView />
-            </ServiceModuleGuard>
+            <ProtectedRoute requiredTier="STAFF">
+              <ServiceModuleGuard
+                moduleKey="specialBillsSection"
+                moduleTitle="Special Bills Section (Fuel Bill, Charge Report, Outsider Bill, BYOD)"
+              >
+                <SpecialFormsView />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/charge-report"
           element={
-            <ServiceModuleGuard
-              moduleKey="specialBillsSection"
-              moduleTitle="Special Bills Section (ACG-61 Charge Report)"
-            >
-              <Acg61ChargeReportView />
-            </ServiceModuleGuard>
+            <ProtectedRoute requiredTier="STAFF">
+              <ServiceModuleGuard
+                moduleKey="specialBillsSection"
+                moduleTitle="Special Bills Section (ACG-61 Charge Report)"
+              >
+                <Acg61ChargeReportView />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
           }
         />
 
@@ -332,12 +470,14 @@ function AuthenticatedApp() {
         <Route
           path="/postal-lms"
           element={
-            <ServiceModuleGuard
-              moduleKey="departmentalLearningSection"
-              moduleTitle="Departmental Learning Section (GDS to MTS / Postman / PA LMS)"
-            >
-              <PostalLMSView />
-            </ServiceModuleGuard>
+            <ProtectedRoute requiredTier="STAFF">
+              <ServiceModuleGuard
+                moduleKey="departmentalLearningSection"
+                moduleTitle="Departmental Learning Section (GDS to MTS / Postman / PA LMS)"
+              >
+                <PostalLMSView />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
           }
         />
 
@@ -345,34 +485,40 @@ function AuthenticatedApp() {
         <Route
           path="/leads"
           element={
-            <ServiceModuleGuard
-              moduleKey="productSchemeLeadSection"
-              moduleTitle="Product & Scheme Lead Section (PLI, SSA, IPPB, Savings Schemes)"
-            >
-              <LeadsPipelineView />
-            </ServiceModuleGuard>
+            <ProtectedRoute requiredTier="STAFF">
+              <ServiceModuleGuard
+                moduleKey="productSchemeLeadSection"
+                moduleTitle="Product & Scheme Lead Section (PLI, SSA, IPPB, Savings Schemes)"
+              >
+                <LeadsPipelineView />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/services"
           element={
-            <ServiceModuleGuard
-              moduleKey="productSchemeLeadSection"
-              moduleTitle="Product & Scheme Lead Section (PLI, SSA, IPPB, Savings Schemes)"
-            >
-              <ServicesCatalogView />
-            </ServiceModuleGuard>
+            <ProtectedRoute requiredTier="STAFF">
+              <ServiceModuleGuard
+                moduleKey="productSchemeLeadSection"
+                moduleTitle="Product & Scheme Lead Section (PLI, SSA, IPPB, Savings Schemes)"
+              >
+                <ServicesCatalogView />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
           }
         />
         <Route
           path="/follow-ups"
           element={
-            <ServiceModuleGuard
-              moduleKey="productSchemeLeadSection"
-              moduleTitle="Product & Scheme Lead Section (PLI, SSA, IPPB, Savings Schemes)"
-            >
-              <FollowUpsView />
-            </ServiceModuleGuard>
+            <ProtectedRoute requiredTier="STAFF">
+              <ServiceModuleGuard
+                moduleKey="productSchemeLeadSection"
+                moduleTitle="Product & Scheme Lead Section (PLI, SSA, IPPB, Savings Schemes)"
+              >
+                <FollowUpsView />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
           }
         />
 
@@ -380,32 +526,132 @@ function AuthenticatedApp() {
         <Route
           path="/communication"
           element={
-            <ServiceModuleGuard
-              moduleKey="contentSharingDispatchSection"
-              moduleTitle="Content Sharing & Customer Request Dispatch Capabilities"
-            >
-              <CommunicationView />
-            </ServiceModuleGuard>
+            <ProtectedRoute requiredTier="STAFF">
+              <ServiceModuleGuard
+                moduleKey="contentSharingDispatchSection"
+                moduleTitle="Content Sharing & Customer Request Dispatch Capabilities"
+              >
+                <CommunicationView />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
           }
         />
 
         {/* Governance & System */}
-        <Route path="/reports" element={<ReportsView />} />
-        <Route path="/data-quality" element={<DataQualityView />} />
-        <Route path="/audit-log" element={<AuditLogView />} />
-        <Route path="/master-data-upload" element={<MasterDataUploadView />} />
-        <Route path="/master-upload" element={<MasterDataUploadView />} />
-        <Route path="/postman-articles" element={<PostmanAllDayArticlesOverview />} />
-        <Route path="/fuel-bills" element={<PostmanAllDayArticlesOverview />} />
-        <Route path="/master-data-hub" element={<MasterDataHub />} />
-        <Route path="/colony-master" element={<MasterDataHub />} />
-        <Route path="/unified-master-hub" element={<MasterDataHub />} />
-        <Route path="/master-source" element={<MasterSourceSync />} />
-        <Route path="/ai-assistant" element={<AIAssistantView />} />
-        <Route path="/settings" element={<SettingsView />} />
+        <Route
+          path="/reports"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <ReportsView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/data-quality"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <DataQualityView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/audit-log"
+          element={
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN']}>
+              <AuditLogView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/master-data-upload"
+          element={
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN']}>
+              <MasterDataUploadView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/master-upload"
+          element={
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN']}>
+              <MasterDataUploadView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/postman-articles"
+          element={
+            <ProtectedRoute requiredTier="STAFF" allowedRoles={['POSTMAN', 'GDS', 'STAFF', 'ADMIN', 'MASTER_ADMIN']}>
+              <PostmanAllDayArticlesOverview />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/fuel-bills"
+          element={
+            <ProtectedRoute requiredTier="STAFF" allowedRoles={['POSTMAN', 'GDS', 'STAFF', 'ADMIN', 'MASTER_ADMIN']}>
+              <PostmanAllDayArticlesOverview />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/master-data-hub"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <MasterDataHub />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/colony-master"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <MasterDataHub />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/unified-master-hub"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <MasterDataHub />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/master-source"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <MasterSourceSync />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ai-assistant"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <AIAssistantView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN']}>
+              <SettingsView />
+            </ProtectedRoute>
+          }
+        />
 
           <Route path="/login" element={<Navigate to="/" replace />} />
-          <Route path="/portal" element={<CustomerPortal onBackToCRM={() => navigate('/')} />} />
+          <Route
+            path="/portal"
+            element={
+              <ProtectedRoute requiredTier="PUBLIC">
+                <CustomerPortal onBackToCRM={() => navigate('/')} />
+              </ProtectedRoute>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

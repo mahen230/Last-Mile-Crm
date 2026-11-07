@@ -1,39 +1,58 @@
-import React, { useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
+import React, { useState, Suspense, lazy } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, Link } from 'react-router-dom';
 import { Lock, ShieldAlert, CheckCircle2, ArrowRight } from 'lucide-react';
 import Layout from './components/Layout';
+import PublicHomePortal from './components/PublicHomePortal';
 import Dashboard from './components/Dashboard';
-import CustomerList from './components/customers/CustomerList';
-import HouseholdsView from './components/crm/HouseholdsView';
-import PropertiesView from './components/crm/PropertiesView';
-import FamilyView from './components/crm/FamilyView';
-import LeadsPipelineView from './components/crm/LeadsPipelineView';
-import ServicesCatalogView from './components/crm/ServicesCatalogView';
-import FollowUpsView from './components/crm/FollowUpsView';
-import TasksView from './components/crm/TasksView';
-import AddressResolutionView from './components/crm/AddressResolutionView';
-import BusinessesView from './components/crm/BusinessesView';
-import BeatsView from './components/crm/BeatsView';
-import BeatManagementView from './components/crm/BeatManagementView';
-import BeatMap from './components/crm/BeatMap';
-import StaffView from './components/crm/StaffView';
-import OfficeMasterView from './components/crm/OfficeMasterView';
-import StaffMasterView from './components/crm/StaffMasterView';
-import SpecialFormsView from './components/crm/SpecialFormsView';
-import PostalLMSView from './components/crm/PostalLMSView';
-import CommunicationView from './components/crm/CommunicationView';
-import ReportsView from './components/crm/ReportsView';
-import DataQualityView from './components/crm/DataQualityView';
-import AuditLogView from './components/crm/AuditLogView';
-import MasterSourceSync from './components/MasterSourceSync';
-import MasterDataHub from './components/crm/MasterDataHub';
-import AIAssistantView from './components/crm/AIAssistantView';
-import SettingsView from './components/crm/SettingsView';
-import CustomerPortal from './components/customer-facing/CustomerPortal';
 import { FirebaseAuthProvider, useAuth } from './components/auth/FirebaseAuthProvider';
 import { staffPermissionService } from './services/staffPermissionService';
 import { ServiceModulePermissions } from './types/models';
 import LoginPage from './pages/LoginPage';
+import LoginModal from './components/auth/LoginModal';
+import { OTAUpdateNotification } from './components/common/OTAUpdateNotification';
+
+// Lazy-load CRM & administrative modules for instant 0ms initial load on Public Home & Dashboard
+const CustomerList = lazy(() => import('./components/customers/CustomerList'));
+const HouseholdsView = lazy(() => import('./components/crm/HouseholdsView'));
+const PropertiesView = lazy(() => import('./components/crm/PropertiesView'));
+const SequenceWisePropertyHub = lazy(() => import('./components/crm/SequenceWisePropertyHub'));
+const UnifiedPropertyFamilyHub = lazy(() => import('./components/crm/UnifiedPropertyFamilyHub'));
+const FamilyView = lazy(() => import('./components/crm/FamilyView'));
+const LeadsPipelineView = lazy(() => import('./components/crm/LeadsPipelineView'));
+const ServicesCatalogView = lazy(() => import('./components/crm/ServicesCatalogView'));
+const FollowUpsView = lazy(() => import('./components/crm/FollowUpsView'));
+const TasksView = lazy(() => import('./components/crm/TasksView'));
+const AddressResolutionView = lazy(() => import('./components/crm/AddressResolutionView'));
+const BusinessesView = lazy(() => import('./components/crm/BusinessesView'));
+const BeatsView = lazy(() => import('./components/crm/BeatsView'));
+const BeatManagementView = lazy(() => import('./components/crm/BeatManagementView'));
+const StaffView = lazy(() => import('./components/crm/StaffView'));
+const OfficeMasterView = lazy(() => import('./components/crm/OfficeMasterView'));
+const StaffMasterView = lazy(() => import('./components/crm/StaffMasterView'));
+const SpecialFormsView = lazy(() => import('./components/crm/SpecialFormsView'));
+const Acg61ChargeReportView = lazy(() => import('./components/crm/Acg61ChargeReportView'));
+const CommunicationView = lazy(() => import('./components/crm/CommunicationView'));
+const DataQualityView = lazy(() => import('./components/crm/DataQualityView'));
+const AuditLogView = lazy(() => import('./components/crm/AuditLogView'));
+const SettingsView = lazy(() => import('./components/crm/SettingsView'));
+const BeatMap = lazy(() => import('./components/crm/BeatMap'));
+const PostalLMSView = lazy(() => import('./components/crm/PostalLMSView'));
+const ReportsView = lazy(() => import('./components/crm/ReportsView'));
+const MasterSourceSync = lazy(() => import('./components/MasterSourceSync'));
+const MasterDataHub = lazy(() => import('./components/crm/MasterDataHub'));
+const AIAssistantView = lazy(() => import('./components/crm/AIAssistantView'));
+const CustomerPortal = lazy(() => import('./components/customer-facing/CustomerPortal'));
+
+// Role-Based Views: Admin & Postman Workspaces
+const StaffRegistrationsView = lazy(() => import('./components/admin/StaffRegistrationsView'));
+const ProfileApprovalsView = lazy(() => import('./components/admin/ProfileApprovalsView'));
+const AdminVerificationsView = lazy(() => import('./components/admin/AdminVerificationsView'));
+const DailyVerificationView = lazy(() => import('./components/postman/DailyVerificationView'));
+const MySubmissionsView = lazy(() => import('./components/postman/MySubmissionsView'));
+const MyBeatDirectoryView = lazy(() => import('./components/postman/MyBeatDirectoryView'));
+const MyProfileView = lazy(() => import('./components/postman/MyProfileView'));
+const MasterDataUploadView = lazy(() => import('./components/admin/MasterDataUploadView'));
+const PostmanAllDayArticlesOverview = lazy(() => import('./components/postman/PostmanAllDayArticlesOverview'));
 
 function ServiceModuleGuard({
   moduleKey,
@@ -44,7 +63,7 @@ function ServiceModuleGuard({
   moduleTitle: string;
   children: React.ReactNode;
 }) {
-  const { userProfile, switchStaffProfile } = useAuth();
+  const { userProfile, loginAsMasterAdmin } = useAuth();
   const allowed = staffPermissionService.canAccessServiceModule(userProfile, moduleKey);
 
   if (allowed) {
@@ -79,11 +98,12 @@ function ServiceModuleGuard({
       </div>
       <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
         <button
-          onClick={() => switchStaffProfile('mahen.comtech@gmail.com')}
-          className="px-4 py-2.5 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-md"
+          type="button"
+          onClick={() => loginAsMasterAdmin()}
+          className="px-4 py-2.5 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-md cursor-pointer"
         >
           <CheckCircle2 size={15} />
-          <span>Switch to Super Admin to Grant Access</span>
+          <span>1-Click Master Admin Bypass (Grant Access)</span>
         </button>
         <Link
           to="/staff-master"
@@ -98,20 +118,87 @@ function ServiceModuleGuard({
 }
 
 function AuthenticatedApp() {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [showPortalMode, setShowPortalMode] = useState(false);
+  const [hasPostmanAuth, setHasPostmanAuth] = useState(() => {
+    return typeof localStorage !== 'undefined' && localStorage.getItem('postman_auth') === 'true';
+  });
   const navigate = useNavigate();
+  const location = useLocation();
 
-  if (!user) return <LoginPage />;
+  const isPublicRoute = location.pathname === '/' || location.pathname === '/home';
+
+  if (location.pathname === '/login' || (!user && !userProfile && !isPublicRoute)) {
+    return <LoginPage />;
+  }
+
+  const triggerStaffAuthModal = () => {
+    window.dispatchEvent(new CustomEvent('open-staff-auth-modal'));
+  };
 
   if (showPortalMode) {
-    return <CustomerPortal onBackToCRM={() => setShowPortalMode(false)} />;
+    return (
+      <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+        {!hasPostmanAuth && (
+          <LoginModal
+            onLoginSuccess={() => {
+              setHasPostmanAuth(true);
+            }}
+          />
+        )}
+        <PublicHomePortal
+          isStandalone={true}
+          onToggleStandalone={() => setShowPortalMode(false)}
+          onOpenStaffLogin={() => {
+            setShowPortalMode(false);
+            setTimeout(triggerStaffAuthModal, 50);
+          }}
+        />
+        <OTAUpdateNotification />
+      </div>
+    );
   }
 
   return (
-    <Layout onOpenCustomerPortal={() => setShowPortalMode(true)}>
-      <Routes>
-        <Route path="/" element={<Dashboard onSwitchToCustomerPortal={() => setShowPortalMode(true)} />} />
+    <>
+      {!hasPostmanAuth && (
+        <LoginModal
+          onLoginSuccess={() => {
+            setHasPostmanAuth(true);
+          }}
+        />
+      )}
+      <Layout onOpenCustomerPortal={() => setShowPortalMode(true)}>
+      <Suspense fallback={<div className="p-8 text-center text-sm font-bold text-slate-600">Loading Module...</div>}>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <PublicHomePortal
+                isStandalone={false}
+                onToggleStandalone={() => setShowPortalMode(true)}
+                onOpenStaffLogin={triggerStaffAuthModal}
+              />
+            }
+          />
+          <Route
+            path="/home"
+            element={
+              <PublicHomePortal
+                isStandalone={false}
+                onToggleStandalone={() => setShowPortalMode(true)}
+                onOpenStaffLogin={triggerStaffAuthModal}
+              />
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={<Dashboard onSwitchToCustomerPortal={() => navigate('/')} />}
+          />
+          <Route
+            path="/crm"
+            element={<Dashboard onSwitchToCustomerPortal={() => navigate('/')} />}
+          />
 
         {/* Staff Directory, Auto-Managed Office Master & Colony-Beat Address Engine */}
         <Route path="/staff-master" element={<StaffMasterView />} />
@@ -120,14 +207,27 @@ function AuthenticatedApp() {
         <Route path="/address-resolution" element={<AddressResolutionView />} />
         <Route path="/beats" element={<BeatManagementView />} />
         <Route path="/beat-management" element={<BeatManagementView />} />
+        <Route path="/beats-overview" element={<BeatsView />} />
         <Route path="/beats-map" element={<BeatMap />} />
+
+        {/* Role-Based Workspaces & Administration */}
+        <Route path="/staff-registrations" element={<StaffRegistrationsView />} />
+        <Route path="/profile-approvals" element={<ProfileApprovalsView />} />
+        <Route path="/verifications" element={<AdminVerificationsView />} />
+        <Route path="/daily-verification" element={<DailyVerificationView />} />
+        <Route path="/my-submissions" element={<MySubmissionsView />} />
+        <Route path="/my-beat" element={<MyBeatDirectoryView />} />
+        <Route path="/my-profile" element={<MyProfileView />} />
 
         {/* 1. CRM Section (Customer & Property Management) */}
         <Route
           path="/customers"
           element={
             <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
-              <CustomerList />
+              <CustomerList
+                onAddLead={(customer) => navigate('/leads', { state: { initialCustomer: customer } })}
+                onAddFollowUp={(customer) => navigate('/follow-ups', { state: { initialCustomer: customer } })}
+              />
             </ServiceModuleGuard>
           }
         />
@@ -144,6 +244,38 @@ function AuthenticatedApp() {
           element={
             <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
               <PropertiesView />
+            </ServiceModuleGuard>
+          }
+        />
+        <Route
+          path="/sequence-properties"
+          element={
+            <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+              <SequenceWisePropertyHub />
+            </ServiceModuleGuard>
+          }
+        />
+        <Route
+          path="/property-sequence"
+          element={
+            <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+              <SequenceWisePropertyHub />
+            </ServiceModuleGuard>
+          }
+        />
+        <Route
+          path="/unified-properties"
+          element={
+            <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+              <UnifiedPropertyFamilyHub />
+            </ServiceModuleGuard>
+          }
+        />
+        <Route
+          path="/unified-family"
+          element={
+            <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+              <UnifiedPropertyFamilyHub />
             </ServiceModuleGuard>
           }
         />
@@ -181,6 +313,17 @@ function AuthenticatedApp() {
               moduleTitle="Special Bills Section (Fuel Bill, Charge Report, Outsider Bill, BYOD)"
             >
               <SpecialFormsView />
+            </ServiceModuleGuard>
+          }
+        />
+        <Route
+          path="/charge-report"
+          element={
+            <ServiceModuleGuard
+              moduleKey="specialBillsSection"
+              moduleTitle="Special Bills Section (ACG-61 Charge Report)"
+            >
+              <Acg61ChargeReportView />
             </ServiceModuleGuard>
           }
         />
@@ -250,16 +393,26 @@ function AuthenticatedApp() {
         <Route path="/reports" element={<ReportsView />} />
         <Route path="/data-quality" element={<DataQualityView />} />
         <Route path="/audit-log" element={<AuditLogView />} />
+        <Route path="/master-data-upload" element={<MasterDataUploadView />} />
+        <Route path="/master-upload" element={<MasterDataUploadView />} />
+        <Route path="/postman-articles" element={<PostmanAllDayArticlesOverview />} />
+        <Route path="/fuel-bills" element={<PostmanAllDayArticlesOverview />} />
         <Route path="/master-data-hub" element={<MasterDataHub />} />
+        <Route path="/colony-master" element={<MasterDataHub />} />
+        <Route path="/unified-master-hub" element={<MasterDataHub />} />
         <Route path="/master-source" element={<MasterSourceSync />} />
         <Route path="/ai-assistant" element={<AIAssistantView />} />
         <Route path="/settings" element={<SettingsView />} />
 
-        <Route path="/portal" element={<CustomerPortal onBackToCRM={() => navigate('/')} />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          <Route path="/login" element={<Navigate to="/" replace />} />
+          <Route path="/portal" element={<CustomerPortal onBackToCRM={() => navigate('/')} />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </Layout>
-  );
+    <OTAUpdateNotification />
+  </>
+);
 }
 
 export default function App() {

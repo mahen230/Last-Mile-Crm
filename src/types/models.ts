@@ -36,15 +36,64 @@ export type LeadStage =
 
 export interface Address {
   houseNo?: string;
+  houseNumber?: string;
   street?: string;
   locality?: string;
+  colony?: string;
   sector?: string;
+  block?: string;
+  sectorLocality?: string;
   area?: string;
   landmark?: string;
   pincode?: string;
   addressLine1?: string;
+  fullAddress?: string;
   city?: string;
   state?: string;
+}
+
+export interface RelocationRecord {
+  id: string;
+  shiftedDate: string;
+  previousAddress: string;
+  previousHouseNo?: string;
+  previousStreet?: string;
+  previousLandmark?: string;
+  previousBeatNo?: string;
+  newAddress: string;
+  newHouseNo: string;
+  newStreet: string;
+  newLandmark: string;
+  newSectorOrColony: string;
+  newPincode: string;
+  newBeatNo: string;
+  reason: 'Tenant Shifted' | 'Own House Purchased' | 'Job / Service Transfer' | 'Family Relocation' | 'Marriage / Joint Family' | 'Other' | string;
+  redirectionActive: boolean;
+  recordedBy: string;
+  remarks?: string;
+}
+
+export interface FuelLedgerEntry {
+  id: string;
+  date: string;
+  employeeId: string;
+  employeeName: string;
+  beatNo: string;
+  officeName: string;
+  vehicleNo: string;
+  openingKmReading: number;
+  closingKmReading: number;
+  netKmRun: number;
+  sanctionedBeatKm: number;
+  fuelVolumeLitres: number;
+  fuelPricePerLitre: number;
+  totalFuelCost: number;
+  receiptNumber: string;
+  fuelStationName: string;
+  paymentMode: 'Cash' | 'UPI / DakPay' | 'IPPB' | 'Card';
+  dssReconciliationStatus: 'Reconciled with DSS' | 'Verified by SPM' | 'Pending DSS Audit';
+  remarks?: string;
+  createdAt: string;
 }
 
 export interface HouseholdMember {
@@ -129,17 +178,27 @@ export interface Customer {
   occupation?: string;
   category?: string; // General, SC, ST, OBC, Senior Citizen, etc.
   address?: Address | any;
+  residentialAddress?: Address;
+  permanentAddress?: Address;
+  sameAsResidential?: boolean;
   addressLine1?: string;
   pincode?: string;
   houseNo?: string;
+  street?: string;
+  landmark?: string;
+  colony?: string;
   sector?: string;
+  block?: string;
   area?: string;
   sectorLocality?: string;
   type?: string;
   livingStatus?: LivingStatus;
+  isShifted?: boolean;
+  relocationHistory?: RelocationRecord[];
   householdMembers?: HouseholdMember[];
   beatNo?: string; // e.g. 'Beat 1' to 'Beat 34'
   officeId?: string; // e.g. DADABARI_SO
+  subOfficeMapping?: string;
   propertyId?: string; // e.g. KP-S7-H0445
   householdId?: string; // e.g. HH-KP-S7-P0825
   isHeadOfFamily?: boolean;
@@ -162,6 +221,7 @@ export interface Customer {
   nextFollowUpDate?: string;
   enteredBy?: string;
   enteredByName?: string;
+  createdBy?: string;
   assignedStaffId?: string;
   assignedStaffName?: string;
   assignedStaffEmail?: string;
@@ -269,6 +329,9 @@ export interface FollowUp {
   priority?: 'Normal' | 'High' | 'Urgent';
   nextAction: string;
   assignedStaffName: string;
+  assignedStaffEmail?: string;
+  enteredBy?: string;
+  beatNo?: string;
   remarks: string;
   outcome?: string;
   completedAt?: string;
@@ -503,6 +566,8 @@ export interface DynamicOfficeRecord {
   staffCount: number;
   assignedStaffNames: string[];
   assignedStaffIds: string[];
+  district?: string;
+  subDivision?: string;
   isAutoManaged?: boolean;
   updatedAt: string;
 }
@@ -523,6 +588,13 @@ export interface ColonyBeatMapping {
   assignedPostmanName?: string;
   assignedPostmanContact?: string;
   assignedPostmanMobile?: string;
+  circle?: string;
+  division?: string;
+  district?: string;
+  subDivision?: string;
+  sectorsList?: string[];
+  coloniesList?: string[];
+  landmarksList?: string[];
   updatedAt: string;
 }
 
@@ -549,6 +621,7 @@ export interface StaffProfile {
   name: string;
   email: string;
   password?: string;
+  mustChangePassword?: boolean;
   role: UserRole;
   designation?: string;
   designationType?: DesignationType;
@@ -585,8 +658,33 @@ export interface DailyArticleEntry {
   staffEmail: string;
   beatNo: string;
   officeName: string;
-  attendanceStatus: 'Present - Field Duty' | 'Present - Office Duty' | 'Half Day' | 'On Leave';
+  attendanceStatus:
+    | 'Present - Field Duty'
+    | 'Present - Office Duty'
+    | 'Half Day'
+    | 'On Leave'
+    | 'Sunday'
+    | 'Gazetted Holiday';
   fixedKm: number;
+  // Dedicated Beat-Wise Fuel Bill Allowance Mapping
+  fuelRatePerKm?: number;
+  dailyFuelAllowance?: number;
+  monthlyFuelAllowance?: number;
+  sanctionedBeatKm?: number;
+  pdmsInvoicedCount?: number | string;
+  dssInvoicedCount?: number | string;
+  mobileUsagePercent?: number | string;
+  dssStatus?: 'Reconciled with DSS' | 'Verified by SPM' | 'Pending DSS Audit';
+  dssReconciledAt?: string;
+  dssReconciledBy?: string;
+  dssArticleAuditTrail?: {
+    timestamp: string;
+    updatedBy: string;
+    changedFields: string[];
+    previousCounts: Record<string, number>;
+    newCounts: Record<string, number>;
+    remarks?: string;
+  }[];
   // Registry
   registryReceived: number;
   registryDelivered: number;
@@ -607,6 +705,26 @@ export interface DailyArticleEntry {
   doorstepInquiriesLogged: number;
   remarks?: string;
   createdAt: string;
+  updatedAt?: string;
+}
+
+export interface ArticleQuantityPatch {
+  registryReceived?: number;
+  registryDelivered?: number;
+  registryReturned?: number;
+  registryDeposit?: number;
+  speedPostReceived?: number;
+  speedPostDelivered?: number;
+  speedPostReturned?: number;
+  speedPostDeposit?: number;
+  parcelReceived?: number;
+  parcelDelivered?: number;
+  parcelReturned?: number;
+  parcelDeposit?: number;
+  codAmountCollected?: number;
+  doorstepInquiriesLogged?: number;
+  remarks?: string;
+  dssStatus?: 'Reconciled with DSS' | 'Verified by SPM' | 'Pending DSS Audit';
 }
 
 export type SpecialBillType = 'FUEL_BILL' | 'CHARGE_REPORT' | 'OUTSIDER_BILL' | 'BYOD_BILL';
@@ -630,5 +748,33 @@ export interface SpecialBillRecord {
   details: Record<string, any>;
   attachmentName?: string;
   createdAt: string;
+}
+
+export interface FieldTask {
+  id: string;
+  title: string;
+  category: 'KYC Collection' | 'Passbook Delivery' | 'Aadhaar Biometric' | 'PLI Renewal' | 'Address Verification' | string;
+  assignedTo: string;
+  beatNo: string;
+  location: string;
+  status: 'Pending' | 'In Progress' | 'Completed';
+  priority: 'High' | 'Medium' | 'Low';
+  dueDate: string;
+  householdsTarget?: number;
+  householdsCovered?: number;
+  progressPercent?: number;
+  updatedAt?: string;
+  completedAt?: string;
+
+  // Customer & Lead Direct Linkage
+  linkedCustomerId?: string;
+  linkedCustomerMasterId?: string;
+  linkedCustomerName?: string;
+  linkedCustomerPhone?: string;
+  linkedCustomerAddress?: string;
+  linkedLeadId?: string;
+  linkedLeadProduct?: string;
+  linkedLeadStage?: string;
+  linkType?: 'CUSTOMER' | 'LEAD' | 'HOUSEHOLD' | 'NONE';
 }
 

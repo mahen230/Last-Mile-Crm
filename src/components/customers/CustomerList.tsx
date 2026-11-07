@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Customer } from '../../types/models';
 import { customerService } from '../../services/customerService';
 import { staffPermissionService } from '../../services/staffPermissionService';
@@ -6,26 +7,38 @@ import { useAuth } from '../auth/FirebaseAuthProvider';
 import { 
   Search, Filter, Plus, Download, Eye, Edit3, Target, Calendar, 
   AlertTriangle, CheckCircle2, Shield, Users, ArrowUpDown, MessageSquare,
-  UserCheck, Trash2, Lock, Sparkles, X, User
+  UserCheck, Trash2, Lock, Sparkles, X, User, MapPin, Layers
 } from 'lucide-react';
 import CustomerProfileModal from './CustomerProfileModal';
 import AddCustomerModal from './AddCustomerModal';
 import DirectMessageModal from '../crm/DirectMessageModal';
+import { 
+  OFFICIAL_MAJOR_COLONIES,
+  getHierarchyColoniesList,
+  getHierarchySectorsForColony,
+  matchCustomerToColonyAndSector
+} from '../../data/colonyHierarchyData';
 
 export default function CustomerList({ onAddLead, onAddFollowUp }: { 
   onAddLead?: (customer: Customer) => void;
   onAddFollowUp?: (customer: Customer) => void;
 }) {
   const { userProfile, user } = useAuth();
+  const navigate = useNavigate();
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [statusBanner, setStatusBanner] = useState<{ type: 'success' | 'warning'; message: string } | null>(null);
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
   const [search, setSearch] = useState('');
-  const [selectedSector, setSelectedSector] = useState<string>('All');
+  const [selectedColony, setSelectedColony] = useState<string>('All');
+  const [selectedSubSector, setSelectedSubSector] = useState<string>('All');
   const [selectedVerification, setSelectedVerification] = useState<string>('All');
   const [selectedBeat, setSelectedBeat] = useState<string>('All');
   const [selectedStaffFilter, setSelectedStaffFilter] = useState<string>('All');
   const [showConflictsOnly, setShowConflictsOnly] = useState(false);
-  const [sortField, setSortField] = useState<'name' | 'masterId' | 'sector' | 'leadScore'>('masterId');
+  const [sortField, setSortField] = useState<'colony' | 'latest' | 'name' | 'masterId' | 'sector' | 'leadScore'>('colony');
   const [sortAsc, setSortAsc] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(50);
 
   // Modals
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -64,10 +77,22 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
     document.body.removeChild(link);
   };
 
+  const showNotification = (message: string, type: 'success' | 'warning' = 'success') => {
+    setStatusBanner({ type, message });
+    setTimeout(() => {
+      setStatusBanner(prev => (prev?.message === message ? null : prev));
+    }, 3500);
+  };
+
   const handleDeleteCustomer = (c: Customer) => {
-    if (window.confirm(`क्या आप ग्राहक "${c.name}" (ID: ${c.masterId || c.id}) को Master Source से हटाना चाहते हैं?`)) {
-      customerService.deleteCustomer(c.id);
-    }
+    setCustomerToDelete(c);
+  };
+
+  const confirmDeleteCustomer = () => {
+    if (!customerToDelete) return;
+    customerService.deleteCustomer(customerToDelete.id);
+    showNotification(`Customer "${customerToDelete.name}" (${customerToDelete.masterId || customerToDelete.id}) removed from directory.`, 'warning');
+    setCustomerToDelete(null);
   };
 
   const handleConfirmAssignment = (e: React.FormEvent) => {
@@ -75,22 +100,36 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
     if (!assignTargetCustomer || !assignStaffEmail) return;
 
     customerService.assignCustomerToStaff(assignTargetCustomer.id, assignStaffEmail);
+    showNotification(`Assigned "${assignTargetCustomer.name}" to ${assignStaffEmail}.`, 'success');
     setAssignTargetCustomer(null);
   };
 
-  // Filter customers with RBAC Scoping & Admin Staff Filter
-  const filteredCustomers = customers.filter(c => {
-    // 1. RBAC Visibility Rule: If staff cannot view all records, enforce ownership & beat scope
-    if (!canViewAll && userProfile) {
-      const isOwner = c.enteredBy?.toLowerCase() === userProfile.email.toLowerCase();
-      const isAssigned = c.assignedStaffEmail?.toLowerCase() === userProfile.email.toLowerCase();
-      const cleanBeat = userProfile.beat.replace('Beat ', '');
-      const isMyBeat = userProfile.beat !== 'All Beats' && c.beatNo === cleanBeat;
-      const isUnassignedInBeat = !c.enteredBy && !c.assignedStaffEmail && isMyBeat;
+  // Hierarchical Colony List & Nested Sub-Sector Chips
+  const availableColonies = React.useMemo(() => {
+    const fromCustomers = customers.map(c => c.area || c.address?.area || c.sectorLocality || '').filter(Boolean);
+    return getHierarchyColoniesList(fromCustomers);
+  }, [customers]);
 
-      if (!isOwner && !isAssigned && !isUnassignedInBeat) {
-        return false;
-      }
+  const customerColonySubSectorChips = React.useMemo(() => {
+    if (selectedColony === 'All') return [];
+    const fromCustomers = customers
+      .filter(c => matchCustomerToColonyAndSector(c, selectedColony, 'All'))
+      .map(c => c.sector || '')
+      .filter(Boolean);
+    return getHierarchySectorsForColony(selectedColony, fromCustomers);
+  }, [selectedColony, customers]);
+
+  const handleColonyChange = (colony: string) => {
+    setSelectedColony(colony);
+    setSelectedSubSector('All');
+    setCurrentPage(1);
+  };
+
+  // Filter customers with strict Beat-Level RBAC Scoping & Admin Staff Filter
+  const filteredCustomers = customers.filter(c => {
+    // 1. Strict Beat-Level Data Visibility Restriction: Non-admin staff only see their assigned Beat records
+    if (!staffPermissionService.matchesUserBeatScope(userProfile, c)) {
+      return false;
     }
 
     // 2. Admin Staff Filter
@@ -121,21 +160,32 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
       (c.enteredByName && c.enteredByName.toLowerCase().includes(s)) ||
       (c.assignedStaffName && c.assignedStaffName.toLowerCase().includes(s));
 
-    // 4. Sector & Beat filters
-    const matchesSector = selectedSector === 'All' || 
-      (c.sector && c.sector.includes(selectedSector)) || 
-      (c.area && c.area.includes(selectedSector)) ||
-      (c.address?.sectorLocality && c.address.sectorLocality.includes(selectedSector));
+    // 4. Hierarchical Colony & Sub-Sector filter
+    const matchesColonyAndSector = matchCustomerToColonyAndSector(c, selectedColony, selectedSubSector);
 
     const matchesBeat = selectedBeat === 'All' || c.beatNo === selectedBeat;
     const matchesVerification = selectedVerification === 'All' || c.verificationStatus === selectedVerification;
     const matchesConflict = !showConflictsOnly || c.hasConflict;
 
-    return matchesSearch && matchesSector && matchesBeat && matchesVerification && matchesConflict;
+    return matchesSearch && matchesColonyAndSector && matchesBeat && matchesVerification && matchesConflict;
   });
 
-  // Sort
+  // Sort (Default 'colony' sorts Colony Name ascending A to Z, then House/Plot Number ascending)
   const sortedCustomers = [...filteredCustomers].sort((a, b) => {
+    if (sortField === 'colony' || sortField === 'sector') {
+      const colA = (a.area || a.sectorLocality || a.address?.area || a.sector || '').trim();
+      const colB = (b.area || b.sectorLocality || b.address?.area || b.sector || '').trim();
+      const cmp = colA.localeCompare(colB, undefined, { numeric: true, sensitivity: 'base' });
+      if (cmp !== 0) return sortAsc ? cmp : -cmp;
+      const hA = (a.houseNo || a.address?.houseNumber || '').trim();
+      const hB = (b.houseNo || b.address?.houseNumber || '').trim();
+      return sortAsc
+        ? hA.localeCompare(hB, undefined, { numeric: true, sensitivity: 'base' })
+        : hB.localeCompare(hA, undefined, { numeric: true, sensitivity: 'base' });
+    }
+    if (sortField === 'latest') {
+      return 0;
+    }
     let aVal = a[sortField] || '';
     let bVal = b[sortField] || '';
     if (typeof aVal === 'string') aVal = aVal.toLowerCase();
@@ -146,7 +196,11 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
     return 0;
   });
 
-  const toggleSort = (field: 'name' | 'masterId' | 'sector' | 'leadScore') => {
+  const totalPages = Math.max(1, Math.ceil(sortedCustomers.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedCustomers = sortedCustomers.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  const toggleSort = (field: 'colony' | 'name' | 'masterId' | 'sector' | 'leadScore') => {
     if (sortField === field) {
       setSortAsc(!sortAsc);
     } else {
@@ -157,6 +211,21 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
 
   return (
     <div className="space-y-5" id="master-customer-directory">
+      {statusBanner && (
+        <div className={`p-3.5 rounded-2xl border flex items-center justify-between text-xs font-bold shadow-xs ${
+          statusBanner.type === 'warning'
+            ? 'bg-amber-50 border-amber-300 text-amber-900'
+            : 'bg-emerald-50 border-emerald-300 text-emerald-900'
+        }`}>
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={16} className={statusBanner.type === 'warning' ? 'text-amber-700' : 'text-emerald-700'} />
+            <span>{statusBanner.message}</span>
+          </div>
+          <button onClick={() => setStatusBanner(null)} className="text-slate-500 hover:text-slate-800">
+            <X size={14} />
+          </button>
+        </div>
+      )}
       
       {/* Active User Status & Quota Banner */}
       {userProfile && (
@@ -247,7 +316,7 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
           <button
             onClick={() => {
               if (quotaCheck.limit > 0 && quotaCheck.todayCount >= quotaCheck.limit) {
-                alert(`दैनिक सीमा पूर्ण (Daily Limit Reached): आप आज के लिए निर्धारित ${quotaCheck.limit} प्रविष्टियां पूरी कर चुके हैं।`);
+                showNotification(`दैनिक सीमा पूर्ण (Daily Limit Reached): आप आज के लिए निर्धारित ${quotaCheck.limit} प्रविष्टियां पूरी कर चुके हैं।`, 'warning');
                 return;
               }
               setCustomerToEdit(null);
@@ -315,50 +384,88 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
           )}
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
-          {/* Sector Filter */}
-          <span className="text-slate-500 font-semibold flex items-center gap-1">
-            <Filter size={13} /> Area/Sector:
-          </span>
-          {['All', '6', '7', '4', '2', 'Santoshi Nagar', 'Patel Nagar'].map((sec) => (
-            <button
-              key={sec}
-              onClick={() => setSelectedSector(sec)}
-              className={`px-2.5 py-1 rounded-lg font-medium transition ${
-                selectedSector === sec
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
+        {/* Colony-First Primary Filter Bar */}
+        <div className="flex flex-wrap items-center gap-2.5 pt-1 text-xs">
+          {/* Colony-First Primary Filter Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-600 font-bold flex items-center gap-1">
+              <MapPin size={13} className="text-red-600" /> Colony:
+            </span>
+            <select
+              value={selectedColony}
+              onChange={(e) => handleColonyChange(e.target.value)}
+              className="py-1.5 px-3 rounded-xl border border-slate-300 bg-white text-slate-800 font-bold text-xs focus:ring-2 focus:ring-red-600 shadow-xs cursor-pointer"
+              id="customer-colony-filter-select"
             >
-              {sec === 'All' ? 'All Areas' : sec.length === 1 ? `Sector ${sec}` : sec}
-            </button>
-          ))}
+              <option value="All">All Major Colonies (Dadabari S.O. 324009)</option>
+              <optgroup label="Official Major Colonies (Pincode 324009 / Beats 1-33)">
+                {OFFICIAL_MAJOR_COLONIES.map((col) => (
+                  <option key={col} value={col}>
+                    {col}
+                  </option>
+                ))}
+              </optgroup>
+              {availableColonies.filter(c => !OFFICIAL_MAJOR_COLONIES.includes(c as any)).length > 0 && (
+                <optgroup label="Additional Registered Areas">
+                  {availableColonies
+                    .filter(c => !OFFICIAL_MAJOR_COLONIES.includes(c as any))
+                    .map((col) => (
+                      <option key={col} value={col}>
+                        {col}
+                      </option>
+                    ))}
+                </optgroup>
+              )}
+            </select>
+          </div>
+
+          {/* Quick Colony Pill Shortcuts for top high-volume hubs */}
+          <div className="hidden sm:flex items-center gap-1">
+            {['Keshavpura', 'Basant Vihar', 'Dadabari', 'Santoshi Nagar', 'Mahaveer Nagar'].map((col) => (
+              <button
+                key={col}
+                type="button"
+                onClick={() => handleColonyChange(selectedColony === col ? 'All' : col)}
+                className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition ${
+                  selectedColony === col
+                    ? 'bg-red-700 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {col}
+              </button>
+            ))}
+          </div>
 
           {/* Beat Filter */}
-          <span className="text-slate-500 font-semibold ml-2">Beat:</span>
-          {['All', '1', '2', '6'].map((b) => (
-            <button
-              key={b}
-              onClick={() => setSelectedBeat(b)}
-              className={`px-2 py-1 rounded-lg font-medium transition ${
-                selectedBeat === b
-                  ? 'bg-red-700 text-white'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
+          <div className="flex items-center gap-1.5 sm:ml-1">
+            <span className="text-slate-500 font-semibold">Beat:</span>
+            <select
+              value={selectedBeat}
+              onChange={(e) => {
+                setSelectedBeat(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="py-1.5 px-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-800 font-bold text-xs focus:ring-2 focus:ring-red-600"
             >
-              {b === 'All' ? 'All Beats' : `Beat ${b}`}
-            </button>
-          ))}
+              <option value="All">All Beats (1-33)</option>
+              {Array.from({ length: 33 }, (_, i) => String(i + 1)).map((b) => (
+                <option key={b} value={b}>Beat {b}</option>
+              ))}
+            </select>
+          </div>
 
           {/* Admin Staff Filter Dropdown */}
           {isAdmin && (
-            <div className="flex items-center gap-1.5 ml-2">
-              <span className="text-slate-500 font-semibold">Staff Filter:</span>
+            <div className="flex items-center gap-1.5 sm:ml-1">
+              <span className="text-slate-500 font-semibold">Staff:</span>
               <select
                 value={selectedStaffFilter}
-                onChange={(e) => setSelectedStaffFilter(e.target.value)}
-                className="p-1 rounded-lg border border-slate-300 bg-slate-50 text-slate-800 font-semibold text-xs focus:ring-2 focus:ring-red-600"
+                onChange={(e) => {
+                  setSelectedStaffFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="py-1.5 px-2 rounded-xl border border-slate-300 bg-slate-50 text-slate-800 font-semibold text-xs focus:ring-2 focus:ring-red-600"
               >
                 <option value="All">All Staff Entries</option>
                 <option value="ekta">Ekta Meena (ektamahenmeena@gmail.com)</option>
@@ -369,8 +476,11 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
           )}
 
           <button
-            onClick={() => setShowConflictsOnly(!showConflictsOnly)}
-            className={`px-2.5 py-1 rounded-lg font-semibold ml-auto transition flex items-center gap-1 ${
+            onClick={() => {
+              setShowConflictsOnly(!showConflictsOnly);
+              setCurrentPage(1);
+            }}
+            className={`px-2.5 py-1.5 rounded-xl font-semibold ml-auto transition flex items-center gap-1 text-xs ${
               showConflictsOnly 
                 ? 'bg-amber-600 text-white' 
                 : 'bg-amber-100 text-amber-900 hover:bg-amber-200'
@@ -380,6 +490,55 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
             <span>{showConflictsOnly ? 'Conflicts Only' : 'Filter Conflicts'}</span>
           </button>
         </div>
+
+        {/* Dynamic Nested Sector / Block Quick-Filter Bar */}
+        {selectedColony !== 'All' && (
+          <div className="p-3 bg-red-50/70 rounded-xl border border-red-200 flex flex-wrap items-center gap-2 animate-fadeIn text-xs">
+            <div className="flex items-center gap-1.5 text-red-900 font-black shrink-0">
+              <Layers size={14} className="text-red-700" />
+              <span>{selectedColony} Sub-Sectors / Blocks:</span>
+            </div>
+            <button
+              onClick={() => {
+                setSelectedSubSector('All');
+                setCurrentPage(1);
+              }}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition shadow-xs ${
+                selectedSubSector === 'All'
+                  ? 'bg-red-700 text-white'
+                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              All {selectedColony} ({customers.filter(c => matchCustomerToColonyAndSector(c, selectedColony, 'All')).length})
+            </button>
+            {customerColonySubSectorChips.map((sec) => {
+              const count = customers.filter(c => matchCustomerToColonyAndSector(c, selectedColony, sec)).length;
+              return (
+                <button
+                  key={sec}
+                  onClick={() => {
+                    setSelectedSubSector(sec);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition shadow-xs flex items-center gap-1.5 ${
+                    selectedSubSector === sec
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <span>{sec}</span>
+                  {count > 0 && (
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      selectedSubSector === sec ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Customer Master Table */}
@@ -414,8 +573,8 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {sortedCustomers.length > 0 ? (
-                sortedCustomers.map((cust, custIdx) => (
+              {paginatedCustomers.length > 0 ? (
+                paginatedCustomers.map((cust, custIdx) => (
                   <tr key={cust.id ? `cust-${cust.id}-${custIdx}` : cust.masterId ? `cust-m-${cust.masterId}-${custIdx}` : `cust-row-${custIdx}`} className="hover:bg-slate-50/80 transition">
                     <td className="px-4 py-3 font-mono font-bold text-slate-900">
                       {cust.masterId || cust.id}
@@ -527,16 +686,26 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
                         </button>
 
                         {/* Edit Record */}
-                        <button
-                          onClick={() => {
-                            setCustomerToEdit(cust);
-                            setShowAddModal(true);
-                          }}
-                          className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition"
-                          title="Edit Record"
-                        >
-                          <Edit3 size={14} />
-                        </button>
+                        {customerService.canEditRecord(cust, userProfile) ? (
+                          <button
+                            onClick={() => {
+                              setCustomerToEdit(cust);
+                              setShowAddModal(true);
+                            }}
+                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition"
+                            title="Edit Record"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                        ) : (
+                          <button
+                            disabled
+                            className="p-1.5 bg-slate-100/50 text-slate-300 rounded-lg cursor-not-allowed"
+                            title="Locked: Field staff can edit only records created by them"
+                          >
+                            <Lock size={14} />
+                          </button>
+                        )}
 
                         {/* Delete (Admin Only) */}
                         {isAdmin && (
@@ -549,15 +718,32 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
                           </button>
                         )}
 
-                        {onAddLead && (
-                          <button
-                            onClick={() => onAddLead(cust)}
-                            className="p-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg transition"
-                            title="Create Lead"
-                          >
-                            <Target size={14} />
-                          </button>
-                        )}
+                        <button
+                          onClick={() => {
+                            if (onAddLead) {
+                              onAddLead(cust);
+                            } else {
+                              navigate('/leads', { state: { initialCustomer: cust } });
+                            }
+                          }}
+                          className="p-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg transition cursor-pointer"
+                          title="Create Lead"
+                        >
+                          <Target size={14} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (onAddFollowUp) {
+                              onAddFollowUp(cust);
+                            } else {
+                              navigate('/followups', { state: { initialCustomer: cust } });
+                            }
+                          }}
+                          className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition cursor-pointer"
+                          title="Schedule Follow-up"
+                        >
+                          <Calendar size={14} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -571,6 +757,54 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Fast Pagination Footer */}
+        <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="text-slate-600 font-medium">
+            Showing{' '}
+            <span className="font-bold text-slate-900">
+              {sortedCustomers.length === 0 ? 0 : (safePage - 1) * pageSize + 1}
+            </span>{' '}
+            to{' '}
+            <span className="font-bold text-slate-900">
+              {Math.min(safePage * pageSize, sortedCustomers.length)}
+            </span>{' '}
+            of <span className="font-bold text-slate-900">{sortedCustomers.length}</span> customers
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-700"
+            >
+              <option value={50}>50 / page</option>
+              <option value={100}>100 / page</option>
+              <option value={500}>Show All ({sortedCustomers.length})</option>
+            </select>
+            <button
+              type="button"
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 disabled:opacity-40 hover:bg-slate-100 cursor-pointer"
+            >
+              Prev
+            </button>
+            <span className="font-bold text-slate-800 px-2">
+              Page {safePage} / {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={safePage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 disabled:opacity-40 hover:bg-slate-100 cursor-pointer"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
 
@@ -643,6 +877,45 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Customer Confirmation Modal */}
+      {customerToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                <Trash2 size={18} className="text-red-600" />
+                <span>Confirm Customer Removal</span>
+              </h3>
+              <button
+                onClick={() => setCustomerToDelete(null)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              क्या आप ग्राहक <strong>"{customerToDelete.name}"</strong> (ID: <span className="font-mono">{customerToDelete.masterId || customerToDelete.id}</span>) को Master Source से हटाना चाहते हैं?
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setCustomerToDelete(null)}
+                className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteCustomer}
+                className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-bold shadow-xs"
+              >
+                Delete Record
+              </button>
+            </div>
           </div>
         </div>
       )}

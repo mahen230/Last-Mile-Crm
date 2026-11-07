@@ -378,5 +378,132 @@ export const POSTAL_PRODUCTS: ProductDefinition[] = [
     faqs: [
       { question: 'Are child fingerprints taken for 0-5 years?', answer: 'No biometric fingerprint is taken for children below 5 years; facial photo and parent authentication are used.' }
     ]
+  },
+  {
+    id: 'prod-rpli-gram-santosh',
+    code: 'RPLI_GRAM_SANTOSH',
+    name: 'Rural Postal Life Insurance (RPLI): Gram Suraksha & Gram Santosh',
+    category: 'Postal Life Insurance',
+    tagline: 'Affordable life cover & maturity wealth creation for rural and semi-urban families',
+    description: 'Sovereign-backed life insurance and endowment assurance tailored for rural and general citizens with low monthly premiums and high government bonus rates.',
+    interestRateOrBonus: '₹60 to ₹65 per ₹1,000 Sum Assured annual bonus',
+    minInvestment: 'Minimum Sum Assured ₹10,000; Maximum ₹10,00,000',
+    tenure: 'Maturity options at age 35, 40, 45, 50, 55, 58, or 60 years',
+    taxBenefits: 'Income Tax rebate under Section 80C & tax-free maturity under Section 10(10D)',
+    isPopular: true,
+    targetAudience: 'Rural residents, self-employed citizens, traders, artisans, and household earners',
+    eligibility: [
+      'Age between 19 and 55 years at entry',
+      'Resident of eligible rural/semi-urban area or Panchayat jurisdiction'
+    ],
+    keyBenefits: [
+      'High annual bonus with sovereign Government of India claim guarantee',
+      'Loan facility available after 3 years of continuous policy active status',
+      'Easy premium collection at any Post Office or through IPPB mobile app',
+      'Full Sum Assured plus accrued bonus payable on maturity or to nominee'
+    ],
+    requiredDocuments: [
+      'RPLI Proposal Form',
+      'Aadhaar Card & Address Proof',
+      'Age Proof (School Certificate / Birth Certificate / Aadhaar)',
+      'Passport size photograph'
+    ],
+    howToApply: [
+      'Click Quick Inquiry to schedule a doorstep consultation with your Beat Postman.',
+      'Complete simple KYC and non-medical/medical declaration.',
+      'Pay initial premium and receive digital policy receipt immediately.'
+    ],
+    faqs: [
+      { question: 'What is the maximum sum assured under RPLI?', answer: 'An eligible individual can avail up to ₹10,00,000 coverage across RPLI schemes.' }
+    ]
+  },
+  {
+    id: 'prod-ippb-aeps-dlc',
+    code: 'IPPB_DOORSTEP',
+    name: 'Doorstep AePS Cash Delivery & Jeevan Pramaan (DLC)',
+    category: 'Digital Banking & Aadhaar',
+    tagline: 'Withdraw cash from any bank account & submit Pensioner Life Certificate at home',
+    description: 'India Post Payments Bank brings the bank counter to your doorstep—withdraw cash using Aadhaar micro-ATM (AePS), pay utility bills, or generate biometric Digital Life Certificate (Jeevan Pramaan) for pensioners from home.',
+    interestRateOrBonus: 'Instant Biometric Settlement (Zero Travel Required)',
+    minInvestment: 'Cash withdrawal up to ₹10,000 per transaction via Aadhaar',
+    tenure: 'Instant real-time doorstep service',
+    taxBenefits: 'Official Government Pension & Direct Benefit Transfer (DBT) gateway',
+    isPopular: true,
+    targetAudience: 'Senior citizens, pensioners, homemakers, differently-abled citizens, and families',
+    eligibility: [
+      'Any citizen with an Aadhaar-seeded bank account (for AePS cash withdrawal)',
+      'Central/State Government pensioners (for Digital Life Certificate / Jeevan Pramaan)'
+    ],
+    keyBenefits: [
+      'Withdraw cash from any Aadhaar-linked bank account right at your doorstep',
+      'Biometric Jeevan Pramaan (DLC) submission in 2 minutes without visiting treasury or bank',
+      'Instant SMS confirmation and printed/digital transaction receipt',
+      'Dedicated priority doorstep service for senior citizens and pensioners across India'
+    ],
+    requiredDocuments: [
+      'Aadhaar Number',
+      'PPO Number & Pension Disbursing Bank details (for Jeevan Pramaan DLC)',
+      'Registered Mobile Number'
+    ],
+    howToApply: [
+      'Submit your Name & Mobile Number via Quick Inquiry on this page.',
+      'Your designated Beat Postman will visit with a biometric micro-ATM device.',
+      'Authenticate with fingerprint/face scan for instant service completion.'
+    ],
+    faqs: [
+      { question: 'Do I need an IPPB account to withdraw cash via AePS?', answer: 'No, you can withdraw cash from ANY bank account in India as long as your Aadhaar is linked to that bank account.' }
+    ]
+  },
+  {
+    id: 'prod-ippb-accident-insurance',
+    code: 'IPPB_GPA',
+    name: 'IPPB Group Personal Accident Insurance (GPA)',
+    category: 'IPPB Loan & Insurance Services',
+    tagline: '₹10 Lakh Accidental Life & Disability Coverage at just ₹399/year',
+    description: 'Special affordable accident insurance protection for citizens and breadwinners offering ₹10 Lakh sum assured, hospital daily cash, child education assistance, and OPD benefits through India Post Payments Bank.',
+    interestRateOrBonus: '₹10,00,000 Coverage for ₹399 to ₹549 / Year',
+    minInvestment: '₹399 per year premium',
+    tenure: '1 Year (Renewable annually)',
+    taxBenefits: 'Medical expense benefits & tax exemption on claims',
+    isPopular: true,
+    targetAudience: 'Citizens aged 18 to 65 years, drivers, daily commuters, and breadwinners',
+    eligibility: ['Individual aged 18 to 65 years with IPPB Savings Account'],
+    keyBenefits: [
+      '₹10,00,000 accidental death & permanent total disability cover',
+      'Accidental hospitalization in-patient expenses up to ₹1,00,000',
+      'Higher education allowance for surviving eligible children',
+      'Instant paperless issuance at doorstep by Postman in 2 minutes'
+    ],
+    requiredDocuments: ['IPPB Account Number or Aadhaar biometric authentication'],
+    howToApply: ['Click Quick Inquiry or request your Beat Postman to issue policy via micro-ATM app'],
+    faqs: [
+      { question: 'Is medical check-up required for IPPB GPA?', answer: 'No medical examination is required; issuance is instant based on simple self-declaration.' }
+    ]
+  },
+  {
+    id: 'prod-ippb-loans',
+    code: 'IPPB_LOANS',
+    name: 'IPPB Doorstep Loan & Financial Assistance',
+    category: 'IPPB Loan & Insurance Services',
+    tagline: 'Transparent Gold, Personal & Business Loans facilitated directly at your home',
+    description: 'In partnership with leading nationalized banks and financial institutions, India Post Payments Bank facilitates doorstep loan applications with minimal paperwork and preferential interest rates.',
+    interestRateOrBonus: 'Competitive Interest Rates starting from 8.85% p.a.',
+    minInvestment: 'Loan amounts from ₹25,000 to ₹25,00,000',
+    tenure: 'Flexible repayment from 12 to 84 months',
+    taxBenefits: 'Interest benefits applicable as per Income Tax regulations on business/home loans',
+    isPopular: true,
+    targetAudience: 'Salaried employees, small business merchants, farmers, and property/gold owners',
+    eligibility: ['Indian residents aged 21 to 60 years with steady verifiable income or gold collateral'],
+    keyBenefits: [
+      'Doorstep preliminary document pickup and pre-screening by Postman',
+      'No hidden processing charges or unapproved markups',
+      'Transparent disbursement directly into your bank or IPPB account',
+      'High loan-to-value ratio on Sovereign Gold & term deposits'
+    ],
+    requiredDocuments: ['Aadhaar Card', 'PAN Card', 'Bank statement (3-6 months) or Gold collateral valuation'],
+    howToApply: ['Submit inquiry online on this portal and select preferred contact time'],
+    faqs: [
+      { question: 'Can Postman collect loan documents from home?', answer: 'Yes, your designated Beat Postman can pick up preliminary documents and initiate digital KYC verification.' }
+    ]
   }
 ];

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Fuel,
   ArrowLeftRight,
@@ -14,8 +15,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import { operationsService } from '../../services/operationsService';
-import { SpecialBillRecord, SpecialBillType } from '../../types/models';
-import { getDefaultFixedKmForBeat } from '../../services/staffPermissionService';
+import { SpecialBillRecord, SpecialBillType, FuelLedgerEntry } from '../../types/models';
+import { staffPermissionService, getDefaultFixedKmForBeat } from '../../services/staffPermissionService';
 import {
   FuelDailyRow,
   MAHEN_FUEL_REFERENCE_ROWS,
@@ -24,6 +25,7 @@ import {
   downloadOfficialFuelBillPDF,
   extractBeatNumberOnly,
 } from '../../utils/fuelBillPdfGenerator';
+import { downloadOfficialAcg61Pdf } from '../../utils/acg61PdfGenerator';
 
 function calculateDaysBetween(fromStr: string, toStr: string): number {
   if (!fromStr || !toStr) return 1;
@@ -39,9 +41,22 @@ export default function SpecialFormsView() {
   const { userProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<SpecialBillType>('FUEL_BILL');
   const [bills, setBills] = useState<SpecialBillRecord[]>([]);
+  const [fuelLedger, setFuelLedger] = useState<FuelLedgerEntry[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [selectedBillForPrint, setSelectedBillForPrint] = useState<SpecialBillRecord | null>(null);
   const [showDailyScheduleEditor, setShowDailyScheduleEditor] = useState<boolean>(false);
+  const [showAddFuelLedgerModal, setShowAddFuelLedgerModal] = useState<boolean>(false);
+
+  // Operational Fuel & Expense Ledger Form State (DSS Reconciliation Format)
+  const [fledDate, setFledDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [fledOpeningKm, setFledOpeningKm] = useState<number>(42900);
+  const [fledClosingKm, setFledClosingKm] = useState<number>(43050);
+  const [fledFuelLitres, setFledFuelLitres] = useState<number>(3.4);
+  const [fledPricePerLitre, setFledPricePerLitre] = useState<number>(104.88);
+  const [fledReceiptNo, setFledReceiptNo] = useState<string>('IOCL-KOTA-92410');
+  const [fledStation, setFledStation] = useState<string>('Indian Oil - CAD Circle Filling Station, Kota');
+  const [fledPaymentMode, setFledPaymentMode] = useState<FuelLedgerEntry['paymentMode']>('UPI / DakPay');
+  const [fledRemarks, setFledRemarks] = useState<string>('Beat 2 Doorstep Delivery Odometer & Fuel Receipt');
 
   // Auto-filled Profile Context (defaults to Official MAHEN FUEL.pdf Reference Profile)
   const autoEmpId = userProfile?.employeeId || '50457421';
@@ -71,12 +86,80 @@ export default function SpecialFormsView() {
   }, [userProfile]);
 
   useEffect(() => {
-    setBills(operationsService.getSpecialBills());
-    const unsub = operationsService.subscribe(() => {
-      setBills(operationsService.getSpecialBills());
+    const refreshSpecialForms = () => {
+      const currentProfile = staffPermissionService.getActiveSession() || userProfile;
+      setBills(
+        operationsService
+          .getSpecialBills()
+          .filter((b) =>
+            staffPermissionService.matchesUserBeatScope(currentProfile, {
+              beatNo: b.beatNo,
+              assignedStaffName: b.employeeName,
+              assignedStaffEmail: b.employeeEmail,
+            })
+          )
+      );
+      setFuelLedger(
+        operationsService
+          .getFuelLedgerEntries()
+          .filter((f) =>
+            staffPermissionService.matchesUserBeatScope(currentProfile, {
+              beatNo: f.beatNo,
+              assignedStaffName: f.employeeName,
+            })
+          )
+      );
+    };
+    refreshSpecialForms();
+    const unsub = operationsService.subscribe(refreshSpecialForms);
+    const unsubStaff = staffPermissionService.subscribe(refreshSpecialForms);
+    return () => {
+      unsub();
+      unsubStaff();
+    };
+  }, [userProfile]);
+
+  const handleAddFuelLedgerSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const netKm = Math.max(0, Number(fledClosingKm) - Number(fledOpeningKm));
+    const totalCost = Math.round((Number(fledFuelLitres) || 0) * (Number(fledPricePerLitre) || 104.88));
+    const created = operationsService.addFuelLedgerEntry({
+      date: fledDate,
+      employeeId,
+      employeeName,
+      beatNo,
+      officeName,
+      vehicleNo,
+      openingKmReading: Number(fledOpeningKm) || 0,
+      closingKmReading: Number(fledClosingKm) || 0,
+      sanctionedBeatKm: netKm || fixedKm,
+      fuelVolumeLitres: Number(fledFuelLitres) || 0,
+      fuelPricePerLitre: Number(fledPricePerLitre) || 104.88,
+      totalFuelCost: totalCost,
+      receiptNumber: fledReceiptNo.trim() || `RCPT-${Date.now().toString().slice(-5)}`,
+      fuelStationName: fledStation.trim() || 'Indian Oil Filling Station, Kota',
+      paymentMode: fledPaymentMode,
+      dssReconciliationStatus: 'Verified by SPM',
+      remarks: fledRemarks,
     });
-    return () => unsub();
-  }, []);
+    setFledOpeningKm(created.closingKmReading);
+    setFledClosingKm(created.closingKmReading + fixedKm * 5);
+    setShowAddFuelLedgerModal(false);
+    setStatusMessage(
+      `Fuel & Odometer Ledger Entry (${created.id}) recorded: ${created.openingKmReading} KM → ${created.closingKmReading} KM (${created.netKmRun} KM · ${created.fuelVolumeLitres}L · ₹${created.totalFuelCost} · Receipt #${created.receiptNumber}) ready for DSS Reconciliation!`
+    );
+  };
+
+  const handleExportFuelLedgerCSV = () => {
+    const csv = operationsService.exportFuelLedgerToCSV(fuelLedger);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `DSS_FUEL_ODOMETER_RECONCILIATION_LEDGER_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const totalCalendarDays = useMemo(() => calculateDaysBetween(fromDate, toDate), [fromDate, toDate]);
 
@@ -282,6 +365,18 @@ export default function SpecialFormsView() {
           orderReferenceNo: orderRefNo,
           cashAndStampsHandedOver: handoverInventory,
         },
+      });
+      // Automatically download Form ACG-61 PDF
+      downloadOfficialAcg61Pdf({
+        relievedOfficerName: relievedName,
+        relievedOfficerId: relievedId,
+        relievingOfficerName: employeeName,
+        relievingOfficerId: employeeId,
+        postName: relievedDesig || 'O/S POSTMAN',
+        placeName: officeName || 'DADABARI SO',
+        date: fromDate,
+        noonSection: sessionType?.toLowerCase().includes('forenoon') ? 'AM' : 'PM',
+        authorityOrderNo: orderRefNo,
       });
     } else if (activeTab === 'OUTSIDER_BILL') {
       created = operationsService.createSpecialBill({
@@ -863,6 +958,28 @@ export default function SpecialFormsView() {
 
         {activeTab === 'CHARGE_REPORT' && (
           <div className="space-y-4 pt-2 border-t border-slate-200">
+            {/* Quick Access to the dedicated ACG-61 Image Scanner & Fast Transfer Page */}
+            <div className="bg-gradient-to-r from-red-900 via-red-800 to-red-950 p-4 rounded-2xl text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md border border-red-700">
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-black uppercase tracking-wider text-amber-300">
+                  New Official Feature
+                </span>
+                <h4 className="font-bold text-sm text-white">
+                  ACG-61 Charge Report Scanner & Instant Transfer Form
+                </h4>
+                <p className="text-xs text-red-200">
+                  Upload an image of Form ACG-61, select Relieved/Relieving officer, date, AM/PM noon session, and get an instant downloadable PDF.
+                </p>
+              </div>
+              <Link
+                to="/charge-report"
+                className="px-4 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-xl text-xs font-black shrink-0 transition flex items-center justify-center gap-1.5 shadow-md"
+              >
+                <span>Open ACG-61 Scanner Page</span>
+                <ArrowLeftRight size={14} />
+              </Link>
+            </div>
+
             <h3 className="text-base font-bold text-slate-900">
               Step 2: Form ACG-61 Relieved & Relieving Officer Details
             </h3>
@@ -1219,6 +1336,273 @@ export default function SpecialFormsView() {
         </div>
       </form>
 
+      {/* Operational Fuel & Expense Ledger (KM Reading, Fuel Volume, Cost & Receipt Tracking for DSS Reconciliation) */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-5" id="dss-fuel-ledger-section">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+          <div>
+            <div className="text-xs font-bold text-red-800 uppercase tracking-wide">
+              Standard Operational Ledger · DSS (Daily Summary Sheet) Reconciliation
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mt-0.5">
+              Fuel Bill & Expense Logging Register (Odometer KM Reading, Fuel Volume, Cost & Receipt Tracking)
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Reconciles physical vehicle odometer KM readings, fuel bunk volume (Litres), receipt numbers, and sanctioned beat allowance for DSS accounting.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowAddFuelLedgerModal(!showAddFuelLedgerModal)}
+              className="px-4 py-2 bg-red-800 hover:bg-red-900 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <Fuel size={14} />
+              <span>{showAddFuelLedgerModal ? 'Close Ledger Entry Form' : '+ Log Odometer & Fuel Receipt'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleExportFuelLedgerCSV}
+              className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <Download size={14} />
+              <span>Export DSS Ledger (CSV)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Summary KPI Strip for DSS Reconciliation */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+            <span className="text-slate-500 font-semibold block">Total Odometer KM Logged</span>
+            <span className="text-xl font-black text-slate-900 font-mono tabular-nums mt-0.5 block">
+              {fuelLedger.reduce((s, e) => s + e.netKmRun, 0)} KM
+            </span>
+            <span className="text-[11px] text-emerald-700 font-semibold">
+              Matched against {fixedKm} KM/day Beat Scale
+            </span>
+          </div>
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+            <span className="text-slate-500 font-semibold block">Total Fuel Volume Dispensed</span>
+            <span className="text-xl font-black text-slate-900 font-mono tabular-nums mt-0.5 block">
+              {fuelLedger.reduce((s, e) => s + e.fuelVolumeLitres, 0).toFixed(2)} Litres
+            </span>
+            <span className="text-[11px] text-slate-500">Verified Petrol Bunk Vouchers</span>
+          </div>
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+            <span className="text-slate-500 font-semibold block">Total Fuel Receipt Cost</span>
+            <span className="text-xl font-black text-red-800 font-mono tabular-nums mt-0.5 block">
+              ₹{fuelLedger.reduce((s, e) => s + e.totalFuelCost, 0).toLocaleString('en-IN')}
+            </span>
+            <span className="text-[11px] text-slate-500">Actual Bunk Receipts Logged</span>
+          </div>
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+            <span className="text-slate-500 font-semibold block">DSS Reconciliation Status</span>
+            <span className="text-xl font-black text-emerald-700 font-mono tabular-nums mt-0.5 block">
+              {fuelLedger.filter((e) => e.dssReconciliationStatus === 'Reconciled with DSS').length} / {fuelLedger.length}
+            </span>
+            <span className="text-[11px] text-emerald-700 font-semibold">Reconciled with Sub-Office DSS</span>
+          </div>
+        </div>
+
+        {/* Collapsible Add Fuel & Odometer Entry Form */}
+        {showAddFuelLedgerModal && (
+          <form
+            onSubmit={handleAddFuelLedgerSubmit}
+            className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-4 text-xs"
+          >
+            <div className="font-bold text-slate-900">
+              New Operational Fuel & Odometer Log Entry (DSS Reconciliation Format)
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Refill / Log Date *</label>
+                <input
+                  type="date"
+                  required
+                  value={fledDate}
+                  onChange={(e) => setFledDate(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Opening KM Reading *</label>
+                <input
+                  type="number"
+                  required
+                  value={fledOpeningKm}
+                  onChange={(e) => setFledOpeningKm(Number(e.target.value))}
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Closing KM Reading *</label>
+                <input
+                  type="number"
+                  required
+                  value={fledClosingKm}
+                  onChange={(e) => setFledClosingKm(Number(e.target.value))}
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Fuel Volume (Litres) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={fledFuelLitres}
+                  onChange={(e) => setFledFuelLitres(Number(e.target.value))}
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Fuel Rate (₹/Litre)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={fledPricePerLitre}
+                  onChange={(e) => setFledPricePerLitre(Number(e.target.value))}
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Receipt / Voucher No. *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="IOCL-KOTA-XXXXX"
+                  value={fledReceiptNo}
+                  onChange={(e) => setFledReceiptNo(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+              <div className="sm:col-span-4">
+                <label className="block font-bold text-slate-700 mb-1">Fuel Station / Bunk Name</label>
+                <input
+                  type="text"
+                  value={fledStation}
+                  onChange={(e) => setFledStation(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block font-bold text-slate-700 mb-1">Payment Mode</label>
+                <select
+                  value={fledPaymentMode}
+                  onChange={(e) => setFledPaymentMode(e.target.value as any)}
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg font-semibold"
+                >
+                  <option value="UPI / DakPay">UPI / DakPay</option>
+                  <option value="IPPB">IPPB Account</option>
+                  <option value="Cash">Cash Voucher</option>
+                  <option value="Card">Fleet Card</option>
+                </select>
+              </div>
+              <div className="sm:col-span-4">
+                <label className="block font-bold text-slate-700 mb-1">Operational Remarks</label>
+                <input
+                  type="text"
+                  value={fledRemarks}
+                  onChange={(e) => setFledRemarks(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <button
+                  type="submit"
+                  className="w-full py-2 px-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg cursor-pointer"
+                >
+                  Save Ledger Entry
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+
+        {/* Operational Fuel & Odometer Ledger Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-slate-200 text-slate-500 bg-slate-50">
+                <th className="py-2.5 px-3 font-semibold">Date & ID</th>
+                <th className="py-2.5 px-3 font-semibold">Staff & Beat</th>
+                <th className="py-2.5 px-3 font-semibold text-right">Opening → Closing KM</th>
+                <th className="py-2.5 px-3 font-semibold text-right">Net KM Run</th>
+                <th className="py-2.5 px-3 font-semibold text-right">Fuel Volume</th>
+                <th className="py-2.5 px-3 font-semibold text-right">Total Cost</th>
+                <th className="py-2.5 px-3 font-semibold">Receipt & Fuel Bunk</th>
+                <th className="py-2.5 px-3 font-semibold">DSS Status</th>
+                <th className="py-2.5 px-3 font-semibold text-right">Reconcile</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {fuelLedger.map((entry) => (
+                <tr key={entry.id} className="hover:bg-slate-50/80 transition">
+                  <td className="py-2.5 px-3 font-mono whitespace-nowrap">
+                    <div className="font-bold text-slate-900">{entry.date}</div>
+                    <div className="text-[10px] text-slate-500">{entry.id}</div>
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <div className="font-semibold text-slate-900">{entry.employeeName}</div>
+                    <div className="text-[11px] font-mono text-slate-500">
+                      {entry.beatNo} · {entry.vehicleNo}
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-3 text-right font-mono tabular-nums text-slate-800 whitespace-nowrap">
+                    {entry.openingKmReading} → {entry.closingKmReading}
+                  </td>
+                  <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700 tabular-nums whitespace-nowrap">
+                    {entry.netKmRun} KM
+                  </td>
+                  <td className="py-2.5 px-3 text-right font-mono tabular-nums text-slate-800 whitespace-nowrap">
+                    {entry.fuelVolumeLitres} L <span className="text-[10px] text-slate-400">(@₹{entry.fuelPricePerLitre})</span>
+                  </td>
+                  <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900 tabular-nums whitespace-nowrap">
+                    ₹{entry.totalFuelCost.toLocaleString('en-IN')}
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <div className="font-mono font-bold text-red-800">{entry.receiptNumber}</div>
+                    <div className="text-[11px] text-slate-500 truncate max-w-48">
+                      {entry.fuelStationName} ({entry.paymentMode})
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-3 whitespace-nowrap">
+                    <span
+                      className={`font-bold text-[11px] ${
+                        entry.dssReconciliationStatus === 'Reconciled with DSS'
+                          ? 'text-emerald-700'
+                          : 'text-amber-700'
+                      }`}
+                    >
+                      ✓ {entry.dssReconciliationStatus}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                    {entry.dssReconciliationStatus !== 'Reconciled with DSS' ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          operationsService.updateFuelLedgerStatus(entry.id, 'Reconciled with DSS')
+                        }
+                        className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                      >
+                        Mark DSS Reconciled
+                      </button>
+                    ) : (
+                      <span className="text-[11px] font-mono text-slate-400">Verified</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Submitted Forms & Reimbursements Ledger */}
       <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -1345,6 +1729,36 @@ export default function SpecialFormsView() {
                   >
                     <Download size={14} />
                     <span>Download Official 2-Page PDF</span>
+                  </button>
+                )}
+                {selectedBillForPrint.type === 'CHARGE_REPORT' && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      downloadOfficialAcg61Pdf({
+                        relievedOfficerName:
+                          selectedBillForPrint.details.relievedOfficerName ||
+                          selectedBillForPrint.employeeName,
+                        relievedOfficerId: selectedBillForPrint.details.relievedOfficerId,
+                        relievingOfficerName:
+                          selectedBillForPrint.details.relievingOfficerName || 'VACANT',
+                        relievingOfficerId: selectedBillForPrint.details.relievingOfficerId,
+                        postName: selectedBillForPrint.details.relievedDesignation || 'O/S POSTMAN',
+                        placeName: selectedBillForPrint.officeName || 'DADABARI SO',
+                        date: selectedBillForPrint.fromDate,
+                        noonSection: selectedBillForPrint.details.sessionType
+                          ?.toLowerCase()
+                          .includes('forenoon')
+                          ? 'AM'
+                          : 'PM',
+                        authorityOrderNo: selectedBillForPrint.details.orderReferenceNo,
+                        copyToList: selectedBillForPrint.details.copyToList,
+                      })
+                    }
+                    className="px-4 py-2 bg-red-800 hover:bg-red-900 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Download size={14} />
+                    <span>Download Form ACG-61 PDF</span>
                   </button>
                 )}
                 <button

@@ -90,7 +90,6 @@ UM-02873,Neha Yadav,9799920815.0,9799920815.0,,,,,,,,,HH-SANTOSHI-H605B-NEHA,,,,
 UM-02875,Asha Prajapati,8290144765.0,8290144765.0,,,,,,,,,HH-SANTOSHI-H675-ASHA,,,,,,Wife of Bajrang Lal Prajapati; H. No. 675 Santoshi Nagar.,Field Confirmed,,,User field input
 UM-02876,Suraj Harijan,7742239527.0,7742239527.0,,,,,,,,,HH-SANTOSHI-H104A-SURAJ,,,,,,"S/o Mukesh Harijan; 104-A Santoshi Nagar, near TVS Circle.",Field Confirmed,,,User field input
 UM-02877,Golu Meghwal,7742251336.0,7742251336.0,,,,,,,,,HH-RAJNAGAR-GOLU-MEGHWAL,,,,,,Raj Nagar. Parent of two daughters. Sukanya + Aadhaar follow-up for both daughters.,Field Confirmed,,,User field input
-UM-02878,Chetan Porwal,9799344952.0,9799344952.0,,,,,,,,,,,,,,,"BPM, Mandaliya BO under Mandana S.O., Kota Division; CELC Operator.",Field Confirmed,,,User field input
 UM-02879,Nand Bihari Prajapati,9929304352.0,9929304352.0,,,,,,,,,HH-NAND-BIHARI-PRAJAPATI,,,,,,Reference by Parmanand Ji. Interest: I and RD. Urgent daily follow-up.,Field Confirmed,,,User field input
 UM-02880,Surendra Jangid,9887541336.0,9887541336.0,,,,,,,,,HH-KP-221-SURENDRA-JANGID,,,,,,H. No. 221 Keshavpura. S/o Babu Lal Ji. Sector not defined.,Field Confirmed,,,User field input
 UM-02881,Kiran Parwani,9782175978.0,9782175978.0,,,,,,,,,HH-KP-S7-UIT175-KIRAN,,,,,,"UIT 175, Keshavpura Sector 7, near Vasundra Park. Chandra Prakash Parwani recorded as related person.",Field Confirmed,,,User field input

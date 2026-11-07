@@ -308,7 +308,6 @@ export default function DirectMessageModal({
                       <option value="1">Beat 1 (Dadabari)</option>
                       <option value="2">Beat 2 (Keshavpura)</option>
                       <option value="6">Beat 6 (Keshavpura Sec 4)</option>
-                      <option value="Mandaliya">Mandaliya BO</option>
                     </select>
                   </div>
                 </div>

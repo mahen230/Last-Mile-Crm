@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Customer, CustomerProductRelation, VerificationStatus } from '../../types/models';
 import { 
   X, User, Phone, MapPin, Building, Shield, CheckCircle2, 
   AlertTriangle, Clock, Calendar, FileText, Plus, ArrowUpRight, 
-  Sparkles, Tag, ChevronRight, Edit3, MessageSquare 
+  Sparkles, Tag, ChevronRight, Edit3, MessageSquare, ArrowRightLeft, Home
 } from 'lucide-react';
 import { customerService } from '../../services/customerService';
 import { POSTAL_PRODUCTS } from '../../data/productsData';
 import DirectMessageModal from '../crm/DirectMessageModal';
+import { useAuth } from '../auth/FirebaseAuthProvider';
 
 interface Props {
   customer: Customer;
@@ -17,14 +19,162 @@ interface Props {
   onAddFollowUp?: (customer: Customer) => void;
 }
 
-export default function CustomerProfileModal({ customer, onClose, onEdit, onAddLead, onAddFollowUp }: Props) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'leads' | 'followups' | 'timeline'>('overview');
-  const [verificationStatus, setVerificationStatus] = useState<VerificationStatus>(customer.verificationStatus);
+export default function CustomerProfileModal({ customer: initialCustomerProp, onClose, onEdit, onAddLead, onAddFollowUp }: Props) {
+  const navigate = useNavigate();
+  const { userProfile } = useAuth();
+  const [customer, setCustomer] = useState<Customer>(initialCustomerProp);
+  const [activeTab, setActiveTab] = useState<'overview' | 'relocation' | 'products' | 'leads' | 'followups' | 'timeline'>('overview');
+  const [verificationStatus, setVerificationStatus] = useState<VerificationStatus>(initialCustomerProp.verificationStatus);
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [newProductCode, setNewProductCode] = useState(POSTAL_PRODUCTS[0].code);
   const [newProductAmount, setNewProductAmount] = useState('');
   const [newProductRemarks, setNewProductRemarks] = useState('');
+  const [profileNotice, setProfileNotice] = useState<string | null>(null);
+
+  // Permanent vs Residential Address inline editor state
+  const [editingAddresses, setEditingAddresses] = useState(false);
+  const [resHouseNo, setResHouseNo] = useState(
+    customer.residentialAddress?.houseNo || customer.address?.houseNumber || customer.houseNo || ''
+  );
+  const [resStreet, setResStreet] = useState(
+    customer.residentialAddress?.street || customer.address?.street || customer.street || 'Main Colony Street'
+  );
+  const [resLandmark, setResLandmark] = useState(
+    customer.residentialAddress?.landmark || customer.address?.landmark || customer.landmark || 'Near Sector Park'
+  );
+  const [resSector, setResSector] = useState(
+    customer.residentialAddress?.sectorLocality || customer.sector || customer.area || 'Keshavpura Sector 7'
+  );
+  const [resPincode, setResPincode] = useState(
+    customer.residentialAddress?.pincode || customer.address?.pincode || customer.pincode || '324009'
+  );
+  const [sameAsResidential, setSameAsResidential] = useState<boolean>(
+    customer.sameAsResidential ?? true
+  );
+  const [permHouseNo, setPermHouseNo] = useState(
+    customer.permanentAddress?.houseNo || customer.address?.houseNumber || customer.houseNo || ''
+  );
+  const [permStreet, setPermStreet] = useState(
+    customer.permanentAddress?.street || customer.street || 'Main Colony Street'
+  );
+  const [permLandmark, setPermLandmark] = useState(
+    customer.permanentAddress?.landmark || customer.landmark || 'Near Sector Park'
+  );
+  const [permSector, setPermSector] = useState(
+    customer.permanentAddress?.sectorLocality || customer.sector || customer.area || 'Keshavpura Sector 7'
+  );
+  const [permPincode, setPermPincode] = useState(
+    customer.permanentAddress?.pincode || customer.address?.pincode || customer.pincode || '324009'
+  );
+
+  // Shifted / Relocation History logging form state
+  const [showRelocationForm, setShowRelocationForm] = useState(false);
+  const [shiftHouseNo, setShiftHouseNo] = useState('');
+  const [shiftStreet, setShiftStreet] = useState('');
+  const [shiftLandmark, setShiftLandmark] = useState('');
+  const [shiftColony, setShiftColony] = useState('Keshavpura Sector 6');
+  const [shiftPincode, setShiftPincode] = useState('324009');
+  const [shiftBeatNo, setShiftBeatNo] = useState(customer.beatNo || '2');
+  const [shiftReason, setShiftReason] = useState('Tenant Shifted');
+  const [shiftRedirection, setShiftRedirection] = useState(true);
+  const [shiftRemarks, setShiftRemarks] = useState('');
+
+  const handleSaveAddresses = (e: React.FormEvent) => {
+    e.preventDefault();
+    const resFull = `${resHouseNo ? resHouseNo + ', ' : ''}${resStreet ? resStreet + ', ' : ''}${resSector}${
+      resLandmark ? ` (Near ${resLandmark})` : ''
+    } - ${resPincode}`;
+    const permFull = sameAsResidential
+      ? resFull
+      : `${permHouseNo ? permHouseNo + ', ' : ''}${permStreet ? permStreet + ', ' : ''}${permSector}${
+          permLandmark ? ` (Near ${permLandmark})` : ''
+        } - ${permPincode}`;
+
+    const updated = customerService.updateCustomerAddresses(
+      customer.id,
+      {
+        houseNo: resHouseNo,
+        houseNumber: resHouseNo,
+        street: resStreet,
+        landmark: resLandmark,
+        sectorLocality: resSector,
+        area: resSector,
+        pincode: resPincode,
+        fullAddress: resFull,
+      },
+      {
+        houseNo: sameAsResidential ? resHouseNo : permHouseNo,
+        houseNumber: sameAsResidential ? resHouseNo : permHouseNo,
+        street: sameAsResidential ? resStreet : permStreet,
+        landmark: sameAsResidential ? resLandmark : permLandmark,
+        sectorLocality: sameAsResidential ? resSector : permSector,
+        area: sameAsResidential ? resSector : permSector,
+        pincode: sameAsResidential ? resPincode : permPincode,
+        fullAddress: permFull,
+      },
+      sameAsResidential,
+      userProfile?.name || 'Postal Staff'
+    );
+    if (updated) {
+      setCustomer({ ...updated });
+      setEditingAddresses(false);
+      setProfileNotice('Residential & Permanent Addresses saved successfully!');
+      setTimeout(() => setProfileNotice(null), 3500);
+    }
+  };
+
+  const handleRecordRelocationSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shiftHouseNo.trim() && !shiftColony.trim()) return;
+    const updated = customerService.recordCustomerRelocation(customer.id, {
+      newHouseNo: shiftHouseNo.trim() || 'New Plot',
+      newStreet: shiftStreet.trim() || 'Main Street',
+      newLandmark: shiftLandmark.trim() || 'Main Landmark',
+      newSectorOrColony: shiftColony.trim(),
+      newPincode: shiftPincode.trim() || '324009',
+      newBeatNo: shiftBeatNo,
+      reason: shiftReason,
+      redirectionActive: shiftRedirection,
+      recordedBy: userProfile?.name || 'Mahendra Kumar Meena',
+      remarks: shiftRemarks.trim(),
+    });
+    if (updated) {
+      setCustomer({ ...updated });
+      setResHouseNo(updated.houseNo || '');
+      setResStreet(updated.street || '');
+      setResLandmark(updated.landmark || '');
+      setResSector(updated.sector || '');
+      setResPincode(updated.pincode || '324009');
+      setShowRelocationForm(false);
+      setShiftHouseNo('');
+      setShiftStreet('');
+      setShiftLandmark('');
+      setShiftRemarks('');
+      setProfileNotice(
+        `Relocation Recorded: Customer shifted to ${updated.residentialAddress?.fullAddress} (Beat ${updated.beatNo}). Mail redirection active!`
+      );
+      setTimeout(() => setProfileNotice(null), 4000);
+    }
+  };
+
+  const handleCreateLeadClick = () => {
+    if (onAddLead) {
+      onAddLead(customer);
+    } else {
+      onClose();
+      navigate('/leads', { state: { initialCustomer: customer } });
+    }
+  };
+
+  const handleScheduleFollowUpClick = () => {
+    if (onAddFollowUp) {
+      onAddFollowUp(customer);
+    } else {
+      onClose();
+      navigate('/follow-ups', { state: { initialCustomer: customer } });
+    }
+  };
 
   const handleStatusChange = (newStatus: VerificationStatus) => {
     setVerificationStatus(newStatus);
@@ -87,7 +237,7 @@ export default function CustomerProfileModal({ customer, onClose, onEdit, onAddL
                 </span>
                 <span className="flex items-center gap-1">
                   <MapPin size={13} className="text-red-400" />
-                  <span>{customer.address?.fullAddress || `${customer.address.houseNumber || ''}, ${customer.address.sectorLocality || customer.address.area || 'Keshavpura'}`}</span>
+                  <span>{customer.address?.fullAddress || `${customer.address?.houseNumber || customer.houseNo || ''}, ${customer.address?.sectorLocality || customer.address?.area || customer.sector || customer.area || 'Keshavpura'}`}</span>
                 </span>
                 <span className="flex items-center gap-1">
                   <Building size={13} className="text-blue-400" />
@@ -124,7 +274,8 @@ export default function CustomerProfileModal({ customer, onClose, onEdit, onAddL
         {/* Tab Navigation */}
         <div className="bg-slate-100 px-6 border-b border-slate-200 flex gap-2 overflow-x-auto text-xs font-semibold">
           {[
-            { id: 'overview', label: '360° Overview' },
+            { id: 'overview', label: '360° Overview & Addresses' },
+            { id: 'relocation', label: `Shifted / Relocation History (${customer.relocationHistory?.length || 0})` },
             { id: 'products', label: `Products & Accounts (${customer.products?.length || 0})` },
             { id: 'leads', label: `Active Leads (${customerLeads.length})` },
             { id: 'followups', label: `Follow-ups (${customerFollowUps.length})` },
@@ -146,6 +297,16 @@ export default function CustomerProfileModal({ customer, onClose, onEdit, onAddL
 
         {/* Modal Body Content */}
         <div className="p-6 overflow-y-auto flex-1 text-slate-800 text-sm">
+          {profileNotice && (
+            <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs font-semibold flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+                <span>{profileNotice}</span>
+              </div>
+              <button onClick={() => setProfileNotice(null)} className="text-emerald-700 font-bold">✕</button>
+            </div>
+          )}
+
           {activeTab === 'overview' && (
             <div className="space-y-6">
               {/* Conflict Alert Box if present */}
@@ -174,9 +335,9 @@ export default function CustomerProfileModal({ customer, onClose, onEdit, onAddL
 
                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
                   <div className="font-bold text-slate-900 text-sm mb-1">Postal & Geographic Location</div>
-                  <div><strong>House / Plot No:</strong> {customer.address.houseNumber || 'N/A'}</div>
-                  <div><strong>Sector / Area:</strong> {customer.address.sectorLocality || customer.address.area || 'Keshavpura'}</div>
-                  <div><strong>Pincode:</strong> {customer.address.pincode || '324009'}</div>
+                  <div><strong>House / Plot No:</strong> {customer.address?.houseNumber || customer.houseNo || 'N/A'}</div>
+                  <div><strong>Sector / Area:</strong> {customer.address?.sectorLocality || customer.address?.area || customer.sector || customer.area || 'Keshavpura'}</div>
+                  <div><strong>Pincode:</strong> {customer.address?.pincode || '324009'}</div>
                   <div><strong>Beat / Delivery Route:</strong> Beat {customer.beatNo || '2'}</div>
                   <div><strong>Sub-Post Office:</strong> {customer.officeId || 'DADABARI_SO'}</div>
                   <div><strong>Property ID:</strong> {customer.propertyId || 'Unassigned'}</div>
@@ -204,6 +365,203 @@ export default function CustomerProfileModal({ customer, onClose, onEdit, onAddL
                 </div>
               </div>
 
+              {/* Permanent vs. Residential Address Comparison & Inline Editor */}
+              <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Home size={16} className="text-red-700" />
+                    <h4 className="font-bold text-xs text-slate-900 uppercase tracking-wide">
+                      Residential vs. Permanent Address Register (House No, Street, Landmark)
+                    </h4>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingAddresses(!editingAddresses)}
+                      className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold transition cursor-pointer"
+                    >
+                      {editingAddresses ? 'Cancel Edit' : 'Edit Addresses'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('relocation');
+                        setShowRelocationForm(true);
+                      }}
+                      className="px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-950 rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                    >
+                      <ArrowRightLeft size={13} />
+                      <span>Log Shifted / Relocation</span>
+                    </button>
+                  </div>
+                </div>
+
+                {editingAddresses ? (
+                  <form onSubmit={handleSaveAddresses} className="space-y-4 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <div className="font-bold text-red-800">1. Current Residential Address</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-0.5">House Number</label>
+                        <input
+                          type="text"
+                          value={resHouseNo}
+                          onChange={(e) => setResHouseNo(e.target.value)}
+                          placeholder="e.g. 445-A"
+                          className="w-full p-2 bg-white border border-slate-300 rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Street / Lane</label>
+                        <input
+                          type="text"
+                          value={resStreet}
+                          onChange={(e) => setResStreet(e.target.value)}
+                          placeholder="e.g. Gali No. 3"
+                          className="w-full p-2 bg-white border border-slate-300 rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Landmark</label>
+                        <input
+                          type="text"
+                          value={resLandmark}
+                          onChange={(e) => setResLandmark(e.target.value)}
+                          placeholder="Near Tejaji Mandir"
+                          className="w-full p-2 bg-white border border-slate-300 rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Colony & Sector</label>
+                        <input
+                          type="text"
+                          value={resSector}
+                          onChange={(e) => setResSector(e.target.value)}
+                          className="w-full p-2 bg-white border border-slate-300 rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Pincode</label>
+                        <input
+                          type="text"
+                          value={resPincode}
+                          onChange={(e) => setResPincode(e.target.value)}
+                          className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-200">
+                      <label className="inline-flex items-center gap-2 font-bold text-slate-800 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={sameAsResidential}
+                          onChange={(e) => setSameAsResidential(e.target.checked)}
+                          className="rounded border-slate-300 text-red-700"
+                        />
+                        <span>Permanent Address is identical to Current Residential Address</span>
+                      </label>
+                    </div>
+
+                    {!sameAsResidential && (
+                      <div className="space-y-2 pt-1">
+                        <div className="font-bold text-slate-800">2. Permanent / Native Address</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 mb-0.5">House Number</label>
+                            <input
+                              type="text"
+                              value={permHouseNo}
+                              onChange={(e) => setPermHouseNo(e.target.value)}
+                              className="w-full p-2 bg-white border border-slate-300 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Street / Lane</label>
+                            <input
+                              type="text"
+                              value={permStreet}
+                              onChange={(e) => setPermStreet(e.target.value)}
+                              className="w-full p-2 bg-white border border-slate-300 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Landmark</label>
+                            <input
+                              type="text"
+                              value={permLandmark}
+                              onChange={(e) => setPermLandmark(e.target.value)}
+                              className="w-full p-2 bg-white border border-slate-300 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Colony / Village</label>
+                            <input
+                              type="text"
+                              value={permSector}
+                              onChange={(e) => setPermSector(e.target.value)}
+                              className="w-full p-2 bg-white border border-slate-300 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Pincode</label>
+                            <input
+                              type="text"
+                              value={permPincode}
+                              onChange={(e) => setPermPincode(e.target.value)}
+                              className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingAddresses(false)}
+                        className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-semibold"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-lg font-bold cursor-pointer"
+                      >
+                        Save Both Addresses
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-red-800">Current Residential Address (Active Delivery)</span>
+                        <span className="font-mono text-[11px] text-slate-500">Beat {customer.beatNo || '2'}</span>
+                      </div>
+                      <div><strong>House Number:</strong> {customer.residentialAddress?.houseNo || customer.address?.houseNumber || customer.houseNo || 'N/A'}</div>
+                      <div><strong>Street / Lane:</strong> {customer.residentialAddress?.street || customer.address?.street || customer.street || 'Main Colony Road'}</div>
+                      <div><strong>Landmark:</strong> {customer.residentialAddress?.landmark || customer.address?.landmark || customer.landmark || 'Near Sector Park / Temple'}</div>
+                      <div><strong>Colony / Sector:</strong> {customer.residentialAddress?.sectorLocality || customer.sector || customer.area || 'Keshavpura'}</div>
+                      <div><strong>Pincode:</strong> <span className="font-mono">{customer.residentialAddress?.pincode || customer.address?.pincode || '324009'}</span></div>
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-800">Permanent / Native Address</span>
+                        <span className="text-[11px] text-emerald-700 font-semibold">
+                          {customer.sameAsResidential === false ? 'Separate Permanent Address' : 'Same as Residential'}
+                        </span>
+                      </div>
+                      <div><strong>House Number:</strong> {customer.permanentAddress?.houseNo || customer.residentialAddress?.houseNo || customer.houseNo || 'N/A'}</div>
+                      <div><strong>Street / Lane:</strong> {customer.permanentAddress?.street || customer.residentialAddress?.street || customer.street || 'Main Colony Road'}</div>
+                      <div><strong>Landmark:</strong> {customer.permanentAddress?.landmark || customer.residentialAddress?.landmark || customer.landmark || 'Near Sector Park / Temple'}</div>
+                      <div><strong>Colony / Sector:</strong> {customer.permanentAddress?.sectorLocality || customer.sector || customer.area || 'Keshavpura'}</div>
+                      <div><strong>Pincode:</strong> <span className="font-mono">{customer.permanentAddress?.pincode || customer.address?.pincode || '324009'}</span></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Remarks & Field Notes */}
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
                 <h4 className="font-bold text-xs text-slate-900 mb-1">Historical Remarks & Field Audit Notes</h4>
@@ -214,32 +572,230 @@ export default function CustomerProfileModal({ customer, onClose, onEdit, onAddL
 
               {/* Action Buttons */}
               <div className="flex flex-wrap items-center gap-3 pt-2">
-                {onAddLead && (
-                  <button
-                    onClick={() => onAddLead(customer)}
-                    className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1.5 transition"
-                  >
-                    <Plus size={15} />
-                    <span>Create New Lead</span>
-                  </button>
-                )}
-                {onAddFollowUp && (
-                  <button
-                    onClick={() => onAddFollowUp(customer)}
-                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1.5 transition"
-                  >
-                    <Calendar size={15} />
-                    <span>Schedule Follow-Up</span>
-                  </button>
-                )}
                 <button
+                  type="button"
+                  onClick={handleCreateLeadClick}
+                  className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Plus size={15} />
+                  <span>Create New Lead</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleScheduleFollowUpClick}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Calendar size={15} />
+                  <span>Schedule Follow-Up</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setShowAddProductModal(true)}
-                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1.5 transition"
+                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1.5 transition cursor-pointer"
                 >
                   <Plus size={15} />
                   <span>Attach Postal Product</span>
                 </button>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'relocation' && (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                    <ArrowRightLeft size={16} className="text-red-700" />
+                    <span>Shifted / Relocation History & Mail Redirection Tracker</span>
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Track household address changes across beats and sub-offices to ensure uninterrupted mail, passbook, and scheme communication.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowRelocationForm(!showRelocationForm)}
+                  className="px-3.5 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus size={14} />
+                  <span>{showRelocationForm ? 'Close Relocation Form' : 'Record New Relocation / Address Shift'}</span>
+                </button>
+              </div>
+
+              {showRelocationForm && (
+                <form
+                  onSubmit={handleRecordRelocationSubmit}
+                  className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3 text-xs"
+                >
+                  <div className="font-bold text-slate-900">
+                    New Shifted / Relocated Address Details (Updates Active Delivery Route & Preserves Permanent History)
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">New House / Plot No. *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 2F-20"
+                        value={shiftHouseNo}
+                        onChange={(e) => setShiftHouseNo(e.target.value)}
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">New Street / Road *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Dispensary Road"
+                        value={shiftStreet}
+                        onChange={(e) => setShiftStreet(e.target.value)}
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">New Landmark *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Near Central Park"
+                        value={shiftLandmark}
+                        onChange={(e) => setShiftLandmark(e.target.value)}
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">New Colony / Sector *</label>
+                      <input
+                        type="text"
+                        required
+                        value={shiftColony}
+                        onChange={(e) => setShiftColony(e.target.value)}
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">New Pincode *</label>
+                      <input
+                        type="text"
+                        required
+                        value={shiftPincode}
+                        onChange={(e) => setShiftPincode(e.target.value)}
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">New Delivery Beat</label>
+                      <select
+                        value={shiftBeatNo}
+                        onChange={(e) => setShiftBeatNo(e.target.value)}
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg font-semibold"
+                      >
+                        {Array.from({ length: 33 }, (_, i) => String(i + 1)).map((b) => (
+                          <option key={b} value={b}>
+                            Beat {b}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Relocation Reason</label>
+                      <select
+                        value={shiftReason}
+                        onChange={(e) => setShiftReason(e.target.value)}
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg"
+                      >
+                        <option value="Tenant Shifted">Tenant Shifted</option>
+                        <option value="Own House Purchased">Own House Purchased</option>
+                        <option value="Job / Service Transfer">Job / Service Transfer</option>
+                        <option value="Family Relocation">Family Relocation</option>
+                        <option value="Marriage / Joint Family">Marriage / Joint Family</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center pt-1">
+                    <input
+                      type="text"
+                      placeholder="Field verification remarks (e.g. Neighbour confirmed new address)"
+                      value={shiftRemarks}
+                      onChange={(e) => setShiftRemarks(e.target.value)}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-lg"
+                    />
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="inline-flex items-center gap-1.5 font-semibold text-slate-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={shiftRedirection}
+                          onChange={(e) => setShiftRedirection(e.target.checked)}
+                          className="rounded border-slate-300 text-red-700"
+                        />
+                        <span>Enable Mail & Passbook Redirection</span>
+                      </label>
+                      <button
+                        type="submit"
+                        className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg cursor-pointer"
+                      >
+                        Save Relocation
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              )}
+
+              {customer.relocationHistory && customer.relocationHistory.length > 0 ? (
+                <div className="space-y-3">
+                  {customer.relocationHistory.map((rel) => (
+                    <div
+                      key={rel.id}
+                      className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="font-bold text-slate-900">
+                          Shifted Date: <span className="font-mono">{rel.shiftedDate}</span> · Reason:{' '}
+                          <span className="text-red-800">{rel.reason}</span>
+                        </div>
+                        <span className="text-[11px] font-semibold text-emerald-800">
+                          {rel.redirectionActive ? '✓ Mail Redirection Active' : 'Redirection Closed'} · Recorded by {rel.recordedBy}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div className="p-3 bg-white border border-slate-200 rounded-lg">
+                          <div className="text-[10px] font-bold text-slate-500 uppercase">
+                            Previous Address (Beat {rel.previousBeatNo || '2'})
+                          </div>
+                          <div className="text-slate-800 font-medium mt-0.5">{rel.previousAddress}</div>
+                        </div>
+                        <div className="p-3 bg-white border border-emerald-200 rounded-lg">
+                          <div className="text-[10px] font-bold text-emerald-700 uppercase">
+                            New Shifted Address (Beat {rel.newBeatNo})
+                          </div>
+                          <div className="text-slate-900 font-bold mt-0.5">{rel.newAddress}</div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">
+                            House: {rel.newHouseNo} · Street: {rel.newStreet} · Landmark: {rel.newLandmark}
+                          </div>
+                        </div>
+                      </div>
+                      {rel.remarks && (
+                        <div className="text-slate-600 text-[11px]">Remarks: {rel.remarks}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-6 text-center bg-slate-50 rounded-xl border border-slate-200 text-slate-500 text-xs space-y-2">
+                  <div className="font-semibold text-slate-700">
+                    No Relocation / Address Shift Recorded Yet
+                  </div>
+                  <p>
+                    If this customer or tenant has shifted to a new house, street, or colony, click &quot;Record New Relocation / Address Shift&quot; above to log the new address while preserving their permanent record.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -291,14 +847,13 @@ export default function CustomerProfileModal({ customer, onClose, onEdit, onAddL
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="font-bold text-sm text-slate-900">CRM Lead Inquiries & Pipeline</h4>
-                {onAddLead && (
-                  <button
-                    onClick={() => onAddLead(customer)}
-                    className="px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-lg text-xs font-semibold flex items-center gap-1"
-                  >
-                    <Plus size={14} /> New Lead
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleCreateLeadClick}
+                  className="px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus size={14} /> New Lead
+                </button>
               </div>
 
               {customerLeads?.length > 0 ? (
@@ -331,14 +886,13 @@ export default function CustomerProfileModal({ customer, onClose, onEdit, onAddL
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="font-bold text-sm text-slate-900">Scheduled & Completed Follow-ups</h4>
-                {onAddFollowUp && (
-                  <button
-                    onClick={() => onAddFollowUp(customer)}
-                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold flex items-center gap-1"
-                  >
-                    <Plus size={14} /> Schedule Follow-up
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleScheduleFollowUpClick}
+                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus size={14} /> Schedule Follow-up
+                </button>
               </div>
 
               {customerFollowUps?.length > 0 ? (

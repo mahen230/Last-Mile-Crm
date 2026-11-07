@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Map,
+  Map as MapIcon,
   Users,
   MessageSquare,
   Send,
@@ -33,6 +33,7 @@ import {
 } from '../../services/staffPermissionService';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import DirectMessageModal from './DirectMessageModal';
+import { RAJASTHAN_CIRCLE_OFFICE_MASTER_LIST, RAJASTHAN_DIVISIONS } from '../../data/officesData';
 
 export interface BeatCardItem {
   id: string;
@@ -54,6 +55,10 @@ export interface BeatCardItem {
   coverageValue: number;
   status: string;
   assignedStaffCount: number;
+  circle?: string;
+  division?: string;
+  district?: string;
+  subDivision?: string;
 }
 
 export interface OfficeHubOption {
@@ -64,6 +69,10 @@ export interface OfficeHubOption {
   parentOfficeName: string;
   linkedDeliveryOffices: string[];
   completeAddress: string;
+  circle?: string;
+  division?: string;
+  district?: string;
+  subDivision?: string;
 }
 
 export default function BeatManagementView({
@@ -88,8 +97,11 @@ export default function BeatManagementView({
   const [dynamicOffices, setDynamicOffices] = useState<DynamicOfficeRecord[]>([]);
   const [allStaffProfiles, setAllStaffProfiles] = useState<StaffProfile[]>([]);
 
-  // 1. Admin Office Filter ("ALL" or specific officeId)
+  // 1. Rajasthan Circle Interactive Hierarchy Filters (Circle -> Division -> Post Office -> Beat)
+  const [selectedCircleFilter, setSelectedCircleFilter] = useState<string>('Rajasthan Circle');
+  const [selectedDivisionFilter, setSelectedDivisionFilter] = useState<string>('ALL');
   const [selectedOfficeFilter, setSelectedOfficeFilter] = useState<string>('ALL');
+  const [selectedBeatFilter, setSelectedBeatFilter] = useState<string>('ALL');
 
   // 2. Quick Search (by Office Name, Pincode, Beat Number, Postman, or Colony)
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -145,80 +157,30 @@ export default function BeatManagementView({
     );
   }, [userProfile, simulateNonAdminOfficeId]);
 
-  // Build canonical list of Post Offices / Delivery Hubs for the dropdown & switcher
+  // Build canonical list of Post Offices / Delivery Hubs for the dropdown & switcher across Rajasthan Circle
   const officeHubOptions = useMemo<OfficeHubOption[]>(() => {
-    const coreHubs: OfficeHubOption[] = [
-      {
-        officeId: 'DADABARI_SO',
-        postOfficeName: 'Dadabari S.O.',
-        officeType: 'SO',
-        pincode: '324009',
-        parentOfficeName: 'Kota H.O. (324001)',
-        linkedDeliveryOffices: [
-          'Mandaliya B.O. (324009)',
-          'Borabas B.O. (325003)',
-          'Engineering College S.O. (324010)',
-        ],
-        completeAddress:
-          'Dadabari Sub-Post Office, Near CAD Circle, Dadabari Extension, Kota, Rajasthan - 324009',
-      },
-      {
-        officeId: 'ENG_COLLEGE_SO',
-        postOfficeName: 'Engineering College S.O.',
-        officeType: 'SO',
-        pincode: '324010',
-        parentOfficeName: 'Kota H.O. (324001)',
-        linkedDeliveryOffices: [
-          'Borabas B.O. (325003)',
-          'Rathkankra B.O. (324010)',
-          'Dadabari S.O. (324009)',
-        ],
-        completeAddress:
-          'Engineering College Sub-Post Office, RTU Campus Road, Rawatbhata Road, Kota - 324010',
-      },
-      {
-        officeId: 'BORABAS_BO',
-        postOfficeName: 'Borabas B.O.',
-        officeType: 'BO',
-        pincode: '325003',
-        parentOfficeName: 'Engineering College S.O. (324010) / Kota H.O.',
-        linkedDeliveryOffices: [
-          'Engineering College S.O. (324010)',
-          'Dadabari S.O. (324009)',
-          'Dolya Rural Delivery Point (325003)',
-        ],
-        completeAddress:
-          'Borabas Branch Post Office, Rawatbhata Highway Belt, Under Engineering College S.O., Kota - 325003',
-      },
-      {
-        officeId: 'MANDALIYA_BO',
-        postOfficeName: 'Mandaliya B.O.',
-        officeType: 'BO',
-        pincode: '324009',
-        parentOfficeName: 'Dadabari S.O. (324009) / Kota H.O.',
-        linkedDeliveryOffices: [
-          'Dadabari S.O. (324009)',
-          'Naya Gaon Outskirts B.O. Link (324009)',
-        ],
-        completeAddress:
-          'Mandaliya Branch Post Office, Naya Gaon Rural Belt, Under Dadabari S.O., Kota - 324009',
-      },
-      {
-        officeId: 'KOTA_HO',
-        postOfficeName: 'Kota H.O.',
-        officeType: 'HO',
-        pincode: '324001',
-        parentOfficeName: 'Kota Division, Rajasthan Circle (324001)',
-        linkedDeliveryOffices: [
-          'Dadabari S.O. (324009)',
-          'Engineering College S.O. (324010)',
-          'Mandaliya B.O. (324009)',
-          'Borabas B.O. (325003)',
-        ],
-        completeAddress:
-          'Kota Head Post Office, Nayapura / Station Road, Kota Division, Rajasthan - 324001',
-      },
-    ];
+    const coreHubs: OfficeHubOption[] = RAJASTHAN_CIRCLE_OFFICE_MASTER_LIST.map((po) => ({
+      officeId: po.officeId,
+      postOfficeName: po.name,
+      officeType: po.type,
+      pincode: po.pin,
+      parentOfficeName: po.parentOffice,
+      linkedDeliveryOffices:
+        po.type === 'HO'
+          ? [
+              'Dadabari S.O. (324009)',
+              'Baran H.O. (325205)',
+              'Jhalawar H.O. (326001)',
+              'Bundi H.O. (323001)',
+              'Tonk H.O. (304001)',
+            ]
+          : [po.parentOffice],
+      completeAddress: po.address,
+      circle: po.circle,
+      division: po.division,
+      district: po.district,
+      subDivision: po.subDivision,
+    }));
 
     const seenIds = new Set(coreHubs.map((h) => h.officeId));
     dynamicOffices.forEach((o) => {
@@ -233,6 +195,10 @@ export default function BeatManagementView({
           parentOfficeName: meta.parentOfficeName,
           linkedDeliveryOffices: o.linkedDeliveryOffices || meta.linkedDeliveryOffices,
           completeAddress: o.completeAddress,
+          circle: o.circle || meta.circle,
+          division: o.division || meta.division,
+          district: o.district || meta.district,
+          subDivision: o.subDivision || meta.subDivision,
         });
       }
     });
@@ -252,7 +218,7 @@ export default function BeatManagementView({
         officeType: 'SO',
         pincode: '324009',
         parentOffice: 'Kota H.O. (324001)',
-        linkedDeliveryOffices: ['Mandaliya B.O. (324009)', 'Borabas B.O. (325003)'],
+        linkedDeliveryOffices: ['Engineering College S.O. (324010)'],
         assignedPostman: 'Muskan Sharma',
         employeeId: '50510312',
         contact: '9521279186',
@@ -286,7 +252,7 @@ export default function BeatManagementView({
         officeType: 'SO',
         pincode: '324009',
         parentOffice: 'Kota H.O. (324001)',
-        linkedDeliveryOffices: ['Mandaliya B.O. (324009)', 'Borabas B.O. (325003)'],
+        linkedDeliveryOffices: ['Engineering College S.O. (324010)'],
         assignedPostman: 'Mahendra Kumar Meena',
         employeeId: '50457421',
         contact: '8769706002',
@@ -330,7 +296,7 @@ export default function BeatManagementView({
         officeType: 'SO',
         pincode: '324009',
         parentOffice: 'Kota H.O. (324001)',
-        linkedDeliveryOffices: ['Mandaliya B.O. (324009)'],
+        linkedDeliveryOffices: ['Engineering College S.O. (324010)'],
         assignedPostman: 'Manali Ahuja',
         employeeId: '50510313',
         contact: '7014408315',
@@ -357,7 +323,7 @@ export default function BeatManagementView({
         officeType: 'SO',
         pincode: '324009',
         parentOffice: 'Kota H.O. (324001)',
-        linkedDeliveryOffices: ['Mandaliya B.O. (324009)'],
+        linkedDeliveryOffices: ['Engineering College S.O. (324010)'],
         assignedPostman: 'Govind Prasad',
         employeeId: '10310735',
         contact: '7877352816',
@@ -384,7 +350,7 @@ export default function BeatManagementView({
         officeType: 'SO',
         pincode: '324009',
         parentOffice: 'Kota H.O. (324001)',
-        linkedDeliveryOffices: ['Mandaliya B.O. (324009)', 'Borabas B.O. (325003)'],
+        linkedDeliveryOffices: ['Engineering College S.O. (324010)'],
         assignedPostman: 'Ramkishan Meghwal',
         employeeId: '10317473',
         contact: '9664215130',
@@ -411,7 +377,7 @@ export default function BeatManagementView({
         officeType: 'SO',
         pincode: '324010',
         parentOffice: 'Kota H.O. (324001)',
-        linkedDeliveryOffices: ['Borabas B.O. (325003)', 'Rathkankra B.O. (324010)'],
+        linkedDeliveryOffices: ['Dadabari S.O. (324009)'],
         assignedPostman: 'Vikram Singh Hada',
         employeeId: 'CSI-10448901',
         contact: '9414188210',
@@ -445,7 +411,7 @@ export default function BeatManagementView({
         officeType: 'SO',
         pincode: '324010',
         parentOffice: 'Kota H.O. (324001)',
-        linkedDeliveryOffices: ['Borabas B.O. (325003)', 'Dadabari S.O. (324009)'],
+        linkedDeliveryOffices: ['Dadabari S.O. (324009)'],
         assignedPostman: 'Suresh Chandra Verma',
         employeeId: 'CSI-10448902',
         contact: '9829077412',
@@ -463,67 +429,208 @@ export default function BeatManagementView({
         status: 'Active Daily Delivery',
         assignedStaffCount: 1,
       },
+      // Baran Division Beats
       {
-        id: 'BEAT-BOR-1',
-        beatNo: 'BOR-1',
-        name: 'Beat BOR-1 — Borabas B.O. Rural Belt & Rawatbhata Highway',
-        officeId: 'BORABAS_BO',
-        postOfficeName: 'Borabas B.O.',
-        officeType: 'BO',
-        pincode: '325003',
-        parentOffice: 'Engineering College S.O. (324010) / Kota H.O.',
-        linkedDeliveryOffices: [
-          'Engineering College S.O. (324010)',
-          'Dadabari S.O. (324009)',
-        ],
-        assignedPostman: 'Kamlesh Kumar Meena (BPM)',
-        employeeId: 'GDS-50882190',
-        contact: '9413355901',
-        fixedKm: 24,
-        areasCovered: [
-          'Borabas Village',
-          'Rawatbhata Highway Checkpost',
-          'Dolya Rural Belt',
-          'Mukundra Outskirts',
-        ],
-        totalCustomers:
-          customers?.filter(
-            (c) =>
-              c.beatNo === 'BOR-1' ||
-              c.beatNo === 'Beat BOR-1' ||
-              c.pincode === '325003' ||
-              c.officeId?.includes('BORABAS')
-          ).length || 0,
-        confirmedCoverage: '94.5%',
-        coverageValue: 94.5,
-        status: 'Rural Postal Service',
+        id: 'BEAT-BAR-1',
+        beatNo: 'BAR-1',
+        name: 'Beat 1 — Baran H.O. (Pratap Chowk & Civil Lines)',
+        officeId: 'BARAN_HO',
+        postOfficeName: 'Baran H.O.',
+        officeType: 'HO',
+        pincode: '325205',
+        circle: 'Rajasthan Circle',
+        division: 'Baran Division',
+        district: 'Baran',
+        subDivision: 'Baran North Sub-Division',
+        parentOffice: 'Baran Division, Rajasthan Circle',
+        linkedDeliveryOffices: ['Baran City S.O. (325205)'],
+        assignedPostman: 'Ramprasad Meena',
+        employeeId: 'CSI-BAR-01',
+        contact: '9414589201',
+        fixedKm: 18,
+        areasCovered: ['Pratap Chowk', 'Civil Lines Baran', 'Collectorate Circle', 'Dharmada Chauraha'],
+        totalCustomers: customers?.filter((c) => c.beatNo?.includes('BAR-1') || c.pincode === '325205').length || 0,
+        confirmedCoverage: '98.0%',
+        coverageValue: 98.0,
+        status: 'Active Daily Delivery',
         assignedStaffCount: 1,
       },
       {
-        id: 'BEAT-MANDALIYA-BO',
-        beatNo: 'BO',
-        name: 'Beat BO — Mandaliya Branch Post Office (BO) Rural Route',
-        officeId: 'MANDALIYA_BO',
-        postOfficeName: 'Mandaliya B.O.',
-        officeType: 'BO',
-        pincode: '324009',
-        parentOffice: 'Dadabari S.O. (324009) / Kota H.O.',
-        linkedDeliveryOffices: ['Dadabari S.O. (324009)', 'Kota H.O. (324001)'],
-        assignedPostman: 'Chetan Porwal (BPM Mandaliya)',
-        employeeId: 'GDS-30991204',
-        contact: '0744-2451122',
+        id: 'BEAT-ANTA-1',
+        beatNo: 'ANTA-1',
+        name: 'Beat 1 — Anta S.O. (NTPC Township & Siswali Road)',
+        officeId: 'ANTA_SO',
+        postOfficeName: 'Anta S.O.',
+        officeType: 'SO',
+        pincode: '325202',
+        circle: 'Rajasthan Circle',
+        division: 'Baran Division',
+        district: 'Baran',
+        subDivision: 'Baran North Sub-Division',
+        parentOffice: 'Baran H.O. (325205)',
+        linkedDeliveryOffices: ['Baran H.O. (325205)'],
+        assignedPostman: 'Dinesh Kumar Sharma',
+        employeeId: 'CSI-BAR-02',
+        contact: '9829145672',
         fixedKm: 20,
-        areasCovered: ['Mandaliya Village', 'Naya Gaon Outer Outskirts', 'Rooparel Rural Belt'],
-        totalCustomers:
-          customers?.filter(
-            (c) =>
-              c.beatNo === 'BO' ||
-              c.beatNo === 'Beat BO' ||
-              c.officeId?.includes('MANDALIYA')
-          ).length || 0,
-        confirmedCoverage: '92.0%',
-        coverageValue: 92.0,
-        status: 'Rural Postal Service',
+        areasCovered: ['NTPC Power Complex', 'Siswali Road', 'Balaji Temple Anta', 'Old Mandi'],
+        totalCustomers: customers?.filter((c) => c.beatNo?.includes('ANTA') || c.pincode === '325202').length || 0,
+        confirmedCoverage: '97.0%',
+        coverageValue: 97.0,
+        status: 'Active Daily Delivery',
+        assignedStaffCount: 1,
+      },
+      // Jhalawar Division Beats
+      {
+        id: 'BEAT-JHL-1',
+        beatNo: 'JHL-1',
+        name: 'Beat 1 — Jhalawar H.O. (Garh Palace & Mama Bhanja)',
+        officeId: 'JHALAWAR_HO',
+        postOfficeName: 'Jhalawar H.O.',
+        officeType: 'HO',
+        pincode: '326001',
+        circle: 'Rajasthan Circle',
+        division: 'Jhalawar Division',
+        district: 'Jhalawar',
+        subDivision: 'Jhalawar City Sub-Division',
+        parentOffice: 'Jhalawar Division, Rajasthan Circle',
+        linkedDeliveryOffices: ['Jhalrapatan S.O. (326023)'],
+        assignedPostman: 'Kailash Chand Verma',
+        employeeId: 'CSI-JHL-01',
+        contact: '9414234567',
+        fixedKm: 16,
+        areasCovered: ['Mama Bhanja Chauraha', 'Garh Palace Area', 'Brijraj Nagar', 'Mangalpura'],
+        totalCustomers: customers?.filter((c) => c.beatNo?.includes('JHL-1') || c.pincode === '326001').length || 0,
+        confirmedCoverage: '98.5%',
+        coverageValue: 98.5,
+        status: 'Active Daily Delivery',
+        assignedStaffCount: 1,
+      },
+      {
+        id: 'BEAT-PATAN-1',
+        beatNo: 'PATAN-1',
+        name: 'Beat 1 — Jhalrapatan S.O. (City of Temple Bells)',
+        officeId: 'JHALRAPATAN_SO',
+        postOfficeName: 'Jhalrapatan S.O.',
+        officeType: 'SO',
+        pincode: '326023',
+        circle: 'Rajasthan Circle',
+        division: 'Jhalawar Division',
+        district: 'Jhalawar',
+        subDivision: 'Jhalawar City Sub-Division',
+        parentOffice: 'Jhalawar H.O. (326001)',
+        linkedDeliveryOffices: ['Jhalawar H.O. (326001)'],
+        assignedPostman: 'Manish Patidar',
+        employeeId: 'CSI-JHL-02',
+        contact: '9784123456',
+        fixedKm: 18,
+        areasCovered: ['Surajpole Gate', 'Dwarikadhish Temple Road', 'Chandrabhaga Road', 'Gomti Sagar'],
+        totalCustomers: customers?.filter((c) => c.beatNo?.includes('PATAN') || c.pincode === '326023').length || 0,
+        confirmedCoverage: '97.5%',
+        coverageValue: 97.5,
+        status: 'Active Daily Delivery',
+        assignedStaffCount: 1,
+      },
+      // Bundi Division Beats
+      {
+        id: 'BEAT-BND-1',
+        beatNo: 'BND-1',
+        name: 'Beat 1 — Bundi H.O. (Sadar Bazar & Lanka Gate)',
+        officeId: 'BUNDI_HO',
+        postOfficeName: 'Bundi H.O.',
+        officeType: 'HO',
+        pincode: '323001',
+        circle: 'Rajasthan Circle',
+        division: 'Bundi Division',
+        district: 'Bundi',
+        subDivision: 'Bundi Central Sub-Division',
+        parentOffice: 'Bundi Division, Rajasthan Circle',
+        linkedDeliveryOffices: ['Keshoraipatan S.O. (323601)'],
+        assignedPostman: 'Om Prakash Saini',
+        employeeId: 'CSI-BND-01',
+        contact: '9460123789',
+        fixedKm: 17,
+        areasCovered: ['Sadar Bazar Bundi', 'Lanka Gate', 'Khoja Gate', 'Vikas Nagar'],
+        totalCustomers: customers?.filter((c) => c.beatNo?.includes('BND-1') || c.pincode === '323001').length || 0,
+        confirmedCoverage: '99.0%',
+        coverageValue: 99.0,
+        status: 'Active Daily Delivery',
+        assignedStaffCount: 1,
+      },
+      {
+        id: 'BEAT-KPATAN-1',
+        beatNo: 'KPATAN-1',
+        name: 'Beat 1 — Keshoraipatan S.O. (Chambal Ghat & Sugar Mill)',
+        officeId: 'KESHORAIPATAN_SO',
+        postOfficeName: 'Keshoraipatan S.O.',
+        officeType: 'SO',
+        pincode: '323601',
+        circle: 'Rajasthan Circle',
+        division: 'Bundi Division',
+        district: 'Bundi',
+        subDivision: 'Bundi Central Sub-Division',
+        parentOffice: 'Bundi H.O. (323001)',
+        linkedDeliveryOffices: ['Bundi H.O. (323001)'],
+        assignedPostman: 'Rameshwar Dayal',
+        employeeId: 'CSI-BND-02',
+        contact: '9828345671',
+        fixedKm: 19,
+        areasCovered: ['Keshorai Temple Ghat', 'Sugar Mill Housing', 'Station Road Patan', 'Main Market'],
+        totalCustomers: customers?.filter((c) => c.beatNo?.includes('KPATAN') || c.pincode === '323601').length || 0,
+        confirmedCoverage: '96.8%',
+        coverageValue: 96.8,
+        status: 'Active Daily Delivery',
+        assignedStaffCount: 1,
+      },
+      // Tonk Division Beats
+      {
+        id: 'BEAT-TNK-1',
+        beatNo: 'TNK-1',
+        name: 'Beat 1 — Tonk H.O. (Nazar Bagh & Civil Lines)',
+        officeId: 'TONK_HO',
+        postOfficeName: 'Tonk H.O.',
+        officeType: 'HO',
+        pincode: '304001',
+        circle: 'Rajasthan Circle',
+        division: 'Tonk Division',
+        district: 'Tonk',
+        subDivision: 'Tonk City Sub-Division',
+        parentOffice: 'Tonk Division, Rajasthan Circle',
+        linkedDeliveryOffices: ['Niwai S.O. (304021)'],
+        assignedPostman: 'Abdul Hameed',
+        employeeId: 'CSI-TNK-01',
+        contact: '9414345678',
+        fixedKm: 18,
+        areasCovered: ['Nazar Bagh', 'Civil Lines Tonk', 'Subhash Bazar', 'Bada Bazar'],
+        totalCustomers: customers?.filter((c) => c.beatNo?.includes('TNK-1') || c.pincode === '304001').length || 0,
+        confirmedCoverage: '98.2%',
+        coverageValue: 98.2,
+        status: 'Active Daily Delivery',
+        assignedStaffCount: 1,
+      },
+      {
+        id: 'BEAT-NIWAI-1',
+        beatNo: 'NIWAI-1',
+        name: 'Beat 1 — Niwai S.O. (Banasthali Link & Mandi Yard)',
+        officeId: 'NIWAI_SO',
+        postOfficeName: 'Niwai S.O.',
+        officeType: 'SO',
+        pincode: '304021',
+        circle: 'Rajasthan Circle',
+        division: 'Tonk Division',
+        district: 'Tonk',
+        subDivision: 'Tonk City Sub-Division',
+        parentOffice: 'Tonk H.O. (304001)',
+        linkedDeliveryOffices: ['Tonk H.O. (304001)'],
+        assignedPostman: 'Satyanarayan Jat',
+        employeeId: 'CSI-TNK-02',
+        contact: '9829456123',
+        fixedKm: 21,
+        areasCovered: ['Mandi Yard Niwai', 'Banasthali Link Road', 'Bhagat Singh Circle', 'Jain Mandir Road'],
+        totalCustomers: customers?.filter((c) => c.beatNo?.includes('NIWAI') || c.pincode === '304021').length || 0,
+        confirmedCoverage: '97.1%',
+        coverageValue: 97.1,
+        status: 'Active Daily Delivery',
         assignedStaffCount: 1,
       },
     ];
@@ -582,18 +689,48 @@ export default function BeatManagementView({
     ? selectedOfficeFilter
     : nonAdminAssignedOffice.officeId;
 
+  // Available offices based on selected division filter
+  const availableOfficesForDivision = useMemo(() => {
+    if (selectedDivisionFilter === 'ALL') return officeHubOptions;
+    return officeHubOptions.filter(
+      (h) => h.division === selectedDivisionFilter || (h.parentOfficeName && h.parentOfficeName.includes(selectedDivisionFilter))
+    );
+  }, [officeHubOptions, selectedDivisionFilter]);
+
+  // Available beats based on division & office selection
+  const availableBeatsForSelection = useMemo(() => {
+    return allBeats.filter((b) => {
+      if (selectedDivisionFilter !== 'ALL') {
+        const meta = resolveOfficeMetadata(b.postOfficeName, '', b.pincode);
+        if ((b.division || meta.division) !== selectedDivisionFilter) return false;
+      }
+      if (effectiveOfficeFilter !== 'ALL' && b.officeId !== effectiveOfficeFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [allBeats, selectedDivisionFilter, effectiveOfficeFilter]);
+
   // Role-Based & Office-Based Filtered Beats
   const filteredBeats = useMemo<BeatCardItem[]>(() => {
     return allBeats.filter((beat) => {
-      // 1. Strict Office Restriction for Non-Admins OR Selected Office for Super Admin
+      // 0. Circle Filter
+      if (selectedCircleFilter !== 'ALL' && beat.circle && beat.circle !== selectedCircleFilter) {
+        return false;
+      }
+
+      // 1. Division Filter (for Super Admin)
+      if (selectedDivisionFilter !== 'ALL') {
+        const beatMeta = resolveOfficeMetadata(beat.postOfficeName, '', beat.pincode);
+        const beatDivision = beat.division || beatMeta.division;
+        if (beatDivision !== selectedDivisionFilter) {
+          return false;
+        }
+      }
+
+      // 2. Strict Office Restriction for Non-Admins OR Selected Office for Super Admin
       if (effectiveOfficeFilter !== 'ALL') {
         const matchesDirectOffice = beat.officeId === effectiveOfficeFilter;
-        // Also include linked BO beats if Postmaster of parent SO is viewing their hub
-        // OR if Super Admin selects an SO/HO and wants to see its direct & linked BO beats:
-        const isLinkedChildBo =
-          (effectiveOfficeFilter === 'DADABARI_SO' && beat.officeId === 'MANDALIYA_BO') ||
-          (effectiveOfficeFilter === 'ENG_COLLEGE_SO' && beat.officeId === 'BORABAS_BO') ||
-          effectiveOfficeFilter === 'KOTA_HO';
 
         // For Non-Admin: check if they are strictly assigned to a single beat or office
         if (!isSuperAdmin && userProfile && !simulateNonAdminOfficeId) {
@@ -638,13 +775,27 @@ export default function BeatManagementView({
           }
         } else {
           // Super Admin with specific office selected or Simulated Non-Admin Office
-          if (!matchesDirectOffice && !isLinkedChildBo) {
+          if (!matchesDirectOffice) {
             return false;
           }
         }
       }
 
-      // 2. Status Filter
+      // 3. Beat / Colony Filter
+      if (selectedBeatFilter !== 'ALL') {
+        const cleanB = selectedBeatFilter.replace(/^Beat\s+/i, '').trim().toLowerCase();
+        const matchesBeatNo =
+          beat.beatNo.toLowerCase() === cleanB ||
+          `beat ${beat.beatNo}`.toLowerCase() === selectedBeatFilter.toLowerCase();
+        const matchesColony = beat.areasCovered.some(
+          (area) => area.toLowerCase().includes(selectedBeatFilter.toLowerCase())
+        );
+        if (!matchesBeatNo && !matchesColony) {
+          return false;
+        }
+      }
+
+      // 4. Status Filter
       if (beatStatusFilter !== 'ALL' && beat.status !== beatStatusFilter) {
         return false;
       }
@@ -728,11 +879,7 @@ export default function BeatManagementView({
         sp.branchOffice,
         sp.officePincode
       );
-      return (
-        spMeta.officeId === effectiveOfficeFilter ||
-        (effectiveOfficeFilter === 'DADABARI_SO' && spMeta.officeId === 'MANDALIYA_BO') ||
-        (effectiveOfficeFilter === 'ENG_COLLEGE_SO' && spMeta.officeId === 'BORABAS_BO')
-      );
+      return spMeta.officeId === effectiveOfficeFilter;
     });
 
     const staffCount = Math.max(
@@ -752,7 +899,7 @@ export default function BeatManagementView({
       assignedDeliveryStaffCount: staffCount,
       completeAddress: activeHub
         ? activeHub.completeAddress
-        : 'Kota Head Post Office, Dadabari S.O., Engineering College S.O., Mandaliya B.O. & Borabas B.O.',
+        : 'Kota Head Post Office, Dadabari S.O., Engineering College S.O.',
     };
   }, [
     effectiveOfficeFilter,
@@ -805,12 +952,9 @@ export default function BeatManagementView({
       const matchBeat =
         bNo === '2'
           ? c.beatNo === '2' || c.beatNo === 'Beat 2' || !c.beatNo
-          : bNo === 'BO'
-          ? c.beatNo === 'BO' || c.beatNo === 'Beat BO' || c.officeId?.includes('MANDALIYA')
           : c.beatNo === bNo ||
             c.beatNo === `Beat ${bNo}` ||
-            (bNo.startsWith('EC') && c.pincode === '324010') ||
-            (bNo.startsWith('BOR') && c.pincode === '325003');
+            (bNo.startsWith('EC') && c.pincode === '324010');
 
       if (!matchBeat) return false;
       if (beatModalSearch.trim()) {
@@ -1011,7 +1155,7 @@ export default function BeatManagementView({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                <Map size={22} className="text-red-700" />
+                <MapIcon size={22} className="text-red-700" />
                 <span>Postal Delivery Beats & Linked Office Management</span>
               </h2>
               {isSuperAdmin ? (
@@ -1030,51 +1174,24 @@ export default function BeatManagementView({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            {/* 1. SUPER ADMIN ONLY: Global "Select Post Office / Delivery Hub" Dropdown */}
             {isSuperAdmin ? (
-              <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-300">
-                <Building2 size={15} className="text-red-700 shrink-0" />
-                <div className="text-xs">
-                  <label
-                    htmlFor="select-post-office-hub"
-                    className="block text-[10px] font-bold uppercase tracking-wider text-slate-500"
-                  >
-                    Select Post Office / Delivery Hub
-                  </label>
-                  <select
-                    id="select-post-office-hub"
-                    value={selectedOfficeFilter}
-                    onChange={(e) => setSelectedOfficeFilter(e.target.value)}
-                    className="bg-transparent font-bold text-slate-900 text-xs focus:outline-none cursor-pointer pr-2"
-                  >
-                    <option value="ALL">All Offices (Kota Division Network)</option>
-                    {officeHubOptions.map((hub) => (
-                      <option key={hub.officeId} value={hub.officeId}>
-                        {hub.postOfficeName} ({hub.pincode}) — {hub.officeType}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div className="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs">
+                <ShieldCheck size={14} className="text-emerald-700" />
+                <span>Cross-Division Admin Rights</span>
               </div>
             ) : (
-              /* NON-ADMIN STAFF / POSTMASTERS: Global dropdown hidden; locked to assigned officeId / postOfficeName */
               <div
-                className="px-3.5 py-2 bg-slate-100 border border-slate-300 rounded-xl text-xs flex items-center gap-2"
+                className="px-3.5 py-1.5 bg-amber-50 border border-amber-300 rounded-xl text-xs flex items-center gap-2 text-amber-900 font-bold"
                 id="non-admin-locked-office-badge"
               >
-                <Building2 size={15} className="text-red-700 shrink-0" />
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-500 block">
-                    Assigned Post Office / Delivery Hub
-                  </span>
-                  <span className="font-black text-slate-900">
-                    {nonAdminAssignedOffice.postOfficeName} (PIN {nonAdminAssignedOffice.pincode})
-                  </span>
-                </div>
+                <Lock size={13} className="text-amber-700 shrink-0" />
+                <span>
+                  Locked to: {nonAdminAssignedOffice.postOfficeName} (PIN {nonAdminAssignedOffice.pincode})
+                </span>
               </div>
             )}
 
-            {/* Super Admin Role Simulation Switcher (to test Non-Admin Office Lock) */}
+            {/* Super Admin Role Simulation Switcher */}
             {isActualSuperAdmin && (
               <div className="flex items-center gap-1.5 bg-amber-50/90 border border-amber-200 px-2.5 py-1.5 rounded-xl text-xs">
                 <Eye size={13} className="text-amber-700 shrink-0" />
@@ -1091,13 +1208,12 @@ export default function BeatManagementView({
                   className="bg-transparent text-[11px] font-bold text-amber-900 focus:outline-none cursor-pointer"
                   title="Test how Non-Admin Staff / Postmasters see their restricted Post Office view"
                 >
-                  <option value="ADMIN_MODE">Role View: Super Admin (Full Dropdown)</option>
-                  <option value="Dadabari S.O.">Simulate Staff: Dadabari S.O. (324009)</option>
-                  <option value="Engineering College S.O.">
-                    Simulate Staff: Engineering College S.O. (324010)
-                  </option>
-                  <option value="Borabas B.O.">Simulate Staff: Borabas B.O. (325003)</option>
-                  <option value="Mandaliya B.O.">Simulate Staff: Mandaliya B.O. (324009)</option>
+                  <option value="ADMIN_MODE">Role View: Super Admin (Full Access)</option>
+                  <option value="Dadabari S.O.">Simulate Staff: Dadabari S.O. (Kota Div)</option>
+                  <option value="Baran H.O.">Simulate Staff: Baran H.O. (Baran Div)</option>
+                  <option value="Jhalawar H.O.">Simulate Staff: Jhalawar H.O. (Jhalawar Div)</option>
+                  <option value="Bundi H.O.">Simulate Staff: Bundi H.O. (Bundi Div)</option>
+                  <option value="Tonk H.O.">Simulate Staff: Tonk H.O. (Tonk Div)</option>
                 </select>
               </div>
             )}
@@ -1108,18 +1224,135 @@ export default function BeatManagementView({
                   setActiveMessageCustomer(null);
                   setShowMessageModal(true);
                 }}
-                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition shadow-xs"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition shadow-xs"
                 id="open-messaging-from-beats"
               >
-                <MessageSquare size={15} />
-                <span>Direct Message / Dispatch</span>
+                <MessageSquare size={14} />
+                <span>Direct Message</span>
               </button>
             ) : (
               <div className="px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-xs font-bold flex items-center gap-1.5">
-                <Lock size={14} />
-                <span>Content Sharing Restricted</span>
+                <Lock size={13} />
+                <span>Dispatch Restricted</span>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Interactive 4-Tier Hierarchy Filter Strip: Circle -> Division -> Sub-Division/Office -> Beat */}
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 space-y-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="text-[11px] font-black text-slate-700 flex items-center gap-1.5 uppercase tracking-wider">
+              <Filter size={13} className="text-red-700" />
+              <span>Rajasthan Circle Administrative Hierarchy Filters</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-slate-500 font-semibold">
+                {filteredBeats.length} delivery beats matched
+              </span>
+              {(selectedDivisionFilter !== 'ALL' || selectedOfficeFilter !== 'ALL' || selectedBeatFilter !== 'ALL' || searchQuery) && isSuperAdmin && (
+                <button
+                  onClick={() => {
+                    setSelectedDivisionFilter('ALL');
+                    setSelectedOfficeFilter('ALL');
+                    setSelectedBeatFilter('ALL');
+                    setSearchQuery('');
+                  }}
+                  className="text-[11px] font-bold text-red-700 hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <RefreshCw size={11} /> Reset Filter
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+            {/* 1. Circle Filter */}
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                1. Postal Circle
+              </label>
+              <select
+                value={selectedCircleFilter}
+                onChange={(e) => setSelectedCircleFilter(e.target.value)}
+                disabled={!isSuperAdmin}
+                className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 disabled:bg-slate-100 disabled:text-slate-500 text-xs"
+              >
+                <option value="Rajasthan Circle">Rajasthan Circle</option>
+                <option value="ALL">All Circles (Pan-India)</option>
+              </select>
+            </div>
+
+            {/* 2. Division Filter */}
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                2. Postal Division (District)
+              </label>
+              <select
+                value={selectedDivisionFilter}
+                onChange={(e) => {
+                  setSelectedDivisionFilter(e.target.value);
+                  setSelectedOfficeFilter('ALL');
+                  setSelectedBeatFilter('ALL');
+                }}
+                disabled={!isSuperAdmin}
+                className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 disabled:bg-slate-100 disabled:text-slate-500 text-xs"
+              >
+                <option value="ALL">All Divisions (Kota, Baran, Jhalawar, Bundi, Tonk)</option>
+                <option value="Kota Division">Kota Division (Kota District)</option>
+                <option value="Baran Division">Baran Division (Baran District)</option>
+                <option value="Jhalawar Division">Jhalawar Division (Jhalawar District)</option>
+                <option value="Bundi Division">Bundi Division (Bundi District)</option>
+                <option value="Tonk Division">Tonk Division (Tonk District)</option>
+              </select>
+            </div>
+
+            {/* 3. Sub-Division / Post Office Filter */}
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                3. Sub-Division / Post Office
+              </label>
+              <select
+                value={selectedOfficeFilter}
+                onChange={(e) => {
+                  setSelectedOfficeFilter(e.target.value);
+                  setSelectedBeatFilter('ALL');
+                }}
+                disabled={!isSuperAdmin}
+                className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 disabled:bg-slate-100 disabled:text-slate-500 text-xs"
+              >
+                <option value="ALL">
+                  {selectedDivisionFilter === 'ALL'
+                    ? 'All Post Offices (Full Circle)'
+                    : `All Offices in ${selectedDivisionFilter}`}
+                </option>
+                {availableOfficesForDivision.map((hub) => (
+                  <option key={hub.officeId} value={hub.officeId}>
+                    {hub.postOfficeName} ({hub.pincode}) — {hub.officeType}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 4. Beat / Colony Filter */}
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                4. Delivery Beat / Colony
+              </label>
+              <select
+                value={selectedBeatFilter}
+                onChange={(e) => setSelectedBeatFilter(e.target.value)}
+                disabled={!isSuperAdmin && !!userProfile?.beat && userProfile.beat !== 'All Beats'}
+                className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-bold text-slate-800 disabled:bg-slate-100 disabled:text-slate-500 text-xs"
+              >
+                <option value="ALL">All Delivery Beats & Colonies</option>
+                {availableBeatsForSelection.map((b) => (
+                  <option key={b.id || b.beatNo} value={b.beatNo}>
+                    Beat {b.beatNo} — {b.assignedPostman || b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -1136,7 +1369,7 @@ export default function BeatManagementView({
               id="beat-office-quick-search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Quick Search by Office Name (Dadabari, Engg College, Borabas), Pincode (324009, 324010), Beat No., or Colony..."
+              placeholder="Quick Search by Office Name (Dadabari, Engg College), Pincode (324009, 324010), Beat No., or Colony..."
               className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:ring-2 focus:ring-red-600 focus:outline-none"
             />
             {searchQuery && (

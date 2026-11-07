@@ -22,6 +22,7 @@ import { customerService } from '../../services/customerService';
 import { staffPermissionService } from '../../services/staffPermissionService';
 import CustomerProfileModal from '../customers/CustomerProfileModal';
 import BulkAddressImport from './BulkAddressImport';
+import { resolveAddressToConsolidatedBeat } from '../../data/consolidatedBeatMatrix';
 
 export default function AddressResolutionView() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -67,6 +68,27 @@ export default function AddressResolutionView() {
 
   const liveResolvedRoute = useMemo(() => {
     if (!lookupColony.trim() && !lookupSector.trim()) return null;
+    const consolidatedMatch = resolveAddressToConsolidatedBeat(`${lookupColony} ${lookupSector}`, lookupPincode);
+    if (consolidatedMatch) {
+      return {
+        id: consolidatedMatch.id,
+        colonyName: consolidatedMatch.coloniesFormatted,
+        sectorNumber: consolidatedMatch.sectorsFormatted,
+        sectorOrPhase: consolidatedMatch.sectorsFormatted,
+        landmark: consolidatedMatch.landmarksFormatted,
+        pincode: consolidatedMatch.pincode,
+        areaPincode: consolidatedMatch.pincode,
+        subOrHoOffice: consolidatedMatch.officeName,
+        subOrHeadOffice: consolidatedMatch.officeName,
+        branchOffice: '',
+        beatNumber: consolidatedMatch.beatNumber,
+        assignedBeatNumber: consolidatedMatch.beatNumber,
+        assignedPostmanName: consolidatedMatch.assignedPostmanName,
+        assignedPostmanContact: consolidatedMatch.assignedPostmanContact,
+        assignedPostmanMobile: consolidatedMatch.assignedPostmanContact,
+        updatedAt: new Date().toISOString(),
+      } as ColonyBeatMapping;
+    }
     return staffPermissionService.resolveColonyBeat(lookupColony, lookupSector, lookupPincode);
   }, [lookupColony, lookupSector, lookupPincode, colonyMappings]);
 
@@ -484,7 +506,7 @@ export default function AddressResolutionView() {
                           ) : (
                             <span className="font-semibold text-slate-900">
                               {isShifted
-                                ? 'Tag as Relocated / Mandaliya BO'
+                                ? 'Tag as Relocated'
                                 : 'Map to Sector 7, Beat 2 (Dadabari SO)'}
                             </span>
                           )}
@@ -585,7 +607,7 @@ export default function AddressResolutionView() {
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Branch Office (BO - optional)</label>
                   <input
-                    placeholder="e.g. Mandaliya BO"
+                    placeholder="e.g. Branch Office Name"
                     value={branchOffice}
                     onChange={(e) => setBranchOffice(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl"

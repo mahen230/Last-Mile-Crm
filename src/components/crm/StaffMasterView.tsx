@@ -202,7 +202,7 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
   }, [directoryStaff]);
 
   const availableOffices = useMemo(() => {
-    const set = new Set<string>(['Kota H.O.', 'Dadabari S.O.', 'Mandaliya B.O.']);
+    const set = new Set<string>(['Kota H.O.', 'Dadabari S.O.']);
     directoryStaff.forEach(s => {
       if (s.headOffice) set.add(s.headOffice);
       if (s.subOffice) set.add(s.subOffice);
@@ -992,7 +992,7 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
                     type="text"
                     value={formBranchOffice}
                     onChange={e => setFormBranchOffice(e.target.value)}
-                    placeholder="e.g., Mandaliya B.O."
+                    placeholder="e.g., Branch Office Name"
                     className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900"
                   />
                 </div>
@@ -1059,7 +1059,7 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
                     required
                     value={formDeliveryMapping}
                     onChange={e => setFormDeliveryMapping(e.target.value)}
-                    placeholder="e.g., Dadabari S.O. (324009) / Mandaliya B.O."
+                    placeholder="e.g., Dadabari S.O. (324009) / Delivery Hub"
                     className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900"
                   />
                 </div>

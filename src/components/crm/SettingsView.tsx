@@ -82,7 +82,7 @@ export default function SettingsView() {
             <div>
               <label className="block font-semibold text-slate-700 mb-1">Active Delivery Beats</label>
               <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 font-medium">
-                Beat 2 (Sector 6, 7 & Santoshi Nagar), Beat 6 (Sector 4 & 2), Mandaliya BO
+                Beat 2 (Sector 6, 7 & Santoshi Nagar), Beat 6 (Sector 4 & 2)
               </div>
             </div>
 

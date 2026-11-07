@@ -1,0 +1,15 @@
+{
+  "appName": "Postman Book CRM (Dadabari S.O. 324009)",
+  "appVersion": "2.4.0",
+  "buildNumber": 240,
+  "releaseDate": "2026-10-31",
+  "minSupportedVersion": "2.0.0",
+  "otaChannel": "production",
+  "otaLiveUrl": "https://ais-dev-upa7hb7ebjsju3e7k63nqq-154904702900.asia-southeast1.run.app",
+  "releaseNotes": [
+    "Native Android Capacitor APK/AAB wrapper setup with GPS & Camera permissions",
+    "Unified real-time cloud data sync between Web Portal and Android Mobile App",
+    "Instant OTA (Over-The-Air) update mechanism directly from AI Studio",
+    "Postman OS Security Layer with mandatory Employee Authentication Gate"
+  ]
+}

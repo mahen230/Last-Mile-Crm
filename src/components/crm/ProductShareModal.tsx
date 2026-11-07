@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Customer, ProductDefinition } from '../../types/models';
+import { POSTAL_PRODUCTS } from '../../data/productsData';
 import { customerService, cleanPhoneNumber } from '../../services/customerService';
 import { 
   X, Share2, Send, Phone, Copy, Check, Users, 
-  CheckCircle2, Sparkles, Filter, Search, Building 
+  CheckCircle2, Sparkles, Search, Building 
 } from 'lucide-react';
 
 interface Props {
@@ -15,7 +16,22 @@ interface Props {
 }
 
 export default function ProductShareModal({ isOpen, onClose, product, preselectedProduct, onSuccess }: Props) {
-  const currentProduct = product || preselectedProduct;
+  const initialProduct = product || preselectedProduct || POSTAL_PRODUCTS[0];
+  const [selectedProductCode, setSelectedProductCode] = useState<string>(initialProduct?.code || POSTAL_PRODUCTS[0].code);
+
+  useEffect(() => {
+    const incoming = product || preselectedProduct;
+    if (incoming?.code) {
+      setSelectedProductCode(incoming.code);
+    }
+  }, [product, preselectedProduct, isOpen]);
+
+  const currentProduct: ProductDefinition =
+    POSTAL_PRODUCTS.find((p) => p.code === selectedProductCode) ||
+    product ||
+    preselectedProduct ||
+    POSTAL_PRODUCTS[0];
+
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedBeat, setSelectedBeat] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -26,30 +42,35 @@ export default function ProductShareModal({ isOpen, onClose, product, preselecte
 
   // Load customers
   useEffect(() => {
-    setCustomers(customerService.getCustomers());
+    if (isOpen) {
+      setCustomers(customerService.getCustomers());
+    }
   }, [isOpen]);
 
   // Generate standard pre-filled product details message
-  const generateBrochureMessage = (custName?: string) => {
-    if (!currentProduct) return '';
+  const generateBrochureMessage = (custName?: string, prod: ProductDefinition = currentProduct) => {
+    if (!prod) return '';
     const greeting = custName ? `नमस्ते ${custName} जी,` : 'नमस्ते,';
-    const benefitsList = currentProduct.keyBenefits?.slice(0, 3).map(b => `• ${b}`).join('\n') || '';
-    const docsList = currentProduct.requiredDocuments?.slice(0, 3).map(d => `• ${d}`).join('\n') || '';
+    const benefitsList = prod.keyBenefits?.slice(0, 3).map(b => `• ${b}`).join('\n') || '';
+    const docsList = prod.requiredDocuments?.slice(0, 3).map(d => `• ${d}`).join('\n') || '';
+    const portalUrl = typeof window !== 'undefined' ? window.location.origin : 'https://www.indiapost.gov.in';
 
-    return `🇮🇳 *भारतीय डाक विभाग - आधिकारिक योजना विवरण*\n\n${greeting}\n\n✨ *${currentProduct.name}* (${currentProduct.code})\n📢 *टैगलाइन:* ${currentProduct.tagline}\n\n💰 *ब्याज दर / लाभ:* ${currentProduct.interestRateOrBonus}\n🛡️ *सुरक्षा:* भारत सरकार द्वारा 100% संप्रभु गारंटी\n🔖 *कर लाभ:* ${currentProduct.taxBenefits}\n\n📌 *मुख्य विशेषताएं:*\n${benefitsList}\n\n📋 *आवश्यक दस्तावेज:*\n${docsList}\n\n🏠 *डोरस्टेप सेवा व खाता खोलने हेतु संपर्क करें:*\n📍 दादाबाड़ी उपडाकघर (Dadabari SO, Kota - 324009)\n📞 संपर्क: आपका बीट डाकिया / 0744-2500123\n🌐 India Post: https://www.indiapost.gov.in`;
+    return `🇮🇳 *भारतीय डाक विभाग - आधिकारिक योजना विवरण*\n\n${greeting}\n\n✨ *${prod.name}* (${prod.code})\n📢 *टैगलाइन:* ${prod.tagline}\n\n💰 *ब्याज दर / लाभ:* ${prod.interestRateOrBonus}\n🛡️ *सुरक्षा:* भारत सरकार द्वारा 100% संप्रभु गारंटी\n🔖 *कर लाभ:* ${prod.taxBenefits}\n\n📌 *मुख्य विशेषताएं:*\n${benefitsList}\n\n📋 *आवश्यक दस्तावेज:*\n${docsList}\n\n🏠 *डोरस्टेप सेवा व खाता खोलने हेतु संपर्क करें:*\n🌐 पोर्टल लिंक: ${portalUrl}`;
   };
 
   const [customMessage, setCustomMessage] = useState('');
 
   useEffect(() => {
     if (currentProduct) {
-      setCustomMessage(generateBrochureMessage());
+      const selectedCust =
+        selectedCustomerIds.length === 1
+          ? customers.find((c) => c.id === selectedCustomerIds[0] || c.masterId === selectedCustomerIds[0])
+          : undefined;
+      setCustomMessage(generateBrochureMessage(selectedCust?.name, currentProduct));
     }
   }, [currentProduct]);
 
-  if (!currentProduct) return null;
-
-  if (!isOpen) return null;
+  if (!isOpen || !currentProduct) return null;
 
   // Filtered customer list
   const filteredCustomers = customers.filter(c => {
@@ -67,7 +88,7 @@ export default function ProductShareModal({ isOpen, onClose, product, preselecte
       setSelectedCustomerIds([id]);
       const cust = customers.find(c => c.id === id || c.masterId === id);
       if (cust) {
-        setCustomMessage(generateBrochureMessage(cust.name));
+        setCustomMessage(generateBrochureMessage(cust.name, currentProduct));
       }
     } else {
       if (selectedCustomerIds.includes(id)) {
@@ -99,7 +120,7 @@ export default function ProductShareModal({ isOpen, onClose, product, preselecte
       const cust = customers.find(c => c.id === selectedCustomerIds[0] || c.masterId === selectedCustomerIds[0]);
       const phone = cleanPhoneNumber(cust?.whatsapp || cust?.mobile);
       if (!phone) {
-        alert('चयनित ग्राहक का मान्य मोबाइल नंबर उपलब्ध नहीं है!');
+        setStatusMessage('चयनित ग्राहक का मान्य मोबाइल नंबर उपलब्ध नहीं है!');
         return;
       }
       const url = `https://wa.me/${phone}?text=${encodeURIComponent(customMessage)}`;
@@ -109,12 +130,12 @@ export default function ProductShareModal({ isOpen, onClose, product, preselecte
         recipientName: cust?.name || 'Customer',
         mobile: cust?.mobile || phone,
         channel: 'WhatsApp',
-        type: `Scheme: ${product.code}`,
+        type: `Scheme: ${currentProduct.code}`,
         content: customMessage,
         status: 'Delivered',
         beatNo: cust?.beatNo || '2',
         customerId: cust?.id || cust?.masterId,
-        productCode: product.code
+        productCode: currentProduct.code
       });
       setStatusMessage(`योजना विवरण WhatsApp पर ${cust?.name} को प्रेषित किया गया!`);
     } else {
@@ -136,7 +157,7 @@ export default function ProductShareModal({ isOpen, onClose, product, preselecte
       const cust = customers.find(c => c.id === selectedCustomerIds[0] || c.masterId === selectedCustomerIds[0]);
       const rawMobile = cust?.mobile;
       if (!rawMobile) {
-        alert('मोबाइल नंबर उपलब्ध नहीं है!');
+        setStatusMessage('मोबाइल नंबर उपलब्ध नहीं है!');
         return;
       }
       window.open(`sms:${rawMobile}?body=${encodeURIComponent(customMessage)}`, '_self');
@@ -144,12 +165,12 @@ export default function ProductShareModal({ isOpen, onClose, product, preselecte
         recipientName: cust?.name || 'Customer',
         mobile: rawMobile,
         channel: 'SMS',
-        type: `Scheme: ${product.code}`,
+        type: `Scheme: ${currentProduct.code}`,
         content: customMessage,
         status: 'Sent',
         beatNo: cust?.beatNo || '2',
         customerId: cust?.id || cust?.masterId,
-        productCode: product.code
+        productCode: currentProduct.code
       });
       setStatusMessage(`SMS ऐप्लिकेशन लोड किया गया!`);
     } else {
@@ -167,7 +188,7 @@ export default function ProductShareModal({ isOpen, onClose, product, preselecte
       .filter(Boolean);
 
     if (numbers.length === 0) {
-      alert('कृपया कम से कम एक ग्राहक चुनें!');
+      setStatusMessage('कृपया कम से कम एक ग्राहक चुनें!');
       return;
     }
 
@@ -190,7 +211,7 @@ export default function ProductShareModal({ isOpen, onClose, product, preselecte
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-bold">Share Product / Postal Scheme</h3>
                 <span className="text-[11px] font-mono font-bold bg-white text-red-800 px-2 py-0.5 rounded">
-                  {product.code}
+                  {currentProduct.code}
                 </span>
               </div>
               <p className="text-xs text-rose-100">
@@ -199,8 +220,9 @@ export default function ProductShareModal({ isOpen, onClose, product, preselecte
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 hover:bg-white/10 rounded-full transition text-white/80 hover:text-white"
+            className="p-2 hover:bg-white/10 rounded-full transition text-white/80 hover:text-white cursor-pointer"
           >
             <X size={20} />
           </button>
@@ -216,18 +238,37 @@ export default function ProductShareModal({ isOpen, onClose, product, preselecte
 
         <div className="p-5 overflow-y-auto space-y-4 flex-1">
           
-          {/* Product Overview Card */}
-          <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                {product.category}
-              </span>
-              <h4 className="font-bold text-slate-900 text-base">{product.name}</h4>
-              <p className="text-xs text-slate-600 mt-0.5">{product.tagline}</p>
+          {/* Product Selector & Overview Card */}
+          <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <label className="text-xs font-bold text-slate-700">
+                Select Postal Scheme to Share:
+              </label>
+              <select
+                value={currentProduct.code}
+                onChange={(e) => setSelectedProductCode(e.target.value)}
+                className="px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-600"
+              >
+                {POSTAL_PRODUCTS.map((p) => (
+                  <option key={p.code} value={p.code}>
+                    {p.name} ({p.interestRateOrBonus})
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="sm:text-right shrink-0">
-              <span className="text-[11px] text-slate-500 block">Sovereign Interest / Bonus</span>
-              <span className="text-base font-black text-red-700">{product.interestRateOrBonus}</span>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-200">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  {currentProduct.category}
+                </span>
+                <h4 className="font-bold text-slate-900 text-base">{currentProduct.name}</h4>
+                <p className="text-xs text-slate-600 mt-0.5">{currentProduct.tagline}</p>
+              </div>
+              <div className="sm:text-right shrink-0">
+                <span className="text-[11px] text-slate-500 block">Sovereign Interest / Bonus</span>
+                <span className="text-base font-black text-red-700">{currentProduct.interestRateOrBonus}</span>
+              </div>
             </div>
           </div>
 
@@ -283,7 +324,6 @@ export default function ProductShareModal({ isOpen, onClose, product, preselecte
                   <option value="1">Beat 1 (Dadabari Circle)</option>
                   <option value="2">Beat 2 (Keshavpura / Santoshi Nagar)</option>
                   <option value="6">Beat 6 (Keshavpura Sec 4 & 2)</option>
-                  <option value="Mandaliya">Mandaliya B.O.</option>
                 </select>
               </div>
             </div>

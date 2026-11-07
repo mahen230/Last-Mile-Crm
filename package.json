@@ -8,9 +8,19 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "cap:sync": "vite build && cap sync android",
+    "cap:copy": "vite build && cap copy android",
+    "cap:open": "cap open android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/camera": "^8.2.6",
+    "@capacitor/cli": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/geolocation": "^8.2.4",
+    "@capacitor/preferences": "^8.0.1",
     "@google/genai": "^2.19.0",
     "@google/generative-ai": "^0.24.1",
     "@tailwindcss/vite": "^4.1.14",

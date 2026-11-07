@@ -1,14 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Target, Plus, ArrowRight, CheckCircle2, Clock, User, Phone, Filter, ChevronRight, X, MessageSquare } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { Target, Plus, ArrowRight, CheckCircle2, Clock, User, Phone, Filter, ChevronRight, X, MessageSquare, Eye } from 'lucide-react';
 import { Lead, LeadStage, Customer } from '../../types/models';
 import { customerService } from '../../services/customerService';
 import { POSTAL_PRODUCTS } from '../../data/productsData';
 import CustomerProfileModal from '../customers/CustomerProfileModal';
 import DirectMessageModal from './DirectMessageModal';
+import { useAuth } from '../auth/FirebaseAuthProvider';
+import { staffPermissionService } from '../../services/staffPermissionService';
 
 export default function LeadsPipelineView({ initialCustomer }: { initialCustomer?: Customer | null }) {
+  const { userProfile } = useAuth();
+  const location = useLocation();
+  const isSuperAdmin = staffPermissionService.isSuperAdmin(userProfile);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
+  const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'SMALL_SAVINGS' | 'IPPB' | 'INSURANCE' | 'SERVICE_REQ'>('ALL');
+  const [beatFilter, setBeatFilter] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showAddLeadModal, setShowAddLeadModal] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -16,8 +25,10 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
   const [leadToLink, setLeadToLink] = useState<Lead | null>(null);
   const [messageLead, setMessageLead] = useState<Lead | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
+  const [feedbackBanner, setFeedbackBanner] = useState<string | null>(null);
 
   // New Lead Form State
+  const [leadCustomerId, setLeadCustomerId] = useState('CUST-TEMP');
   const [leadCustomerName, setLeadCustomerName] = useState('');
   const [leadCustomerMobile, setLeadCustomerMobile] = useState('');
   const [leadProductCode, setLeadProductCode] = useState(POSTAL_PRODUCTS[0].code);
@@ -26,6 +37,13 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
   const [leadEstimatedValue, setLeadEstimatedValue] = useState('');
   const [leadAssignedStaff, setLeadAssignedStaff] = useState('Shri Rajesh Sharma (Beat 2 Postman)');
 
+  const showToast = (msg: string) => {
+    setFeedbackBanner(msg);
+    setTimeout(() => {
+      setFeedbackBanner(prev => (prev === msg ? null : prev));
+    }, 3500);
+  };
+
   useEffect(() => {
     setLeads(customerService.getLeads());
     const unsub = customerService.subscribe(() => {
@@ -33,6 +51,17 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
     });
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    const prefillCustomer: Customer | null =
+      initialCustomer || (location.state as any)?.initialCustomer || null;
+    if (prefillCustomer) {
+      setLeadCustomerId(prefillCustomer.id || prefillCustomer.masterId || 'CUST-TEMP');
+      setLeadCustomerName(prefillCustomer.name || '');
+      setLeadCustomerMobile(prefillCustomer.mobile || '');
+      setShowAddLeadModal(true);
+    }
+  }, [initialCustomer, location.state]);
 
   const stages: LeadStage[] = [
     'New',
@@ -48,14 +77,15 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
   const handleCreateLead = (e: React.FormEvent) => {
     e.preventDefault();
     if (!leadCustomerName || !leadCustomerMobile) {
-      alert('Please fill customer name and mobile.');
+      showToast('Please fill customer name and mobile number.');
       return;
     }
 
     const prod = POSTAL_PRODUCTS.find(p => p.code === leadProductCode);
+    const activeBeatNo = (userProfile?.beat || 'Beat 2').replace(/^Beat\s*/i, '').trim() || '2';
 
     customerService.createLead({
-      customerId: 'CUST-TEMP',
+      customerId: leadCustomerId || 'CUST-TEMP',
       customerName: leadCustomerName,
       customerMobile: leadCustomerMobile,
       productCode: leadProductCode,
@@ -65,29 +95,38 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
       leadScore: 80,
       priority: leadPriority,
       estimatedValue: leadEstimatedValue ? parseFloat(leadEstimatedValue) : undefined,
-      assignedStaffName: leadAssignedStaff,
-      assignedStaffId: 'STAFF-BEAT-02',
+      assignedStaffName: userProfile ? `${userProfile.name} (${userProfile.beat})` : leadAssignedStaff,
+      assignedStaffId: userProfile?.id || 'STAFF-BEAT-02',
+      assignedStaffEmail: userProfile?.email,
+      beatNo: activeBeatNo,
       stage: 'New'
     });
 
     setShowAddLeadModal(false);
+    setLeadCustomerId('CUST-TEMP');
     setLeadCustomerName('');
     setLeadCustomerMobile('');
     setLeadRequirement('');
     setLeadEstimatedValue('');
+    showToast(`Created new ${prod?.name || leadProductCode} lead for ${leadCustomerName}.`);
   };
 
   const handleAdvanceStage = (leadId: string, currentStage: LeadStage) => {
     const currentIndex = stages.indexOf(currentStage);
-    if (currentIndex < stages.length - 2) {
+    if (currentIndex >= 0 && currentIndex < stages.length - 2) {
       const nextStage = stages[currentIndex + 1];
       customerService.updateLeadStage(leadId, nextStage);
+      showToast(`Lead ${leadId} advanced to "${nextStage}".`);
+    } else if (currentIndex === stages.length - 3) {
+      customerService.convertLeadToProduct(leadId);
+      showToast(`Lead ${leadId} converted to opened product!`);
     }
   };
 
   const handleLinkToHousehold = (householdId: string) => {
     if (leadToLink) {
       customerService.updateLead(leadToLink.id, { householdId });
+      showToast(`Linked lead ${leadToLink.id} to household ${householdId}.`);
       setShowLinkModal(false);
       setLeadToLink(null);
     }
@@ -96,12 +135,78 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
   const handleConvertToProduct = (lead: Lead) => {
     const success = customerService.convertLeadToProduct(lead.id);
     if (success) {
-      alert(`Lead ${lead.id} successfully converted! Product account has been attached to customer profile.`);
+      showToast(`Lead ${lead.id} (${lead.customerName}) converted! Product account attached to customer profile.`);
     }
   };
 
+  const handleOpenLeadCustomerProfile = (lead: Lead) => {
+    const existing =
+      customerService.getCustomerById(lead.customerId) ||
+      customerService.getCustomerByMobile(lead.customerMobile);
+    if (existing) {
+      setSelectedCustomer(existing);
+    } else {
+      setSelectedCustomer({
+        id: lead.customerId || `CUST-${lead.id}`,
+        masterId: lead.customerId || `CUST-${lead.id}`,
+        name: lead.customerName,
+        mobile: lead.customerMobile,
+        beatNo: lead.beatNo || '2',
+        sector: 'Dadabari',
+        area: 'Dadabari SO',
+        verificationStatus: 'Pending Verification',
+        products: [],
+        createdAt: lead.createdAt || new Date().toISOString()
+      });
+    }
+  };
+
+  const visibleLeads = leads.filter(l => {
+    if (!staffPermissionService.matchesUserBeatScope(userProfile, l)) return false;
+    if (beatFilter !== 'ALL') {
+      const b = String(l.beatNo || '2').replace(/^Beat\s*/i, '').trim();
+      if (b !== beatFilter) return false;
+    }
+    if (categoryFilter !== 'ALL') {
+      const code = (l.productCode || '').toUpperCase();
+      const name = (l.productName || '').toUpperCase();
+      const req = (l.requirement || '').toUpperCase();
+      if (categoryFilter === 'SMALL_SAVINGS') {
+        if (!['PPF', 'SSY', 'SSA', 'NSC', 'KVP', 'MIS', 'SCSS', 'RD', 'TD', 'SB', 'MSSC'].some(k => code.includes(k) || name.includes(k))) return false;
+      } else if (categoryFilter === 'IPPB') {
+        if (!code.includes('IPPB') && !name.includes('IPPB') && !req.includes('AEPS') && !req.includes('DOORSTEP')) return false;
+      } else if (categoryFilter === 'INSURANCE') {
+        if (!code.includes('PLI') && !code.includes('RPLI') && !name.includes('INSURANCE') && !name.includes('BIMA')) return false;
+      } else if (categoryFilter === 'SERVICE_REQ') {
+        if (!code.includes('AADHAAR') && !code.includes('DLC') && !code.includes('SPEED') && !req.includes('AADHAAR') && !req.includes('CELC') && !req.includes('PICKUP') && !req.includes('SERVICE')) return false;
+      }
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const match =
+        (l.customerName || '').toLowerCase().includes(q) ||
+        (l.customerMobile || '').includes(q) ||
+        (l.productName || '').toLowerCase().includes(q) ||
+        (l.requirement || '').toLowerCase().includes(q) ||
+        (l.id || '').toLowerCase().includes(q);
+      if (!match) return false;
+    }
+    return true;
+  });
+
   return (
     <div className="space-y-6" id="leads-pipeline-view-root">
+      {feedbackBanner && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-300 text-emerald-900 rounded-2xl flex items-center justify-between text-xs font-bold shadow-xs">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={16} className="text-emerald-700" />
+            <span>{feedbackBanner}</span>
+          </div>
+          <button onClick={() => setFeedbackBanner(null)} className="text-slate-500 hover:text-slate-800">
+            <X size={14} />
+          </button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
         <div>
@@ -110,7 +215,9 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
             <span>Sales & Scheme Inquiries Pipeline</span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Full 9-stage Postal Product Opportunity & Conversion Lifecycle ({leads.length} Leads)
+            {isSuperAdmin
+              ? `Global Admin View: Full 9-stage Postal Product Pipeline across all Beats (${visibleLeads.length} Leads)`
+              : `Beat-Restricted View (${userProfile?.beat || 'Beat 2'}): Showing only leads assigned to your Beat (${visibleLeads.length} Leads)`}
           </p>
         </div>
 
@@ -146,11 +253,59 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
         </div>
       </div>
 
+      {/* Filter & Search Bar for Product Queries vs Service Requests */}
+      <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {[
+            { id: 'ALL', label: 'All Inquiries' },
+            { id: 'SMALL_SAVINGS', label: 'Small Savings (PPF/SSY/NSC/MIS)' },
+            { id: 'IPPB', label: 'IPPB & Doorstep Banking' },
+            { id: 'INSURANCE', label: 'PLI / RPLI Insurance' },
+            { id: 'SERVICE_REQ', label: 'Service Requests (Aadhaar/Mail)' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setCategoryFilter(tab.id as any)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                categoryFilter === tab.id
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          {isSuperAdmin && (
+            <select
+              value={beatFilter}
+              onChange={(e) => setBeatFilter(e.target.value)}
+              className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
+            >
+              <option value="ALL">All Beats</option>
+              <option value="1">Beat 1</option>
+              <option value="2">Beat 2</option>
+              <option value="3">Beat 3</option>
+              <option value="4">Beat 4</option>
+              <option value="5">Beat 5</option>
+            </select>
+          )}
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search customer, scheme, mobile..."
+            className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 w-48 sm:w-56"
+          />
+        </div>
+      </div>
+
       {/* Kanban Board View */}
       {viewMode === 'kanban' && (
         <div className="flex gap-4 overflow-x-auto pb-4 items-start min-h-[600px]">
           {stages.map((stage) => {
-            const stageLeads = leads.filter(l => l.stage === stage);
+            const stageLeads = visibleLeads.filter(l => l.stage === stage);
             return (
               <div
                 key={stage}
@@ -180,7 +335,12 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
                         </span>
                       </div>
 
-                      <div className="font-bold text-slate-900 text-sm">{lead.customerName}</div>
+                      <div
+                        onClick={() => handleOpenLeadCustomerProfile(lead)}
+                        className="font-bold text-slate-900 text-sm hover:text-red-700 hover:underline cursor-pointer"
+                      >
+                        {lead.customerName}
+                      </div>
                       <div className="text-slate-500 font-mono text-[11px] flex items-center justify-between">
                         <div className="flex items-center gap-1">
                           <Phone size={11} className="text-emerald-600" />
@@ -272,7 +432,7 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {leads.map((l) => (
+                {visibleLeads.map((l) => (
                   <tr key={l.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3 font-mono font-bold text-slate-900">{l.id}</td>
                     <td className="px-4 py-3">
@@ -415,7 +575,6 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
                   <option value="Shri Rajesh Sharma (Beat 2 Postman)">Shri Rajesh Sharma (Beat 2 Postman)</option>
                   <option value="Shri Dinesh Verma (Beat 6 Postman)">Shri Dinesh Verma (Beat 6 Postman)</option>
                   <option value="Dadabari SO Savings Counter">Dadabari SO Savings Counter</option>
-                  <option value="Mandaliya BO Branch Postmaster">Mandaliya BO Branch Postmaster</option>
                 </select>
               </div>
 
@@ -464,6 +623,13 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
             </button>
           </div>
         </div>
+      )}
+
+      {selectedCustomer && (
+        <CustomerProfileModal
+          customer={selectedCustomer}
+          onClose={() => setSelectedCustomer(null)}
+        />
       )}
 
       {/* Direct Messaging Modal */}

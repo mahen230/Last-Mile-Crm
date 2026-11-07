@@ -6,6 +6,16 @@ import CustomerProfileModal from '../customers/CustomerProfileModal';
 import AddMemberModal from '../customers/AddMemberModal';
 import AssociateMemberModal from '../customers/AssociateMemberModal';
 
+// Safe formatter for household addresses
+const formatHouseholdAddress = (addr: any): string => {
+  if (!addr) return 'Dadabari S.O. Jurisdiction, Kota';
+  if (typeof addr === 'string') return addr;
+  if (typeof addr === 'object') {
+    return addr.fullAddress || [addr.houseNo || addr.houseNumber, addr.sector, addr.area || addr.colony].filter(Boolean).join(', ') || 'Dadabari S.O. Jurisdiction, Kota';
+  }
+  return String(addr);
+};
+
 export default function HouseholdsView({ onAddLead }: { onAddLead?: (customer: Customer) => void }) {
   const [households, setHouseholds] = useState<Household[]>([]);
   const [search, setSearch] = useState('');
@@ -36,6 +46,14 @@ export default function HouseholdsView({ onAddLead }: { onAddLead?: (customer: C
       headName.includes(s) ||
       (mobileS && primaryMobile.includes(mobileS)) ||
       h.members.some(m => m.name.toLowerCase().replace(/\s+/g, '').includes(s));
+  }).sort((a, b) => {
+    const colA = (a.address?.sectorLocality || a.address?.area || '').trim();
+    const colB = (b.address?.sectorLocality || b.address?.area || '').trim();
+    const colCmp = colA.localeCompare(colB, undefined, { numeric: true, sensitivity: 'base' });
+    if (colCmp !== 0) return colCmp;
+    const hA = (a.address?.houseNo || '').trim();
+    const hB = (b.address?.houseNo || '').trim();
+    return hA.localeCompare(hB, undefined, { numeric: true, sensitivity: 'base' });
   });
 
   return (
@@ -90,7 +108,7 @@ export default function HouseholdsView({ onAddLead }: { onAddLead?: (customer: C
               <div className="space-y-1.5 text-xs text-slate-600 mb-4">
                 <div className="flex items-start gap-1.5">
                   <MapPin size={14} className="text-slate-400 shrink-0 mt-0.5" />
-                  <span>{hh.address.fullAddress}</span>
+                  <span>{formatHouseholdAddress(hh.address)}</span>
                 </div>
                 <div className="flex items-center gap-1.5 font-mono">
                   <Phone size={14} className="text-emerald-600 shrink-0" />
@@ -125,7 +143,7 @@ export default function HouseholdsView({ onAddLead }: { onAddLead?: (customer: C
 
             <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
               <span className="text-slate-500">
-                Beat {hh.address.area?.includes('Santoshi') ? '2' : '2'} • Dadabari SO
+                Beat {hh.beatId || '2'} • Dadabari SO
               </span>
               <button
                 onClick={() => setSelectedHousehold(hh)}
@@ -155,7 +173,7 @@ export default function HouseholdsView({ onAddLead }: { onAddLead?: (customer: C
 
             <div className="py-4 space-y-4 text-xs text-slate-700">
               <div className="p-3 bg-slate-50 rounded-xl space-y-1">
-                <div><strong>Address:</strong> {selectedHousehold.address.fullAddress}</div>
+                <div><strong>Address:</strong> {formatHouseholdAddress(selectedHousehold.address)}</div>
                 <div><strong>Primary Phone:</strong> {selectedHousehold.primaryContactNumber}</div>
                 <div><strong>Total Residents:</strong> {selectedHousehold.members?.length || 0}</div>
               </div>

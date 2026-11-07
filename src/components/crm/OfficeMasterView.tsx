@@ -669,7 +669,7 @@ export default function OfficeMasterView() {
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Branch Office (BO - if any)</label>
                   <input
-                    placeholder="e.g. Mandaliya BO"
+                    placeholder="e.g. Branch Office Name"
                     value={newBoName}
                     onChange={(e) => setNewBoName(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl"

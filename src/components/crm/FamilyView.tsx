@@ -26,6 +26,14 @@ export default function FamilyView() {
       (c.fatherHusbandName && c.fatherHusbandName.toLowerCase().includes(s)) ||
       (c.remarks && c.remarks.toLowerCase().includes(s));
     return hasFamilyInfo && matchesSearch;
+  }).sort((a, b) => {
+    const colA = (a.area || a.sectorLocality || a.address?.area || a.sector || '').trim();
+    const colB = (b.area || b.sectorLocality || b.address?.area || b.sector || '').trim();
+    const colCmp = colA.localeCompare(colB, undefined, { numeric: true, sensitivity: 'base' });
+    if (colCmp !== 0) return colCmp;
+    const hA = (a.houseNo || a.address?.houseNumber || '').trim();
+    const hB = (b.houseNo || b.address?.houseNumber || '').trim();
+    return hA.localeCompare(hB, undefined, { numeric: true, sensitivity: 'base' });
   });
 
   return (

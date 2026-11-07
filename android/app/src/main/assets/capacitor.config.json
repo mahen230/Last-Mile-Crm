@@ -1,0 +1,37 @@
+{
+	"appId": "in.gov.indiapost.postmanbook.dadabari",
+	"appName": "Postman Book CRM",
+	"webDir": "dist",
+	"server": {
+		"androidScheme": "https",
+		"cleartext": true,
+		"allowNavigation": [
+			"ais-dev-*.run.app",
+			"ais-pre-*.run.app",
+			"*.googleapis.com",
+			"*.firebaseio.com",
+			"*.google.com"
+		]
+	},
+	"plugins": {
+		"Camera": {
+			"permissions": [
+				"camera",
+				"photos"
+			]
+		},
+		"Geolocation": {
+			"permissions": [
+				"location"
+			]
+		},
+		"App": {
+			"disableBackButtonHandler": false
+		}
+	},
+	"android": {
+		"allowMixedContent": true,
+		"captureInput": true,
+		"webContentsDebuggingEnabled": true
+	}
+}

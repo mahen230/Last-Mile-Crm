@@ -12,6 +12,9 @@ export interface FuelDailyRow {
   total: number | string;
   pmaHandled: number | string;
   pmaPercent: number | string;
+  pdmsInvoicedCount?: number | string;
+  dssInvoicedCount?: number | string;
+  mobileUsagePercent?: number | string;
 }
 
 /**
@@ -52,6 +55,120 @@ export const MAHEN_FUEL_REFERENCE_ROWS: FuelDailyRow[] = [
   { sn: 30, date: '30-08-2026', isoDate: '2026-08-30', status: 'WORKING', sp: 30, reg: '', others: '', total: 30, pmaHandled: 30, pmaPercent: 100 },
 ];
 
+/**
+ * Official October 2026 31-Day Fuel Sheet Reference (01-10-2026 to 31-10-2026)
+ * Total Days = 31 | Sundays = 4 (Oct 4, 11, 18, 25) | Gazetted Holidays = 2 (Oct 2 Gandhi Jayanti, Oct 20 Dussehra)
+ * Working Days = 25 | Daily KM = 30 KM | Rate = ₹3.60 / KM | Claim = 25 * 30 * 3.60 = ₹2,700.00
+ */
+export const OCTOBER_2026_FUEL_REFERENCE_ROWS: FuelDailyRow[] = [
+  { sn: 1, date: '01-10-2026', isoDate: '2026-10-01', status: 'WORKING', sp: 28, reg: 2, others: 3, total: 33, pmaHandled: 33, pmaPercent: 100 },
+  { sn: 2, date: '02-10-2026', isoDate: '2026-10-02', status: 'HOLIDAY', sp: 'HOLIDAY', reg: 0, others: 'HOLIDAY', total: 'HOLIDAY', pmaHandled: '', pmaPercent: 'HOLIDAY' },
+  { sn: 3, date: '03-10-2026', isoDate: '2026-10-03', status: 'WORKING', sp: 32, reg: 1, others: 4, total: 37, pmaHandled: 37, pmaPercent: 100 },
+  { sn: 4, date: '04-10-2026', isoDate: '2026-10-04', status: 'SUNDAY', sp: 'SUNDAY', reg: '', others: 'SUNDAY', total: 'SUNDAY', pmaHandled: '', pmaPercent: 'SUNDAY' },
+  { sn: 5, date: '05-10-2026', isoDate: '2026-10-05', status: 'WORKING', sp: 104, reg: 2, others: 6, total: 112, pmaHandled: 112, pmaPercent: 100 },
+  { sn: 6, date: '06-10-2026', isoDate: '2026-10-06', status: 'WORKING', sp: 58, reg: 1, others: 4, total: 63, pmaHandled: 63, pmaPercent: 100 },
+  { sn: 7, date: '07-10-2026', isoDate: '2026-10-07', status: 'WORKING', sp: 62, reg: 2, others: 3, total: 67, pmaHandled: 67, pmaPercent: 100 },
+  { sn: 8, date: '08-10-2026', isoDate: '2026-10-08', status: 'WORKING', sp: 45, reg: 1, others: 2, total: 48, pmaHandled: 48, pmaPercent: 100 },
+  { sn: 9, date: '09-10-2026', isoDate: '2026-10-09', status: 'WORKING', sp: 52, reg: 0, others: 3, total: 55, pmaHandled: 55, pmaPercent: 100 },
+  { sn: 10, date: '10-10-2026', isoDate: '2026-10-10', status: 'WORKING', sp: 38, reg: 1, others: 2, total: 41, pmaHandled: 41, pmaPercent: 100 },
+  { sn: 11, date: '11-10-2026', isoDate: '2026-10-11', status: 'SUNDAY', sp: 'SUNDAY', reg: '', others: 'SUNDAY', total: 'SUNDAY', pmaHandled: '', pmaPercent: 'SUNDAY' },
+  { sn: 12, date: '12-10-2026', isoDate: '2026-10-12', status: 'WORKING', sp: 98, reg: 2, others: 5, total: 105, pmaHandled: 105, pmaPercent: 100 },
+  { sn: 13, date: '13-10-2026', isoDate: '2026-10-13', status: 'WORKING', sp: 64, reg: 1, others: 3, total: 68, pmaHandled: 68, pmaPercent: 100 },
+  { sn: 14, date: '14-10-2026', isoDate: '2026-10-14', status: 'WORKING', sp: 55, reg: 0, others: 4, total: 59, pmaHandled: 59, pmaPercent: 100 },
+  { sn: 15, date: '15-10-2026', isoDate: '2026-10-15', status: 'WORKING', sp: 48, reg: 1, others: 2, total: 51, pmaHandled: 51, pmaPercent: 100 },
+  { sn: 16, date: '16-10-2026', isoDate: '2026-10-16', status: 'WORKING', sp: 50, reg: 2, others: 3, total: 55, pmaHandled: 55, pmaPercent: 100 },
+  { sn: 17, date: '17-10-2026', isoDate: '2026-10-17', status: 'WORKING', sp: 42, reg: 1, others: 2, total: 45, pmaHandled: 45, pmaPercent: 100 },
+  { sn: 18, date: '18-10-2026', isoDate: '2026-10-18', status: 'SUNDAY', sp: 'SUNDAY', reg: '', others: 'SUNDAY', total: 'SUNDAY', pmaHandled: '', pmaPercent: 'SUNDAY' },
+  { sn: 19, date: '19-10-2026', isoDate: '2026-10-19', status: 'WORKING', sp: 106, reg: 2, others: 5, total: 113, pmaHandled: 113, pmaPercent: 100 },
+  { sn: 20, date: '20-10-2026', isoDate: '2026-10-20', status: 'HOLIDAY', sp: 'HOLIDAY', reg: 0, others: 'HOLIDAY', total: 'HOLIDAY', pmaHandled: '', pmaPercent: 'HOLIDAY' },
+  { sn: 21, date: '21-10-2026', isoDate: '2026-10-21', status: 'WORKING', sp: 74, reg: 1, others: 4, total: 79, pmaHandled: 79, pmaPercent: 100 },
+  { sn: 22, date: '22-10-2026', isoDate: '2026-10-22', status: 'WORKING', sp: 52, reg: 0, others: 3, total: 55, pmaHandled: 55, pmaPercent: 100 },
+  { sn: 23, date: '23-10-2026', isoDate: '2026-10-23', status: 'WORKING', sp: 48, reg: 1, others: 2, total: 51, pmaHandled: 51, pmaPercent: 100 },
+  { sn: 24, date: '24-10-2026', isoDate: '2026-10-24', status: 'WORKING', sp: 40, reg: 1, others: 3, total: 44, pmaHandled: 44, pmaPercent: 100 },
+  { sn: 25, date: '25-10-2026', isoDate: '2026-10-25', status: 'SUNDAY', sp: 'SUNDAY', reg: '', others: 'SUNDAY', total: 'SUNDAY', pmaHandled: '', pmaPercent: 'SUNDAY' },
+  { sn: 26, date: '26-10-2026', isoDate: '2026-10-26', status: 'WORKING', sp: 92, reg: 2, others: 5, total: 99, pmaHandled: 99, pmaPercent: 100 },
+  { sn: 27, date: '27-10-2026', isoDate: '2026-10-27', status: 'WORKING', sp: 56, reg: 1, others: 2, total: 59, pmaHandled: 59, pmaPercent: 100 },
+  { sn: 28, date: '28-10-2026', isoDate: '2026-10-28', status: 'WORKING', sp: 48, reg: 0, others: 3, total: 51, pmaHandled: 51, pmaPercent: 100 },
+  { sn: 29, date: '29-10-2026', isoDate: '2026-10-29', status: 'WORKING', sp: 44, reg: 1, others: 2, total: 47, pmaHandled: 47, pmaPercent: 100 },
+  { sn: 30, date: '30-10-2026', isoDate: '2026-10-30', status: 'WORKING', sp: 50, reg: 1, others: 3, total: 54, pmaHandled: 54, pmaPercent: 100 },
+  { sn: 31, date: '31-10-2026', isoDate: '2026-10-31', status: 'WORKING', sp: 36, reg: 1, others: 2, total: 39, pmaHandled: 39, pmaPercent: 100 },
+];
+
+/**
+ * Official October 2026 31-Day Fuel Sheet Reference for Beat 17 (Priyanshu Trivedi)
+ * Cross-checked & audited against official India Post PDMS/DSS Invoiced Count Sort Sheet:
+ * 25 Working Days | 4 Sundays | 2 Gazetted Holidays (Oct 2 Gandhi Jayanti, Oct 20 Dussehra)
+ * Total PDMS Invoiced Count: 1,138 | Total DSS Invoiced Count: 1,136
+ * Registered Articles: Nil (0) across all days as per statutory jurisdiction
+ * Overall Mobile Usage: 99.76% (Oct 1: 98.08%, Oct 8: 96.00%, rest 100.00%)
+ * Sanctioned Route Distance: 28 KM / Day | Fuel Rate: ₹3.60 / KM
+ * Monthly Distance: 25 × 28 KM = 700 KM | Claim Amount: 700 × 3.60 = ₹2,520.00
+ */
+export const PRIYANSHU_BEAT_17_OCTOBER_2026_ROWS: FuelDailyRow[] = [
+  // Day 1: 01-10-2026 (Row 17 in audit: PDMS 52, DSS 51, Mobile Usage 98.08%)
+  { sn: 1, date: '01-10-2026', isoDate: '2026-10-01', status: 'WORKING', sp: 48, reg: 0, others: 3, total: 51, pmaHandled: 51, pmaPercent: 98.08, pdmsInvoicedCount: 52, dssInvoicedCount: 51, mobileUsagePercent: 98.08 },
+  // Day 2: 02-10-2026 Gandhi Jayanti
+  { sn: 2, date: '02-10-2026', isoDate: '2026-10-02', status: 'HOLIDAY', sp: 'HOLIDAY', reg: 0, others: 'HOLIDAY', total: 'HOLIDAY', pmaHandled: '', pmaPercent: 'HOLIDAY', pdmsInvoicedCount: 'HOLIDAY', dssInvoicedCount: 'HOLIDAY', mobileUsagePercent: '-' },
+  // Day 3: 03-10-2026 (Row 46: PDMS 95, DSS 95, 100%)
+  { sn: 3, date: '03-10-2026', isoDate: '2026-10-03', status: 'WORKING', sp: 88, reg: 0, others: 7, total: 95, pmaHandled: 95, pmaPercent: 100, pdmsInvoicedCount: 95, dssInvoicedCount: 95, mobileUsagePercent: 100 },
+  // Day 4: 04-10-2026 Sunday
+  { sn: 4, date: '04-10-2026', isoDate: '2026-10-04', status: 'SUNDAY', sp: 'SUNDAY', reg: '', others: 'SUNDAY', total: 'SUNDAY', pmaHandled: '', pmaPercent: 'SUNDAY', pdmsInvoicedCount: 'SUNDAY', dssInvoicedCount: 'SUNDAY', mobileUsagePercent: '-' },
+  // Day 5: 05-10-2026 (Row 77: PDMS 52, DSS 52, 100%)
+  { sn: 5, date: '05-10-2026', isoDate: '2026-10-05', status: 'WORKING', sp: 48, reg: 0, others: 4, total: 52, pmaHandled: 52, pmaPercent: 100, pdmsInvoicedCount: 52, dssInvoicedCount: 52, mobileUsagePercent: 100 },
+  // Day 6: 06-10-2026 (Row 106: PDMS 31, DSS 31, 100%)
+  { sn: 6, date: '06-10-2026', isoDate: '2026-10-06', status: 'WORKING', sp: 29, reg: 0, others: 2, total: 31, pmaHandled: 31, pmaPercent: 100, pdmsInvoicedCount: 31, dssInvoicedCount: 31, mobileUsagePercent: 100 },
+  // Day 7: 07-10-2026 (Row 137: PDMS 54, DSS 54, 100%)
+  { sn: 7, date: '07-10-2026', isoDate: '2026-10-07', status: 'WORKING', sp: 50, reg: 0, others: 4, total: 54, pmaHandled: 54, pmaPercent: 100, pdmsInvoicedCount: 54, dssInvoicedCount: 54, mobileUsagePercent: 100 },
+  // Day 8: 08-10-2026 (Row 168: PDMS 25, DSS 24, 96%)
+  { sn: 8, date: '08-10-2026', isoDate: '2026-10-08', status: 'WORKING', sp: 22, reg: 0, others: 2, total: 24, pmaHandled: 24, pmaPercent: 96, pdmsInvoicedCount: 25, dssInvoicedCount: 24, mobileUsagePercent: 96 },
+  // Day 9: 09-10-2026 (Row 199: PDMS 53, DSS 53, 100%)
+  { sn: 9, date: '09-10-2026', isoDate: '2026-10-09', status: 'WORKING', sp: 49, reg: 0, others: 4, total: 53, pmaHandled: 53, pmaPercent: 100, pdmsInvoicedCount: 53, dssInvoicedCount: 53, mobileUsagePercent: 100 },
+  // Day 10: 10-10-2026 (Row 230: PDMS 47, DSS 47, 100%)
+  { sn: 10, date: '10-10-2026', isoDate: '2026-10-10', status: 'WORKING', sp: 44, reg: 0, others: 3, total: 47, pmaHandled: 47, pmaPercent: 100, pdmsInvoicedCount: 47, dssInvoicedCount: 47, mobileUsagePercent: 100 },
+  // Day 11: 11-10-2026 Sunday
+  { sn: 11, date: '11-10-2026', isoDate: '2026-10-11', status: 'SUNDAY', sp: 'SUNDAY', reg: '', others: 'SUNDAY', total: 'SUNDAY', pmaHandled: '', pmaPercent: 'SUNDAY', pdmsInvoicedCount: 'SUNDAY', dssInvoicedCount: 'SUNDAY', mobileUsagePercent: '-' },
+  // Day 12: 12-10-2026 (Row 260: PDMS 51, DSS 51, 100%)
+  { sn: 12, date: '12-10-2026', isoDate: '2026-10-12', status: 'WORKING', sp: 47, reg: 0, others: 4, total: 51, pmaHandled: 51, pmaPercent: 100, pdmsInvoicedCount: 51, dssInvoicedCount: 51, mobileUsagePercent: 100 },
+  // Day 13: 13-10-2026 (Row 289: PDMS 74, DSS 74, 100%)
+  { sn: 13, date: '13-10-2026', isoDate: '2026-10-13', status: 'WORKING', sp: 68, reg: 0, others: 6, total: 74, pmaHandled: 74, pmaPercent: 100, pdmsInvoicedCount: 74, dssInvoicedCount: 74, mobileUsagePercent: 100 },
+  // Day 14: 14-10-2026 (Row 319: PDMS 29, DSS 29, 100%)
+  { sn: 14, date: '14-10-2026', isoDate: '2026-10-14', status: 'WORKING', sp: 27, reg: 0, others: 2, total: 29, pmaHandled: 29, pmaPercent: 100, pdmsInvoicedCount: 29, dssInvoicedCount: 29, mobileUsagePercent: 100 },
+  // Day 15: 15-10-2026 (Row 350: PDMS 37, DSS 37, 100%)
+  { sn: 15, date: '15-10-2026', isoDate: '2026-10-15', status: 'WORKING', sp: 34, reg: 0, others: 3, total: 37, pmaHandled: 37, pmaPercent: 100, pdmsInvoicedCount: 37, dssInvoicedCount: 37, mobileUsagePercent: 100 },
+  // Day 16: 16-10-2026 (Row 382: PDMS 41, DSS 41, 100%)
+  { sn: 16, date: '16-10-2026', isoDate: '2026-10-16', status: 'WORKING', sp: 38, reg: 0, others: 3, total: 41, pmaHandled: 41, pmaPercent: 100, pdmsInvoicedCount: 41, dssInvoicedCount: 41, mobileUsagePercent: 100 },
+  // Day 17: 17-10-2026 (Row 412: PDMS 47, DSS 47, 100%)
+  { sn: 17, date: '17-10-2026', isoDate: '2026-10-17', status: 'WORKING', sp: 43, reg: 0, others: 4, total: 47, pmaHandled: 47, pmaPercent: 100, pdmsInvoicedCount: 47, dssInvoicedCount: 47, mobileUsagePercent: 100 },
+  // Day 18: 18-10-2026 Sunday
+  { sn: 18, date: '18-10-2026', isoDate: '2026-10-18', status: 'SUNDAY', sp: 'SUNDAY', reg: '', others: 'SUNDAY', total: 'SUNDAY', pmaHandled: '', pmaPercent: 'SUNDAY', pdmsInvoicedCount: 'SUNDAY', dssInvoicedCount: 'SUNDAY', mobileUsagePercent: '-' },
+  // Day 19: 19-10-2026 (Row 441: PDMS 29, DSS 29, 100%)
+  { sn: 19, date: '19-10-2026', isoDate: '2026-10-19', status: 'WORKING', sp: 27, reg: 0, others: 2, total: 29, pmaHandled: 29, pmaPercent: 100, pdmsInvoicedCount: 29, dssInvoicedCount: 29, mobileUsagePercent: 100 },
+  // Day 20: 20-10-2026 Dussehra
+  { sn: 20, date: '20-10-2026', isoDate: '2026-10-20', status: 'HOLIDAY', sp: 'HOLIDAY', reg: 0, others: 'HOLIDAY', total: 'HOLIDAY', pmaHandled: '', pmaPercent: 'HOLIDAY', pdmsInvoicedCount: 'HOLIDAY', dssInvoicedCount: 'HOLIDAY', mobileUsagePercent: '-' },
+  // Day 21: 21-10-2026 (Row 465: PDMS 76, DSS 76, 100%)
+  { sn: 21, date: '21-10-2026', isoDate: '2026-10-21', status: 'WORKING', sp: 70, reg: 0, others: 6, total: 76, pmaHandled: 76, pmaPercent: 100, pdmsInvoicedCount: 76, dssInvoicedCount: 76, mobileUsagePercent: 100 },
+  // Day 22: 22-10-2026 (Row 495: PDMS 57, DSS 57, 100%)
+  { sn: 22, date: '22-10-2026', isoDate: '2026-10-22', status: 'WORKING', sp: 53, reg: 0, others: 4, total: 57, pmaHandled: 57, pmaPercent: 100, pdmsInvoicedCount: 57, dssInvoicedCount: 57, mobileUsagePercent: 100 },
+  // Day 23: 23-10-2026 (Row 526: PDMS 33, DSS 33, 100%)
+  { sn: 23, date: '23-10-2026', isoDate: '2026-10-23', status: 'WORKING', sp: 30, reg: 0, others: 3, total: 33, pmaHandled: 33, pmaPercent: 100, pdmsInvoicedCount: 33, dssInvoicedCount: 33, mobileUsagePercent: 100 },
+  // Day 24: 24-10-2026 (Row 554: PDMS 25, DSS 25, 100%)
+  { sn: 24, date: '24-10-2026', isoDate: '2026-10-24', status: 'WORKING', sp: 23, reg: 0, others: 2, total: 25, pmaHandled: 25, pmaPercent: 100, pdmsInvoicedCount: 25, dssInvoicedCount: 25, mobileUsagePercent: 100 },
+  // Day 25: 25-10-2026 Sunday
+  { sn: 25, date: '25-10-2026', isoDate: '2026-10-25', status: 'SUNDAY', sp: 'SUNDAY', reg: '', others: 'SUNDAY', total: 'SUNDAY', pmaHandled: '', pmaPercent: 'SUNDAY', pdmsInvoicedCount: 'SUNDAY', dssInvoicedCount: 'SUNDAY', mobileUsagePercent: '-' },
+  // Day 26: 26-10-2026 (Row 585: PDMS 33, DSS 33, 100%)
+  { sn: 26, date: '26-10-2026', isoDate: '2026-10-26', status: 'WORKING', sp: 30, reg: 0, others: 3, total: 33, pmaHandled: 33, pmaPercent: 100, pdmsInvoicedCount: 33, dssInvoicedCount: 33, mobileUsagePercent: 100 },
+  // Day 27: 27-10-2026 (Row 617: PDMS 26, DSS 26, 100%)
+  { sn: 27, date: '27-10-2026', isoDate: '2026-10-27', status: 'WORKING', sp: 24, reg: 0, others: 2, total: 26, pmaHandled: 26, pmaPercent: 100, pdmsInvoicedCount: 26, dssInvoicedCount: 26, mobileUsagePercent: 100 },
+  // Day 28: 28-10-2026 (Row 649: PDMS 38, DSS 38, 100%)
+  { sn: 28, date: '28-10-2026', isoDate: '2026-10-28', status: 'WORKING', sp: 35, reg: 0, others: 3, total: 38, pmaHandled: 38, pmaPercent: 100, pdmsInvoicedCount: 38, dssInvoicedCount: 38, mobileUsagePercent: 100 },
+  // Day 29: 29-10-2026 (Row 681: PDMS 29, DSS 29, 100%)
+  { sn: 29, date: '29-10-2026', isoDate: '2026-10-29', status: 'WORKING', sp: 27, reg: 0, others: 2, total: 29, pmaHandled: 29, pmaPercent: 100, pdmsInvoicedCount: 29, dssInvoicedCount: 29, mobileUsagePercent: 100 },
+  // Day 30: 30-10-2026 (Row 713: PDMS 44, DSS 44, 100%)
+  { sn: 30, date: '30-10-2026', isoDate: '2026-10-30', status: 'WORKING', sp: 40, reg: 0, others: 4, total: 44, pmaHandled: 44, pmaPercent: 100, pdmsInvoicedCount: 44, dssInvoicedCount: 44, mobileUsagePercent: 100 },
+  // Day 31: 31-10-2026 (Row 745: PDMS 60, DSS 60, 100%)
+  { sn: 31, date: '31-10-2026', isoDate: '2026-10-31', status: 'WORKING', sp: 55, reg: 0, others: 5, total: 60, pmaHandled: 60, pmaPercent: 100, pdmsInvoicedCount: 60, dssInvoicedCount: 60, mobileUsagePercent: 100 },
+];
+
 export function formatIsoToDDMMYYYY(isoDate: string): string {
   if (!isoDate) return '';
   const parts = isoDate.split('-');
@@ -70,10 +187,10 @@ export function getMonthNameFromDate(isoDate: string): string {
     'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
     'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER',
   ];
-  if (!isoDate) return 'SEPTEMBER';
+  if (!isoDate) return 'OCTOBER';
   const d = new Date(isoDate);
-  if (isNaN(d.getTime())) return 'SEPTEMBER';
-  return months[d.getMonth()] || 'SEPTEMBER';
+  if (isNaN(d.getTime())) return 'OCTOBER';
+  return months[d.getMonth()] || 'OCTOBER';
 }
 
 export function buildFuelDailySchedule(
@@ -84,6 +201,10 @@ export function buildFuelDailySchedule(
 ): FuelDailyRow[] {
   if (existingRows && existingRows.length > 0) {
     return existingRows;
+  }
+
+  if (fromDate.startsWith('2026-10') || toDate.startsWith('2026-10')) {
+    return OCTOBER_2026_FUEL_REFERENCE_ROWS.map((r) => ({ ...r }));
   }
 
   if (fromDate === '2026-08-01' && toDate === '2026-08-30') {
@@ -779,8 +900,24 @@ export function downloadOfficialFuelBillPDF(bill: SpecialBillRecord): void {
     'Name & Signature of Divisional Head',
     { align: 'center', bold: true, fontSize: 9.5 }
   );
+  y2 += p2RowH + 6;
+
+  // 12. Beat Territorial Map & Route Distance Calculation Box (Official DoP Beat Audit Record)
+  const coverageLocality = details.territorialCoverage || details.coverage || 'Keshavpura Sectors 6 & 7, Santoshi Nagar, TVS Circle & Market Corridor';
+  const routeDesc = details.routeDescription || 'Dadabari S.O. High-Density Beat Delivery Sector';
+  doc.rect(x0, y2, totalW, 18.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.text(`[BEAT TERRITORIAL MAP & CALCULATION SUMMARY: BEAT ${beatDisplay}]`, x0 + 2.5, y2 + 4.8);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text(`• Coverage Localities: ${coverageLocality} (PIN: 324009)`, x0 + 2.5, y2 + 9.0);
+  doc.text(`• Route Survey & Terrain: ${routeDesc}`, x0 + 2.5, y2 + 13.0);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`• Statutory Formula: ${workingDays} Working Days × ${fixedKm} KM/d = ${totalDistanceKm} KM @ ₹${ratePerKm.toFixed(2)}/KM = Admissible Total: ₹${totalAmount}.00`, x0 + 2.5, y2 + 17.0);
 
   const safeStaff = staffName.replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
   const filename = `${safeStaff}_FUEL_CLAIM_${claimMonth}_${claimYear}.pdf`;
   doc.save(filename);
 }
+

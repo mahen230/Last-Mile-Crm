@@ -211,7 +211,7 @@ class OperationsService {
               (e) =>
                 (e.beatNo === 'Beat 5' || e.beatNo === '5') &&
                 e.date.startsWith('2026-10') &&
-                (e.registryDelivered > 0 || (e.date === '2026-10-01' && e.speedPostDelivered + e.registryDelivered + e.parcelDelivered !== 81))
+                (e.registryDelivered > 0 || (e.date === '2026-10-01' && e.speedPostDelivered + e.registryDelivered + e.parcelDelivered !== 75) || (e.date === '2026-10-03' && e.speedPostDelivered + e.registryDelivered + e.parcelDelivered !== 251))
             );
 
           if (needsBeat5Refresh) {
@@ -602,7 +602,7 @@ class OperationsService {
         sanctionedBeatKm: b5Fuel.sanctionedDailyKm,
         fuelRatePerKm: 3.60,
         dailyFuelAllowance: isSun || isHol || isLeave ? 0 : 68.40, // 19 KM * ₹3.60
-        monthlyFuelAllowance: 1573, // 23 working days * 19 KM * ₹3.60 = ₹1,573.20
+        monthlyFuelAllowance: 1642, // 24 working days * 19 KM * ₹3.60 = ₹1,641.60
         pdmsInvoicedCount: r.pdmsInvoicedCount,
         dssInvoicedCount: r.dssInvoicedCount,
         mobileUsagePercent: r.mobileUsagePercent,
@@ -764,6 +764,42 @@ class OperationsService {
       target.parcelReturned = Math.max(0, target.parcelReceived - target.parcelDelivered);
     }
 
+    // ========================================================
+    // STATUTORY DSS SHEET MASTER PRIORITY & SPEED POST AUTO-ADJUSTMENT RULE
+    // Rule: Official DSS benchmark represents the absolute authority.
+    // If daily entry totals do not match the official DSS report totals,
+    // Speed Post articles must be dynamically adjusted so that master DSS sheet
+    // totals, delivery counts, and delivery percentages remain completely undisturbed.
+    // ========================================================
+    const masterDssBenchmark =
+      typeof target.dssInvoicedCount === 'number' && target.dssInvoicedCount > 0
+        ? target.dssInvoicedCount
+        : typeof target.pdmsInvoicedCount === 'number' && target.pdmsInvoicedCount > 0
+        ? target.pdmsInvoicedCount
+        : null;
+
+    if (masterDssBenchmark !== null) {
+      const regDeliv = target.registryDelivered || 0;
+      const parDeliv = target.parcelDelivered || 0;
+      const currentSpDeliv = target.speedPostDelivered || 0;
+      const totalDelivered = currentSpDeliv + regDeliv + parDeliv;
+
+      if (totalDelivered !== masterDssBenchmark) {
+        const balancedSp = Math.max(0, masterDssBenchmark - (regDeliv + parDeliv));
+        if (balancedSp !== currentSpDeliv) {
+          const originalSp = currentSpDeliv;
+          target.speedPostDelivered = balancedSp;
+          target.speedPostReceived = Math.max(target.speedPostReceived || 0, balancedSp);
+          target.speedPostReturned = Math.max(0, target.speedPostReceived - balancedSp);
+          changedFields.push('speedPostDelivered (DSS Master Auto-Adjusted)');
+          previousCounts['speedPostDelivered_original'] = originalSp;
+          newCounts['speedPostDelivered_adjusted'] = balancedSp;
+          const adjustRemark = `[DSS Master Priority]: Speed Post dynamically adjusted ${originalSp} → ${balancedSp} to maintain master DSS total (${masterDssBenchmark}) and 100% audit integrity.`;
+          target.remarks = target.remarks ? `${target.remarks} | ${adjustRemark}` : adjustRemark;
+        }
+      }
+    }
+
     // Ensure beat-wise fuel allowance is accurately mapped
     if (!target.dailyFuelAllowance) {
       const fuelData = getBeatFuelMapping(target.beatNo);
@@ -847,6 +883,78 @@ class OperationsService {
         isUpdate: false,
       };
     }
+  }
+
+  /**
+   * Reconciles all daily entries against Master DSS benchmarks.
+   * If any day's delivered articles (Speed Post + Registered + Parcels) do not equal
+   * the official DSS benchmark, dynamically auto-adjusts Speed Post so that
+   * the master DSS totals and delivery percentages remain 100% undisturbed.
+   */
+  public reconcileAndAutoAdjustEntriesToDss(
+    targetBeat?: string,
+    targetMonth?: string
+  ): {
+    totalChecked: number;
+    adjustedCount: number;
+    details: Array<{ date: string; beatNo: string; originalSp: number; newSp: number; dssBenchmark: number }>;
+  } {
+    let adjustedCount = 0;
+    let totalChecked = 0;
+    const details: Array<{ date: string; beatNo: string; originalSp: number; newSp: number; dssBenchmark: number }> = [];
+
+    const cleanBeat = targetBeat ? targetBeat.replace(/beat\s*/i, '').trim().toLowerCase() : null;
+
+    this.dailyEntries.forEach((entry) => {
+      const entryBeatClean = entry.beatNo.replace(/beat\s*/i, '').trim().toLowerCase();
+      if (cleanBeat && entryBeatClean !== cleanBeat) return;
+      if (targetMonth && !entry.date.startsWith(targetMonth)) return;
+
+      totalChecked++;
+
+      const benchmark =
+        typeof entry.dssInvoicedCount === 'number' && entry.dssInvoicedCount > 0
+          ? entry.dssInvoicedCount
+          : typeof entry.pdmsInvoicedCount === 'number' && entry.pdmsInvoicedCount > 0
+          ? entry.pdmsInvoicedCount
+          : null;
+
+      if (benchmark !== null && benchmark > 0) {
+        const reg = entry.registryDelivered || 0;
+        const par = entry.parcelDelivered || 0;
+        const sp = entry.speedPostDelivered || 0;
+        const sum = sp + reg + par;
+
+        if (sum !== benchmark) {
+          const balancedSp = Math.max(0, benchmark - (reg + par));
+          const orig = sp;
+          entry.speedPostDelivered = balancedSp;
+          entry.speedPostReceived = Math.max(entry.speedPostReceived || 0, balancedSp);
+          entry.speedPostReturned = Math.max(0, entry.speedPostReceived - balancedSp);
+          entry.dssStatus = 'Reconciled with DSS';
+          entry.remarks = entry.remarks
+            ? `${entry.remarks} | [Auto-Reconciled]: SP adjusted ${orig} → ${balancedSp} to match DSS target (${benchmark}).`
+            : `[Auto-Reconciled]: SP adjusted ${orig} → ${balancedSp} to match DSS target (${benchmark}).`;
+
+          adjustedCount++;
+          details.push({
+            date: entry.date,
+            beatNo: entry.beatNo,
+            originalSp: orig,
+            newSp: balancedSp,
+            dssBenchmark: benchmark,
+          });
+        }
+      }
+    });
+
+    if (adjustedCount > 0) {
+      this.saveDailyEntries();
+      this.incrementPendingSync();
+      this.notify();
+    }
+
+    return { totalChecked, adjustedCount, details };
   }
 
   /**

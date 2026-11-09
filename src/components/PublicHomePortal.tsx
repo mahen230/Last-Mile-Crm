@@ -524,27 +524,23 @@ export default function PublicHomePortal({
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          <Link
-            to="/dashboard"
-            className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap shrink-0 shadow-2xs"
-            id="go-to-staff-crm-link"
+          <button
+            type="button"
+            onClick={() => {
+              const calcEl = document.getElementById('small-savings-calculator');
+              if (calcEl) {
+                calcEl.scrollIntoView({ behavior: 'smooth' });
+              } else {
+                handleProductAction(POSTAL_PRODUCTS[0], 'KNOW_MORE');
+              }
+            }}
+            className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap shrink-0 shadow-2xs cursor-pointer"
+            id="public-portal-calc-link"
           >
-            <Shield size={13} className="text-amber-400" />
-            <span>Staff CRM Portal & Login</span>
+            <Calculator size={13} className="text-amber-400" />
+            <span>Scheme Returns Calculator</span>
             <ArrowRight size={13} />
-          </Link>
-
-          {onOpenStaffLogin && (
-            <button
-              type="button"
-              onClick={onOpenStaffLogin}
-              className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shrink-0"
-              id="public-portal-staff-login-btn"
-            >
-              <Lock size={13} className="text-red-700" />
-              <span>Staff Login</span>
-            </button>
-          )}
+          </button>
 
           {unlockedVisitor ? (
             <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900">
@@ -1155,6 +1151,44 @@ export default function PublicHomePortal({
           </div>
         </div>
       </section>
+
+      {/* Official Department of Posts Citizen Portal Footer */}
+      <footer className="mt-16 pt-8 pb-12 border-t border-slate-200 text-xs text-slate-500">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3 text-left">
+            <div className="w-9 h-9 rounded-xl bg-red-800 text-white flex items-center justify-center font-bold text-sm">
+              📮
+            </div>
+            <div>
+              <div className="font-bold text-slate-800 text-sm">
+                डाक विभाग · Department of Posts, Government of India
+              </div>
+              <div className="text-[11px] text-slate-500">
+                Dadabari Sub Post Office · PIN 324009 · Kota Division, Rajasthan Circle
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 text-xs font-medium flex-wrap justify-center">
+            <Link to="/xpo-kart" className="hover:text-red-700 transition">Xpo Kart Wholesale</Link>
+            <span>•</span>
+            <Link to="/postal-lms" className="hover:text-red-700 transition">Postal LMS & LDCE</Link>
+            <span>•</span>
+            <Link
+              to="/login"
+              className="text-slate-500 hover:text-slate-800 transition flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white shadow-2xs text-[11px] font-semibold"
+              title="Official Departmental Personnel Login"
+              id="footer-staff-login-link"
+            >
+              <Lock size={12} className="text-red-700" />
+              <span>Official Staff Gateway</span>
+            </Link>
+          </div>
+        </div>
+        <div className="mt-4 pt-4 border-t border-slate-100 text-[11px] text-slate-400 text-center">
+          © {new Date().getFullYear()} Department of Posts, Ministry of Communications, Government of India. All Rights Reserved.
+        </div>
+      </footer>
 
       {/* SMART LEAD CAPTURE GATE MODAL (Prompts Name & Mobile BEFORE showing full details) */}
       {leadGateTargetProduct && (

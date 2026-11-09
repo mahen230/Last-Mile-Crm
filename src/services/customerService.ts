@@ -1143,6 +1143,29 @@ class CustomerService {
       }
     }
 
+    // 3. Strict Relational Reference Matching: Beat Number + Sector + Pincode + Unique House Number
+    const candBeat = (candidate.beatNo || '').trim().toLowerCase();
+    const candPincode = (candidate.pincode || candidate.address?.pincode || '324009').trim();
+    if (candBeat && candSector && candHouse && candHouse !== 'n/a') {
+      const propMatch = this.customers.find(c => {
+        const cBeat = (c.beatNo || '').trim().toLowerCase();
+        const cSector = (c.address?.sectorLocality || c.sector || '').trim().toLowerCase();
+        const cHouse = (c.address?.houseNumber || c.houseNo || '').trim().toLowerCase();
+        const cPin = (c.pincode || c.address?.pincode || '324009').trim();
+        return (cBeat === candBeat || cBeat.replace(/\s+/g, '') === candBeat.replace(/\s+/g, '')) &&
+               (cSector === candSector || cSector.includes(candSector) || candSector.includes(cSector)) &&
+               cHouse === candHouse &&
+               (!cPin || !candPincode || cPin === candPincode);
+      });
+      if (propMatch) {
+        return {
+          status: 'EXACT_MATCH',
+          matchedCustomer: propMatch,
+          conflictReason: `Relational property matched on ${candidate.beatNo}, Sector ${candSector}, House ${candHouse}, PIN ${candPincode}. Merging non-destructively.`
+        };
+      }
+    }
+
     return { status: 'UNIQUE' };
   }
 
@@ -1184,6 +1207,10 @@ class CustomerService {
         });
       }
 
+      // Non-destructive preservation of historic GPS pins, verified logs, and existing household members
+      const existingGps = (existing as any).gpsCoordinates || (existing.address as any)?.gpsCoordinates || (existing as any).gpsPin || (existing.address as any)?.latitude;
+      const existingPropId = existing.propertyId || (existing as any).propertyCode;
+
       // Update fields if new non-empty verified values provided
       existing.name = data.name || existing.name;
       existing.whatsapp = data.whatsapp ? normalizeMobile(data.whatsapp) : existing.whatsapp;
@@ -1191,12 +1218,30 @@ class CustomerService {
       existing.email = data.email || existing.email;
       existing.occupation = data.occupation || existing.occupation;
       existing.livingStatus = data.livingStatus || existing.livingStatus;
-      existing.householdMembers = data.householdMembers || existing.householdMembers;
+
+      // Cleanly append or update household members without wiping existing ones
+      if (data.householdMembers && Array.isArray(data.householdMembers) && data.householdMembers.length > 0) {
+        const currentMembers = existing.householdMembers || [];
+        const mergedMembers = [...currentMembers];
+        data.householdMembers.forEach(newMem => {
+          if (!mergedMembers.some(em => em.name?.toLowerCase() === newMem.name?.toLowerCase())) {
+            mergedMembers.push(newMem);
+          }
+        });
+        existing.householdMembers = mergedMembers;
+      }
+
       existing.beatNo = data.beatNo || existing.beatNo;
       existing.existingBanking = data.existingBanking || existing.existingBanking;
       existing.financialInterest = data.financialInterest || existing.financialInterest;
-      existing.verificationStatus = data.verificationStatus || existing.verificationStatus;
+      existing.verificationStatus = existing.verificationStatus === 'Verified' ? 'Verified' : (data.verificationStatus || existing.verificationStatus);
       
+      // Preserve historic property ID & GPS pins
+      if (existingPropId) existing.propertyId = existingPropId;
+      if (existingGps) {
+        (existing as any).gpsCoordinates = existingGps;
+      }
+
       // Explicit validated hierarchy persistence
       existing.colony = validColony;
       existing.area = validColony;

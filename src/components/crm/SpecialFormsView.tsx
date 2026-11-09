@@ -20,6 +20,8 @@ import { staffPermissionService, getDefaultFixedKmForBeat } from '../../services
 import {
   FuelDailyRow,
   MAHEN_FUEL_REFERENCE_ROWS,
+  PRIYANSHU_BEAT_17_OCTOBER_2026_ROWS,
+  MOHIT_BEAT_5_OCTOBER_2026_ROWS,
   buildFuelDailySchedule,
   calculateFuelScheduleTotals,
   downloadOfficialFuelBillPDF,
@@ -183,7 +185,7 @@ export default function SpecialFormsView() {
   const handleDateRangeChange = (newFrom: string, newTo: string) => {
     setFromDate(newFrom);
     setToDate(newTo);
-    const rebuilt = buildFuelDailySchedule(newFrom, newTo, fuelLeaveDays);
+    const rebuilt = buildFuelDailySchedule(newFrom, newTo, fuelLeaveDays, undefined, beatNo);
     setDailyRows(rebuilt);
     const tots = calculateFuelScheduleTotals(rebuilt);
     setFuelLeaveDays(tots.offDaysCount);
@@ -209,6 +211,40 @@ export default function SpecialFormsView() {
     setVehicleNo('RJ-20-SS-4521');
     setDailyRows(MAHEN_FUEL_REFERENCE_ROWS.map((r) => ({ ...r })));
     setStatusMessage('Loaded exact official reference data from MAHEN FUEL.pdf (30 KM × 25 Days = 750 KM × ₹3.60 = ₹2,700).');
+  };
+
+  const handleLoadMohitBeat5Preset = () => {
+    setEmployeeId('10310736');
+    setEmployeeName('MOHIT ARVIND');
+    setBeatNo('Beat 5');
+    setOfficeName('Dadabari S.O. (324009)');
+    setFixedKm(19);
+    setFromDate('2026-10-01');
+    setToDate('2026-10-31');
+    setClaimMonth('OCTOBER');
+    setClaimYear('2026');
+    setFuelLeaveDays(7); // 4 Sundays + 2 Holidays + 1 Leave Day = 7 Off Days (24 Working Days)
+    setFuelRatePerKm(3.6);
+    setVehicleNo('RJ-20-MB-8112');
+    setDailyRows(MOHIT_BEAT_5_OCTOBER_2026_ROWS.map((r) => ({ ...r })));
+    setStatusMessage('Loaded official audited data for Beat 5 (Mohit Arvind) October 2026: 24 Working Days × 19 KM @ ₹3.60 = ₹1,641.60 | Total Accountable Articles: 2,178 | Mobile Usage: 100% | Registered: 0');
+  };
+
+  const handleLoadPriyanshuBeat17Preset = () => {
+    setEmployeeId('50507003');
+    setEmployeeName('PRIYANSHU TRIVEDI');
+    setBeatNo('Beat 17');
+    setOfficeName('Dadabari S.O. (324009)');
+    setFixedKm(28);
+    setFromDate('2026-10-01');
+    setToDate('2026-10-31');
+    setClaimMonth('OCTOBER');
+    setClaimYear('2026');
+    setFuelLeaveDays(6); // 4 Sundays + 2 Holidays = 6 Off Days (25 Working Days)
+    setFuelRatePerKm(3.6);
+    setVehicleNo('RJ-20-SP-9928');
+    setDailyRows(PRIYANSHU_BEAT_17_OCTOBER_2026_ROWS.map((r) => ({ ...r })));
+    setStatusMessage('Loaded official audited data for Beat 17 (Priyanshu Trivedi) October 2026: 25 Working Days × 28 KM @ ₹3.60 = ₹2,520.00 | Total Accountable Articles: 1,136 | Mobile Usage: 99.76% | Registered: 0');
   };
 
   const updateSingleDailyRow = (
@@ -576,14 +612,35 @@ export default function SpecialFormsView() {
               Step 1: Delivery Staff Details, Post Office & Duty Period
             </h2>
             {activeTab === 'FUEL_BILL' && (
-              <button
-                type="button"
-                onClick={handleLoadMahenReferencePreset}
-                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-amber-300 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-              >
-                <RefreshCw size={13} />
-                <span>Load Official MAHEN FUEL.pdf Reference Values</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleLoadMohitBeat5Preset}
+                  className="px-2.5 py-1.5 bg-blue-900/90 hover:bg-blue-800 text-blue-200 border border-blue-600/50 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                  title="24 Working Days · 19 KM/day @ ₹3.60 = ₹1,641.60 · Articles: 2,178 · Reg: 0 · 100% Mobile"
+                >
+                  <RefreshCw size={12} />
+                  <span>Beat 5 (Mohit Arvind - Oct 2026)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLoadPriyanshuBeat17Preset}
+                  className="px-2.5 py-1.5 bg-amber-950/90 hover:bg-amber-900 text-amber-300 border border-amber-600/50 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                  title="25 Working Days · 28 KM/day @ ₹3.60 = ₹2,520.00 · Articles: 1,136 · Reg: 0"
+                >
+                  <RefreshCw size={12} />
+                  <span>Beat 17 (Priyanshu Trivedi - Oct 2026)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLoadMahenReferencePreset}
+                  className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                  title="25 Working Days · 30 KM/day @ ₹3.60 = ₹2,700.00 · MAHEN FUEL.pdf"
+                >
+                  <RefreshCw size={12} />
+                  <span>Beat 2 (Mahendra Kumar)</span>
+                </button>
+              </div>
             )}
           </div>
 

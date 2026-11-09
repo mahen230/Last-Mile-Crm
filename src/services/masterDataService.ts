@@ -5,6 +5,7 @@
  * and structured Charge Report & BYOD bill submissions.
  */
 
+import * as XLSX from 'xlsx';
 import { customerService } from './customerService';
 import { operationsService } from './operationsService';
 import {
@@ -13,6 +14,7 @@ import {
   DEPARTMENTAL_FUEL_RATE_PER_KM,
   STANDARD_MONTHLY_WORKING_DAYS,
   getBeatFuelMapping,
+  buildAll33BeatsFuelDirectory,
 } from '../data/beatFuelData';
 import {
   DailyArticleEntry,
@@ -48,6 +50,17 @@ export interface MasterUploadLog {
   summary: string;
 }
 
+export interface FuelBillApprovalRecord {
+  beatNo: string;
+  month: string; // e.g. "2026-10"
+  staffName: string;
+  staffId: string;
+  staffRole: string;
+  timestamp: string;
+  notes?: string;
+  isApproved: boolean;
+}
+
 export interface PostmanMonthlyFuelSummary {
   beatNo: string;
   postmanName: string;
@@ -74,6 +87,11 @@ export interface PostmanMonthlyFuelSummary {
   routeDescription?: string;
   pincode?: string;
   dailyRows: FuelDailyRow[];
+  isStaffApproved?: boolean;
+  staffApprovedBy?: string;
+  staffApprovedById?: string;
+  staffApprovedAt?: string;
+  approvalNotes?: string;
 }
 
 export type IngestionVerificationStage =
@@ -176,11 +194,15 @@ export interface IngestedMasterRecord {
 const STORAGE_KEY_UPLOAD_LOGS = 'postman_master_upload_logs_v1';
 const STORAGE_KEY_CUSTOM_BEAT_KM = 'postman_custom_beat_km_overrides_v1';
 const STORAGE_KEY_INGESTED_RECORDS = 'postman_ingested_master_records_v3';
+const STORAGE_KEY_FUEL_APPROVALS = 'postman_fuel_approvals_v1';
+const STORAGE_KEY_CUSTOM_DAILY_SCHEDULE = 'postman_custom_daily_schedule_v1';
 
 class MasterDataService {
   private uploadLogs: MasterUploadLog[] = [];
   private customBeatKmOverrides: Record<string, number> = {};
   private ingestedRecords: IngestedMasterRecord[] = [];
+  private fuelApprovals: Record<string, FuelBillApprovalRecord> = {};
+  private customDayRowsOverrides: Record<string, FuelDailyRow[]> = {};
   private listeners: (() => void)[] = [];
 
   constructor() {
@@ -210,12 +232,104 @@ class MasterDataService {
           this.ingestedRecords = this.getInitialIngestedRecords();
           this.saveIngestedRecords();
         }
+
+        const rawApprovals = localStorage.getItem(STORAGE_KEY_FUEL_APPROVALS);
+        if (rawApprovals) {
+          this.fuelApprovals = JSON.parse(rawApprovals);
+        }
+
+        const rawSchedules = localStorage.getItem(STORAGE_KEY_CUSTOM_DAILY_SCHEDULE);
+        if (rawSchedules) {
+          this.customDayRowsOverrides = JSON.parse(rawSchedules);
+        }
       }
     } catch (e) {
       console.warn('Failed to load master data upload state:', e);
       this.uploadLogs = this.getInitialUploadLogs();
       this.ingestedRecords = this.getInitialIngestedRecords();
     }
+  }
+
+  private saveFuelApprovals() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY_FUEL_APPROVALS, JSON.stringify(this.fuelApprovals));
+      }
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+
+  private saveCustomDayRows() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY_CUSTOM_DAILY_SCHEDULE, JSON.stringify(this.customDayRowsOverrides));
+      }
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+
+  public saveFuelBillApproval(
+    beatNo: string,
+    month: string,
+    staffName: string,
+    staffId: string,
+    staffRole: string,
+    notes?: string
+  ): FuelBillApprovalRecord {
+    const cleanBeat = beatNo.startsWith('Beat') ? beatNo : `Beat ${beatNo}`;
+    const key = `${cleanBeat}_${month}`;
+    const record: FuelBillApprovalRecord = {
+      beatNo: cleanBeat,
+      month,
+      staffName,
+      staffId,
+      staffRole,
+      timestamp: new Date().toISOString(),
+      notes: notes || 'Verified & Approved by Assigned Postman / Supervisor.',
+      isApproved: true,
+    };
+    this.fuelApprovals[key] = record;
+    this.saveFuelApprovals();
+    this.notify();
+    return record;
+  }
+
+  public revokeFuelBillApproval(beatNo: string, month: string) {
+    const cleanBeat = beatNo.startsWith('Beat') ? beatNo : `Beat ${beatNo}`;
+    const key = `${cleanBeat}_${month}`;
+    delete this.fuelApprovals[key];
+    this.saveFuelApprovals();
+    this.notify();
+  }
+
+  public getFuelBillApproval(beatNo: string, month: string): FuelBillApprovalRecord | null {
+    const cleanBeat = beatNo.startsWith('Beat') ? beatNo : `Beat ${beatNo}`;
+    const key = `${cleanBeat}_${month}`;
+    return this.fuelApprovals[key] || null;
+  }
+
+  public saveCustomFuelDailyRows(beatNo: string, month: string, rows: FuelDailyRow[]) {
+    const cleanBeat = beatNo.startsWith('Beat') ? beatNo : `Beat ${beatNo}`;
+    const key = `${cleanBeat}_${month}`;
+    this.customDayRowsOverrides[key] = rows;
+    this.saveCustomDayRows();
+    this.notify();
+  }
+
+  public getCustomFuelDailyRows(beatNo: string, month: string): FuelDailyRow[] | null {
+    const cleanBeat = beatNo.startsWith('Beat') ? beatNo : `Beat ${beatNo}`;
+    const key = `${cleanBeat}_${month}`;
+    return this.customDayRowsOverrides[key] || null;
+  }
+
+  public resetCustomFuelDailyRows(beatNo: string, month: string) {
+    const cleanBeat = beatNo.startsWith('Beat') ? beatNo : `Beat ${beatNo}`;
+    const key = `${cleanBeat}_${month}`;
+    delete this.customDayRowsOverrides[key];
+    this.saveCustomDayRows();
+    this.notify();
   }
 
   public saveIngestedRecords() {
@@ -2037,6 +2151,70 @@ class MasterDataService {
         e.date.startsWith(targetMonthYear)
     );
 
+    // If custom day-by-day edited rows exist for this beat and month, load them
+    const savedCustomRows = this.customDayRowsOverrides[`${cleanBeat}_${targetMonthYear}`];
+    if (savedCustomRows && savedCustomRows.length > 0) {
+      let savedWorking = 0;
+      let savedSundays = 0;
+      let sSp = 0;
+      let sReg = 0;
+      let sPar = 0;
+      let sTotal = 0;
+      let customKmSum = 0;
+
+      savedCustomRows.forEach((r) => {
+        if (r.status === 'WORKING') {
+          savedWorking++;
+          const rowKm = typeof r.dailyKm === 'number' && r.dailyKm > 0 ? r.dailyKm : customKm;
+          customKmSum += rowKm;
+          sSp += typeof r.sp === 'number' ? r.sp : 0;
+          sReg += typeof r.reg === 'number' ? r.reg : 0;
+          sPar += typeof r.others === 'number' ? r.others : 0;
+          sTotal += typeof r.total === 'number' ? r.total : 0;
+        } else {
+          savedSundays++;
+        }
+      });
+
+      const effectiveWorking = overrides?.customWorkingDays || savedWorking;
+      const totalKm = customKmSum > 0 ? customKmSum : effectiveWorking * customKm;
+      const totalClaim = Math.round(totalKm * fuelRate);
+      const approval = this.getFuelBillApproval(cleanBeat, targetMonthYear);
+
+      return {
+        beatNo: cleanBeat,
+        postmanName: overrides?.postmanName || fuelMapping.assignedPostmanName,
+        employeeId: overrides?.employeeId || fuelMapping.assignedStaffId,
+        officeName: fuelMapping.officeName,
+        month: targetMonthYear,
+        monthName,
+        totalDaysInMonth,
+        workingDays: effectiveWorking,
+        sundaysAndHolidays: savedSundays,
+        sanctionedDailyKm: customKm,
+        fuelRatePerKm: fuelRate,
+        totalMonthlyKm: totalKm,
+        totalClaimAmount: totalClaim,
+        totalSpeedPostDelivered: sSp,
+        totalRegistryDelivered: sReg,
+        totalParcelsDelivered: sPar,
+        totalArticlesDelivered: sTotal || (sSp + sReg + sPar),
+        pmaDeliveryRate: 100,
+        dssSheetCount: beatMonthEntries.length,
+        isFullyReconciled: beatMonthEntries.length >= 10,
+        territorialCoverage: fuelMapping.territorialCoverage,
+        terrainClassification: fuelMapping.terrainClassification,
+        routeDescription: fuelMapping.routeDescription,
+        pincode: fuelMapping.pincode,
+        dailyRows: savedCustomRows,
+        isStaffApproved: approval ? approval.isApproved : false,
+        staffApprovedBy: approval?.staffName,
+        staffApprovedById: approval?.staffId,
+        staffApprovedAt: approval?.timestamp,
+        approvalNotes: approval?.notes,
+      };
+    }
+
     // Build day-by-day 1..N schedule
     const dailyRows: FuelDailyRow[] = [];
     let workingDaysCount = 0;
@@ -2271,6 +2449,137 @@ class MasterDataService {
       routeDescription: fuelMapping.routeDescription,
       pincode: fuelMapping.pincode,
       dailyRows,
+      isStaffApproved: this.getFuelBillApproval(cleanBeat, targetMonthYear)?.isApproved || false,
+      staffApprovedBy: this.getFuelBillApproval(cleanBeat, targetMonthYear)?.staffName,
+      staffApprovedById: this.getFuelBillApproval(cleanBeat, targetMonthYear)?.staffId,
+      staffApprovedAt: this.getFuelBillApproval(cleanBeat, targetMonthYear)?.timestamp,
+      approvalNotes: this.getFuelBillApproval(cleanBeat, targetMonthYear)?.notes,
+    };
+  }
+
+  /**
+   * AI-Powered Monthly DSS Report Ingestion & Auto-Sync Engine:
+   * Parses uploaded spreadsheet rows, detects beat/date mappings, compares them against
+   * the official DSS invoiced benchmark, and applies the statutory Speed Post balancing rule:
+   * Adjusted Speed Post = max(0, dssInvoicedCount - (registryDelivered + parcelDelivered))
+   * Previews records in a review state before staff approval.
+   */
+  public reconcileDssRowsWithAI(
+    rawRows: Record<string, any>[],
+    fileName: string,
+    uploaderName: string
+  ): {
+    previewRows: Array<{
+      id: string;
+      date: string;
+      beatNo: string;
+      staffName: string;
+      employeeId: string;
+      attendanceStatus: string;
+      sanctionedKm: number;
+      fuelRatePerKm: number;
+      speedPostDelivered: number;
+      registryDelivered: number;
+      parcelDelivered: number;
+      totalDelivered: number;
+      dssInvoicedCount: number;
+      pdmsInvoicedCount: number;
+      mobileUsagePercent: number;
+      originalSp: number;
+      wasSpAdjusted: boolean;
+      remarks: string;
+    }>;
+    stats: {
+      totalRows: number;
+      adjustedCount: number;
+      perfectMatchCount: number;
+      beatsCount: number;
+      uniqueBeats: string[];
+      totalClaimSum: number;
+    };
+  } {
+    const previewRows: any[] = [];
+    let adjustedCount = 0;
+    let perfectMatchCount = 0;
+    const beatsSet = new Set<string>();
+
+    rawRows.forEach((row, idx) => {
+      const rawDate = row['date'] || row['Date'] || row['Date of Entry'] || row['entryDate'];
+      const date = String(rawDate || new Date().toISOString().split('T')[0]).trim();
+      const rawBeat = row['beatNo'] || row['BeatNo'] || row['Beat'] || row['beat'] || 'Beat 2';
+      const beatNo = String(rawBeat).trim().startsWith('Beat') ? String(rawBeat).trim() : `Beat ${rawBeat}`;
+      beatsSet.add(beatNo);
+
+      const fuelData = getBeatFuelMapping(beatNo);
+      const staffName = String(row['staffName'] || row['StaffName'] || row['PostmanName'] || fuelData.assignedPostmanName).trim();
+      const employeeId = String(row['employeeId'] || row['EmployeeId'] || row['StaffId'] || fuelData.assignedStaffId).trim();
+      const attendance = String(row['attendanceStatus'] || row['Attendance'] || row['Status'] || 'Present - Field Duty').trim();
+
+      const reg = Number(row['registryDelivered'] || row['RegDeliv'] || row['regDeliv'] || row['reg'] || row['Registry'] || 0);
+      const par = Number(row['parcelDelivered'] || row['ParcelDeliv'] || row['parDeliv'] || row['par'] || row['Parcels'] || 0);
+      const spInput = Number(row['speedPostDelivered'] || row['SpeedPostDeliv'] || row['spDeliv'] || row['sp'] || row['SpeedPost'] || 0);
+
+      // DSS Benchmark
+      const rawDssCount = row['dssInvoicedCount'] || row['DSS Invoiced Count'] || row['dssCount'] || row['dss'] || row['PDMS Invoiced Count'] || row['pdmsInvoicedCount'];
+      const dssBenchmark = rawDssCount !== undefined && rawDssCount !== '' ? Number(rawDssCount) : (spInput + reg + par);
+
+      const pdmsCount = Number(row['pdmsInvoicedCount'] || row['PDMS Invoiced Count'] || dssBenchmark);
+      const mobileUsage = Number(row['mobileUsagePercent'] || row['Mobile Usage %'] || row['mobileUsage'] || 100);
+
+      // Apply statutory Speed Post balancing rule
+      let balancedSp = spInput;
+      let wasAdjusted = false;
+      if (dssBenchmark > 0 && (spInput + reg + par) !== dssBenchmark) {
+        balancedSp = Math.max(0, dssBenchmark - (reg + par));
+        wasAdjusted = true;
+        adjustedCount++;
+      } else {
+        perfectMatchCount++;
+      }
+
+      const totalDeliv = balancedSp + reg + par;
+      const customKm = this.customBeatKmOverrides[beatNo] || fuelData.sanctionedDailyKm;
+
+      previewRows.push({
+        id: `AI-DSS-${idx + 1}-${date}-${beatNo.replace(/\s+/g, '')}`,
+        date,
+        beatNo,
+        staffName,
+        employeeId,
+        attendanceStatus: attendance,
+        sanctionedKm: customKm,
+        fuelRatePerKm: DEPARTMENTAL_FUEL_RATE_PER_KM,
+        speedPostDelivered: balancedSp,
+        registryDelivered: reg,
+        parcelDelivered: par,
+        totalDelivered: totalDeliv,
+        dssInvoicedCount: dssBenchmark,
+        pdmsInvoicedCount: pdmsCount,
+        mobileUsagePercent: mobileUsage,
+        originalSp: spInput,
+        wasSpAdjusted: wasAdjusted,
+        remarks: wasAdjusted
+          ? `AI Reconciled: Speed Post auto-adjusted ${spInput} → ${balancedSp} to guarantee 100% DSS benchmark (${dssBenchmark}).`
+          : `Aligned with official DSS benchmark (${dssBenchmark}).`,
+      });
+    });
+
+    const uniqueBeats = Array.from(beatsSet);
+    const totalClaimSum = uniqueBeats.reduce((sum, b) => {
+      const bKm = this.customBeatKmOverrides[b] || getBeatFuelMapping(b).sanctionedDailyKm;
+      return sum + Math.round(bKm * DEPARTMENTAL_FUEL_RATE_PER_KM * 24);
+    }, 0);
+
+    return {
+      previewRows,
+      stats: {
+        totalRows: rawRows.length,
+        adjustedCount,
+        perfectMatchCount,
+        beatsCount: uniqueBeats.length,
+        uniqueBeats,
+        totalClaimSum,
+      },
     };
   }
 
@@ -2305,9 +2614,12 @@ class MasterDataService {
       totalDays: summary.workingDays,
       fixedKm: summary.sanctionedDailyKm,
       totalAmount: summary.totalClaimAmount,
-      status: 'Verified by SPM',
+      status: summary.isStaffApproved ? 'Verified by SPM' : 'Draft',
       details: {
-        dssReconciliationStatus: 'Reconciled with DSS',
+        dssReconciliationStatus: summary.isStaffApproved ? 'Staff Approved & Reconciled with DSS' : 'Reconciled with DSS',
+        spmVerificationNote: summary.isStaffApproved
+          ? `Verified & Approved by ${summary.staffApprovedBy} (${summary.staffApprovedById}) on ${summary.staffApprovedAt ? new Date(summary.staffApprovedAt).toLocaleDateString() : 'Official'} - 100% DSS Reconciled.`
+          : 'Pending Final Staff Sign-Off.',
         fuelRatePerKm: summary.fuelRatePerKm,
         ratePerKm: summary.fuelRatePerKm,
         totalDistanceKm: summary.totalMonthlyKm,
@@ -2327,6 +2639,107 @@ class MasterDataService {
     };
 
     downloadOfficialFuelBillPDF(billRecord);
+  }
+
+  // ========================================================
+  // MASTER DATA BULK EXPORT & DISASTER RECOVERY BACKUP ENGINE
+  // ========================================================
+  public exportCustomersToExcel() {
+    const customers = customerService.getCustomers();
+    const rows = customers.map((c) => ({
+      'Customer ID': c.id,
+      'Full Name': c.name,
+      'Mobile Number': c.mobile,
+      'Beat Number': c.beatNo || 'Beat 2',
+      'Colony / Locality': c.colony || c.area || '',
+      'Sector / Phase': c.sector || '',
+      'Plot / House No': c.houseNo || '',
+      'Delivery Address': (typeof c.address === 'string' ? c.address : c.address?.fullAddress) || c.addressLine1 || '',
+      'Pincode': c.pincode || '324009',
+      'Household / Establishment': c.type || 'Residential',
+      'Lead / Financial Interest': c.financialInterest || 'None',
+      'Verification Status': c.verificationStatus || 'Verified',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Dadabari_Customers');
+    XLSX.writeFile(wb, `Dadabari_SO_324009_Customer_Directory_${new Date().toISOString().split('T')[0]}.xlsx`);
+  }
+
+  public exportDssStatementsToExcel(targetMonth?: string) {
+    const entries = operationsService.getDailyEntries().filter((e) => !targetMonth || e.date.startsWith(targetMonth));
+    const rows = entries.map((e) => ({
+      'Date': e.date,
+      'Beat Number': e.beatNo,
+      'Delivery Staff Name': e.staffName,
+      'Staff Employee ID': e.employeeId,
+      'Attendance Status': e.attendanceStatus,
+      'Sanctioned KM': e.sanctionedBeatKm,
+      'Fuel Rate (₹/KM)': e.fuelRatePerKm,
+      'Daily Fuel Allowance (₹)': e.dailyFuelAllowance,
+      'PDMS Invoiced Count': e.pdmsInvoicedCount ?? (e.speedPostDelivered + e.registryDelivered + e.parcelDelivered),
+      'DSS Invoiced Count': e.dssInvoicedCount ?? (e.speedPostDelivered + e.registryDelivered + e.parcelDelivered),
+      'Mobile Usage %': e.mobileUsagePercent ?? 100,
+      'Speed Post Received': e.speedPostReceived,
+      'Speed Post Delivered': e.speedPostDelivered,
+      'Speed Post Returned': e.speedPostReturned,
+      'Registry Received': e.registryReceived,
+      'Registry Delivered': e.registryDelivered,
+      'Registry Returned': e.registryReturned,
+      'Parcels Received': e.parcelReceived,
+      'Parcels Delivered': e.parcelDelivered,
+      'Parcels Returned': e.parcelReturned,
+      'Total Articles Delivered': e.speedPostDelivered + e.registryDelivered + e.parcelDelivered,
+      'COD Cash Collected (₹)': e.codAmountCollected,
+      'Audit / Reconcile Remarks': e.remarks,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'DSS_Statements');
+    XLSX.writeFile(wb, `Dadabari_SO_324009_DSS_Consolidated_${targetMonth || 'All'}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  }
+
+  public exportBeatFuelMasterToExcel() {
+    const beats = buildAll33BeatsFuelDirectory();
+    const rows = beats.map((b) => ({
+      'Beat Number': b.beatNumber,
+      'Assigned Postman': b.assignedPostmanName,
+      'Employee ID': b.assignedStaffId,
+      'Territorial Coverage': b.territorialCoverage,
+      'Terrain Classification': b.terrainClassification,
+      'Sanctioned Daily KM': b.sanctionedDailyKm,
+      'Fuel Rate per KM (₹)': b.fuelRatePerKm,
+      'Daily Allowance (₹)': b.dailyFuelAllowance,
+      'Monthly Working Days': b.monthlyWorkingDays,
+      'Monthly Claim (₹)': b.monthlyFuelAllowance,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '33_Beats_Fuel_Master');
+    XLSX.writeFile(wb, `Dadabari_SO_324009_33_Beats_Fuel_Master_${new Date().toISOString().split('T')[0]}.xlsx`);
+  }
+
+  public exportAllMasterDataBackupJSON() {
+    const backup = {
+      backupTimestamp: new Date().toISOString(),
+      postalOffice: 'Dadabari S.O. (PIN 324009, Kota Division, Rajasthan Circle)',
+      systemVersion: 'POSTMAN BOOK CRM v3.2 Enterprise',
+      superAdmin: 'Mahendra Kumar Meena (mahen.comtech@gmail.com)',
+      customers: customerService.getCustomers(),
+      dailyArticles: operationsService.getDailyEntries(),
+      ingestedRecords: this.ingestedRecords,
+      uploadLogs: this.uploadLogs,
+      specialBills: operationsService.getSpecialBills(),
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `POSTMAN_BOOK_CRM_Master_Backup_Dadabari_324009_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 }
 

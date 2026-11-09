@@ -195,6 +195,22 @@ export default function PostmanAllDayArticlesOverview({
     const staffName = currentStaff?.name || fuelSummary.postmanName || 'Mahendra Kumar Meena';
     const staffEmpId = currentStaff?.employeeId || fuelSummary.employeeId || '50457421';
 
+    const curRow = fuelSummary.dailyRows.find((r) => r.sn === selectedDayEntry.sn);
+    const dssBenchmark = curRow
+      ? typeof curRow.dssInvoicedCount === 'number' && curRow.dssInvoicedCount > 0
+        ? curRow.dssInvoicedCount
+        : typeof curRow.total === 'number' && curRow.total > 0
+        ? curRow.total
+        : 0
+      : 0;
+
+    const regDeliv = Number(selectedDayEntry.regDeliv) || 0;
+    const parDeliv = Number(selectedDayEntry.parDeliv) || 0;
+    const finalSpDeliv = dssBenchmark > 0 ? Math.max(0, dssBenchmark - (regDeliv + parDeliv)) : (Number(selectedDayEntry.spDeliv) || 0);
+    const finalSpRecd = Math.max(Number(selectedDayEntry.spRecd) || 0, finalSpDeliv);
+
+    const wasAutoAdjusted = dssBenchmark > 0 && finalSpDeliv !== Number(selectedDayEntry.spDeliv);
+
     const patchResult = operationsService.patchOrUpsertDailyArticleQuantities(
       {
         date: selectedDayEntry.isoDate,
@@ -213,18 +229,21 @@ export default function PostmanAllDayArticlesOverview({
         fuelRatePerKm: customFuelRate,
         dailyFuelAllowance: Math.round(customDailyKm * customFuelRate),
         monthlyFuelAllowance: Math.round(customDailyKm * customFuelRate * customWorkingDays),
+        pdmsInvoicedCount: curRow?.pdmsInvoicedCount ?? (dssBenchmark > 0 ? dssBenchmark : undefined),
+        dssInvoicedCount: dssBenchmark > 0 ? dssBenchmark : undefined,
+        mobileUsagePercent: curRow?.mobileUsagePercent ?? 100,
         dssStatus: 'Reconciled with DSS',
-        speedPostReceived: Number(selectedDayEntry.spRecd) || 0,
-        speedPostDelivered: Number(selectedDayEntry.spDeliv) || 0,
-        speedPostReturned: Math.max(0, (Number(selectedDayEntry.spRecd) || 0) - (Number(selectedDayEntry.spDeliv) || 0)),
+        speedPostReceived: finalSpRecd,
+        speedPostDelivered: finalSpDeliv,
+        speedPostReturned: Math.max(0, finalSpRecd - finalSpDeliv),
         speedPostDeposit: 0,
         registryReceived: Number(selectedDayEntry.regRecd) || 0,
-        registryDelivered: Number(selectedDayEntry.regDeliv) || 0,
-        registryReturned: Math.max(0, (Number(selectedDayEntry.regRecd) || 0) - (Number(selectedDayEntry.regDeliv) || 0)),
+        registryDelivered: regDeliv,
+        registryReturned: Math.max(0, (Number(selectedDayEntry.regRecd) || 0) - regDeliv),
         registryDeposit: 0,
         parcelReceived: Number(selectedDayEntry.parRecd) || 0,
-        parcelDelivered: Number(selectedDayEntry.parDeliv) || 0,
-        parcelReturned: Math.max(0, (Number(selectedDayEntry.parRecd) || 0) - (Number(selectedDayEntry.parDeliv) || 0)),
+        parcelDelivered: parDeliv,
+        parcelReturned: Math.max(0, (Number(selectedDayEntry.parRecd) || 0) - parDeliv),
         parcelDeposit: 0,
         codAmountCollected: Number(selectedDayEntry.codAmount) || 0,
         doorstepInquiriesLogged: 4,
@@ -232,17 +251,23 @@ export default function PostmanAllDayArticlesOverview({
       },
       {
         updatedBy: `${staffName} (${staffEmpId}) [All-Day Overview Hub]`,
-        remarks: `Safe article quantity update for ${selectedDayEntry.date}. Strict Total Lock Rule maintained.`,
+        remarks: wasAutoAdjusted
+          ? `DSS Priority Enforced: Speed Post auto-balanced to ${finalSpDeliv} to preserve official DSS total of ${dssBenchmark}.`
+          : `Safe article quantity update for ${selectedDayEntry.date}. Strict Total Lock Rule maintained.`,
       }
     );
 
     if (patchResult.success) {
-      setModalNotice(`Day ${selectedDayEntry.sn} (${selectedDayEntry.date}) article counts saved & fuel sheet updated!`);
+      if (wasAutoAdjusted) {
+        setModalNotice(`Day ${selectedDayEntry.sn} saved! Master DSS Priority Enforced: Speed Post auto-adjusted to ${finalSpDeliv} (Total locked to ${dssBenchmark}).`);
+      } else {
+        setModalNotice(`Day ${selectedDayEntry.sn} (${selectedDayEntry.date}) article counts saved & fuel sheet updated!`);
+      }
       refreshSummary();
       setTimeout(() => {
         setSelectedDayEntry(null);
         setModalNotice(null);
-      }, 1400);
+      }, 1600);
     }
   };
 
@@ -721,7 +746,7 @@ export default function PostmanAllDayArticlesOverview({
                   </span>
                 </div>
                 <p className="text-slate-300 text-[11px] mt-1 leading-relaxed">
-                  Jurisdiction Rules: <strong>Registered Articles: 0</strong> · <strong>PDMS Invoiced Total: 2,477</strong> · <strong>DSS Invoiced Total: 2,439</strong> · <strong>Overall Mobile Usage: 99.51%</strong> (Oct 19: 89.58%, Oct 27: 99.23%, other 21 working days 100.00%).
+                  Jurisdiction Rules: <strong>Registered Articles: 0</strong> · <strong>PDMS Invoiced Total: 2,178</strong> · <strong>DSS Invoiced Total: 2,178</strong> · <strong>Overall Mobile Usage: 100.00%</strong> (24 working days, 100.00% across all working days).
                 </p>
               </div>
             </div>
@@ -729,7 +754,7 @@ export default function PostmanAllDayArticlesOverview({
               <div className="text-right">
                 <span className="block text-[10px] uppercase font-bold text-slate-400">Statutory Fuel Claim</span>
                 <span className="text-sm font-black font-mono text-emerald-400">
-                  23 Days × 19 KM @ ₹3.60 = ₹1,573.20
+                  24 Days × 19 KM @ ₹3.60 = ₹1,641.60
                 </span>
               </div>
             </div>
@@ -980,12 +1005,77 @@ export default function PostmanAllDayArticlesOverview({
               </div>
             )}
 
+            {/* Dynamic DSS Master Benchmark Info Bar */}
+            {(() => {
+              const currentDayRow = fuelSummary.dailyRows.find((r) => r.sn === selectedDayEntry.sn);
+              const dssBenchmarkTotal = currentDayRow
+                ? typeof currentDayRow.dssInvoicedCount === 'number' && currentDayRow.dssInvoicedCount > 0
+                  ? currentDayRow.dssInvoicedCount
+                  : typeof currentDayRow.total === 'number' && currentDayRow.total > 0
+                  ? currentDayRow.total
+                  : 0
+                : 0;
+
+              const currentDeliveredSum = selectedDayEntry.spDeliv + selectedDayEntry.regDeliv + selectedDayEntry.parDeliv;
+              const isAligned = dssBenchmarkTotal === 0 || currentDeliveredSum === dssBenchmarkTotal;
+
+              return (
+                <div className="p-3 bg-slate-900 text-white rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <Lock size={14} className="text-amber-400" />
+                      <span className="font-bold text-slate-200">
+                        Official Master DSS Benchmark:
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-mono font-bold text-xs border border-amber-400/40">
+                        {dssBenchmarkTotal > 0 ? `${dssBenchmarkTotal} Articles` : 'Standard Sum'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400 text-[11px]">Sum:</span>
+                      <span className={`text-sm font-mono font-black ${isAligned ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        {currentDeliveredSum}
+                      </span>
+                    </div>
+                  </div>
+
+                  {!isAligned && dssBenchmarkTotal > 0 && (
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-800 text-[11px]">
+                      <span className="text-amber-300 flex items-center gap-1 font-medium">
+                        <span>⚡ Discrepancy detected: Speed Post will auto-adjust to {Math.max(0, dssBenchmarkTotal - (selectedDayEntry.regDeliv + selectedDayEntry.parDeliv))} upon save.</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const autoSp = Math.max(0, dssBenchmarkTotal - (selectedDayEntry.regDeliv + selectedDayEntry.parDeliv));
+                          setSelectedDayEntry({
+                            ...selectedDayEntry,
+                            spDeliv: autoSp,
+                            spRecd: Math.max(autoSp, selectedDayEntry.spRecd),
+                          });
+                        }}
+                        className="px-2 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-md text-[10px] font-black cursor-pointer shadow-xs transition"
+                      >
+                        Auto-Balance Speed Post
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             <form onSubmit={handleSaveDayArticleEntry} className="space-y-4">
               {/* Category inputs */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {/* Speed Post */}
                 <div className="p-3 bg-blue-50/60 border border-blue-200 rounded-xl space-y-2">
-                  <span className="font-bold text-xs text-blue-900 block">Speed Post</span>
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-blue-900 block">Speed Post</span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 font-bold">
+                      Auto-Adjust Buffer
+                    </span>
+                  </div>
                   <div>
                     <label className="block text-[10px] text-slate-500 mb-0.5">Delivered</label>
                     <input
@@ -1021,20 +1111,34 @@ export default function PostmanAllDayArticlesOverview({
 
                 {/* Registry */}
                 <div className="p-3 bg-purple-50/60 border border-purple-200 rounded-xl space-y-2">
-                  <span className="font-bold text-xs text-purple-900 block">Registry</span>
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-purple-900 block">Registry</span>
+                    {selectedBeat === 'Beat 17' || selectedBeat === '17' || selectedBeat === 'Beat 5' || selectedBeat === '5' ? (
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 font-bold">
+                        Jurisdiction: 0
+                      </span>
+                    ) : null}
+                  </div>
                   <div>
                     <label className="block text-[10px] text-slate-500 mb-0.5">Delivered</label>
                     <input
                       type="number"
                       min={0}
                       value={selectedDayEntry.regDeliv}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const newReg = parseInt(e.target.value) || 0;
+                        const curRow = fuelSummary.dailyRows.find((r) => r.sn === selectedDayEntry.sn);
+                        const dssTarget = curRow ? (typeof curRow.dssInvoicedCount === 'number' ? curRow.dssInvoicedCount : (typeof curRow.total === 'number' ? curRow.total : 0)) : 0;
+                        const balancedSp = dssTarget > 0 ? Math.max(0, dssTarget - (newReg + selectedDayEntry.parDeliv)) : selectedDayEntry.spDeliv;
+
                         setSelectedDayEntry({
                           ...selectedDayEntry,
-                          regDeliv: parseInt(e.target.value) || 0,
-                          regRecd: Math.max(parseInt(e.target.value) || 0, selectedDayEntry.regRecd),
-                        })
-                      }
+                          regDeliv: newReg,
+                          regRecd: Math.max(newReg, selectedDayEntry.regRecd),
+                          spDeliv: balancedSp,
+                          spRecd: Math.max(balancedSp, selectedDayEntry.spRecd),
+                        });
+                      }}
                       className="w-full px-2.5 py-1.5 bg-white border border-purple-300 rounded-lg font-mono font-bold text-purple-900 text-xs"
                     />
                   </div>
@@ -1064,13 +1168,20 @@ export default function PostmanAllDayArticlesOverview({
                       type="number"
                       min={0}
                       value={selectedDayEntry.parDeliv}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const newPar = parseInt(e.target.value) || 0;
+                        const curRow = fuelSummary.dailyRows.find((r) => r.sn === selectedDayEntry.sn);
+                        const dssTarget = curRow ? (typeof curRow.dssInvoicedCount === 'number' ? curRow.dssInvoicedCount : (typeof curRow.total === 'number' ? curRow.total : 0)) : 0;
+                        const balancedSp = dssTarget > 0 ? Math.max(0, dssTarget - (selectedDayEntry.regDeliv + newPar)) : selectedDayEntry.spDeliv;
+
                         setSelectedDayEntry({
                           ...selectedDayEntry,
-                          parDeliv: parseInt(e.target.value) || 0,
-                          parRecd: Math.max(parseInt(e.target.value) || 0, selectedDayEntry.parRecd),
-                        })
-                      }
+                          parDeliv: newPar,
+                          parRecd: Math.max(newPar, selectedDayEntry.parRecd),
+                          spDeliv: balancedSp,
+                          spRecd: Math.max(balancedSp, selectedDayEntry.spRecd),
+                        });
+                      }}
                       className="w-full px-2.5 py-1.5 bg-white border border-amber-300 rounded-lg font-mono font-bold text-amber-900 text-xs"
                     />
                   </div>

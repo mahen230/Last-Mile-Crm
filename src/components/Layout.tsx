@@ -310,270 +310,273 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
         )}
       </AnimatePresence>
 
-      {/* Sidebar */}
-      <aside
-        className={`fixed inset-y-0 left-0 w-72 bg-slate-900 text-slate-300 border-r border-slate-800 z-50 flex flex-col justify-between shadow-xl transition-transform duration-200 ease-in-out ${
-          isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-        }`}
-        id="sidebar"
-      >
-        <div className="flex flex-col h-full overflow-hidden">
-          {/* Brand Header */}
-          <div className="p-4 bg-gradient-to-r from-red-900 via-red-800 to-slate-950 border-b border-red-700/40 flex items-center justify-between">
-            <Link to="/" onClick={() => setIsOpen(false)} className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-black text-lg shadow-md">
-                📮
-              </div>
-              <div>
-                <h1 className="text-sm font-black text-white tracking-tight leading-tight">
-                  POSTMAN BOOK CRM
-                </h1>
-                <p className="text-[10px] text-amber-300 font-bold">
-                  {userProfile?.subOffice || 'Dadabari SO'} • PIN {userProfile?.officePincode || '324009'}
-                </p>
-              </div>
-            </Link>
-
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              className="md:hidden p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800"
-              id="close-sidebar-btn"
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          {/* Navigation Menu Links */}
-          <nav className="p-3 space-y-4 overflow-y-auto flex-1 text-xs" id="nav-menu">
-            {menuSections.map((section, idx) => (
-              <div key={idx} className="space-y-1">
-                <div className="px-3 py-1 text-[10px] font-black tracking-wider text-amber-400/90 uppercase">
-                  {section.group}
+      {/* Sidebar: Rendered ONLY for Internal Staff CRM Views */}
+      {!isPublicHomeRoute && (
+        <aside
+          className={`fixed inset-y-0 left-0 w-72 bg-slate-900 text-slate-300 border-r border-slate-800 z-50 flex flex-col justify-between shadow-xl transition-transform duration-200 ease-in-out ${
+            isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+          }`}
+          id="sidebar"
+        >
+          <div className="flex flex-col h-full overflow-hidden">
+            {/* Brand Header */}
+            <div className="p-4 bg-gradient-to-r from-red-900 via-red-800 to-slate-950 border-b border-red-700/40 flex items-center justify-between">
+              <Link to="/dashboard" onClick={() => setIsOpen(false)} className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-black text-lg shadow-md">
+                  📮
                 </div>
-                {section.items.map((item) => {
-                  const isActive =
-                    location.pathname === item.path ||
-                    (item.path === '/beats' && location.pathname === '/beat-management');
-                  const Icon = item.icon;
-                  const isModuleAllowed = item.requiredModule
-                    ? staffPermissionService.canAccessServiceModule(userProfile, item.requiredModule)
-                    : true;
-
-                  return (
-                    <Link
-                      key={item.name}
-                      to={item.path}
-                      onClick={() => setIsOpen(false)}
-                      className={`flex items-center justify-between px-3 py-2 rounded-xl transition font-medium ${
-                        isActive
-                          ? 'bg-red-700 text-white font-bold shadow-xs'
-                          : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 truncate">
-                        <Icon size={16} className={isActive ? 'text-amber-300' : 'text-slate-400'} />
-                        <span className="truncate">{item.name}</span>
-                      </div>
-
-                      {!isModuleAllowed ? (
-                        <span
-                          className="px-1.5 py-0.5 rounded bg-slate-800 text-amber-400 text-[10px] font-bold flex items-center gap-1"
-                          title="Module Restricted by Super Admin"
-                        >
-                          <Lock size={11} />
-                        </span>
-                      ) : (
-                        item.badge && (
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              item.badgeColor || (isActive ? 'bg-white text-red-700' : 'bg-slate-800 text-slate-300')
-                            }`}
-                          >
-                            {item.badge}
-                          </span>
-                        )
-                      )}
-                    </Link>
-                  );
-                })}
-              </div>
-            ))}
-          </nav>
-
-          {/* Sidebar Footer User Info */}
-          <div className="p-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs">
-            <button
-              type="button"
-              onClick={() => setShowProfileModal(true)}
-              className="flex items-center gap-2.5 truncate text-left hover:opacity-90 transition cursor-pointer"
-              title="Open My Staff Profile & Beat Settings"
-            >
-              <div className="w-8 h-8 rounded-full bg-red-800 text-amber-300 border border-amber-400/40 flex items-center justify-center font-black text-xs shrink-0">
-                {userProfile?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'A'}
-              </div>
-              <div className="truncate">
-                <div className="font-bold text-white text-[11px] truncate">
-                  {userProfile?.name || user?.displayName || 'Master Admin'}
+                <div>
+                  <h1 className="text-sm font-black text-white tracking-tight leading-tight">
+                    POSTMAN BOOK CRM
+                  </h1>
+                  <p className="text-[10px] text-amber-300 font-bold">
+                    {userProfile?.subOffice || 'Dadabari SO'} • PIN {userProfile?.officePincode || '324009'}
+                  </p>
                 </div>
-                <div className="text-[10px] text-emerald-400 truncate">
-                  {isSuperAdmin ? 'MASTER ADMIN' : userProfile?.designation || userProfile?.role} •{' '}
-                  {isSuperAdmin ? 'All Beats' : userProfile?.beat || 'Beat 2'}
-                </div>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => signOut()}
-              title="Sign Out"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 transition shrink-0"
-              id="sidebar-signout-btn"
-            >
-              <LogOut size={16} />
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col md:ml-72 min-w-0" id="main-content">
-        {/* Top Header Bar: Dedicated Staff CRM Portal & Login Section on Left/Top + Pan-India Public Header */}
-        <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 sm:px-6 py-3 flex items-center justify-between shadow-2xs gap-3">
-          {/* LEFT / TOP: Dedicated Staff CRM Portal & Login Section + Route Branding */}
-          <div className="flex items-center gap-2.5 min-w-0 flex-wrap" id="top-staff-crm-access-section">
-            <button
-              type="button"
-              onClick={() => setIsOpen(true)}
-              className="p-2 rounded-xl border border-slate-200 md:hidden hover:bg-slate-100 text-slate-700 shrink-0"
-              id="mobile-hamburger-btn"
-            >
-              <Menu size={20} />
-            </button>
-
-            {/* Dedicated Staff CRM Portal & Login Pill Group on Left/Top */}
-            <div className="flex items-center gap-1.5 bg-slate-900 text-white p-1 rounded-xl shadow-2xs shrink-0">
-              <Link
-                to="/dashboard"
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition flex items-center gap-1.5 whitespace-nowrap ${
-                  !isPublicHomeRoute
-                    ? 'bg-red-700 text-white shadow-2xs'
-                    : 'bg-amber-400 text-slate-950 hover:bg-amber-300'
-                }`}
-                id="top-left-staff-crm-portal-link"
-                title="Instant Access to Administrative Staff CRM Operations Dashboard"
-              >
-                <LayoutDashboard size={13} />
-                <span>Staff CRM Portal</span>
               </Link>
 
               <button
                 type="button"
-                onClick={() => setShowAuthModal(true)}
-                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-                id="top-left-staff-login-btn"
-                title="Staff Login, Profile Switch & Registration"
+                onClick={() => setIsOpen(false)}
+                className="md:hidden p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800"
+                id="close-sidebar-btn"
               >
-                <KeyRound size={12} />
-                <span>Staff Login</span>
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Navigation Menu Links */}
+            <nav className="p-3 space-y-4 overflow-y-auto flex-1 text-xs" id="nav-menu">
+              {menuSections.map((section, idx) => (
+                <div key={idx} className="space-y-1">
+                  <div className="px-3 py-1 text-[10px] font-black tracking-wider text-amber-400/90 uppercase">
+                    {section.group}
+                  </div>
+                  {section.items.map((item) => {
+                    const isActive =
+                      location.pathname === item.path ||
+                      (item.path === '/beats' && location.pathname === '/beat-management');
+                    const Icon = item.icon;
+                    const isModuleAllowed = item.requiredModule
+                      ? staffPermissionService.canAccessServiceModule(userProfile, item.requiredModule)
+                      : true;
+
+                    return (
+                      <Link
+                        key={item.name}
+                        to={item.path}
+                        onClick={() => setIsOpen(false)}
+                        className={`flex items-center justify-between px-3 py-2 rounded-xl transition font-medium ${
+                          isActive
+                            ? 'bg-red-700 text-white font-bold shadow-xs'
+                            : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 truncate">
+                          <Icon size={16} className={isActive ? 'text-amber-300' : 'text-slate-400'} />
+                          <span className="truncate">{item.name}</span>
+                        </div>
+
+                        {!isModuleAllowed ? (
+                          <span
+                            className="px-1.5 py-0.5 rounded bg-slate-800 text-amber-400 text-[10px] font-bold flex items-center gap-1"
+                            title="Module Restricted by Super Admin"
+                          >
+                            <Lock size={11} />
+                          </span>
+                        ) : (
+                          item.badge && (
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                item.badgeColor || (isActive ? 'bg-white text-red-700' : 'bg-slate-800 text-slate-300')
+                              }`}
+                            >
+                              {item.badge}
+                            </span>
+                          )
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
+            </nav>
+
+            {/* Sidebar Footer User Info */}
+            <div className="p-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs">
+              <button
+                type="button"
+                onClick={() => setShowProfileModal(true)}
+                className="flex items-center gap-2.5 truncate text-left hover:opacity-90 transition cursor-pointer"
+                title="Open My Staff Profile & Beat Settings"
+              >
+                <div className="w-8 h-8 rounded-full bg-red-800 text-amber-300 border border-amber-400/40 flex items-center justify-center font-black text-xs shrink-0">
+                  {userProfile?.name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'A'}
+                </div>
+                <div className="truncate">
+                  <div className="font-bold text-white text-[11px] truncate">
+                    {userProfile?.name || user?.displayName || 'Master Admin'}
+                  </div>
+                  <div className="text-[10px] text-emerald-400 truncate">
+                    {isSuperAdmin ? 'MASTER ADMIN' : userProfile?.designation || userProfile?.role} •{' '}
+                    {isSuperAdmin ? 'All Beats' : userProfile?.beat || 'Beat 2'}
+                  </div>
+                </div>
               </button>
 
-              {!isPublicHomeRoute && (
-                <Link
-                  to="/"
-                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 text-xs font-bold transition flex items-center gap-1 whitespace-nowrap"
-                  id="top-left-public-home-link"
-                  title="Switch to 100% Public Pan-India Home Page"
-                >
-                  <Home size={12} />
-                  <span className="hidden sm:inline">Public Home</span>
-                </Link>
-              )}
-            </div>
-
-            {/* Context Title: 100% Pan-India on Public Home Route, Operational Scope inside CRM */}
-            <div className="hidden lg:flex items-center gap-2 text-xs text-slate-500 truncate pl-1">
-              {isPublicHomeRoute ? (
-                <>
-                  <span className="font-extrabold text-slate-900 truncate">
-                    Pan-India Postal & IPPB Financial Services Portal
-                  </span>
-                  <span>•</span>
-                  <span className="text-emerald-700 font-semibold truncate">
-                    100% Govt. of India Sovereign Guarantee
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="font-bold text-slate-900 truncate">
-                    {userProfile?.subOffice || 'Dadabari Sub-Post Office (SO)'}
-                  </span>
-                  <span>•</span>
-                  <span className="font-mono font-semibold text-red-700 shrink-0">
-                    PIN {userProfile?.officePincode || '324009'}
-                  </span>
-                  <span>•</span>
-                  <span className="text-emerald-700 font-semibold flex items-center gap-1 truncate">
-                    <CheckCircle2 size={13} className="shrink-0" />
-                    <span className="truncate">
-                      {isSuperAdmin
-                        ? 'Master Admin Access (All Circles & Beats)'
-                        : `Scoped: ${userProfile?.beat || 'Beat 2'}`}
-                    </span>
-                  </span>
-                </>
-              )}
+              <button
+                type="button"
+                onClick={() => signOut()}
+                title="Sign Out"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 transition shrink-0"
+                id="sidebar-signout-btn"
+              >
+                <LogOut size={16} />
+              </button>
             </div>
           </div>
+        </aside>
+      )}
 
-          {/* RIGHT: Clean Public Actions on Home Route, Full Administrative Controls inside CRM */}
-          <div className="flex items-center gap-2 flex-wrap justify-end">
-            {isPublicHomeRoute ? (
-              <>
-                <Link
-                  to="/dashboard"
-                  className="hidden sm:flex px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-800 border border-red-200 rounded-xl text-xs font-bold transition items-center gap-1.5"
+      {/* Main Content Area: Responsive w-full for Public Views, md:ml-72 for Staff CRM */}
+      <div className={`flex-1 flex flex-col ${!isPublicHomeRoute ? 'md:ml-72' : 'w-full'} min-w-0`} id="main-content">
+        {/* Top Header Bar */}
+        <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-3 sm:px-6 py-2.5 flex items-center justify-between shadow-2xs gap-2 sm:gap-4">
+          {/* Public Citizen Header Layout */}
+          {isPublicHomeRoute ? (
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-red-800 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
+                  📮
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs sm:text-sm font-black text-slate-900 tracking-tight">
+                      POSTMAN BOOK CRM
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 font-mono text-[10px] font-bold">
+                      PIN 324009
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 hidden sm:block">
+                    Dadabari Sub Post Office • Kota Division, Rajasthan Circle
+                  </p>
+                </div>
+              </div>
+
+              {/* Public Citizen Navigation Links */}
+              <div className="flex items-center gap-2 sm:gap-3">
+                <a
+                  href="#postal-schemes-section"
+                  className="hidden md:inline-block text-xs font-semibold text-slate-700 hover:text-red-700 transition"
                 >
-                  <ShieldCheck size={14} className="text-red-700" />
-                  <span>Enter Operations CRM</span>
+                  Postal Schemes
+                </a>
+                <Link
+                  to="/xpo-kart"
+                  className="hidden sm:inline-block text-xs font-semibold text-slate-700 hover:text-red-700 transition"
+                >
+                  Xpo Kart Store
                 </Link>
-                {onOpenCustomerPortal && (
-                  <button
-                    type="button"
-                    onClick={onOpenCustomerPortal}
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                    id="top-customer-portal-switch"
+                <Link
+                  to="/postal-lms"
+                  className="hidden lg:inline-block text-xs font-semibold text-slate-700 hover:text-red-700 transition"
+                >
+                  Postal Exam LMS
+                </Link>
+
+                {/* Secure, Low-Profile Staff Gateway */}
+                <Link
+                  to="/login"
+                  className="px-3 py-1.5 rounded-xl border border-slate-300 hover:border-slate-400 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition flex items-center gap-1.5 shadow-2xs"
+                  id="citizen-header-staff-login-btn"
+                  title="Authorized Departmental Personnel Login Gate"
+                >
+                  <Lock size={12} className="text-red-700" />
+                  <span>Official Staff Gateway</span>
+                </Link>
+              </div>
+            </div>
+          ) : (
+            /* Staff CRM Header Layout */
+            <>
+              {/* Left: Hamburger, Brand Identity & Route Context */}
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0" id="top-staff-crm-access-section">
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(true)}
+                  className="p-2 rounded-xl border border-slate-200 md:hidden hover:bg-slate-100 text-slate-700 shrink-0"
+                  id="mobile-hamburger-btn"
+                  title="Open Navigation Menu"
+                >
+                  <Menu size={19} />
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-red-800 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
+                    📮
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-black text-slate-900 tracking-tight truncate">
+                        POSTMAN BOOK CRM
+                      </span>
+                      <span className="hidden sm:inline-block px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 font-mono text-[10px] font-bold">
+                        PIN {userProfile?.officePincode || '324009'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 truncate hidden xs:block">
+                      {userProfile?.subOffice || 'Dadabari S.O.'} • {isSuperAdmin ? 'Master Admin' : userProfile?.beat || 'Beat 2'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Portal Switcher Tabs */}
+                <div className="hidden sm:flex items-center p-0.5 bg-slate-100 rounded-lg border border-slate-200 ml-2 shrink-0">
+                  <Link
+                    to="/dashboard"
+                    className="px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1 whitespace-nowrap bg-red-800 text-white shadow-2xs"
+                    title="Enter Internal Staff Operations"
                   >
-                    <ExternalLink size={13} />
-                    <span className="hidden sm:inline">Full-Screen Portal</span>
-                  </button>
-                )}
-              </>
-            ) : (
-              <>
-                {/* 1-Click Master Admin Bypass Override Button when testing non-admin profiles */}
+                    <LayoutDashboard size={12} />
+                    <span>Staff CRM</span>
+                  </Link>
+                  <Link
+                    to="/"
+                    className="px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1 whitespace-nowrap text-slate-600 hover:text-slate-900"
+                    title="View Public Pan-India Portal"
+                  >
+                    <Home size={12} />
+                    <span>Public Portal</span>
+                  </Link>
+                </div>
+              </div>
+
+              {/* Right: Staff Controls & Role Switcher */}
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                {/* 1-Click Master Admin Bypass */}
                 {!isSuperAdmin && (
                   <button
                     type="button"
                     onClick={() => loginAsMasterAdmin()}
                     id="header-master-admin-bypass-btn"
-                    className="px-2.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-xl text-xs font-black transition flex items-center gap-1 shadow-2xs cursor-pointer"
-                    title="Instantly switch to Master Admin profile with unrestricted access across all beats and offices"
+                    className="hidden lg:flex px-2.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-xl text-xs font-black transition items-center gap-1 shadow-2xs cursor-pointer"
+                    title="Switch to Master Admin profile"
                   >
                     <ShieldCheck size={13} />
-                    <span>Master Admin Override</span>
+                    <span>Admin Bypass</span>
                   </button>
                 )}
 
                 {/* Quick Staff Role & Profile Switcher */}
-                <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl text-xs">
-                  <Shield size={13} className={isSuperAdmin ? 'text-red-700 shrink-0' : 'text-slate-500 shrink-0'} />
+                <div className="hidden md:flex items-center gap-1 bg-slate-50 border border-slate-200 px-2 py-1.5 rounded-xl text-xs">
+                  <Shield size={12} className={isSuperAdmin ? 'text-red-700 shrink-0' : 'text-slate-500 shrink-0'} />
                   <select
                     value={userProfile?.email || 'mahen.comtech@gmail.com'}
                     onChange={(e) => switchStaffProfile(e.target.value)}
-                    className="bg-transparent font-bold text-slate-800 text-xs focus:outline-none cursor-pointer max-w-[190px] truncate"
+                    className="bg-transparent font-bold text-slate-800 text-xs focus:outline-none cursor-pointer max-w-[150px] lg:max-w-[180px] truncate"
                     id="top-profile-quick-switch"
-                    title="Switch active user profile to test Super Admin vs General Staff visibility & permissions"
+                    title="Switch active user profile"
                   >
                     {allProfiles.slice(0, 25).map((sp) => (
                       <option key={sp.id} value={sp.email}>
@@ -583,48 +586,32 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
                   </select>
                 </div>
 
-                {/* Dedicated My Profile Modal Button */}
+                {/* My Profile Button */}
                 <button
                   type="button"
                   onClick={() => setShowProfileModal(true)}
-                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  className="p-1.5 sm:px-2.5 sm:py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
                   id="top-my-profile-btn"
-                  title="View and update your Staff Profile, Post Office, Beat & Password"
+                  title="My Profile & Settings"
                 >
-                  <User size={13} className="text-red-700" />
-                  <span className="hidden md:inline">My Profile</span>
+                  <User size={14} className="text-red-700 shrink-0" />
+                  <span className="hidden sm:inline">Profile</span>
                 </button>
 
-                {/* Top Header Logout Button to view full-screen Login Gate */}
+                {/* Sign Out */}
                 <button
                   type="button"
                   onClick={() => signOut()}
-                  className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                  className="p-1.5 sm:px-2.5 sm:py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
                   id="top-signout-btn"
-                  title="Sign Out to Full-Screen Staff Login Gate"
+                  title="Sign Out"
                 >
-                  <LogOut size={13} />
-                  <span className="hidden lg:inline">Logout</span>
+                  <LogOut size={14} />
+                  <span className="hidden sm:inline">Logout</span>
                 </button>
-
-                <Link
-                  to="/special-forms"
-                  className="hidden xl:flex px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold transition items-center gap-1.5"
-                >
-                  <FileText size={14} className="text-red-700" />
-                  <span>Bills & Forms</span>
-                </Link>
-
-                <Link
-                  to="/postal-lms"
-                  className="hidden xl:flex px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 rounded-xl text-xs font-bold transition items-center gap-1.5"
-                >
-                  <GraduationCap size={14} />
-                  <span>Exam LMS</span>
-                </Link>
-              </>
-            )}
-          </div>
+              </div>
+            </>
+          )}
         </header>
 
         {/* Page Content View */}

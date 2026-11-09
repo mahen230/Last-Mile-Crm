@@ -35,6 +35,7 @@ import {
 import * as XLSX from 'xlsx';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import { staffPermissionService } from '../../services/staffPermissionService';
+import { operationsService } from '../../services/operationsService';
 import {
   masterDataService,
   MasterUploadCategory,
@@ -128,8 +129,17 @@ export default function MasterDataUploadView() {
 
   // Top-Level Navigation Tabs
   const [activeMainTab, setActiveMainTab] = useState<
-    'VERIFICATION_GATE' | 'UPLOAD_PORTAL' | 'TEMPLATES' | 'SPECIAL_BILLS' | 'FUEL_GENERATOR'
+    'VERIFICATION_GATE' | 'UPLOAD_PORTAL' | 'EXPORT_HUB' | 'TEMPLATES' | 'SPECIAL_BILLS' | 'FUEL_GENERATOR'
   >('VERIFICATION_GATE');
+
+  // Bulk Export & DSS Reconciliation Hub State
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
+  const [reconcileReport, setReconcileReport] = useState<{
+    totalChecked: number;
+    adjustedCount: number;
+    details: Array<{ date: string; beatNo: string; originalSp: number; newSp: number; dssBenchmark: number }>;
+  } | null>(null);
+  const [isReconciling, setIsReconciling] = useState(false);
 
   // Ingestion Verification Gateway State
   const [ingestedRecords, setIngestedRecords] = useState<IngestedMasterRecord[]>(() =>
@@ -658,6 +668,18 @@ export default function MasterDataUploadView() {
         >
           <Upload size={15} />
           <span>Master File Ingestion (CSV/XLSX)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveMainTab('EXPORT_HUB')}
+          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-2xs ${
+            activeMainTab === 'EXPORT_HUB'
+              ? 'bg-red-700 text-white shadow-xs'
+              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <Database size={15} />
+          <span>Bulk Export & Backup</span>
         </button>
 
         <button
@@ -1306,7 +1328,7 @@ export default function MasterDataUploadView() {
       {/* ======================================================== */}
       {/* DUAL-PANE GRID LAYOUT (UPLOAD & TEMPLATES HUB) */}
       {/* ======================================================== */}
-      <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 ${activeMainTab === 'UPLOAD_PORTAL' || activeMainTab === 'TEMPLATES' || activeMainTab === 'SPECIAL_BILLS' ? 'block' : 'hidden'}`}>
+      <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 ${activeMainTab === 'UPLOAD_PORTAL' || activeMainTab === 'SPECIAL_BILLS' ? 'block' : 'hidden'}`}>
         
         {/* ======================================================== */}
         {/* LEFT PANE: UPLOAD & DIRECT SUBMISSION HUB (7 COLS) */}
@@ -1940,9 +1962,352 @@ export default function MasterDataUploadView() {
       </div>
 
       {/* ======================================================== */}
+      {/* TAB 3: DEDICATED BULK EXPORT & OFFICIAL DSS RECONCILER   */}
+      {/* ======================================================== */}
+      {activeMainTab === 'EXPORT_HUB' && (
+        <div className="space-y-6">
+          {/* Top Notice or Success Feedback */}
+          {exportNotice && (
+            <div className="p-4 bg-emerald-50 border border-emerald-300 text-emerald-950 font-semibold rounded-2xl flex items-center justify-between shadow-2xs">
+              <div className="flex items-center gap-2 text-xs">
+                <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                <span>{exportNotice}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExportNotice(null)}
+                className="text-slate-400 hover:text-slate-600 text-xs font-bold px-2 py-1"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Statutory Rule 1: DSS Priority & Dynamic Speed Post Balancing Engine */}
+          <div className="p-6 bg-gradient-to-r from-slate-950 via-slate-900 to-amber-950 text-white rounded-2xl border border-slate-800 shadow-md space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black border border-amber-500/30">
+                  <ShieldCheck size={20} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>Statutory DSS Priority & Dynamic Speed Post Auto-Adjustment</span>
+                    <span className="text-[10px] font-mono bg-amber-400 text-slate-950 px-2 py-0.5 rounded font-black">
+                      Rule 1 Compliant
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Dadabari S.O. (324009) · Absolute Benchmark Integrity for Postal Audit Compliance
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={isReconciling}
+                  onClick={() => {
+                    setIsReconciling(true);
+                    setTimeout(() => {
+                      const res = operationsService.reconcileAndAutoAdjustEntriesToDss();
+                      setReconcileReport(res);
+                      setIsReconciling(false);
+                      setExportNotice(`DSS Auto-Reconciliation Complete: ${res.adjustedCount} entries adjusted across ${res.totalChecked} daily sheets checked. Speed Post dynamically balanced to guarantee 100% DSS audit conformity!`);
+                    }, 400);
+                  }}
+                  className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-black transition flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
+                  id="reconcile-dss-all-beats-btn"
+                >
+                  <RefreshCw size={14} className={isReconciling ? 'animate-spin' : ''} />
+                  <span>{isReconciling ? 'Reconciling Beats...' : '⚡ Reconcile All 33 Beats to DSS'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+              <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1">
+                <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">Absolute Inviolability</span>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Month-end official <strong>Daily Summary Sheet (DSS) reports</strong> uploaded into the system are the absolute benchmark for total volume and delivery percentages.
+                </p>
+              </div>
+              <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1">
+                <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">Mathematical Auto-Adjustment</span>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  If postman daily field inputs do not match the official DSS report totals, <strong>Speed Post is dynamically adjusted</strong> (<code className="font-mono text-amber-300">SP = Total - Reg - Parcel</code>) so the master DSS delivery count remains 100% undisturbed.
+                </p>
+              </div>
+              <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1">
+                <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">Fuel Claim Integrity</span>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  ACG-61 fuel reimbursement claims require zero-discrepancy daily delivery logs. Fuel calculations derive directly from these adjusted, audit-ready numbers.
+                </p>
+              </div>
+            </div>
+
+            {reconcileReport && reconcileReport.details.length > 0 && (
+              <div className="mt-3 p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <span className="font-bold text-amber-400 flex items-center gap-1.5">
+                    <CheckCircle2 size={14} /> Audit Trail of Reconciled Entries ({reconcileReport.details.length} Actions)
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">All 33 Beats Synced</span>
+                </div>
+                <div className="max-h-36 overflow-y-auto space-y-1 font-mono text-[11px] text-slate-300 mt-2">
+                  {reconcileReport.details.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between py-1 border-b border-slate-900 last:border-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-amber-400">›</span>
+                        <span className="font-bold text-white">{item.date}</span>
+                        <span className="text-slate-400">({item.beatNo})</span>
+                      </div>
+                      <div className="text-right text-[10px] space-x-2">
+                        <span className="text-slate-400">Speed Post: {item.originalSp} → <strong className="text-amber-400">{item.newSp}</strong></span>
+                        <span className="text-emerald-400 font-bold">(DSS Benchmark: {item.dssBenchmark})</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 1-Click Master Data Export Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Card 1: Customer Household Directory */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-4 hover:border-blue-300 transition">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center font-bold">
+                    <Building2 size={20} />
+                  </div>
+                  <span className="text-[10px] font-mono bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full">
+                    .XLSX
+                  </span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">Customer & Household Directory</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Full directory of all verified households, contact numbers, colony matrices, and PLI/SSA financial scheme interests across all 33 beats.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  masterDataService.exportCustomersToExcel();
+                  setExportNotice('Exported Customer Directory to Excel successfully!');
+                }}
+                className="w-full py-2.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs transition cursor-pointer"
+                id="export-customers-excel-btn"
+              >
+                <Download size={14} />
+                <span>Export Customers (.xlsx)</span>
+              </button>
+            </div>
+
+            {/* Card 2: Consolidated Monthly DSS Reports */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-4 hover:border-emerald-300 transition">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
+                    <FileSpreadsheet size={20} />
+                  </div>
+                  <span className="text-[10px] font-mono bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                    .XLSX
+                  </span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">Monthly DSS Summary Statements</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Consolidated October 2026 Daily Summary Sheets across all beats, with official Invoiced Counts, delivered items, and delivery percentage metrics.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  masterDataService.exportDssStatementsToExcel('2026-10');
+                  setExportNotice('Exported Consolidated Monthly DSS Statements to Excel successfully!');
+                }}
+                className="w-full py-2.5 px-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs transition cursor-pointer"
+                id="export-dss-excel-btn"
+              >
+                <Download size={14} />
+                <span>Export DSS Sheets (.xlsx)</span>
+              </button>
+            </div>
+
+            {/* Card 3: 33-Beat Fuel Bill Master */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-4 hover:border-amber-300 transition">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold">
+                    <Fuel size={20} />
+                  </div>
+                  <span className="text-[10px] font-mono bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
+                    .XLSX
+                  </span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">33-Beat Route Fuel Master</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Complete official master of all 33 beats of Dadabari S.O. with sanctioned daily distances (KM), staff assignments, ₹3.60/KM rates, and working days.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  masterDataService.exportBeatFuelMasterToExcel();
+                  setExportNotice('Exported 33-Beat Fuel Master Matrix to Excel successfully!');
+                }}
+                className="w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs transition cursor-pointer"
+                id="export-fuel-excel-btn"
+              >
+                <Download size={14} />
+                <span>Export Fuel Master (.xlsx)</span>
+              </button>
+            </div>
+
+            {/* Card 4: Complete Disaster Recovery Snapshot */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-4 hover:border-purple-300 transition">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold">
+                    <Database size={20} />
+                  </div>
+                  <span className="text-[10px] font-mono bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded-full">
+                    .JSON
+                  </span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">Full Disaster Recovery Backup</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Full atomic snapshot including all live customer records, 4-stage verification audit ledger, custom KM preferences, and system logs.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  masterDataService.exportAllMasterDataBackupJSON();
+                  setExportNotice('Downloaded full system state backup JSON successfully!');
+                }}
+                className="w-full py-2.5 px-3 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs transition cursor-pointer"
+                id="export-backup-json-btn"
+              >
+                <Download size={14} />
+                <span>Export Full State (.json)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* TAB 4: DEDICATED FULL-WIDTH STANDARDIZED TEMPLATES HUB   */}
+      {/* ======================================================== */}
+      {activeMainTab === 'TEMPLATES' && (
+        <div className="space-y-6">
+          <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Download size={18} className="text-red-700" />
+                  <span>Standardized Master Ingestion Templates</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Pre-formatted official Department of Posts templates designed for seamless bulk parsing with zero header mismatches.
+                </p>
+              </div>
+              <span className="text-xs font-mono bg-slate-100 text-slate-700 px-3 py-1 rounded-lg border border-slate-200">
+                UTF-8 CSV · RFC 4180 Format
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-1">
+              {/* Template 1 */}
+              <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4 flex flex-col justify-between">
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-2 text-blue-700 font-bold text-sm">
+                    <Building2 size={16} />
+                    <span>Customer & Property Master</span>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    Household mapping for Keshavpura, Santoshi Nagar, Dadabari plots, house numbers & beat assignments.
+                  </p>
+                  <div className="text-[11px] font-mono text-slate-600 bg-white p-3 rounded-xl border border-slate-200 space-y-1.5">
+                    <span className="font-bold text-slate-800 block text-[10px] uppercase">Required Schema:</span>
+                    <span className="text-[10px] leading-relaxed break-all block">
+                      name, mobile, beatNo, area, sector, houseNo, address, pincode, householdType, financialInterest
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadTemplate('CUSTOMER')}
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs transition cursor-pointer"
+                >
+                  <Download size={14} />
+                  <span>Download Customer Template (CSV)</span>
+                </button>
+              </div>
+
+              {/* Template 2 */}
+              <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4 flex flex-col justify-between">
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-2 text-amber-700 font-bold text-sm">
+                    <Fuel size={16} />
+                    <span>Beat Fuel Master (33 Beats)</span>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    Sanctioned route distances, assigned staff IDs, ₹3.60/KM rates, and monthly working days.
+                  </p>
+                  <div className="text-[11px] font-mono text-slate-600 bg-white p-3 rounded-xl border border-slate-200 space-y-1.5">
+                    <span className="font-bold text-slate-800 block text-[10px] uppercase">Required Schema:</span>
+                    <span className="text-[10px] leading-relaxed break-all block">
+                      beatNumber, assignedPostmanName, assignedStaffId, territorialCoverage, terrainClassification, sanctionedDailyKm, fuelRatePerKm, monthlyWorkingDays
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadTemplate('BEAT_FUEL')}
+                  className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs transition cursor-pointer"
+                >
+                  <Download size={14} />
+                  <span>Download 33-Beat Fuel Template (CSV)</span>
+                </button>
+              </div>
+
+              {/* Template 3 */}
+              <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4 flex flex-col justify-between">
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-2 text-emerald-700 font-bold text-sm">
+                    <FileSpreadsheet size={16} />
+                    <span>Monthly DSS Summary Report</span>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    Daily summary sheet benchmark with Speed Post, Registered Articles, Parcels, and COD collections.
+                  </p>
+                  <div className="text-[11px] font-mono text-slate-600 bg-white p-3 rounded-xl border border-slate-200 space-y-1.5">
+                    <span className="font-bold text-slate-800 block text-[10px] uppercase">Required Schema:</span>
+                    <span className="text-[10px] leading-relaxed break-all block">
+                      date, beatNo, staffName, employeeId, attendanceStatus, speedPostDelivered, registryDelivered, parcelDelivered, codAmountCollected, remarks
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadTemplate('DSS')}
+                  className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs transition cursor-pointer"
+                >
+                  <Download size={14} />
+                  <span>Download DSS Statement Template (CSV)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
       {/* SECTION 2: AUTOMATIC POSTMAN MONTHLY FUEL BILL DOWNLOADER */}
       {/* ======================================================== */}
-      <div className={`bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5 ${activeMainTab === 'FUEL_GENERATOR' || activeMainTab === 'UPLOAD_PORTAL' ? 'block' : 'hidden'}`}>
+      <div className={`bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5 ${activeMainTab === 'FUEL_GENERATOR' ? 'block' : 'hidden'}`}>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200 pb-4">
           <div>
             <div className="flex items-center gap-2">

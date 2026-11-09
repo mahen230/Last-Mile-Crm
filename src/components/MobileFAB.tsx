@@ -9,8 +9,8 @@ export default function MobileFAB() {
 
   const actions = [
     { name: 'Add Customer', icon: Plus, action: () => navigate('/customers') },
-    { name: 'Scan QR', icon: QrCode, action: () => alert('Scan feature coming soon') },
-    { name: 'Call Support', icon: Phone, action: () => window.location.href = 'tel:18001234567' },
+    { name: 'Scan & Verify', icon: QrCode, action: () => navigate('/verifications') },
+    { name: 'Call Support', icon: Phone, action: () => { window.location.href = 'tel:18002666868'; } },
   ];
 
   return (

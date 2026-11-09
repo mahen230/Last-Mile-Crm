@@ -54,6 +54,7 @@ const MyBeatDirectoryView = lazy(() => import('./components/postman/MyBeatDirect
 const MyProfileView = lazy(() => import('./components/postman/MyProfileView'));
 const MasterDataUploadView = lazy(() => import('./components/admin/MasterDataUploadView'));
 const PostmanAllDayArticlesOverview = lazy(() => import('./components/postman/PostmanAllDayArticlesOverview'));
+const OfficialStaffDocumentsHub = lazy(() => import('./components/crm/OfficialStaffDocumentsHub'));
 
 function ServiceModuleGuard({
   moduleKey,
@@ -462,6 +463,22 @@ function AuthenticatedApp() {
               >
                 <Acg61ChargeReportView />
               </ServiceModuleGuard>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/official-documents"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <OfficialStaffDocumentsHub />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/statutory-reports"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <OfficialStaffDocumentsHub />
             </ProtectedRoute>
           }
         />

@@ -25,6 +25,7 @@ import {
   Edit2,
   Eye,
   X,
+  FileCheck2,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { customerService } from '../services/customerService';
@@ -44,6 +45,7 @@ import {
 import CustomerProfileModal from './customers/CustomerProfileModal';
 import AddCustomerModal from './customers/AddCustomerModal';
 import PostmanAllDayArticlesOverview from './postman/PostmanAllDayArticlesOverview';
+import OfficialStaffDocumentsHub from './crm/OfficialStaffDocumentsHub';
 
 export default function Dashboard({
   onSwitchToCustomerPortal,
@@ -53,8 +55,8 @@ export default function Dashboard({
   const { userProfile } = useAuth();
   const navigate = useNavigate();
 
-  const [postmanActiveTab, setPostmanActiveTab] = useState<'ALL_DAY_ARTICLES' | 'CRM_FIELD'>('ALL_DAY_ARTICLES');
-  const [adminShowAllDayHub, setAdminShowAllDayHub] = useState<boolean>(false);
+  const [postmanActiveTab, setPostmanActiveTab] = useState<'ALL_DAY_ARTICLES' | 'CRM_FIELD' | 'OFFICIAL_DOCUMENTS'>('ALL_DAY_ARTICLES');
+  const [adminShowAllDayHub, setAdminShowAllDayHub] = useState<'CRM' | 'ALL_DAY_ARTICLES' | 'OFFICIAL_DOCUMENTS'>('CRM');
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -599,16 +601,30 @@ export default function Dashboard({
 
                 <button
                   type="button"
-                  onClick={() => setAdminShowAllDayHub(!adminShowAllDayHub)}
+                  onClick={() => setAdminShowAllDayHub(adminShowAllDayHub === 'ALL_DAY_ARTICLES' ? 'CRM' : 'ALL_DAY_ARTICLES')}
                   className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap ${
-                    adminShowAllDayHub
+                    adminShowAllDayHub === 'ALL_DAY_ARTICLES'
                       ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300'
                       : 'bg-blue-800 hover:bg-blue-700 text-white'
                   }`}
                   title="View All-Day Article Delivery Overview & Beat Fuel Bills"
                 >
                   <FileText size={15} />
-                  <span>{adminShowAllDayHub ? 'Dashboard CRM' : 'All-Day Articles & Fuel Hub'}</span>
+                  <span>{adminShowAllDayHub === 'ALL_DAY_ARTICLES' ? 'Dashboard CRM' : 'All-Day Articles & Fuel'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAdminShowAllDayHub(adminShowAllDayHub === 'OFFICIAL_DOCUMENTS' ? 'CRM' : 'OFFICIAL_DOCUMENTS')}
+                  className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap ${
+                    adminShowAllDayHub === 'OFFICIAL_DOCUMENTS'
+                      ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300'
+                      : 'bg-emerald-800 hover:bg-emerald-700 text-white'
+                  }`}
+                  title="Official Staff Documents & Statutory Reports Hub"
+                >
+                  <FileCheck2 size={15} />
+                  <span>{adminShowAllDayHub === 'OFFICIAL_DOCUMENTS' ? 'Dashboard CRM' : 'Official Documents Hub'}</span>
                 </button>
 
                 <button
@@ -721,8 +737,30 @@ export default function Dashboard({
                   <FileText size={15} />
                   <span>
                     {postmanActiveTab === 'ALL_DAY_ARTICLES'
-                      ? 'View Field CRM & Tasks'
-                      : '★ All-Day Articles & Fuel Hub'}
+                      ? 'View Field CRM'
+                      : '★ All-Day Articles & Fuel'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPostmanActiveTab(
+                      postmanActiveTab === 'OFFICIAL_DOCUMENTS' ? 'CRM_FIELD' : 'OFFICIAL_DOCUMENTS'
+                    )
+                  }
+                  className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm ${
+                    postmanActiveTab === 'OFFICIAL_DOCUMENTS'
+                      ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300'
+                      : 'bg-emerald-950 text-emerald-200 border border-emerald-400/50 hover:bg-emerald-900'
+                  }`}
+                  title="Official Staff Documents & Statutory Reports Hub"
+                >
+                  <FileCheck2 size={15} />
+                  <span>
+                    {postmanActiveTab === 'OFFICIAL_DOCUMENTS'
+                      ? 'View Field CRM'
+                      : '📑 Official Documents Hub'}
                   </span>
                 </button>
 
@@ -813,13 +851,20 @@ export default function Dashboard({
         )}
 
         {/* All-Day Register, Speed Post & Fuel Sheet Hub (For Postman or Admin toggled) */}
-        {((!isAdmin && postmanActiveTab === 'ALL_DAY_ARTICLES') || (isAdmin && adminShowAllDayHub)) && (
+        {((!isAdmin && postmanActiveTab === 'ALL_DAY_ARTICLES') || (isAdmin && adminShowAllDayHub === 'ALL_DAY_ARTICLES')) && (
           <div className="p-4 sm:p-6 bg-slate-900/90 border-b border-slate-800">
             <PostmanAllDayArticlesOverview
               initialBeat={activeBeat}
               initialMonth="2026-10"
               embedded={true}
             />
+          </div>
+        )}
+
+        {/* Dedicated Official Staff Documents & Statutory Reports Hub */}
+        {((!isAdmin && postmanActiveTab === 'OFFICIAL_DOCUMENTS') || (isAdmin && adminShowAllDayHub === 'OFFICIAL_DOCUMENTS')) && (
+          <div className="p-4 sm:p-6 bg-slate-900/90 border-b border-slate-800">
+            <OfficialStaffDocumentsHub />
           </div>
         )}
 

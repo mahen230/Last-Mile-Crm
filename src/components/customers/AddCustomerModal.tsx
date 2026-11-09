@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Customer } from '../../types/models';
 import { customerService } from '../../services/customerService';
-import { X, AlertTriangle, MapPin, Sparkles, Layers } from 'lucide-react';
+import { addressVerificationService, AddressVerificationResult } from '../../services/addressVerificationService';
+import { X, AlertTriangle, MapPin, Sparkles, Layers, CheckCircle2, Zap } from 'lucide-react';
 import { normalizeMobile } from '../../data/initialMasterData';
 import { UPDATED_STAFF_LIST } from '../../data/updatedStaffData';
 import { KOTA_POST_OFFICE_OPTIONS } from '../../data/officesData';
@@ -102,6 +103,51 @@ export default function AddCustomerModal({
   const [isCustomSector, setIsCustomSector] = useState(false);
   const [isCustomBlock, setIsCustomBlock] = useState(false);
   const [customBlockText, setCustomBlockText] = useState('');
+  const [aiVerificationResult, setAiVerificationResult] = useState<AddressVerificationResult | null>(null);
+  const [isVerifyingAddress, setIsVerifyingAddress] = useState(false);
+
+  const handleRunAiVerification = async () => {
+    setIsVerifyingAddress(true);
+    try {
+      const res = await addressVerificationService.verifyAddress(
+        {
+          houseNo: formData.houseNo,
+          colony: formData.colony || formData.area,
+          sector: formData.sector,
+          landmark: formData.landmark,
+          pincode: formData.pincode,
+          beatNo: formData.beatNo,
+          subOffice: formData.subOfficeMapping,
+          rawInput: `${formData.houseNo || ''}, ${formData.sector || ''}, ${formData.colony || ''}, ${formData.landmark || ''}, ${formData.subOfficeMapping || ''} - ${formData.pincode || ''}`,
+          source: 'MANUAL_ENTRY',
+        },
+        { recordExceptionIfFlawed: false }
+      );
+      setAiVerificationResult(res);
+    } catch (e) {
+      console.warn('AI Address verification error:', e);
+    } finally {
+      setIsVerifyingAddress(false);
+    }
+  };
+
+  const handleApplyAiCorrection = () => {
+    if (!aiVerificationResult) return;
+    const { suggestedCorrection } = aiVerificationResult;
+    setFormData((prev) => ({
+      ...prev,
+      houseNo: suggestedCorrection.correctedHouseNo || prev.houseNo,
+      colony: suggestedCorrection.correctedColony || prev.colony,
+      area: suggestedCorrection.correctedColony || prev.area,
+      sector: suggestedCorrection.correctedSector || prev.sector,
+      landmark: suggestedCorrection.correctedLandmark || prev.landmark,
+      pincode: suggestedCorrection.correctedPincode || prev.pincode,
+      beatNo: (suggestedCorrection.correctedBeatNo || prev.beatNo).replace(/^Beat\s+/i, ''),
+      subOfficeMapping: suggestedCorrection.correctedSubOffice || prev.subOfficeMapping,
+    }));
+    setAutoMappedNotice(`AI Postal Standard Applied: ${suggestedCorrection.correctedFullAddress}`);
+    setTimeout(() => setAutoMappedNotice(null), 4000);
+  };
 
   const quotaCheck = userProfile
     ? staffPermissionService.canUserEnterRecord(userProfile.email)
@@ -439,6 +485,27 @@ export default function AddCustomerModal({
       customerPayload,
       customerToEdit ? 'CRM Customer Edit' : 'CRM Structured Colony-Beat Customer Entry'
     );
+
+    // Auto-evaluate address against postal records & log to Address_Exceptions if discrepancies exist
+    if (res.customer) {
+      addressVerificationService.verifyAddress(
+        {
+          customerId: res.customer.id,
+          customerName: res.customer.name,
+          customerMobile: res.customer.mobile,
+          houseNo: res.customer.houseNo,
+          colony: res.customer.colony || res.customer.area,
+          sector: res.customer.sector,
+          landmark: res.customer.landmark,
+          pincode: res.customer.pincode,
+          beatNo: res.customer.beatNo,
+          subOffice: res.customer.subOfficeMapping,
+          rawInput: res.customer.address?.fullAddress,
+          source: 'MANUAL_ENTRY',
+        },
+        { recordExceptionIfFlawed: true }
+      ).catch((err) => console.warn('Background address verify error:', err));
+    }
 
     setSaving(false);
     if (onSaved) onSaved(res.customer);
@@ -802,6 +869,88 @@ export default function AddCustomerModal({
                 <span>SO: <strong className="text-slate-900">{formData.subOfficeMapping || 'Dadabari S.O.'}</strong></span>
               </div>
             </div>
+
+            {/* AI Address Verification & Exception Detection Bar */}
+            <div className="bg-slate-100/80 p-3 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Sparkles size={16} className="text-amber-500" />
+                <div>
+                  <div className="font-black text-slate-800 text-xs">
+                    AI Address Verification (Dadabari S.O. & Kota Division Benchmark)
+                  </div>
+                  <div className="text-[10px] text-slate-500">
+                    Verify address integrity against geographical bounds and postal records before saving
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleRunAiVerification}
+                disabled={isVerifyingAddress}
+                className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition self-start sm:self-auto shrink-0"
+              >
+                {isVerifyingAddress ? (
+                  <span>Checking...</span>
+                ) : (
+                  <>
+                    <Zap size={13} className="text-amber-400" />
+                    <span>Verify with AI</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {aiVerificationResult && (
+              <div
+                className={`p-3.5 rounded-xl border text-xs ${
+                  aiVerificationResult.accuracyScore >= 90
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                    : aiVerificationResult.accuracyScore >= 70
+                    ? 'bg-amber-50 border-amber-300 text-amber-950'
+                    : 'bg-red-50 border-red-300 text-red-950'
+                }`}
+              >
+                <div className="flex items-center justify-between font-black mb-1">
+                  <div className="flex items-center gap-1.5">
+                    {aiVerificationResult.accuracyScore >= 90 ? (
+                      <CheckCircle2 size={16} className="text-emerald-600" />
+                    ) : (
+                      <AlertTriangle size={16} className="text-amber-600" />
+                    )}
+                    <span>
+                      Accuracy: {aiVerificationResult.accuracyScore}% ({aiVerificationResult.riskLevel} Risk)
+                    </span>
+                  </div>
+                  {aiVerificationResult.discrepancies.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleApplyAiCorrection}
+                      className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-[11px] font-black flex items-center gap-1"
+                    >
+                      <Sparkles size={11} />
+                      <span>Auto-Apply AI Correction</span>
+                    </button>
+                  )}
+                </div>
+
+                {aiVerificationResult.discrepancies.length > 0 ? (
+                  <div className="mt-1.5 space-y-1">
+                    {aiVerificationResult.discrepancies.map((d, i) => (
+                      <div key={i} className="text-[11px] font-semibold text-red-800">
+                        • <strong>{d.type}:</strong> {d.message}
+                      </div>
+                    ))}
+                    <div className="text-[11px] font-bold text-slate-800 mt-2 bg-white/70 p-2 rounded-lg border border-slate-200">
+                      Suggested: {aiVerificationResult.suggestedCorrection.correctedFullAddress}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-emerald-800 font-semibold">
+                    Address conforms 100% to Dadabari S.O. & Beat {formData.beatNo} geographical records.
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div>

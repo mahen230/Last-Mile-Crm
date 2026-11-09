@@ -23,6 +23,8 @@ import {
   ShieldCheck,
   Sliders,
   RotateCcw,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import { staffPermissionService } from '../../services/staffPermissionService';
@@ -97,8 +99,13 @@ export default function PostmanAllDayArticlesOverview({
 
   const [modalNotice, setModalNotice] = useState<string | null>(null);
 
-  // Filter state for all-day table
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'WORKING' | 'SUNDAY' | 'HOLIDAY'>('ALL');
+  // Collapsible Table State
+  const [isTableExpanded, setIsTableExpanded] = useState<boolean>(true);
+
+  // Filter State: Quick Chips, Date Range, High Volume, Search
+  const [quickFilterChip, setQuickFilterChip] = useState<'ALL' | 'WORKING' | 'SUNDAY_HOLIDAY' | 'HIGH_VOLUME'>('ALL');
+  const [startDateFilter, setStartDateFilter] = useState<string>('');
+  const [endDateFilter, setEndDateFilter] = useState<string>('');
   const [searchDayQuery, setSearchDayQuery] = useState('');
 
   // Keep beat in sync if user changes
@@ -352,15 +359,46 @@ export default function PostmanAllDayArticlesOverview({
   // Filtered rows for the day table
   const filteredDailyRows = useMemo(() => {
     return fuelSummary.dailyRows.filter((r) => {
-      const matchStatus = statusFilter === 'ALL' || r.status === statusFilter;
-      const matchQuery =
-        searchDayQuery.trim() === '' ||
-        r.date.includes(searchDayQuery) ||
-        String(r.sn) === searchDayQuery ||
-        r.status.toLowerCase().includes(searchDayQuery.toLowerCase());
-      return matchStatus && matchQuery;
+      // 1. Quick Filter Chips
+      if (quickFilterChip === 'WORKING' && r.status !== 'WORKING') return false;
+      if (quickFilterChip === 'SUNDAY_HOLIDAY' && r.status !== 'SUNDAY' && r.status !== 'HOLIDAY') return false;
+      if (quickFilterChip === 'HIGH_VOLUME') {
+        const totalCount =
+          typeof r.total === 'number'
+            ? r.total
+            : (r.sp || 0) + (r.reg || 0) + (r.others || 0);
+        const invoiced = r.dssInvoicedCount || r.pdmsInvoicedCount || 0;
+        if (totalCount <= 50 && invoiced <= 50) return false;
+      }
+
+      // 2. Date Range Filter
+      if (startDateFilter && r.isoDate < startDateFilter) return false;
+      if (endDateFilter && r.isoDate > endDateFilter) return false;
+
+      // 3. Search Query (matches date, day number, status, or remarks)
+      if (searchDayQuery.trim() !== '') {
+        const q = searchDayQuery.trim().toLowerCase();
+        const dssMatch = allEntries.find(
+          (e) => e.date === r.isoDate && e.beatNo.toLowerCase() === selectedBeat.toLowerCase()
+        );
+        const remarksStr = (dssMatch?.remarks || r.remarks || '').toLowerCase();
+        const dateStr = r.date.toLowerCase();
+        const snStr = String(r.sn);
+        const statusStr = r.status.toLowerCase();
+
+        if (
+          !dateStr.includes(q) &&
+          !snStr.includes(q) &&
+          !statusStr.includes(q) &&
+          !remarksStr.includes(q)
+        ) {
+          return false;
+        }
+      }
+
+      return true;
     });
-  }, [fuelSummary.dailyRows, statusFilter, searchDayQuery]);
+  }, [fuelSummary.dailyRows, quickFilterChip, startDateFilter, endDateFilter, searchDayQuery, allEntries, selectedBeat]);
 
   return (
     <div className={`space-y-6 ${embedded ? '' : 'max-w-7xl mx-auto p-4 sm:p-6'}`}>
@@ -645,61 +683,196 @@ export default function PostmanAllDayArticlesOverview({
       </div>
 
       {/* ======================================================== */}
-      {/* 4. ALL-DAY ARTICLES TABLE (1 TO 31 DAYS)                */}
+      {/* 4. COLLAPSIBLE MONTHLY DELIVERY & ARTICLE LOG OVERVIEW  */}
       {/* ======================================================== */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-        {/* Table Filter & Action Bar */}
-        <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50/70 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div>
-            <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
-              <FileSpreadsheet size={18} className="text-red-700" />
-              <span>All-Day Article Delivery Sheet ({fuelSummary.monthName})</span>
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Strict Total Lock Rule: Individual category article counts can be patched; total article count is tamper-proof auto-summed.
-            </p>
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-300">
+        {/* Accordion Master Header with Compact Summary Strip (Always Visible) */}
+        <div
+          onClick={() => setIsTableExpanded(!isTableExpanded)}
+          className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white flex flex-col lg:flex-row lg:items-center justify-between gap-4 cursor-pointer select-none hover:bg-slate-800/90 transition"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-red-600/30 border border-red-500/40 text-red-400 flex items-center justify-center shrink-0">
+              <FileSpreadsheet size={20} />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-black text-base sm:text-lg text-white">
+                  Monthly Delivery & Article Log Overview
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-700 text-white border border-red-500/50">
+                  {fuelSummary.beatNo}
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-slate-300">
+                  {fuelSummary.monthName}
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Dadabari S.O. (324009) · 31 Days Consolidated Article Delivery & Odometer Log
+              </p>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Search Filter */}
-            <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search day / date..."
-                value={searchDayQuery}
-                onChange={(e) => setSearchDayQuery(e.target.value)}
-                className="pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-xl font-medium text-slate-900 focus:outline-none focus:border-red-700 w-36 sm:w-44"
-              />
+          {/* Compact Summary Strip (Visible Even When Collapsed) */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="bg-slate-800/90 border border-slate-700/80 px-3 py-1.5 rounded-xl text-xs flex items-center gap-2">
+              <span className="text-[10px] uppercase font-bold text-slate-400">Total Articles:</span>
+              <span className="font-black text-white font-mono">
+                {fuelSummary.totalArticlesDelivered.toLocaleString('en-IN')}
+              </span>
             </div>
 
-            {/* Status Filter */}
-            <div className="flex items-center gap-1 bg-white border border-slate-300 p-1 rounded-xl text-xs">
-              {(['ALL', 'WORKING', 'SUNDAY', 'HOLIDAY'] as const).map((st) => (
-                <button
-                  key={st}
-                  type="button"
-                  onClick={() => setStatusFilter(st)}
-                  className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition cursor-pointer ${
-                    statusFilter === st ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {st}
-                </button>
-              ))}
+            <div className="bg-slate-800/90 border border-slate-700/80 px-3 py-1.5 rounded-xl text-xs flex items-center gap-2">
+              <span className="text-[10px] uppercase font-bold text-slate-400">Avg Delivery / PMA:</span>
+              <span className="font-black text-emerald-400 font-mono">
+                {fuelSummary.averageDeliveryPercentage.toFixed(2)}%
+              </span>
             </div>
 
-            {/* Export CSV Button */}
+            <div className="bg-emerald-950/80 border border-emerald-600/50 px-3 py-1.5 rounded-xl text-xs flex items-center gap-2">
+              <span className="text-[10px] uppercase font-bold text-emerald-300">Fuel Claim:</span>
+              <span className="font-black text-emerald-300 font-mono">
+                ₹{fuelSummary.totalClaimAmount.toLocaleString('en-IN')}
+              </span>
+              <span className="text-[10px] text-emerald-400/80">({fuelSummary.workingDays}d × {customDailyKm}km @ ₹{customFuelRate.toFixed(2)})</span>
+            </div>
+
             <button
               type="button"
-              onClick={handleExportCsv}
-              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsTableExpanded(!isTableExpanded);
+              }}
+              className="ml-1 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center gap-1.5 text-xs font-bold transition border border-white/15"
+              aria-label={isTableExpanded ? 'Collapse Table' : 'Expand Table'}
             >
-              <Download size={13} />
-              <span>Export CSV</span>
+              {isTableExpanded ? (
+                <>
+                  <span>Collapse Table</span>
+                  <ChevronUp size={16} />
+                </>
+              ) : (
+                <>
+                  <span>Expand Table ({filteredDailyRows.length} Days)</span>
+                  <ChevronDown size={16} />
+                </>
+              )}
             </button>
           </div>
         </div>
+
+        {/* Collapsible Content Section */}
+        {isTableExpanded && (
+          <div>
+            {/* Interactive Filter & Date Range Toolbar */}
+            <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              {/* Quick Filter Chips */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider mr-1">
+                  Filters:
+                </span>
+                {[
+                  { id: 'ALL', label: 'All Days (31)' },
+                  { id: 'WORKING', label: `Working Days (${fuelSummary.workingDays})` },
+                  { id: 'SUNDAY_HOLIDAY', label: `Sundays / Holidays (${31 - fuelSummary.workingDays})` },
+                  { id: 'HIGH_VOLUME', label: 'High Volume (>50 Articles)' },
+                ].map((chip) => (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    onClick={() => setQuickFilterChip(chip.id as any)}
+                    className={`px-3 py-1.5 rounded-xl font-bold text-xs transition cursor-pointer flex items-center gap-1.5 ${
+                      quickFilterChip === chip.id
+                        ? 'bg-red-700 text-white shadow-sm'
+                        : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-200'
+                    }`}
+                  >
+                    <span>{chip.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Date Range & Instant Search */}
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Date Range Inputs */}
+                <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-300 text-xs">
+                  <span className="text-[10px] font-bold text-slate-400 pl-1">From:</span>
+                  <input
+                    type="date"
+                    value={startDateFilter}
+                    onChange={(e) => setStartDateFilter(e.target.value)}
+                    className="p-1 text-xs font-mono font-bold text-slate-800 bg-transparent focus:outline-none"
+                  />
+                  <span className="text-slate-300">→</span>
+                  <span className="text-[10px] font-bold text-slate-400">To:</span>
+                  <input
+                    type="date"
+                    value={endDateFilter}
+                    onChange={(e) => setEndDateFilter(e.target.value)}
+                    className="p-1 text-xs font-mono font-bold text-slate-800 bg-transparent focus:outline-none"
+                  />
+                  {(startDateFilter || endDateFilter) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStartDateFilter('');
+                        setEndDateFilter('');
+                      }}
+                      className="p-1 text-slate-400 hover:text-red-600 rounded-lg"
+                      title="Clear date range"
+                    >
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Instant Search Input */}
+                <div className="relative w-40 sm:w-52">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search date / remarks..."
+                    value={searchDayQuery}
+                    onChange={(e) => setSearchDayQuery(e.target.value)}
+                    className="w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-slate-300 rounded-xl font-medium text-slate-900 focus:outline-none focus:border-red-700"
+                  />
+                  {searchDayQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchDayQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Export CSV Button */}
+                <button
+                  type="button"
+                  onClick={handleExportCsv}
+                  className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Download size={13} />
+                  <span>Export CSV</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Row Counter Strip */}
+            <div className="px-5 py-2 bg-slate-100/70 border-b border-slate-200 flex items-center justify-between text-xs text-slate-600">
+              <div className="flex items-center gap-2">
+                <span>Showing <strong>{filteredDailyRows.length}</strong> of <strong>{fuelSummary.dailyRows.length}</strong> calendar days</span>
+                {(quickFilterChip !== 'ALL' || startDateFilter || endDateFilter || searchDayQuery) && (
+                  <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 font-bold text-[10px]">
+                    Filtered View Active
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] text-slate-500 font-mono">
+                Speed Post + Reg (0) + Parcels = Reconciled with DSS Statement
+              </div>
+            </div>
 
         {/* Beat 17 Audited Sort Verification Badge */}
         {selectedBeat === 'Beat 17' && (
@@ -970,6 +1143,8 @@ export default function PostmanAllDayArticlesOverview({
           </table>
         </div>
       </div>
+    )}
+  </div>
 
       {/* ======================================================== */}
       {/* 5. 1-CLICK SAFE DAY ARTICLE ENTRY MODAL (STRICT LOCK)    */}

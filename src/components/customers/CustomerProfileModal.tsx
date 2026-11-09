@@ -334,7 +334,20 @@ export default function CustomerProfileModal({ customer: initialCustomerProp, on
                 </div>
 
                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
-                  <div className="font-bold text-slate-900 text-sm mb-1">Postal & Geographic Location</div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold text-slate-900 text-sm">Postal & Geographic Location</span>
+                    {customer.addressAccuracyScore !== undefined && (
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                          customer.addressAccuracyScore >= 90
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        AI Score: {customer.addressAccuracyScore}%
+                      </span>
+                    )}
+                  </div>
                   <div><strong>House / Plot No:</strong> {customer.address?.houseNumber || customer.houseNo || 'N/A'}</div>
                   <div><strong>Sector / Area:</strong> {customer.address?.sectorLocality || customer.address?.area || customer.sector || customer.area || 'Keshavpura'}</div>
                   <div><strong>Pincode:</strong> {customer.address?.pincode || '324009'}</div>
@@ -343,6 +356,27 @@ export default function CustomerProfileModal({ customer: initialCustomerProp, on
                   <div><strong>Property ID:</strong> {customer.propertyId || 'Unassigned'}</div>
                   <div><strong>Household ID:</strong> {customer.householdId || 'Unassigned'}</div>
                 </div>
+
+                {customer.addressExceptionId && (
+                  <div className="col-span-full p-3.5 bg-amber-50 border border-amber-300 rounded-xl text-amber-950 text-xs flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle size={16} className="text-amber-700 shrink-0" />
+                      <div>
+                        <strong>Address Exception Flagged ({customer.addressExceptionId}):</strong> Potential discrepancy against Dadabari S.O. postal records.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        navigate('/address-resolution');
+                      }}
+                      className="px-3 py-1 bg-amber-700 hover:bg-amber-800 text-white rounded-lg font-bold text-[11px] whitespace-nowrap"
+                    >
+                      Resolve in Exceptions Hub →
+                    </button>
+                  </div>
+                )}
 
                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
                   <div className="font-bold text-slate-900 text-sm mb-1">Status & Data Quality</div>

@@ -645,6 +645,11 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
                       }`}>
                         {cust.verificationStatus}
                       </span>
+                      {cust.addressExceptionId && (
+                        <span className="block mt-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-200 text-amber-950 border border-amber-300">
+                          ⚠️ Address Exception
+                        </span>
+                      )}
                     </td>
 
                     <td className="px-4 py-3 text-right">

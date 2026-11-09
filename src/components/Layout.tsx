@@ -40,6 +40,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from './auth/FirebaseAuthProvider';
 import { customerService } from '../services/customerService';
 import { staffPermissionService } from '../services/staffPermissionService';
+import { addressVerificationService } from '../services/addressVerificationService';
 import { ServiceModulePermissions, StaffProfile } from '../types/models';
 import FloatingAIChatBot from './FloatingAIChatBot';
 import MobileFAB from './MobileFAB';
@@ -71,6 +72,7 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
   const [overdueTaskCount, setOverdueTaskCount] = useState(0);
   const [pendingRegCount, setPendingRegCount] = useState(0);
   const [pendingProfileCount, setPendingProfileCount] = useState(0);
+  const [addressExceptionsCount, setAddressExceptionsCount] = useState(0);
   const [allProfiles, setAllProfiles] = useState<StaffProfile[]>([]);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -99,6 +101,7 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
         setOverdueTaskCount(tasks.filter((t) => t.status !== 'Completed' && t.dueDate < today).length);
         setPendingRegCount(staffRegistrationService.getPendingRegistrationCount());
         setPendingProfileCount(staffRegistrationService.getPendingProfileApprovalCount());
+        setAddressExceptionsCount(addressVerificationService.getExceptionStats().pending);
       } catch (err) {
         console.warn('Error updating layout counts:', err);
       }
@@ -107,10 +110,12 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
     const unsubCust = customerService.subscribe(updateCounts);
     const unsubStaff = staffPermissionService.subscribe(updateCounts);
     const unsubReg = staffRegistrationService.subscribe(updateCounts);
+    const unsubExceptions = addressVerificationService.subscribe(updateCounts);
     return () => {
       unsubCust();
       unsubStaff();
       unsubReg();
+      unsubExceptions();
     };
   }, [userProfile]);
 
@@ -214,8 +219,21 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
           group: 'ADDITIONAL CAPABILITIES',
           items: [
             { name: 'Auto Office Master', icon: Building, path: '/office-master' },
-            { name: 'Address Standardization', icon: MapPin, path: '/address-resolution' },
+            {
+              name: 'AI Address Exceptions & Verify',
+              icon: MapPin,
+              path: '/address-resolution',
+              badge: addressExceptionsCount ? `${addressExceptionsCount}` : undefined,
+              badgeColor: 'bg-amber-500 text-slate-950 font-bold',
+            },
             { name: 'Scheme Leads (PLI/SSA)', icon: Target, path: '/leads', badge: leadCount ? `${leadCount}` : undefined },
+            {
+              name: 'Official Staff Documents Hub',
+              icon: FileCheck2,
+              path: '/official-documents',
+              badge: 'Statutory',
+              badgeColor: 'bg-emerald-600 text-white font-bold',
+            },
             { name: 'Postal Exam LMS Hub', icon: GraduationCap, path: '/postal-lms' },
             { name: 'Special Forms & Bills', icon: FileText, path: '/special-forms' },
           ],
@@ -244,6 +262,13 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
               path: '/postman-articles',
               badge: 'Oct 2026',
               badgeColor: 'bg-amber-400 text-slate-950 font-black',
+            },
+            {
+              name: '★ Official Staff Documents Hub',
+              icon: FileCheck2,
+              path: '/official-documents',
+              badge: 'Statutory',
+              badgeColor: 'bg-emerald-600 text-white font-black',
             },
             {
               name: '2. My Beat / Area Directory',

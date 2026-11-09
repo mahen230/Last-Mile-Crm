@@ -52,6 +52,88 @@ export interface Address {
   state?: string;
 }
 
+export type AddressExceptionSeverity = 'CRITICAL' | 'WARNING' | 'INFO';
+export type AddressExceptionStatus = 'PENDING_REVIEW' | 'AUTO_CORRECTED' | 'MANUALLY_RESOLVED' | 'REJECTED' | 'DISMISSED';
+export type AddressDiscrepancyType =
+  | 'PINCODE_MISMATCH'
+  | 'INVALID_PINCODE'
+  | 'COLONY_NOT_FOUND'
+  | 'SECTOR_MISMATCH'
+  | 'BEAT_MISALLOCATION'
+  | 'MISSING_HOUSE_NUMBER'
+  | 'INCOMPLETE_ADDRESS'
+  | 'AMBIGUOUS_LANDMARK'
+  | 'OUT_OF_DELIVERY_JURISDICTION'
+  | 'SPELLING_ANOMALY'
+  | 'GEO_COORDINATE_DRIFT';
+
+export interface AddressDiscrepancyItem {
+  type: AddressDiscrepancyType;
+  message: string;
+  severity: AddressExceptionSeverity;
+  field: 'houseNo' | 'colony' | 'sector' | 'landmark' | 'pincode' | 'beatNo' | 'subOffice' | 'fullAddress';
+}
+
+export interface AddressCorrectionSuggestion {
+  correctedHouseNo?: string;
+  correctedColony?: string;
+  correctedSector?: string;
+  correctedLandmark?: string;
+  correctedPincode?: string;
+  correctedBeatNo?: string;
+  correctedSubOffice?: string;
+  correctedFullAddress?: string;
+  confidenceScore: number; // 0.0 to 1.0 (e.g. 0.95 = 95%)
+  explanation: string;
+  geographicalReference?: string;
+}
+
+export interface Address_Exceptions {
+  id: string; // e.g. "EXC-10492"
+  customerId?: string; // Relational reference to Customer entity
+  customerName?: string;
+  customerMobile?: string;
+  source: 'MANUAL_ENTRY' | 'BULK_IMPORT' | 'CUSTOMER_PORTAL' | 'FIELD_SURVEY' | 'POSTAL_DATABASE_AUDIT' | 'DSS_AUTO_SYNC';
+  originalAddress: {
+    rawInput?: string;
+    houseNo?: string;
+    colony?: string;
+    sector?: string;
+    landmark?: string;
+    pincode?: string;
+    beatNo?: string;
+    subOffice?: string;
+    city?: string;
+    state?: string;
+  };
+  detectedDiscrepancies: AddressDiscrepancyItem[];
+  severity: AddressExceptionSeverity;
+  status: AddressExceptionStatus;
+  suggestedCorrection: AddressCorrectionSuggestion;
+  appliedCorrection?: Partial<AddressCorrectionSuggestion>;
+  aiVerificationDetails: {
+    modelUsed: string;
+    verifiedAt: string;
+    accuracyScore: number; // 0 to 100
+    riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    reasoning: string;
+    matchedPostalRecord?: {
+      officeName: string;
+      beatNumber: string;
+      standardColony: string;
+      standardPincode: string;
+      assignedStaff: string;
+    };
+  };
+  manualReviewNotes?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AddressException = Address_Exceptions;
+
 export interface RelocationRecord {
   id: string;
   shiftedDate: string;
@@ -217,6 +299,10 @@ export interface Customer {
   dataCompleteness?: number; // 0 to 100%
   hasConflict?: boolean;
   conflictDetails?: string[];
+  addressExceptionId?: string;
+  addressAccuracyScore?: number;
+  addressVerifiedAt?: string;
+  addressIssuesCount?: number;
   lastVisit?: string;
   nextFollowUpDate?: string;
   enteredBy?: string;
@@ -727,7 +813,14 @@ export interface ArticleQuantityPatch {
   dssStatus?: 'Reconciled with DSS' | 'Verified by SPM' | 'Pending DSS Audit';
 }
 
-export type SpecialBillType = 'FUEL_BILL' | 'CHARGE_REPORT' | 'OUTSIDER_BILL' | 'BYOD_BILL';
+export type SpecialBillType =
+  | 'FUEL_BILL'
+  | 'CHARGE_REPORT'
+  | 'OUTSIDER_BILL'
+  | 'BYOD_BILL'
+  | 'CONSOLIDATED_BILL'
+  | 'NPR_CENSUS_LOG'
+  | string;
 
 export interface SpecialBillRecord {
   id: string;
@@ -744,9 +837,16 @@ export interface SpecialBillRecord {
   totalDays: number;
   fixedKm: number;
   totalAmount: number;
-  status: 'Submitted' | 'Verified by SPM' | 'Sanctioned' | 'Paid';
+  status: 'Draft' | 'Submitted' | 'Verified by SPM' | 'Sanctioned' | 'Paid' | 'Approved' | 'Downloaded' | string;
   details: Record<string, any>;
   attachmentName?: string;
+  documentCategory?: 'STATUTORY_CHARGE' | 'FUEL_ALLOWANCE' | 'DEVICE_ALLOWANCE' | 'DUTY_ALLOWANCE' | 'CONSOLIDATED_SUMMARY' | 'CENSUS_VERIFICATION';
+  auditTrail?: {
+    action: string;
+    performedBy: string;
+    timestamp: string;
+    notes?: string;
+  }[];
   createdAt: string;
 }
 

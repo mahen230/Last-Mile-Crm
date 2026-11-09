@@ -2614,7 +2614,7 @@ class MasterDataService {
       totalDays: summary.workingDays,
       fixedKm: summary.sanctionedDailyKm,
       totalAmount: summary.totalClaimAmount,
-      status: summary.isStaffApproved ? 'Verified by SPM' : 'Draft',
+      status: summary.isStaffApproved ? 'Verified by SPM' : 'Submitted',
       details: {
         dssReconciliationStatus: summary.isStaffApproved ? 'Staff Approved & Reconciled with DSS' : 'Reconciled with DSS',
         spmVerificationNote: summary.isStaffApproved

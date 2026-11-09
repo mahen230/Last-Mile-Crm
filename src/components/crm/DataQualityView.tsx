@@ -1,26 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, AlertTriangle, CheckCircle2, RefreshCw, GitMerge, Check, X, Upload } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ShieldCheck, AlertTriangle, CheckCircle2, RefreshCw, GitMerge, Check, X, Upload, MapPin, Sparkles } from 'lucide-react';
 import { DataConflict, Customer } from '../../types/models';
 import { customerService } from '../../services/customerService';
+import { addressVerificationService } from '../../services/addressVerificationService';
 import CustomerProfileModal from '../customers/CustomerProfileModal';
 import BulkAddressImport from './BulkAddressImport';
 import Sector6Report from './Sector6Report';
 
 export default function DataQualityView() {
+  const navigate = useNavigate();
   const [conflicts, setConflicts] = useState<DataConflict[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedConflict, setSelectedConflict] = useState<DataConflict | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [pendingExceptionsCount, setPendingExceptionsCount] = useState(0);
 
   useEffect(() => {
     setConflicts(customerService.getConflicts());
     setCustomers(customerService.getCustomers());
+    setPendingExceptionsCount(addressVerificationService.getExceptionStats().pending);
     const unsub = customerService.subscribe(() => {
       setConflicts([...customerService.getConflicts()]);
       setCustomers([...customerService.getCustomers()]);
     });
-    return () => unsub();
+    const unsubExc = addressVerificationService.subscribe(() => {
+      setPendingExceptionsCount(addressVerificationService.getExceptionStats().pending);
+    });
+    return () => {
+      unsub();
+      unsubExc();
+    };
   }, []);
 
   const openConflicts = conflicts.filter(c => c.status === 'Pending Review');
@@ -45,7 +56,19 @@ export default function DataQualityView() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => navigate('/address-resolution')}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-xl text-xs font-black shadow-xs transition"
+          >
+            <MapPin size={15} />
+            <span>AI Address_Exceptions Hub</span>
+            {pendingExceptionsCount > 0 && (
+              <span className="px-1.5 py-0.5 bg-red-600 text-white rounded-full text-[10px] font-mono">
+                {pendingExceptionsCount}
+              </span>
+            )}
+          </button>
           <button 
             onClick={() => setShowBulkImport(true)}
             className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-semibold hover:bg-slate-800 transition"

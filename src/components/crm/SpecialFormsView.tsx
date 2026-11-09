@@ -12,6 +12,7 @@ import {
   X,
   Table,
   RefreshCw,
+  FileCheck2,
 } from 'lucide-react';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import { operationsService } from '../../services/operationsService';
@@ -505,6 +506,15 @@ export default function SpecialFormsView() {
             <span className="text-slate-400 block text-[10px]">Post Office</span>
             <span className="font-bold text-white">{officeName}</span>
           </div>
+          <div className="h-6 w-px bg-slate-800 hidden sm:block" />
+          <Link
+            to="/official-documents"
+            className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+            title="Open Dedicated Official Staff Documents & Statutory Reports Hub"
+          >
+            <FileCheck2 size={14} />
+            <span>Documents Hub ↗</span>
+          </Link>
         </div>
       </div>
 

@@ -207,6 +207,39 @@ class CustomerAuthService {
     return session;
   }
 
+  /**
+   * Direct Citizen / Customer Registration
+   */
+  public registerCustomerAccount(data: {
+    name: string;
+    mobile: string;
+    email?: string;
+    colony?: string;
+    pincode?: string;
+    schemeInterest?: string;
+  }): { success: boolean; message: string; session: CustomerSession } {
+    const cleanMobile = data.mobile.replace(/\D/g, '').slice(-10);
+    const session: CustomerSession = {
+      id: `CUST-${cleanMobile}-${Date.now().toString(36).toUpperCase()}`,
+      tier: 'CUSTOMER',
+      name: data.name.trim(),
+      mobile: cleanMobile,
+      email: data.email?.trim() || undefined,
+      authProvider: 'MOBILE_OTP',
+      isPhoneVerified: true,
+      createdAt: new Date().toISOString(),
+      lastLoginAt: new Date().toISOString(),
+      token: `cust_jwt_${Math.random().toString(36).slice(2)}`,
+    };
+
+    this.saveSession(session);
+    return {
+      success: true,
+      message: `Welcome ${data.name}! Citizen account registered successfully.`,
+      session,
+    };
+  }
+
   public signOutCustomer() {
     this.saveSession(null);
   }

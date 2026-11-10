@@ -128,10 +128,18 @@ function AuthenticatedApp() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isPublicRoute = location.pathname === '/' || location.pathname === '/home' || location.pathname === '/portal';
+  const isPublicRoute =
+    location.pathname === '/' ||
+    location.pathname === '/home' ||
+    location.pathname === '/portal' ||
+    location.pathname === '/staff-gateway';
+
+  if (location.pathname === '/staff-gateway') {
+    return <LoginPage initialTier="STAFF" isStaffDirect={true} />;
+  }
 
   if (location.pathname === '/login' || (!user && !userProfile && !isPublicRoute)) {
-    return <LoginPage />;
+    return <LoginPage initialTier="CUSTOMER" />;
   }
 
   const triggerStaffAuthModal = () => {
@@ -660,6 +668,7 @@ function AuthenticatedApp() {
           }
         />
 
+          <Route path="/staff-gateway" element={<LoginPage initialTier="STAFF" isStaffDirect={true} />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
           <Route
             path="/portal"

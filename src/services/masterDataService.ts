@@ -22,6 +22,7 @@ import {
   SpecialBillRecord,
   ColonyMasterRecord,
   registerColonyToMaster,
+  registerOrUpdateUniqueColony,
 } from '../types/models';
 import {
   FuelDailyRow,
@@ -282,7 +283,12 @@ class MasterDataService {
         pincode: '324009',
         division: 'KOTA',
         postOfficeName: 'Dadabari S.O.',
-        geoTag: { lat: 25.1432, lng: 75.8234 },
+        subSectors: ['Chambal Enclave', 'Shopping Centre', 'Block A-D'],
+        geoTag: {
+          lat: 25.1432,
+          lng: 75.8234,
+          googleMapsUrl: 'https://www.google.com/maps?q=25.1432,75.8234',
+        },
         assignedBeat: 'Beat 2',
         status: 'ACTIVE',
         createdAt: '2026-01-01T08:00:00.000Z',
@@ -293,7 +299,12 @@ class MasterDataService {
         pincode: '324005',
         division: 'KOTA',
         postOfficeName: 'Keshavpura S.O.',
-        geoTag: { lat: 25.1388, lng: 75.8301 },
+        subSectors: ['Sector 1', 'Sector 2', 'Sector 3', 'Sector 4', 'Sector 5', 'Sector 6', 'Sector 7'],
+        geoTag: {
+          lat: 25.1388,
+          lng: 75.8301,
+          googleMapsUrl: 'https://www.google.com/maps?q=25.1388,75.8301',
+        },
         assignedBeat: 'Beat 6',
         status: 'ACTIVE',
         createdAt: '2026-01-02T08:00:00.000Z',
@@ -304,7 +315,12 @@ class MasterDataService {
         pincode: '324005',
         division: 'KOTA',
         postOfficeName: 'Mahaveer Nagar S.O.',
-        geoTag: { lat: 25.148, lng: 75.834 },
+        subSectors: ['Sector 1', 'Sector 2', 'Sector 3', 'Central Park Enclave'],
+        geoTag: {
+          lat: 25.148,
+          lng: 75.834,
+          googleMapsUrl: 'https://www.google.com/maps?q=25.148,75.834',
+        },
         assignedBeat: 'Beat 5',
         status: 'ACTIVE',
         createdAt: '2026-01-03T08:00:00.000Z',
@@ -315,7 +331,12 @@ class MasterDataService {
         pincode: '324009',
         division: 'KOTA',
         postOfficeName: 'Dadabari S.O.',
-        geoTag: { lat: 25.145, lng: 75.821 },
+        subSectors: ['Phase 1', 'Phase 2', 'School Road'],
+        geoTag: {
+          lat: 25.145,
+          lng: 75.821,
+          googleMapsUrl: 'https://www.google.com/maps?q=25.145,75.821',
+        },
         assignedBeat: 'Beat 1',
         status: 'ACTIVE',
         createdAt: '2026-01-04T08:00:00.000Z',
@@ -326,7 +347,12 @@ class MasterDataService {
         pincode: '324005',
         division: 'KOTA',
         postOfficeName: 'Vigyan Nagar S.O.',
-        geoTag: { lat: 25.132, lng: 75.845 },
+        subSectors: ['Road No. 1-4', 'Commercial Belt', 'Worker Quarters'],
+        geoTag: {
+          lat: 25.132,
+          lng: 75.845,
+          googleMapsUrl: 'https://www.google.com/maps?q=25.132,75.845',
+        },
         assignedBeat: 'Beat 8',
         status: 'ACTIVE',
         createdAt: '2026-01-05T08:00:00.000Z',
@@ -337,7 +363,12 @@ class MasterDataService {
         pincode: '324009',
         division: 'KOTA',
         postOfficeName: 'Dadabari S.O.',
-        geoTag: { lat: 25.1412, lng: 75.819 },
+        subSectors: ['Sector A', 'Sector B', 'Sector C', 'Scheme No. 3'],
+        geoTag: {
+          lat: 25.1412,
+          lng: 75.819,
+          googleMapsUrl: 'https://www.google.com/maps?q=25.1412,75.819',
+        },
         assignedBeat: 'Beat 4',
         status: 'ACTIVE',
         createdAt: '2026-01-06T08:00:00.000Z',
@@ -350,7 +381,12 @@ class MasterDataService {
         pincode: '325205',
         division: 'BARAN',
         postOfficeName: 'Baran H.O.',
-        geoTag: { lat: 25.1011, lng: 76.5132 },
+        subSectors: ['Main Bazaar', 'Station Road', 'Chowk Market'],
+        geoTag: {
+          lat: 25.1011,
+          lng: 76.5132,
+          googleMapsUrl: 'https://www.google.com/maps?q=25.1011,76.5132',
+        },
         assignedBeat: 'Beat 1',
         status: 'ACTIVE',
         createdAt: '2026-01-07T08:00:00.000Z',
@@ -361,7 +397,12 @@ class MasterDataService {
         pincode: '325202',
         division: 'BARAN',
         postOfficeName: 'Anta S.O.',
-        geoTag: { lat: 25.1522, lng: 76.3021 },
+        subSectors: ['Type 1-4 Quarters', 'Township Sector A', 'Officers Enclave'],
+        geoTag: {
+          lat: 25.1522,
+          lng: 76.3021,
+          googleMapsUrl: 'https://www.google.com/maps?q=25.1522,76.3021',
+        },
         assignedBeat: 'Beat 2',
         status: 'ACTIVE',
         createdAt: '2026-01-08T08:00:00.000Z',
@@ -372,7 +413,12 @@ class MasterDataService {
         pincode: '325218',
         division: 'BARAN',
         postOfficeName: 'Atru S.O.',
-        geoTag: { lat: 24.882, lng: 76.654 },
+        subSectors: ['Kasba Mandi', 'Old Post Office Lane', 'Bundi Road Belt'],
+        geoTag: {
+          lat: 24.882,
+          lng: 76.654,
+          googleMapsUrl: 'https://www.google.com/maps?q=24.882,76.654',
+        },
         assignedBeat: 'Beat 1',
         status: 'ACTIVE',
         createdAt: '2026-01-09T08:00:00.000Z',
@@ -383,7 +429,12 @@ class MasterDataService {
         pincode: '325220',
         division: 'BARAN',
         postOfficeName: 'Chhabra S.O.',
-        geoTag: { lat: 24.664, lng: 76.842 },
+        subSectors: ['Fort Enclave', 'Thermal Power Road', 'Main Bazaar'],
+        geoTag: {
+          lat: 24.664,
+          lng: 76.842,
+          googleMapsUrl: 'https://www.google.com/maps?q=24.664,76.842',
+        },
         assignedBeat: 'Beat 3',
         status: 'ACTIVE',
         createdAt: '2026-01-10T08:00:00.000Z',
@@ -394,7 +445,12 @@ class MasterDataService {
         pincode: '325217',
         division: 'BARAN',
         postOfficeName: 'Shahbad S.O.',
-        geoTag: { lat: 25.184, lng: 77.173 },
+        subSectors: ['Khanda Forest Belt', 'Kasba Ward 1-3'],
+        geoTag: {
+          lat: 25.184,
+          lng: 77.173,
+          googleMapsUrl: 'https://www.google.com/maps?q=25.184,77.173',
+        },
         assignedBeat: 'PENDING_ASSIGNMENT',
         status: 'PENDING_BEAT_MAPPING',
         createdAt: '2026-01-11T08:00:00.000Z',
@@ -405,7 +461,12 @@ class MasterDataService {
         pincode: '325206',
         division: 'BARAN',
         postOfficeName: 'Mangrol S.O.',
-        geoTag: { lat: 25.331, lng: 76.512 },
+        subSectors: ['Bada Bazaar', 'Panchayat Circle', 'Banganga Road'],
+        geoTag: {
+          lat: 25.331,
+          lng: 76.512,
+          googleMapsUrl: 'https://www.google.com/maps?q=25.331,76.512',
+        },
         assignedBeat: 'Beat 1',
         status: 'ACTIVE',
         createdAt: '2026-01-12T08:00:00.000Z',
@@ -418,7 +479,12 @@ class MasterDataService {
         pincode: '323001',
         division: 'BUNDI',
         postOfficeName: 'Bundi H.O.',
-        geoTag: { lat: 25.441, lng: 75.642 },
+        subSectors: ['Garh Palace Ward', 'Sadar Bazaar', 'Chogan Gate'],
+        geoTag: {
+          lat: 25.441,
+          lng: 75.642,
+          googleMapsUrl: 'https://www.google.com/maps?q=25.441,75.642',
+        },
         assignedBeat: 'Beat 1',
         status: 'ACTIVE',
         createdAt: '2026-01-13T08:00:00.000Z',
@@ -429,7 +495,12 @@ class MasterDataService {
         pincode: '323803',
         division: 'BUNDI',
         postOfficeName: 'Lakheri S.O.',
-        geoTag: { lat: 25.662, lng: 76.171 },
+        subSectors: ['Cement Plant Township', 'ACC Staff Quarters', 'Station Enclave'],
+        geoTag: {
+          lat: 25.662,
+          lng: 76.171,
+          googleMapsUrl: 'https://www.google.com/maps?q=25.662,76.171',
+        },
         assignedBeat: 'Beat 2',
         status: 'ACTIVE',
         createdAt: '2026-01-14T08:00:00.000Z',
@@ -440,7 +511,12 @@ class MasterDataService {
         pincode: '323801',
         division: 'BUNDI',
         postOfficeName: 'Nainwa S.O.',
-        geoTag: { lat: 25.765, lng: 75.854 },
+        subSectors: ['Krishi Upaj Mandi', 'Old Fort Area', 'Bazaar Ward 1-4'],
+        geoTag: {
+          lat: 25.765,
+          lng: 75.854,
+          googleMapsUrl: 'https://www.google.com/maps?q=25.765,75.854',
+        },
         assignedBeat: 'Beat 1',
         status: 'ACTIVE',
         createdAt: '2026-01-15T08:00:00.000Z',
@@ -451,7 +527,12 @@ class MasterDataService {
         pincode: '323601',
         division: 'BUNDI',
         postOfficeName: 'Keshoraipatan S.O.',
-        geoTag: { lat: 25.311, lng: 75.942 },
+        subSectors: ['Temple Ghats', 'Sugar Mill Quarters', 'Station Road'],
+        geoTag: {
+          lat: 25.311,
+          lng: 75.942,
+          googleMapsUrl: 'https://www.google.com/maps?q=25.311,75.942',
+        },
         assignedBeat: 'Beat 1',
         status: 'ACTIVE',
         createdAt: '2026-01-16T08:00:00.000Z',
@@ -462,7 +543,12 @@ class MasterDataService {
         pincode: '323023',
         division: 'BUNDI',
         postOfficeName: 'Hindoli S.O.',
-        geoTag: { lat: 25.578, lng: 75.498 },
+        subSectors: ['Mandi Complex', 'Bypass Road'],
+        geoTag: {
+          lat: 25.578,
+          lng: 75.498,
+          googleMapsUrl: 'https://www.google.com/maps?q=25.578,75.498',
+        },
         assignedBeat: 'PENDING_ASSIGNMENT',
         status: 'PENDING_BEAT_MAPPING',
         createdAt: '2026-01-17T08:00:00.000Z',
@@ -473,7 +559,12 @@ class MasterDataService {
         pincode: '323807',
         division: 'BUNDI',
         postOfficeName: 'Kapren S.O.',
-        geoTag: { lat: 25.405, lng: 76.071 },
+        subSectors: ['Railway Colony', 'Mandi Road', 'Panchayat Area'],
+        geoTag: {
+          lat: 25.405,
+          lng: 76.071,
+          googleMapsUrl: 'https://www.google.com/maps?q=25.405,76.071',
+        },
         assignedBeat: 'Beat 1',
         status: 'ACTIVE',
         createdAt: '2026-01-18T08:00:00.000Z',
@@ -492,17 +583,28 @@ class MasterDataService {
   public addColonyMasterRecord(
     newColony: Omit<ColonyMasterRecord, 'id' | 'status' | 'createdAt'>
   ): { success: boolean; message: string; updatedColonies: ColonyMasterRecord[]; record?: ColonyMasterRecord } {
-    const result = registerColonyToMaster(this.colonyMasterRecords, newColony);
+    const result = registerOrUpdateUniqueColony(this.colonyMasterRecords, newColony);
     if (result.success) {
       this.colonyMasterRecords = result.updatedColonies;
       this.saveColonyMaster();
       this.notify();
+      const matched = result.updatedColonies.find(
+        (c) =>
+          c.colonyName.trim().toLowerCase() === newColony.colonyName.trim().toLowerCase() &&
+          c.pincode.trim() === newColony.pincode.trim()
+      );
       return {
         ...result,
-        record: result.updatedColonies[result.updatedColonies.length - 1],
+        record: matched || result.updatedColonies[result.updatedColonies.length - 1],
       };
     }
     return result;
+  }
+
+  public registerOrUpdateColony(
+    newColony: Omit<ColonyMasterRecord, 'id' | 'status' | 'createdAt'>
+  ): { success: boolean; message: string; updatedColonies: ColonyMasterRecord[]; record?: ColonyMasterRecord } {
+    return this.addColonyMasterRecord(newColony);
   }
 
   public updateColonyMasterRecord(id: string, updates: Partial<ColonyMasterRecord>): boolean {

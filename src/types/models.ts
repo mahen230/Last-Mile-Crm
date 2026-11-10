@@ -686,48 +686,84 @@ export interface ColonyBeatMapping {
 
 export interface ColonyMasterRecord {
   id: string;
-  colonyName: string;
-  pincode: string;
+  colonyName: string;       // यूनीक मुख्य कॉलोनी नाम (जैसे: Keshavpura, Basant Vihar)
+  pincode: string;          // पिनकोड (जैसे: 324009)
   division: 'KOTA' | 'BARAN' | 'BUNDI';
-  postOfficeName: string; // जैसे Dadabari S.O., Kota H.O. आदि
+  postOfficeName: string;   // जैसे Dadabari S.O.
+  subSectors?: string[];    // इसके अंतर्गत आने वाले सेक्टर/पॉकेट्स (जैसे: ['Sector 1', 'Sector 2', 'Sector 6'])
   geoTag: {
     lat: number;
     lng: number;
+    googleMapsUrl: string;  // डायरेक्ट गूगल मैप्स पिन लिंक
   };
-  assignedBeat?: string; // यदि बीट मैप नहीं है तो 'PENDING' या undefined रहेगा
+  assignedBeat?: string;
   status: 'ACTIVE' | 'PENDING_BEAT_MAPPING';
   createdAt: string;
 }
 
 /**
- * नई कॉलोनी रजिस्टर करने का फंक्शन (डुप्लीकेशन प्रिवेंशन के साथ)
+ * कॉलोनी रजिस्टर या अपडेट (Upsert) करने का फंक्शन (Colony Name + PIN यूनीकनेस के साथ)
  */
-export function registerColonyToMaster(
+export function registerOrUpdateUniqueColony(
   existingColonies: ColonyMasterRecord[],
   newColony: Omit<ColonyMasterRecord, 'id' | 'status' | 'createdAt'>
 ): { success: boolean; message: string; updatedColonies: ColonyMasterRecord[] } {
-  // 1. नाम और पिनकोड की डुप्लीकेशन जाँच (Case-insensitive check)
-  const normalizedNewName = newColony.colonyName.trim().toLowerCase();
-  const isDuplicate = existingColonies.some(
-    (c) => c.colonyName.trim().toLowerCase() === normalizedNewName && c.pincode === newColony.pincode
+  // 1. यूनीकनेस चेक: Colony Name + Pincode का कॉम्बिनेशन मैच किया जाएगा
+  const normalizedColony = newColony.colonyName.trim().toLowerCase();
+  const normalizedPincode = newColony.pincode.trim();
+
+  const existingIndex = existingColonies.findIndex(
+    (c) => c.colonyName.trim().toLowerCase() === normalizedColony && c.pincode.trim() === normalizedPincode
   );
 
-  if (isDuplicate) {
+  const hasBeat = Boolean(
+    newColony.assignedBeat &&
+    newColony.assignedBeat.trim() !== '' &&
+    newColony.assignedBeat !== 'PENDING_ASSIGNMENT'
+  );
+  const status: 'ACTIVE' | 'PENDING_BEAT_MAPPING' = hasBeat ? 'ACTIVE' : 'PENDING_BEAT_MAPPING';
+
+  const lat = newColony.geoTag?.lat ?? 25.1432;
+  const lng = newColony.geoTag?.lng ?? 75.8234;
+  const googleMapsUrl =
+    newColony.geoTag?.googleMapsUrl || `https://www.google.com/maps?q=${lat},${lng}`;
+  const geoTagWithMap = {
+    lat,
+    lng,
+    googleMapsUrl,
+  };
+
+  if (existingIndex > -1) {
+    // अगर कॉलोनी उस पिनकोड पर पहले से है, तो उसके सब-सेक्टर्स और मैप लिंक को अपडेट (Upsert) कर देंगे
+    const updatedColonies = [...existingColonies];
+    const prev = updatedColonies[existingIndex];
+    const mergedSubSectors = Array.from(
+      new Set([...(prev.subSectors || []), ...(newColony.subSectors || [])])
+    );
+
+    updatedColonies[existingIndex] = {
+      ...prev,
+      ...newColony,
+      subSectors: mergedSubSectors.length > 0 ? mergedSubSectors : prev.subSectors,
+      geoTag: geoTagWithMap,
+      status: newColony.assignedBeat !== undefined ? status : prev.status,
+      assignedBeat: newColony.assignedBeat !== undefined ? newColony.assignedBeat : prev.assignedBeat,
+      id: prev.id, // पुरानी ID बरकरार रहेगी
+      createdAt: prev.createdAt,
+    };
     return {
-      success: false,
-      message: `Error: Colony "${newColony.colonyName}" with PIN ${newColony.pincode} already exists in the Master Database!`,
-      updatedColonies: existingColonies,
+      success: true,
+      message: `Colony "${newColony.colonyName}" (PIN: ${newColony.pincode}) updated successfully with latest sectors & map link!`,
+      updatedColonies,
     };
   }
 
-  // 2. बीट मैपिंग पेंडिंग चेक
-  const hasBeat = Boolean(newColony.assignedBeat && newColony.assignedBeat.trim() !== '' && newColony.assignedBeat !== 'PENDING_ASSIGNMENT');
-  const status = hasBeat ? 'ACTIVE' : 'PENDING_BEAT_MAPPING';
-
+  // 2. नई यूनीक कॉलोनी रजिस्टर करना
   const colonyRecord: ColonyMasterRecord = {
     id: `COL-${Date.now().toString(36).toUpperCase()}`,
     ...newColony,
     colonyName: newColony.colonyName.trim(),
+    geoTag: geoTagWithMap,
     assignedBeat: hasBeat ? newColony.assignedBeat : 'PENDING_ASSIGNMENT',
     status,
     createdAt: new Date().toISOString(),
@@ -735,12 +771,13 @@ export function registerColonyToMaster(
 
   return {
     success: true,
-    message: hasBeat
-      ? `Colony "${colonyRecord.colonyName}" successfully registered with Geo-Tag & Beat Map!`
-      : `Colony "${colonyRecord.colonyName}" registered successfully! Beat mapping kept as PENDING.`,
+    message: `New unique colony "${colonyRecord.colonyName}" registered under PIN ${colonyRecord.pincode} with Google Map link!`,
     updatedColonies: [...existingColonies, colonyRecord],
   };
 }
+
+// Re-export alias for existing callers
+export const registerColonyToMaster = registerOrUpdateUniqueColony;
 
 export interface StaffPermission {
   canCreateCustomer: boolean;

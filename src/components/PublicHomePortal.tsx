@@ -1175,12 +1175,12 @@ export default function PublicHomePortal({
             <Link to="/postal-lms" className="hover:text-red-700 transition">Postal LMS & LDCE</Link>
             <span>•</span>
             <Link
-              to="/login"
-              className="text-slate-500 hover:text-slate-800 transition flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white shadow-2xs text-[11px] font-semibold"
-              title="Official Departmental Personnel Login"
+              to="/staff-gateway"
+              className="text-slate-400 hover:text-slate-700 transition flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium"
+              title="Official Departmental Personnel Gateway · Restricted to Authorized Staff"
               id="footer-staff-login-link"
             >
-              <Lock size={12} className="text-red-700" />
+              <Lock size={11} className="text-slate-400" />
               <span>Official Staff Gateway</span>
             </Link>
           </div>

@@ -61,9 +61,17 @@ interface LoginPageProps {
   isModal?: boolean;
   onClose?: () => void;
   initialMode?: 'LOGIN' | 'REGISTER' | 'FORGOT_PASSWORD';
+  initialTier?: 'STAFF' | 'CUSTOMER';
+  isStaffDirect?: boolean;
 }
 
-export default function LoginPage({ isModal = false, onClose, initialMode = 'LOGIN' }: LoginPageProps) {
+export default function LoginPage({
+  isModal = false,
+  onClose,
+  initialMode = 'LOGIN',
+  initialTier,
+  isStaffDirect = false,
+}: LoginPageProps) {
   const {
     signIn,
     signInWithPassword,
@@ -82,7 +90,7 @@ export default function LoginPage({ isModal = false, onClose, initialMode = 'LOG
     }
     const state = location.state as { from?: { pathname: string } } | null;
     const dest = state?.from?.pathname || '/dashboard';
-    if (dest === '/login' || dest === '/' || dest === '/home') {
+    if (dest === '/login' || dest === '/' || dest === '/home' || dest === '/staff-gateway') {
       navigate('/dashboard', { replace: true });
     } else {
       navigate(dest, { replace: true });
@@ -97,11 +105,22 @@ export default function LoginPage({ isModal = false, onClose, initialMode = 'LOG
   };
 
   // Primary Dual-Tier Authentication State: STAFF vs CUSTOMER
-  const [authTier, setAuthTier] = useState<'STAFF' | 'CUSTOMER'>('STAFF');
+  // Citizens / Customers are primary (First). Staff Gateway is discrete and secured.
+  const [authTier, setAuthTier] = useState<'STAFF' | 'CUSTOMER'>(() => {
+    if (initialTier) return initialTier;
+    if (typeof window !== 'undefined' && (window.location.pathname.includes('staff') || isStaffDirect)) {
+      return 'STAFF';
+    }
+    return 'CUSTOMER';
+  });
 
-  // Customer Tier State (Google OAuth + Mobile SMS OTP)
+  // Customer Tier State (Registration First! as requested)
+  const [custRegMode, setCustRegMode] = useState<'REGISTER' | 'LOGIN'>('REGISTER');
   const [custName, setCustName] = useState('');
   const [custMobile, setCustMobile] = useState('');
+  const [custRegLocality, setCustRegLocality] = useState('Dadabari Extension');
+  const [custRegPincode, setCustRegPincode] = useState('324009');
+  const [custRegScheme, setCustRegScheme] = useState('Sukanya Samriddhi Yojana (SSY)');
   const [custEnteredOtp, setCustEnteredOtp] = useState('');
   const [custGeneratedOtp, setCustGeneratedOtp] = useState<string | null>(null);
   const [custOtpStep, setCustOtpStep] = useState<'DETAILS' | 'VERIFY'>('DETAILS');
@@ -185,6 +204,31 @@ export default function LoginPage({ isModal = false, onClose, initialMode = 'LOG
   };
 
   // 1. Customer Handlers
+  const handleCustomerRegister = (e: React.FormEvent) => {
+    e.preventDefault();
+    clearMessages();
+    if (!custName.trim() || !custMobile.trim()) {
+      setLocalError('Please enter your Full Name and 10-digit Indian Mobile Number.');
+      return;
+    }
+    const cleanMobile = custMobile.replace(/\D/g, '').slice(-10);
+    if (!/^\d{10}$/.test(cleanMobile)) {
+      setLocalError('Please enter a valid 10-digit Indian Mobile Number.');
+      return;
+    }
+    const res = customerAuthService.registerCustomerAccount({
+      name: custName.trim(),
+      mobile: cleanMobile,
+      colony: custRegLocality,
+      pincode: custRegPincode,
+      schemeInterest: custRegScheme,
+    });
+    if (res.success) {
+      setSuccessMessage(res.message);
+      setTimeout(finishCustomerLogin, 400);
+    }
+  };
+
   const handleCustomerGoogleSignIn = async () => {
     clearMessages();
     setIsLoading(true);
@@ -580,23 +624,8 @@ export default function LoginPage({ isModal = false, onClose, initialMode = 'LOG
       {/* Right Column: Clean, High-Contrast Authentication Form (7 cols on lg) */}
       <div className="lg:col-span-7 p-5 sm:p-7 bg-white text-slate-900 flex flex-col justify-between">
         <div>
-          {/* Top Primary Tier Switcher: Citizen vs Staff */}
+          {/* Top Primary Tier Switcher: Citizen (Default/Primary) vs Official Staff */}
           <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-xl mb-4 border border-slate-200">
-            <button
-              type="button"
-              onClick={() => {
-                clearMessages();
-                setAuthTier('STAFF');
-              }}
-              className={`py-2 px-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer touch-target ${
-                authTier === 'STAFF'
-                  ? 'bg-red-800 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <KeyRound size={14} />
-              <span>Staff Login</span>
-            </button>
             <button
               type="button"
               onClick={() => {
@@ -610,7 +639,22 @@ export default function LoginPage({ isModal = false, onClose, initialMode = 'LOG
               }`}
             >
               <Users size={14} />
-              <span>Citizen Portal</span>
+              <span>Citizen & Customer Portal</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                clearMessages();
+                setAuthTier('STAFF');
+              }}
+              className={`py-2 px-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer touch-target ${
+                authTier === 'STAFF'
+                  ? 'bg-red-800 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <KeyRound size={14} />
+              <span>Official Staff Gateway</span>
             </button>
           </div>
 
@@ -620,13 +664,52 @@ export default function LoginPage({ isModal = false, onClose, initialMode = 'LOG
           {authTier === 'CUSTOMER' && (
             <div className="space-y-4">
               <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-950 space-y-1">
-                <div className="font-bold flex items-center gap-1.5">
-                  <CheckCircle2 size={15} className="text-amber-700" />
-                  <span>Public Citizen Entry (Dual-Tier Access)</span>
+                <div className="font-bold flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle2 size={15} className="text-amber-700" />
+                    <span>Citizen Doorstep Postal & Banking Portal</span>
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-200/70 text-amber-900 px-2 py-0.5 rounded">
+                    100% Sovereign Guarantee
+                  </span>
                 </div>
                 <p className="text-[11px] text-amber-900/80">
-                  Track parcels, calculate interest, and book doorstep visits. Sign in with Google or verify via Mobile OTP.
+                  Register for doorstep services, Sukanya Samriddhi (SSY), Postal Life Insurance (PLI), SCSS pension, or IPPB banking.
                 </p>
+              </div>
+
+              {/* Sub-Switcher: Registration (First!) vs Quick Login */}
+              <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearMessages();
+                    setCustRegMode('REGISTER');
+                  }}
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    custRegMode === 'REGISTER'
+                      ? 'bg-blue-900 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <UserPlus size={13} />
+                  <span>1. New Citizen Registration</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearMessages();
+                    setCustRegMode('LOGIN');
+                  }}
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                    custRegMode === 'LOGIN'
+                      ? 'bg-blue-900 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Smartphone size={13} />
+                  <span>2. Quick Citizen Login</span>
+                </button>
               </div>
 
               {activeError && (
@@ -643,33 +726,9 @@ export default function LoginPage({ isModal = false, onClose, initialMode = 'LOG
                 </div>
               )}
 
-              {/* Google Sign In */}
-              <button
-                type="button"
-                onClick={handleCustomerGoogleSignIn}
-                className="w-full flex items-center justify-center gap-3 py-2.5 px-4 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs rounded-xl border border-slate-300 shadow-2xs transition cursor-pointer min-h-[44px]"
-              >
-                <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-4 h-4 block">
-                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
-                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
-                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
-                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
-                  <path fill="none" d="M0 0h48v48H0z"></path>
-                </svg>
-                <span>Sign in with Google Account</span>
-              </button>
-
-              <div className="relative my-3 text-center">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-200"></div>
-                </div>
-                <div className="relative inline-block px-3 bg-white text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                  OR VERIFY WITH MOBILE SMS OTP
-                </div>
-              </div>
-
-              {custOtpStep === 'DETAILS' ? (
-                <form onSubmit={handleCustomerRequestOtp} className="space-y-3">
+              {/* Citizen Registration Form (First Priority!) */}
+              {custRegMode === 'REGISTER' ? (
+                <form onSubmit={handleCustomerRegister} className="space-y-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Full Name *
@@ -683,6 +742,7 @@ export default function LoginPage({ isModal = false, onClose, initialMode = 'LOG
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white min-h-[42px]"
                     />
                   </div>
+
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       10-Digit Indian Mobile Number *
@@ -696,48 +756,209 @@ export default function LoginPage({ isModal = false, onClose, initialMode = 'LOG
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white min-h-[42px]"
                     />
                   </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Locality / Colony *
+                      </label>
+                      <select
+                        value={custRegLocality}
+                        onChange={(e) => setCustRegLocality(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white min-h-[42px]"
+                      >
+                        <option value="Dadabari Extension">Dadabari Extension (324009)</option>
+                        <option value="Keshavpura Sector 1-7">Keshavpura Sector 1-7 (324005)</option>
+                        <option value="Mahaveer Nagar Vistar">Mahaveer Nagar Vistar (324005)</option>
+                        <option value="Teachers Colony & Shastri Nagar">Teachers Colony (324009)</option>
+                        <option value="Vigyan Nagar Industrial Area">Vigyan Nagar (324005)</option>
+                        <option value="Basant Vihar Sector A-C">Basant Vihar (324009)</option>
+                        <option value="Pratap Chowk Baran">Pratap Chowk (Baran 325205)</option>
+                        <option value="Anta NTPC Township">Anta NTPC (Baran 325202)</option>
+                        <option value="Sadar Bazar Bundi">Sadar Bazar (Bundi 323001)</option>
+                        <option value="ACC Colony Lakheri">ACC Lakheri (Bundi 323803)</option>
+                        <option value="Other Hadoti Locality">Other Pan-India Locality</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Postal Pincode *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={6}
+                        value={custRegPincode}
+                        onChange={(e) => setCustRegPincode(e.target.value)}
+                        placeholder="324009"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white min-h-[42px]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Primary Service / Scheme of Interest
+                    </label>
+                    <select
+                      value={custRegScheme}
+                      onChange={(e) => setCustRegScheme(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white min-h-[42px]"
+                    >
+                      <option value="Sukanya Samriddhi Yojana (SSY)">Sukanya Samriddhi Yojana (SSY · 8.2% Tax Free)</option>
+                      <option value="Senior Citizen Savings Scheme (SCSS)">Senior Citizen Savings Scheme (SCSS · 8.2% Quarterly Pension)</option>
+                      <option value="Postal Life Insurance (PLI / RPLI)">Postal Life Insurance (PLI · Highest Bonus)</option>
+                      <option value="IPPB Digital Banking & Aadhaar ATM">IPPB Digital Banking & Aadhaar Doorstep ATM</option>
+                      <option value="Speed Post & Parcel Booking">Speed Post & Parcel Doorstep Booking</option>
+                    </select>
+                  </div>
+
                   <button
                     type="submit"
                     className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
                   >
-                    <Smartphone size={15} />
-                    <span>Send Verification SMS OTP</span>
+                    <CheckCircle2 size={15} />
+                    <span>Register Citizen Account & Proceed</span>
                   </button>
-                </form>
-              ) : (
-                <form onSubmit={handleCustomerVerifyOtp} className="space-y-3">
-                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 flex items-center justify-between">
-                    <span>Verifying +91 {custMobile}</span>
+
+                  <div className="text-center pt-1">
                     <button
                       type="button"
-                      onClick={() => setCustOtpStep('DETAILS')}
-                      className="text-red-700 underline font-bold cursor-pointer"
+                      onClick={() => setCustRegMode('LOGIN')}
+                      className="text-xs font-bold text-blue-900 hover:underline cursor-pointer"
                     >
-                      Change Number
+                      Already registered? Click here to Login
                     </button>
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Enter 6-Digit SMS OTP *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={custEnteredOtp}
-                      onChange={(e) => setCustEnteredOtp(e.target.value)}
-                      placeholder="6-Digit OTP"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 text-center tracking-widest font-black min-h-[44px]"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
-                  >
-                    <CheckCircle2 size={15} />
-                    <span>Verify OTP & Enter Citizen Portal</span>
-                  </button>
                 </form>
+              ) : (
+                /* Citizen Login Form */
+                <div className="space-y-4">
+                  {/* Google Sign In */}
+                  <button
+                    type="button"
+                    onClick={handleCustomerGoogleSignIn}
+                    className="w-full flex items-center justify-center gap-3 py-2.5 px-4 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs rounded-xl border border-slate-300 shadow-2xs transition cursor-pointer min-h-[44px]"
+                  >
+                    <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-4 h-4 block">
+                      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+                      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+                      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+                      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+                      <path fill="none" d="M0 0h48v48H0z"></path>
+                    </svg>
+                    <span>Sign in with Google Account</span>
+                  </button>
+
+                  <div className="relative my-3 text-center">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-slate-200"></div>
+                    </div>
+                    <div className="relative inline-block px-3 bg-white text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                      OR VERIFY WITH MOBILE SMS OTP
+                    </div>
+                  </div>
+
+                  {custOtpStep === 'DETAILS' ? (
+                    <form onSubmit={handleCustomerRequestOtp} className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Full Name *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={custName}
+                          onChange={(e) => setCustName(e.target.value)}
+                          placeholder="e.g. Ramesh Kumar Sharma"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white min-h-[42px]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          10-Digit Indian Mobile Number *
+                        </label>
+                        <input
+                          type="tel"
+                          required
+                          value={custMobile}
+                          onChange={(e) => setCustMobile(e.target.value)}
+                          placeholder="e.g. 9829012345"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white min-h-[42px]"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+                      >
+                        <Smartphone size={15} />
+                        <span>Send Verification SMS OTP</span>
+                      </button>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleCustomerVerifyOtp} className="space-y-3">
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 flex items-center justify-between">
+                        <span>Verifying +91 {custMobile}</span>
+                        <button
+                          type="button"
+                          onClick={() => setCustOtpStep('DETAILS')}
+                          className="text-red-700 underline font-bold cursor-pointer"
+                        >
+                          Change Number
+                        </button>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Enter 6-Digit SMS OTP *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={custEnteredOtp}
+                          onChange={(e) => setCustEnteredOtp(e.target.value)}
+                          placeholder="6-Digit OTP"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 text-center tracking-widest font-black min-h-[44px]"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
+                      >
+                        <CheckCircle2 size={15} />
+                        <span>Verify OTP & Enter Citizen Portal</span>
+                      </button>
+                    </form>
+                  )}
+
+                  <div className="text-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setCustRegMode('REGISTER')}
+                      className="text-xs font-bold text-blue-900 hover:underline cursor-pointer"
+                    >
+                      New User? Click here to Register
+                    </button>
+                  </div>
+                </div>
               )}
+
+              {/* Discrete Staff Link only visible at the bottom */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                <span className="text-slate-400">Department of Posts · India Post</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearMessages();
+                    setAuthTier('STAFF');
+                  }}
+                  className="text-slate-400 hover:text-slate-700 font-semibold flex items-center gap-1 transition cursor-pointer"
+                  title="Official Departmental Staff Gateway (Restricted Access)"
+                >
+                  <Lock size={11} className="text-slate-400" />
+                  <span>Authorized Staff Gateway →</span>
+                </button>
+              </div>
             </div>
           )}
 
@@ -1147,6 +1368,20 @@ export default function LoginPage({ isModal = false, onClose, initialMode = 'LOG
                     {presetsList}
                   </div>
                 )}
+
+                <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                  <span className="text-[11px] text-slate-400">Authorized Personnel Only</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearMessages();
+                      setAuthTier('CUSTOMER');
+                    }}
+                    className="text-xs font-bold text-amber-700 hover:text-amber-800 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>← Return to Public Citizen Portal</span>
+                  </button>
+                </div>
               </div>
             </>
           )}

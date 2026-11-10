@@ -293,6 +293,7 @@ export default function UnifiedCrmMasterHub() {
   const [hadotiPostOfficeName, setHadotiPostOfficeName] = useState('Dadabari S.O.');
   const [hadotiLat, setHadotiLat] = useState('25.1432');
   const [hadotiLng, setHadotiLng] = useState('75.8234');
+  const [hadotiSubSectors, setHadotiSubSectors] = useState('Sector 1, Sector 2, Pocket A');
   const [hadotiAssignedBeat, setHadotiAssignedBeat] = useState('Beat 2');
   const [hadotiStatusMessage, setHadotiStatusMessage] = useState<{ success: boolean; text: string } | null>(null);
   const [inlineBeatEditId, setInlineBeatEditId] = useState<string | null>(null);
@@ -392,13 +393,21 @@ export default function UnifiedCrmMasterHub() {
 
     const latNum = parseFloat(hadotiLat) || 25.1432;
     const lngNum = parseFloat(hadotiLng) || 75.8234;
+    const subSectorsList = hadotiSubSectors.trim()
+      ? hadotiSubSectors.split(',').map((s) => s.trim()).filter(Boolean)
+      : undefined;
 
     const res = masterDataService.addColonyMasterRecord({
       colonyName: hadotiColonyName.trim(),
       pincode: hadotiPincode.trim(),
       division: hadotiDivision,
       postOfficeName: hadotiPostOfficeName.trim(),
-      geoTag: { lat: latNum, lng: lngNum },
+      subSectors: subSectorsList,
+      geoTag: {
+        lat: latNum,
+        lng: lngNum,
+        googleMapsUrl: `https://www.google.com/maps?q=${latNum},${lngNum}`,
+      },
       assignedBeat: hadotiAssignedBeat.trim() ? hadotiAssignedBeat.trim() : undefined,
     });
 
@@ -1367,6 +1376,19 @@ export default function UnifiedCrmMasterHub() {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Sub-Sectors / Pockets (Comma separated)
+                  </label>
+                  <input
+                    type="text"
+                    value={hadotiSubSectors}
+                    onChange={(e) => setHadotiSubSectors(e.target.value)}
+                    placeholder="e.g. Sector 1, Sector 2, Pocket A"
+                    className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
                     Assigned Postal Beat (Optional)
                   </label>
                   <input
@@ -1628,6 +1650,20 @@ export default function UnifiedCrmMasterHub() {
                           )}
                         </div>
                       </div>
+
+                      {col.subSectors && col.subSectors.length > 0 && (
+                        <div className="mt-2.5 pt-2 border-t border-slate-50 flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase">Sub-Sectors:</span>
+                          {col.subSectors.map((sec, idx) => (
+                            <span
+                              key={idx}
+                              className="text-[10px] font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200"
+                            >
+                              {sec}
+                            </span>
+                          ))}
+                        </div>
+                      )}
 
                       <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
                         <span className="font-mono">ID: {col.id}</span>

@@ -12,6 +12,10 @@
 
 import { StaffProfile, DailyArticleEntry, Customer } from '../types/models';
 import { CustomerSession } from './customerAuthService';
+import { StaffMember, getMaskedStaffProfile } from '../utils/securityUtils';
+
+export type { StaffMember };
+export { getMaskedStaffProfile };
 
 export type SecurityClearanceLevel = 'PUBLIC' | 'CUSTOMER' | 'STAFF' | 'ADMIN';
 
@@ -23,6 +27,12 @@ export interface ClearanceContext {
 }
 
 class DataClearanceSanitizer {
+  /**
+   * Masks sensitive personal staff info if viewer is not MASTER_ADMIN / ADMIN
+   */
+  public getMaskedStaffProfile(targetStaff: StaffMember, viewerRole: string) {
+    return getMaskedStaffProfile(targetStaff, viewerRole);
+  }
   /**
    * Resolves current clearance level from active staff or customer sessions
    */

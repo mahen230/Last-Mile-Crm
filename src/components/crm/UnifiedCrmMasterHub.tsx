@@ -26,9 +26,14 @@ import {
   Home,
   Briefcase,
   Landmark,
+  Globe,
+  Navigation,
+  ExternalLink,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { staffPermissionService } from '../../services/staffPermissionService';
+import { masterDataService } from '../../services/masterDataService';
+import { ColonyMasterRecord } from '../../types/models';
 
 import { UPDATED_STAFF_LIST } from '../../data/updatedStaffData';
 
@@ -274,7 +279,24 @@ export default function UnifiedCrmMasterHub() {
   });
 
   // Active View Tab
-  const [activeTab, setActiveTab] = useState<'colonies' | 'customers' | 'bulk'>('colonies');
+  const [activeTab, setActiveTab] = useState<'colonies' | 'division-colonies' | 'customers' | 'bulk'>('colonies');
+
+  // Hadoti Division Colony Master State (Kota, Baran, Bundi)
+  const [divisionColonies, setDivisionColonies] = useState<ColonyMasterRecord[]>(() =>
+    masterDataService.getColonyMasterRecords()
+  );
+  const [divisionFilter, setDivisionFilter] = useState<'ALL' | 'KOTA' | 'BARAN' | 'BUNDI' | 'PENDING'>('ALL');
+  const [divisionSearch, setDivisionSearch] = useState('');
+  const [hadotiColonyName, setHadotiColonyName] = useState('');
+  const [hadotiPincode, setHadotiPincode] = useState('324009');
+  const [hadotiDivision, setHadotiDivision] = useState<'KOTA' | 'BARAN' | 'BUNDI'>('KOTA');
+  const [hadotiPostOfficeName, setHadotiPostOfficeName] = useState('Dadabari S.O.');
+  const [hadotiLat, setHadotiLat] = useState('25.1432');
+  const [hadotiLng, setHadotiLng] = useState('75.8234');
+  const [hadotiAssignedBeat, setHadotiAssignedBeat] = useState('Beat 2');
+  const [hadotiStatusMessage, setHadotiStatusMessage] = useState<{ success: boolean; text: string } | null>(null);
+  const [inlineBeatEditId, setInlineBeatEditId] = useState<string | null>(null);
+  const [inlineBeatValue, setInlineBeatValue] = useState('');
 
   // Delivery Office Filter (Core User Request)
   const [selectedOfficeFilter, setSelectedOfficeFilter] = useState<string>('Dadabari S.O.');
@@ -327,6 +349,109 @@ export default function UnifiedCrmMasterHub() {
       // ignore
     }
   }, [customers]);
+
+  // MasterDataService subscription for Hadoti Division Colonies
+  useEffect(() => {
+    const unsub = masterDataService.subscribe(() => {
+      setDivisionColonies(masterDataService.getColonyMasterRecords());
+    });
+    return () => unsub();
+  }, []);
+
+  // Filtered Hadoti Division Colonies
+  const filteredDivisionColonies = useMemo(() => {
+    return divisionColonies.filter((c) => {
+      if (divisionFilter === 'KOTA' && c.division !== 'KOTA') return false;
+      if (divisionFilter === 'BARAN' && c.division !== 'BARAN') return false;
+      if (divisionFilter === 'BUNDI' && c.division !== 'BUNDI') return false;
+      if (divisionFilter === 'PENDING' && c.status !== 'PENDING_BEAT_MAPPING') return false;
+
+      if (divisionSearch.trim()) {
+        const q = divisionSearch.toLowerCase().trim();
+        const matchName = c.colonyName.toLowerCase().includes(q);
+        const matchPin = c.pincode.includes(q);
+        const matchPo = c.postOfficeName.toLowerCase().includes(q);
+        const matchBeat = (c.assignedBeat || '').toLowerCase().includes(q);
+        if (!matchName && !matchPin && !matchPo && !matchBeat) return false;
+      }
+      return true;
+    });
+  }, [divisionColonies, divisionFilter, divisionSearch]);
+
+  const handleRegisterHadotiColony = (e: React.FormEvent) => {
+    e.preventDefault();
+    setHadotiStatusMessage(null);
+
+    if (!hadotiColonyName.trim() || !hadotiPincode.trim() || !hadotiPostOfficeName.trim()) {
+      setHadotiStatusMessage({
+        success: false,
+        text: 'Colony name, Pincode, and Post Office are mandatory fields.',
+      });
+      return;
+    }
+
+    const latNum = parseFloat(hadotiLat) || 25.1432;
+    const lngNum = parseFloat(hadotiLng) || 75.8234;
+
+    const res = masterDataService.addColonyMasterRecord({
+      colonyName: hadotiColonyName.trim(),
+      pincode: hadotiPincode.trim(),
+      division: hadotiDivision,
+      postOfficeName: hadotiPostOfficeName.trim(),
+      geoTag: { lat: latNum, lng: lngNum },
+      assignedBeat: hadotiAssignedBeat.trim() ? hadotiAssignedBeat.trim() : undefined,
+    });
+
+    if (res.success) {
+      setHadotiStatusMessage({ success: true, text: res.message });
+      setHadotiColonyName('');
+      showSuccessNotification(res.message);
+    } else {
+      setHadotiStatusMessage({ success: false, text: res.message });
+    }
+  };
+
+  const handleUpdateHadotiBeat = (id: string, beatValue: string) => {
+    const success = masterDataService.updateColonyMasterRecord(id, {
+      assignedBeat: beatValue.trim() || undefined,
+    });
+    if (success) {
+      setInlineBeatEditId(null);
+      setInlineBeatValue('');
+      showSuccessNotification('Beat assignment updated successfully!');
+    }
+  };
+
+  const handleDeleteHadotiColony = (id: string, name: string) => {
+    if (window.confirm(`Are you sure you want to remove "${name}" from Hadoti Master Database?`)) {
+      const deleted = masterDataService.deleteColonyMasterRecord(id);
+      if (deleted) {
+        showSuccessNotification(`Colony "${name}" deleted.`);
+      }
+    }
+  };
+
+  const handleExportHadotiColonies = () => {
+    const rows = divisionColonies.map((c) => ({
+      'Record ID': c.id,
+      'Colony Name': c.colonyName,
+      'Division': c.division,
+      'Postal Pincode': c.pincode,
+      'Registered Post Office': c.postOfficeName,
+      'Latitude': c.geoTag.lat,
+      'Longitude': c.geoTag.lng,
+      'Assigned Beat': c.assignedBeat || 'PENDING_ASSIGNMENT',
+      'Status': c.status,
+      'Registration Date': c.createdAt,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Hadoti_Colony_Master');
+    XLSX.writeFile(
+      wb,
+      `Hadoti_Colony_Master_Kota_Baran_Bundi_${new Date().toISOString().split('T')[0]}.xlsx`
+    );
+  };
 
   // Handle Beat Selection in Colony Form to auto-fill Postman & Staff ID
   const handleBeatChange = (beat: string) => {
@@ -765,6 +890,17 @@ export default function UnifiedCrmMasterHub() {
           <span>Colony & Sector Mapping ({colonies.length})</span>
         </button>
         <button
+          onClick={() => setActiveTab('division-colonies')}
+          className={`px-4 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition cursor-pointer whitespace-nowrap ${
+            activeTab === 'division-colonies'
+              ? 'bg-blue-900 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <Map size={16} />
+          <span>Hadoti Division Colony Master (Kota • Baran • Bundi) ({divisionColonies.length})</span>
+        </button>
+        <button
           onClick={() => setActiveTab('customers')}
           className={`px-4 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition cursor-pointer whitespace-nowrap ${
             activeTab === 'customers'
@@ -1066,6 +1202,441 @@ export default function UnifiedCrmMasterHub() {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hadoti Division Colony Master Tab (Kota, Baran, Bundi) */}
+      {activeTab === 'division-colonies' && (
+        <div className="space-y-6">
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs">
+              <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Hadoti</div>
+              <div className="text-xl font-black text-slate-900 mt-0.5">{divisionColonies.length} Colonies</div>
+              <div className="text-[10px] text-slate-500 font-medium mt-0.5">3 Divisions Master</div>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-blue-200/90 shadow-xs">
+              <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">Kota Division</div>
+              <div className="text-xl font-black text-blue-900 mt-0.5">
+                {divisionColonies.filter((c) => c.division === 'KOTA').length} Colonies
+              </div>
+              <div className="text-[10px] text-blue-600 font-medium mt-0.5">PIN 324xxx Belts</div>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-amber-200/90 shadow-xs">
+              <div className="text-[11px] font-bold text-amber-600 uppercase tracking-wider">Baran Division</div>
+              <div className="text-xl font-black text-amber-900 mt-0.5">
+                {divisionColonies.filter((c) => c.division === 'BARAN').length} Colonies
+              </div>
+              <div className="text-[10px] text-amber-600 font-medium mt-0.5">PIN 325xxx Belts</div>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-emerald-200/90 shadow-xs">
+              <div className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">Bundi Division</div>
+              <div className="text-xl font-black text-emerald-900 mt-0.5">
+                {divisionColonies.filter((c) => c.division === 'BUNDI').length} Colonies
+              </div>
+              <div className="text-[10px] text-emerald-600 font-medium mt-0.5">PIN 323xxx Belts</div>
+            </div>
+            <div className="bg-white p-4 rounded-2xl border border-rose-200/90 shadow-xs col-span-2 sm:col-span-1">
+              <div className="text-[11px] font-bold text-rose-600 uppercase tracking-wider">Pending Mapping</div>
+              <div className="text-xl font-black text-rose-700 mt-0.5">
+                {divisionColonies.filter((c) => c.status === 'PENDING_BEAT_MAPPING').length} Records
+              </div>
+              <div className="text-[10px] text-rose-600 font-medium mt-0.5">Awaiting Beat Allocation</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column: Register Colony to Hadoti Master */}
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200/90 lg:col-span-1 h-fit sticky top-6">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
+                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-indigo-600" />
+                  <span>Register Colony to Master</span>
+                </h2>
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100">
+                  Duplication Guard
+                </span>
+              </div>
+
+              <form onSubmit={handleRegisterHadotiColony} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Colony / Locality Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={hadotiColonyName}
+                    onChange={(e) => setHadotiColonyName(e.target.value)}
+                    placeholder="e.g. Dadabari Extension / Pratap Chowk"
+                    className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Division <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={hadotiDivision}
+                      onChange={(e) => {
+                        const div = e.target.value as 'KOTA' | 'BARAN' | 'BUNDI';
+                        setHadotiDivision(div);
+                        if (div === 'KOTA') {
+                          setHadotiPincode('324009');
+                          setHadotiPostOfficeName('Dadabari S.O.');
+                          setHadotiLat('25.1432');
+                          setHadotiLng('75.8234');
+                        } else if (div === 'BARAN') {
+                          setHadotiPincode('325205');
+                          setHadotiPostOfficeName('Baran H.O.');
+                          setHadotiLat('25.1011');
+                          setHadotiLng('76.5132');
+                        } else if (div === 'BUNDI') {
+                          setHadotiPincode('323001');
+                          setHadotiPostOfficeName('Bundi H.O.');
+                          setHadotiLat('25.4410');
+                          setHadotiLng('75.6420');
+                        }
+                      }}
+                      className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="KOTA">Kota Division</option>
+                      <option value="BARAN">Baran Division</option>
+                      <option value="BUNDI">Bundi Division</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Postal Pincode <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={6}
+                      value={hadotiPincode}
+                      onChange={(e) => setHadotiPincode(e.target.value)}
+                      placeholder="e.g. 324009"
+                      className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Registered Post Office <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={hadotiPostOfficeName}
+                    onChange={(e) => setHadotiPostOfficeName(e.target.value)}
+                    placeholder="e.g. Dadabari S.O., Kota H.O., Baran H.O."
+                    className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Latitude</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={hadotiLat}
+                      onChange={(e) => setHadotiLat(e.target.value)}
+                      placeholder="e.g. 25.1432"
+                      className="w-full text-xs font-mono px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Longitude</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={hadotiLng}
+                      onChange={(e) => setHadotiLng(e.target.value)}
+                      placeholder="e.g. 75.8234"
+                      className="w-full text-xs font-mono px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Assigned Postal Beat (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={hadotiAssignedBeat}
+                    onChange={(e) => setHadotiAssignedBeat(e.target.value)}
+                    placeholder="e.g. Beat 2 (Leave empty if unassigned)"
+                    className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <div className="mt-1.5 p-2 rounded-lg bg-slate-50 border border-slate-200 text-[11px] flex items-center justify-between">
+                    <span className="text-slate-500">Auto Status Preview:</span>
+                    {hadotiAssignedBeat.trim() ? (
+                      <span className="px-2 py-0.5 rounded font-bold bg-emerald-100 text-emerald-800 text-[10px]">
+                        ACTIVE (Beat Assigned)
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded font-bold bg-amber-100 text-amber-800 text-[10px]">
+                        PENDING_BEAT_MAPPING
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {hadotiStatusMessage && (
+                  <div
+                    className={`p-3 rounded-xl text-xs font-medium border flex items-start gap-2 ${
+                      hadotiStatusMessage.success
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        : 'bg-rose-50 text-rose-800 border-rose-200'
+                    }`}
+                  >
+                    {hadotiStatusMessage.success ? (
+                      <CheckCircle2 size={16} className="shrink-0 text-emerald-600 mt-0.5" />
+                    ) : (
+                      <AlertTriangle size={16} className="shrink-0 text-rose-600 mt-0.5" />
+                    )}
+                    <span>{hadotiStatusMessage.text}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 bg-blue-900 hover:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Plus size={16} />
+                  <span>Register Colony to Master</span>
+                </button>
+              </form>
+            </div>
+
+            {/* Right Column: Master Records Directory */}
+            <div className="lg:col-span-2 space-y-4">
+              {/* Filter & Search Toolbar */}
+              <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
+                  <button
+                    onClick={() => setDivisionFilter('ALL')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      divisionFilter === 'ALL'
+                        ? 'bg-blue-900 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    All ({divisionColonies.length})
+                  </button>
+                  <button
+                    onClick={() => setDivisionFilter('KOTA')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      divisionFilter === 'KOTA'
+                        ? 'bg-blue-700 text-white shadow-xs'
+                        : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                    }`}
+                  >
+                    Kota ({divisionColonies.filter((c) => c.division === 'KOTA').length})
+                  </button>
+                  <button
+                    onClick={() => setDivisionFilter('BARAN')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      divisionFilter === 'BARAN'
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                    }`}
+                  >
+                    Baran ({divisionColonies.filter((c) => c.division === 'BARAN').length})
+                  </button>
+                  <button
+                    onClick={() => setDivisionFilter('BUNDI')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      divisionFilter === 'BUNDI'
+                        ? 'bg-emerald-700 text-white shadow-xs'
+                        : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                    }`}
+                  >
+                    Bundi ({divisionColonies.filter((c) => c.division === 'BUNDI').length})
+                  </button>
+                  <button
+                    onClick={() => setDivisionFilter('PENDING')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      divisionFilter === 'PENDING'
+                        ? 'bg-rose-700 text-white shadow-xs'
+                        : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+                    }`}
+                  >
+                    Pending Mapping ({divisionColonies.filter((c) => c.status === 'PENDING_BEAT_MAPPING').length})
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <div className="relative flex-1 sm:w-60">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      value={divisionSearch}
+                      onChange={(e) => setDivisionSearch(e.target.value)}
+                      placeholder="Search colony, PIN, post office..."
+                      className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <button
+                    onClick={handleExportHadotiColonies}
+                    title="Export to Excel"
+                    className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl transition cursor-pointer shrink-0"
+                  >
+                    <Download size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Colony Cards Grid */}
+              <div className="space-y-3">
+                {filteredDivisionColonies.length === 0 ? (
+                  <div className="p-8 text-center bg-white rounded-2xl border border-slate-200 text-slate-500">
+                    <MapPin className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="text-xs font-bold">No colony records found matching your filters.</p>
+                  </div>
+                ) : (
+                  filteredDivisionColonies.map((col) => (
+                    <div
+                      key={col.id}
+                      className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs hover:border-slate-300 transition"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2 pb-2 border-b border-slate-100">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-sm text-slate-900">{col.colonyName}</span>
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                              col.division === 'KOTA'
+                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                : col.division === 'BARAN'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            }`}
+                          >
+                            {col.division} DIVISION
+                          </span>
+                          <span className="text-xs font-mono font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                            PIN {col.pincode}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              col.status === 'ACTIVE'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                            }`}
+                          >
+                            {col.status === 'ACTIVE' ? 'ACTIVE BEAT' : 'PENDING BEAT MAPPING'}
+                          </span>
+                          <button
+                            onClick={() => handleDeleteHadotiColony(col.id, col.colonyName)}
+                            title="Delete Colony Record"
+                            className="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3 text-xs text-slate-600">
+                        <div>
+                          <span className="text-slate-400 block text-[10px] uppercase font-semibold">Post Office</span>
+                          <span className="font-semibold text-slate-800 flex items-center gap-1 mt-0.5">
+                            <Building2 size={13} className="text-slate-400 shrink-0" />
+                            {col.postOfficeName}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-slate-400 block text-[10px] uppercase font-semibold">Geo-Tag (Lat/Lng)</span>
+                          <a
+                            href={`https://www.google.com/maps?q=${col.geoTag.lat},${col.geoTag.lng}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono text-indigo-600 hover:underline flex items-center gap-1 mt-0.5"
+                            title="Open in Google Maps"
+                          >
+                            <Navigation size={12} className="shrink-0" />
+                            {col.geoTag.lat.toFixed(4)}, {col.geoTag.lng.toFixed(4)}
+                            <ExternalLink size={11} className="opacity-70" />
+                          </a>
+                        </div>
+
+                        <div>
+                          <span className="text-slate-400 block text-[10px] uppercase font-semibold">Assigned Beat</span>
+                          {inlineBeatEditId === col.id ? (
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <input
+                                type="text"
+                                value={inlineBeatValue}
+                                onChange={(e) => setInlineBeatValue(e.target.value)}
+                                placeholder="e.g. Beat 2"
+                                className="w-24 text-xs font-semibold px-2 py-0.5 border border-indigo-400 rounded focus:outline-none"
+                              />
+                              <button
+                                onClick={() => handleUpdateHadotiBeat(col.id, inlineBeatValue)}
+                                className="px-1.5 py-0.5 bg-emerald-600 text-white rounded text-[10px] font-bold"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setInlineBeatEditId(null);
+                                  setInlineBeatValue('');
+                                }}
+                                className="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded text-[10px]"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span
+                                className={`font-semibold ${
+                                  col.assignedBeat && col.assignedBeat !== 'PENDING_ASSIGNMENT'
+                                    ? 'text-slate-900'
+                                    : 'text-amber-700 font-medium italic'
+                                }`}
+                              >
+                                {col.assignedBeat && col.assignedBeat !== 'PENDING_ASSIGNMENT'
+                                  ? col.assignedBeat
+                                  : 'Pending Assignment'}
+                              </span>
+                              <button
+                                onClick={() => {
+                                  setInlineBeatEditId(col.id);
+                                  setInlineBeatValue(
+                                    col.assignedBeat && col.assignedBeat !== 'PENDING_ASSIGNMENT'
+                                      ? col.assignedBeat
+                                      : ''
+                                  );
+                                }}
+                                className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                              >
+                                Edit Beat
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                        <span className="font-mono">ID: {col.id}</span>
+                        <span>Registered: {new Date(col.createdAt).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>

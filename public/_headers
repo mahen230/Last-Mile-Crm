@@ -1,0 +1,19 @@
+/*
+  # Strict Transport Security (HSTS) - Enforce HTTPS for 2 years with preloading
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+
+  # Prevent MIME-sniffing
+  X-Content-Type-Options: nosniff
+
+  # Clickjacking Protection (Restrict framing to same origin)
+  X-Frame-Options: SAMEORIGIN
+
+  # Cross-Site Scripting Protection & Referrer Policy
+  X-XSS-Protection: 1; mode=block
+  Referrer-Policy: strict-origin-when-cross-origin
+
+  # Restrict device APIs / hardware features not needed
+  Permissions-Policy: camera=(self), geolocation=(self), microphone=(), payment=(), usb=(), display-capture=()
+
+  # Comprehensive Content Security Policy (Fintech / Government Services)
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com https://accounts.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://*.googleusercontent.com https://images.unsplash.com https://*.run.app; connect-src 'self' https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.whatsapp.com https://wa.me; frame-src 'self' https://accounts.google.com; object-src 'none'; base-uri 'self'; form-action 'self' https://api.whatsapp.com https://wa.me; upgrade-insecure-requests;

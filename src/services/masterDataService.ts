@@ -20,6 +20,8 @@ import {
   DailyArticleEntry,
   Customer,
   SpecialBillRecord,
+  ColonyMasterRecord,
+  registerColonyToMaster,
 } from '../types/models';
 import {
   FuelDailyRow,
@@ -196,6 +198,7 @@ const STORAGE_KEY_CUSTOM_BEAT_KM = 'postman_custom_beat_km_overrides_v1';
 const STORAGE_KEY_INGESTED_RECORDS = 'postman_ingested_master_records_v3';
 const STORAGE_KEY_FUEL_APPROVALS = 'postman_fuel_approvals_v1';
 const STORAGE_KEY_CUSTOM_DAILY_SCHEDULE = 'postman_custom_daily_schedule_v1';
+const STORAGE_KEY_COLONY_MASTER_RECORDS = 'postman_colony_master_records_v1';
 
 class MasterDataService {
   private uploadLogs: MasterUploadLog[] = [];
@@ -203,6 +206,7 @@ class MasterDataService {
   private ingestedRecords: IngestedMasterRecord[] = [];
   private fuelApprovals: Record<string, FuelBillApprovalRecord> = {};
   private customDayRowsOverrides: Record<string, FuelDailyRow[]> = {};
+  private colonyMasterRecords: ColonyMasterRecord[] = [];
   private listeners: (() => void)[] = [];
 
   constructor() {
@@ -242,12 +246,298 @@ class MasterDataService {
         if (rawSchedules) {
           this.customDayRowsOverrides = JSON.parse(rawSchedules);
         }
+
+        const rawColonies = localStorage.getItem(STORAGE_KEY_COLONY_MASTER_RECORDS);
+        if (rawColonies) {
+          this.colonyMasterRecords = JSON.parse(rawColonies);
+        } else {
+          this.colonyMasterRecords = this.getInitialColonyMasterRecords();
+          this.saveColonyMaster();
+        }
       }
     } catch (e) {
       console.warn('Failed to load master data upload state:', e);
       this.uploadLogs = this.getInitialUploadLogs();
       this.ingestedRecords = this.getInitialIngestedRecords();
+      this.colonyMasterRecords = this.getInitialColonyMasterRecords();
     }
+  }
+
+  private saveColonyMaster() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY_COLONY_MASTER_RECORDS, JSON.stringify(this.colonyMasterRecords));
+      }
+    } catch (e) {
+      console.warn('Failed to save colony master records:', e);
+    }
+  }
+
+  private getInitialColonyMasterRecords(): ColonyMasterRecord[] {
+    return [
+      // KOTA DIVISION
+      {
+        id: 'COL-KT-001',
+        colonyName: 'Dadabari Extension',
+        pincode: '324009',
+        division: 'KOTA',
+        postOfficeName: 'Dadabari S.O.',
+        geoTag: { lat: 25.1432, lng: 75.8234 },
+        assignedBeat: 'Beat 2',
+        status: 'ACTIVE',
+        createdAt: '2026-01-01T08:00:00.000Z',
+      },
+      {
+        id: 'COL-KT-002',
+        colonyName: 'Keshavpura Sector 1-7',
+        pincode: '324005',
+        division: 'KOTA',
+        postOfficeName: 'Keshavpura S.O.',
+        geoTag: { lat: 25.1388, lng: 75.8301 },
+        assignedBeat: 'Beat 6',
+        status: 'ACTIVE',
+        createdAt: '2026-01-02T08:00:00.000Z',
+      },
+      {
+        id: 'COL-KT-003',
+        colonyName: 'Mahaveer Nagar Vistar',
+        pincode: '324005',
+        division: 'KOTA',
+        postOfficeName: 'Mahaveer Nagar S.O.',
+        geoTag: { lat: 25.148, lng: 75.834 },
+        assignedBeat: 'Beat 5',
+        status: 'ACTIVE',
+        createdAt: '2026-01-03T08:00:00.000Z',
+      },
+      {
+        id: 'COL-KT-004',
+        colonyName: 'Teachers Colony & Shastri Nagar',
+        pincode: '324009',
+        division: 'KOTA',
+        postOfficeName: 'Dadabari S.O.',
+        geoTag: { lat: 25.145, lng: 75.821 },
+        assignedBeat: 'Beat 1',
+        status: 'ACTIVE',
+        createdAt: '2026-01-04T08:00:00.000Z',
+      },
+      {
+        id: 'COL-KT-005',
+        colonyName: 'Vigyan Nagar Industrial Area',
+        pincode: '324005',
+        division: 'KOTA',
+        postOfficeName: 'Vigyan Nagar S.O.',
+        geoTag: { lat: 25.132, lng: 75.845 },
+        assignedBeat: 'Beat 8',
+        status: 'ACTIVE',
+        createdAt: '2026-01-05T08:00:00.000Z',
+      },
+      {
+        id: 'COL-KT-006',
+        colonyName: 'Basant Vihar Sector A-C',
+        pincode: '324009',
+        division: 'KOTA',
+        postOfficeName: 'Dadabari S.O.',
+        geoTag: { lat: 25.1412, lng: 75.819 },
+        assignedBeat: 'Beat 4',
+        status: 'ACTIVE',
+        createdAt: '2026-01-06T08:00:00.000Z',
+      },
+
+      // BARAN DIVISION
+      {
+        id: 'COL-BR-001',
+        colonyName: 'Pratap Chowk & Station Road',
+        pincode: '325205',
+        division: 'BARAN',
+        postOfficeName: 'Baran H.O.',
+        geoTag: { lat: 25.1011, lng: 76.5132 },
+        assignedBeat: 'Beat 1',
+        status: 'ACTIVE',
+        createdAt: '2026-01-07T08:00:00.000Z',
+      },
+      {
+        id: 'COL-BR-002',
+        colonyName: 'Anta NTPC Township',
+        pincode: '325202',
+        division: 'BARAN',
+        postOfficeName: 'Anta S.O.',
+        geoTag: { lat: 25.1522, lng: 76.3021 },
+        assignedBeat: 'Beat 2',
+        status: 'ACTIVE',
+        createdAt: '2026-01-08T08:00:00.000Z',
+      },
+      {
+        id: 'COL-BR-003',
+        colonyName: 'Atru Kasba Market',
+        pincode: '325218',
+        division: 'BARAN',
+        postOfficeName: 'Atru S.O.',
+        geoTag: { lat: 24.882, lng: 76.654 },
+        assignedBeat: 'Beat 1',
+        status: 'ACTIVE',
+        createdAt: '2026-01-09T08:00:00.000Z',
+      },
+      {
+        id: 'COL-BR-004',
+        colonyName: 'Chhabra Gugor Fort Area',
+        pincode: '325220',
+        division: 'BARAN',
+        postOfficeName: 'Chhabra S.O.',
+        geoTag: { lat: 24.664, lng: 76.842 },
+        assignedBeat: 'Beat 3',
+        status: 'ACTIVE',
+        createdAt: '2026-01-10T08:00:00.000Z',
+      },
+      {
+        id: 'COL-BR-005',
+        colonyName: 'Shahbad Tribal Belt',
+        pincode: '325217',
+        division: 'BARAN',
+        postOfficeName: 'Shahbad S.O.',
+        geoTag: { lat: 25.184, lng: 77.173 },
+        assignedBeat: 'PENDING_ASSIGNMENT',
+        status: 'PENDING_BEAT_MAPPING',
+        createdAt: '2026-01-11T08:00:00.000Z',
+      },
+      {
+        id: 'COL-BR-006',
+        colonyName: 'Mangrol Kasba',
+        pincode: '325206',
+        division: 'BARAN',
+        postOfficeName: 'Mangrol S.O.',
+        geoTag: { lat: 25.331, lng: 76.512 },
+        assignedBeat: 'Beat 1',
+        status: 'ACTIVE',
+        createdAt: '2026-01-12T08:00:00.000Z',
+      },
+
+      // BUNDI DIVISION
+      {
+        id: 'COL-BN-001',
+        colonyName: 'Sadar Bazar & Garh Palace',
+        pincode: '323001',
+        division: 'BUNDI',
+        postOfficeName: 'Bundi H.O.',
+        geoTag: { lat: 25.441, lng: 75.642 },
+        assignedBeat: 'Beat 1',
+        status: 'ACTIVE',
+        createdAt: '2026-01-13T08:00:00.000Z',
+      },
+      {
+        id: 'COL-BN-002',
+        colonyName: 'ACC Colony & Cement Works',
+        pincode: '323803',
+        division: 'BUNDI',
+        postOfficeName: 'Lakheri S.O.',
+        geoTag: { lat: 25.662, lng: 76.171 },
+        assignedBeat: 'Beat 2',
+        status: 'ACTIVE',
+        createdAt: '2026-01-14T08:00:00.000Z',
+      },
+      {
+        id: 'COL-BN-003',
+        colonyName: 'Nainwa Town Market',
+        pincode: '323801',
+        division: 'BUNDI',
+        postOfficeName: 'Nainwa S.O.',
+        geoTag: { lat: 25.765, lng: 75.854 },
+        assignedBeat: 'Beat 1',
+        status: 'ACTIVE',
+        createdAt: '2026-01-15T08:00:00.000Z',
+      },
+      {
+        id: 'COL-BN-004',
+        colonyName: 'Keshoraipatan Temple Enclave',
+        pincode: '323601',
+        division: 'BUNDI',
+        postOfficeName: 'Keshoraipatan S.O.',
+        geoTag: { lat: 25.311, lng: 75.942 },
+        assignedBeat: 'Beat 1',
+        status: 'ACTIVE',
+        createdAt: '2026-01-16T08:00:00.000Z',
+      },
+      {
+        id: 'COL-BN-005',
+        colonyName: 'Hindoli Krishi Mandi',
+        pincode: '323023',
+        division: 'BUNDI',
+        postOfficeName: 'Hindoli S.O.',
+        geoTag: { lat: 25.578, lng: 75.498 },
+        assignedBeat: 'PENDING_ASSIGNMENT',
+        status: 'PENDING_BEAT_MAPPING',
+        createdAt: '2026-01-17T08:00:00.000Z',
+      },
+      {
+        id: 'COL-BN-006',
+        colonyName: 'Kapren Railway Station Belt',
+        pincode: '323807',
+        division: 'BUNDI',
+        postOfficeName: 'Kapren S.O.',
+        geoTag: { lat: 25.405, lng: 76.071 },
+        assignedBeat: 'Beat 1',
+        status: 'ACTIVE',
+        createdAt: '2026-01-18T08:00:00.000Z',
+      },
+    ];
+  }
+
+  public getColonyMasterRecords(): ColonyMasterRecord[] {
+    return [...this.colonyMasterRecords];
+  }
+
+  public getColoniesByDivision(division: 'KOTA' | 'BARAN' | 'BUNDI'): ColonyMasterRecord[] {
+    return this.colonyMasterRecords.filter((c) => c.division === division);
+  }
+
+  public addColonyMasterRecord(
+    newColony: Omit<ColonyMasterRecord, 'id' | 'status' | 'createdAt'>
+  ): { success: boolean; message: string; updatedColonies: ColonyMasterRecord[]; record?: ColonyMasterRecord } {
+    const result = registerColonyToMaster(this.colonyMasterRecords, newColony);
+    if (result.success) {
+      this.colonyMasterRecords = result.updatedColonies;
+      this.saveColonyMaster();
+      this.notify();
+      return {
+        ...result,
+        record: result.updatedColonies[result.updatedColonies.length - 1],
+      };
+    }
+    return result;
+  }
+
+  public updateColonyMasterRecord(id: string, updates: Partial<ColonyMasterRecord>): boolean {
+    const idx = this.colonyMasterRecords.findIndex((c) => c.id === id);
+    if (idx === -1) return false;
+    const current = this.colonyMasterRecords[idx];
+    const updated: ColonyMasterRecord = {
+      ...current,
+      ...updates,
+      id: current.id,
+    };
+    if (updates.assignedBeat !== undefined) {
+      const hasBeat = Boolean(
+        updates.assignedBeat &&
+        updates.assignedBeat.trim() !== '' &&
+        updates.assignedBeat !== 'PENDING_ASSIGNMENT'
+      );
+      updated.status = hasBeat ? 'ACTIVE' : 'PENDING_BEAT_MAPPING';
+      updated.assignedBeat = hasBeat ? updates.assignedBeat : 'PENDING_ASSIGNMENT';
+    }
+    this.colonyMasterRecords[idx] = updated;
+    this.saveColonyMaster();
+    this.notify();
+    return true;
+  }
+
+  public deleteColonyMasterRecord(id: string): boolean {
+    const beforeCount = this.colonyMasterRecords.length;
+    this.colonyMasterRecords = this.colonyMasterRecords.filter((c) => c.id !== id);
+    if (this.colonyMasterRecords.length !== beforeCount) {
+      this.saveColonyMaster();
+      this.notify();
+      return true;
+    }
+    return false;
   }
 
   private saveFuelApprovals() {
@@ -2729,6 +3019,7 @@ class MasterDataService {
       dailyArticles: operationsService.getDailyEntries(),
       ingestedRecords: this.ingestedRecords,
       uploadLogs: this.uploadLogs,
+      colonyMasterRecords: this.colonyMasterRecords,
       specialBills: operationsService.getSpecialBills(),
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });

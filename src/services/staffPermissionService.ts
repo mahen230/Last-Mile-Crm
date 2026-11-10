@@ -1674,8 +1674,8 @@ class StaffPermissionService {
               division: po.division || 'Kota Division',
               district: po.district || 'Kota',
               subDivision: po.subDivision || 'Kota West Sub-Division',
-              headOffice: po.type === 'HO' ? po.name : `${po.division || 'Kota Division'} Head Office`,
-              hoName: po.type === 'HO' ? po.name : `${po.division || 'Kota Division'} Head Office`,
+              headOffice: po.type === 'HO' ? po.name : (po.parentOffice ? po.parentOffice.split('(')[0].trim() : `${po.division || 'Kota Division'} Head Office`),
+              hoName: po.type === 'HO' ? po.name : (po.parentOffice ? po.parentOffice.split('(')[0].trim() : `${po.division || 'Kota Division'} Head Office`),
               subOffice: po.type === 'BO' ? po.parentOffice.replace(/\(\d+\)/, '').trim() : po.name,
               soName: po.type === 'BO' ? po.parentOffice.replace(/\(\d+\)/, '').trim() : po.name,
               branchOffice: po.type === 'BO' ? po.name : undefined,
@@ -1686,13 +1686,8 @@ class StaffPermissionService {
               mappedColonies: po.defaultColonies,
               linkedDeliveryOffices:
                 po.type === 'HO'
-                  ? [
-                      'Dadabari S.O. (324009)',
-                      'Engineering College S.O. (324010)',
-                      'Vigyan Nagar S.O. (324005)',
-                      'Gumanpura S.O. (324007)',
-                    ]
-                  : [po.parentOffice, 'Kota H.O. (324001)'],
+                  ? [`${po.name} Local Beats`, `${po.division} Delivery Hub`]
+                  : [po.parentOffice, `${po.division} Head Office`],
               coveragePercentage: 97.4,
               assignedStaffCount: Math.max(matchedStaffForOffice.length, 1),
               staffCount: Math.max(matchedStaffForOffice.length, 1),

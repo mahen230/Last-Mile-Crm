@@ -684,6 +684,64 @@ export interface ColonyBeatMapping {
   updatedAt: string;
 }
 
+export interface ColonyMasterRecord {
+  id: string;
+  colonyName: string;
+  pincode: string;
+  division: 'KOTA' | 'BARAN' | 'BUNDI';
+  postOfficeName: string; // जैसे Dadabari S.O., Kota H.O. आदि
+  geoTag: {
+    lat: number;
+    lng: number;
+  };
+  assignedBeat?: string; // यदि बीट मैप नहीं है तो 'PENDING' या undefined रहेगा
+  status: 'ACTIVE' | 'PENDING_BEAT_MAPPING';
+  createdAt: string;
+}
+
+/**
+ * नई कॉलोनी रजिस्टर करने का फंक्शन (डुप्लीकेशन प्रिवेंशन के साथ)
+ */
+export function registerColonyToMaster(
+  existingColonies: ColonyMasterRecord[],
+  newColony: Omit<ColonyMasterRecord, 'id' | 'status' | 'createdAt'>
+): { success: boolean; message: string; updatedColonies: ColonyMasterRecord[] } {
+  // 1. नाम और पिनकोड की डुप्लीकेशन जाँच (Case-insensitive check)
+  const normalizedNewName = newColony.colonyName.trim().toLowerCase();
+  const isDuplicate = existingColonies.some(
+    (c) => c.colonyName.trim().toLowerCase() === normalizedNewName && c.pincode === newColony.pincode
+  );
+
+  if (isDuplicate) {
+    return {
+      success: false,
+      message: `Error: Colony "${newColony.colonyName}" with PIN ${newColony.pincode} already exists in the Master Database!`,
+      updatedColonies: existingColonies,
+    };
+  }
+
+  // 2. बीट मैपिंग पेंडिंग चेक
+  const hasBeat = Boolean(newColony.assignedBeat && newColony.assignedBeat.trim() !== '' && newColony.assignedBeat !== 'PENDING_ASSIGNMENT');
+  const status = hasBeat ? 'ACTIVE' : 'PENDING_BEAT_MAPPING';
+
+  const colonyRecord: ColonyMasterRecord = {
+    id: `COL-${Date.now().toString(36).toUpperCase()}`,
+    ...newColony,
+    colonyName: newColony.colonyName.trim(),
+    assignedBeat: hasBeat ? newColony.assignedBeat : 'PENDING_ASSIGNMENT',
+    status,
+    createdAt: new Date().toISOString(),
+  };
+
+  return {
+    success: true,
+    message: hasBeat
+      ? `Colony "${colonyRecord.colonyName}" successfully registered with Geo-Tag & Beat Map!`
+      : `Colony "${colonyRecord.colonyName}" registered successfully! Beat mapping kept as PENDING.`,
+    updatedColonies: [...existingColonies, colonyRecord],
+  };
+}
+
 export interface StaffPermission {
   canCreateCustomer: boolean;
   canEditCustomer: boolean;
@@ -877,4 +935,9 @@ export interface FieldTask {
   linkedLeadStage?: string;
   linkType?: 'CUSTOMER' | 'LEAD' | 'HOUSEHOLD' | 'NONE';
 }
+
+// Re-export Staff Privacy & RBAC Masking models
+export type { StaffMember, StaffPersonalInfo } from '../utils/securityUtils';
+export { getMaskedStaffProfile } from '../utils/securityUtils';
+
 

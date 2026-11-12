@@ -46,6 +46,7 @@ import CustomerProfileModal from './customers/CustomerProfileModal';
 import AddCustomerModal from './customers/AddCustomerModal';
 import PostmanAllDayArticlesOverview from './postman/PostmanAllDayArticlesOverview';
 import OfficialStaffDocumentsHub from './crm/OfficialStaffDocumentsHub';
+import DailyOperationsHub from './crm/DailyOperationsHub';
 
 export default function Dashboard({
   onSwitchToCustomerPortal,
@@ -55,8 +56,8 @@ export default function Dashboard({
   const { userProfile } = useAuth();
   const navigate = useNavigate();
 
-  const [postmanActiveTab, setPostmanActiveTab] = useState<'ALL_DAY_ARTICLES' | 'CRM_FIELD' | 'OFFICIAL_DOCUMENTS'>('ALL_DAY_ARTICLES');
-  const [adminShowAllDayHub, setAdminShowAllDayHub] = useState<'CRM' | 'ALL_DAY_ARTICLES' | 'OFFICIAL_DOCUMENTS'>('CRM');
+  const [postmanActiveTab, setPostmanActiveTab] = useState<'OPERATIONS_HUB' | 'ALL_DAY_ARTICLES' | 'CRM_FIELD' | 'OFFICIAL_DOCUMENTS'>('OPERATIONS_HUB');
+  const [adminShowAllDayHub, setAdminShowAllDayHub] = useState<'OPERATIONS_HUB' | 'CRM' | 'ALL_DAY_ARTICLES' | 'OFFICIAL_DOCUMENTS'>('OPERATIONS_HUB');
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -601,6 +602,20 @@ export default function Dashboard({
 
                 <button
                   type="button"
+                  onClick={() => setAdminShowAllDayHub(adminShowAllDayHub === 'OPERATIONS_HUB' ? 'CRM' : 'OPERATIONS_HUB')}
+                  className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap ${
+                    adminShowAllDayHub === 'OPERATIONS_HUB'
+                      ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300'
+                      : 'bg-red-950 hover:bg-red-900 text-amber-300 border border-amber-400/40'
+                  }`}
+                  title="Daily Operations Hub & Fuel Reconciliation"
+                >
+                  <Package size={15} />
+                  <span>{adminShowAllDayHub === 'OPERATIONS_HUB' ? 'View Full CRM Grid' : 'Operations Hub & Fuel'}</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setAdminShowAllDayHub(adminShowAllDayHub === 'ALL_DAY_ARTICLES' ? 'CRM' : 'ALL_DAY_ARTICLES')}
                   className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap ${
                     adminShowAllDayHub === 'ALL_DAY_ARTICLES'
@@ -724,13 +739,35 @@ export default function Dashboard({
                   type="button"
                   onClick={() =>
                     setPostmanActiveTab(
+                      postmanActiveTab === 'OPERATIONS_HUB' ? 'CRM_FIELD' : 'OPERATIONS_HUB'
+                    )
+                  }
+                  className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm ${
+                    postmanActiveTab === 'OPERATIONS_HUB'
+                      ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300'
+                      : 'bg-red-950 text-amber-300 border border-amber-400/50 hover:bg-red-900'
+                  }`}
+                  title="Daily Operations Hub & Fuel Reconciliation"
+                >
+                  <Package size={15} />
+                  <span>
+                    {postmanActiveTab === 'OPERATIONS_HUB'
+                      ? 'View Field CRM'
+                      : '★ Operations Hub & Fuel'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPostmanActiveTab(
                       postmanActiveTab === 'ALL_DAY_ARTICLES' ? 'CRM_FIELD' : 'ALL_DAY_ARTICLES'
                     )
                   }
                   className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm ${
                     postmanActiveTab === 'ALL_DAY_ARTICLES'
                       ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300'
-                      : 'bg-red-950 text-amber-300 border border-amber-400/50 hover:bg-red-900'
+                      : 'bg-blue-900 text-white hover:bg-blue-800'
                   }`}
                   title="Toggle All-Day Article Delivery Overview & Monthly Fuel Sheet"
                 >
@@ -738,7 +775,7 @@ export default function Dashboard({
                   <span>
                     {postmanActiveTab === 'ALL_DAY_ARTICLES'
                       ? 'View Field CRM'
-                      : '★ All-Day Articles & Fuel'}
+                      : 'All-Day Articles'}
                   </span>
                 </button>
 
@@ -760,7 +797,7 @@ export default function Dashboard({
                   <span>
                     {postmanActiveTab === 'OFFICIAL_DOCUMENTS'
                       ? 'View Field CRM'
-                      : '📑 Official Documents Hub'}
+                      : 'Official Docs'}
                   </span>
                 </button>
 
@@ -847,6 +884,24 @@ export default function Dashboard({
             >
               ✕
             </button>
+          </div>
+        )}
+
+        {/* Module 3: Daily Operations Hub & Fuel Reconciliation (For Postman or Admin toggled) */}
+        {((!isAdmin && postmanActiveTab === 'OPERATIONS_HUB') || (isAdmin && adminShowAllDayHub === 'OPERATIONS_HUB')) && (
+          <div className="p-4 sm:p-6 bg-slate-950 border-b border-slate-800">
+            <DailyOperationsHub
+              onOpenCustomerModal={(c) => setSelectedCustomer(c)}
+              onOpenLeadModal={(l) => {
+                setSelectedLeadForModal(l);
+                setLeadModalStage(l.stage);
+                setLeadModalNotes(l.notes || '');
+              }}
+              onNavigateToFullLog={() => {
+                if (isAdmin) setAdminShowAllDayHub('ALL_DAY_ARTICLES');
+                else setPostmanActiveTab('ALL_DAY_ARTICLES');
+              }}
+            />
           </div>
         )}
 

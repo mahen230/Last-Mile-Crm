@@ -3,6 +3,7 @@ import { User, onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from 'f
 import { auth, googleWorkspaceProvider } from '../../lib/firebase';
 import { setInMemoryAccessToken } from '../../lib/google-workspace';
 import { staffPermissionService } from '../../services/staffPermissionService';
+import { clearUserSession } from '../../services/authSecurityService';
 import { StaffProfile } from '../../types/models';
 
 interface AuthContextType {
@@ -318,6 +319,9 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
     try {
       localStorage.removeItem('postman_auth');
     } catch {}
+    if (userProfile?.employeeId || userProfile?.email) {
+      clearUserSession(userProfile.employeeId || userProfile.email);
+    }
     setInMemoryAccessToken(null);
     staffPermissionService.setActiveSession(null);
     setUser(null);

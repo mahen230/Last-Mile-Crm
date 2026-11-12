@@ -25,6 +25,10 @@ import {
   registerOrUpdateUniqueColony,
 } from '../types/models';
 import {
+  registerOrUpdateColonyWithGovernance,
+  deleteColonyMasterRecord as deleteColonyGovernance,
+} from './colonyGovernanceService';
+import {
   FuelDailyRow,
   downloadOfficialFuelBillPDF,
   formatIsoToDDMMYYYY,
@@ -83,6 +87,7 @@ export interface PostmanMonthlyFuelSummary {
   totalParcelsDelivered: number;
   totalArticlesDelivered: number;
   pmaDeliveryRate: number;
+  averageDeliveryPercentage?: number;
   dssSheetCount: number;
   isFullyReconciled: boolean;
   territorialCoverage?: string;
@@ -280,6 +285,7 @@ class MasterDataService {
       {
         id: 'COL-KT-001',
         colonyName: 'Dadabari Extension',
+        entityType: 'Residential Colony',
         pincode: '324009',
         division: 'KOTA',
         postOfficeName: 'Dadabari S.O.',
@@ -296,6 +302,7 @@ class MasterDataService {
       {
         id: 'COL-KT-002',
         colonyName: 'Keshavpura Sector 1-7',
+        entityType: 'Residential Colony',
         pincode: '324005',
         division: 'KOTA',
         postOfficeName: 'Keshavpura S.O.',
@@ -312,6 +319,7 @@ class MasterDataService {
       {
         id: 'COL-KT-003',
         colonyName: 'Mahaveer Nagar Vistar',
+        entityType: 'Residential Colony',
         pincode: '324005',
         division: 'KOTA',
         postOfficeName: 'Mahaveer Nagar S.O.',
@@ -328,6 +336,7 @@ class MasterDataService {
       {
         id: 'COL-KT-004',
         colonyName: 'Teachers Colony & Shastri Nagar',
+        entityType: 'Residential Colony',
         pincode: '324009',
         division: 'KOTA',
         postOfficeName: 'Dadabari S.O.',
@@ -344,6 +353,7 @@ class MasterDataService {
       {
         id: 'COL-KT-005',
         colonyName: 'Vigyan Nagar Industrial Area',
+        entityType: 'Commercial Complex',
         pincode: '324005',
         division: 'KOTA',
         postOfficeName: 'Vigyan Nagar S.O.',
@@ -360,6 +370,7 @@ class MasterDataService {
       {
         id: 'COL-KT-006',
         colonyName: 'Basant Vihar Sector A-C',
+        entityType: 'Residential Colony',
         pincode: '324009',
         division: 'KOTA',
         postOfficeName: 'Dadabari S.O.',
@@ -378,6 +389,7 @@ class MasterDataService {
       {
         id: 'COL-BR-001',
         colonyName: 'Pratap Chowk & Station Road',
+        entityType: 'Specific Landmark',
         pincode: '325205',
         division: 'BARAN',
         postOfficeName: 'Baran H.O.',
@@ -394,6 +406,7 @@ class MasterDataService {
       {
         id: 'COL-BR-002',
         colonyName: 'Anta NTPC Township',
+        entityType: 'Commercial Complex',
         pincode: '325202',
         division: 'BARAN',
         postOfficeName: 'Anta S.O.',
@@ -410,6 +423,7 @@ class MasterDataService {
       {
         id: 'COL-BR-003',
         colonyName: 'Atru Kasba Market',
+        entityType: 'Commercial Complex',
         pincode: '325218',
         division: 'BARAN',
         postOfficeName: 'Atru S.O.',
@@ -426,6 +440,7 @@ class MasterDataService {
       {
         id: 'COL-BR-004',
         colonyName: 'Chhabra Gugor Fort Area',
+        entityType: 'Specific Landmark',
         pincode: '325220',
         division: 'BARAN',
         postOfficeName: 'Chhabra S.O.',
@@ -442,6 +457,7 @@ class MasterDataService {
       {
         id: 'COL-BR-005',
         colonyName: 'Shahbad Tribal Belt',
+        entityType: 'Residential Colony',
         pincode: '325217',
         division: 'BARAN',
         postOfficeName: 'Shahbad S.O.',
@@ -458,6 +474,7 @@ class MasterDataService {
       {
         id: 'COL-BR-006',
         colonyName: 'Mangrol Kasba',
+        entityType: 'Residential Colony',
         pincode: '325206',
         division: 'BARAN',
         postOfficeName: 'Mangrol S.O.',
@@ -476,6 +493,7 @@ class MasterDataService {
       {
         id: 'COL-BN-001',
         colonyName: 'Sadar Bazar & Garh Palace',
+        entityType: 'Specific Landmark',
         pincode: '323001',
         division: 'BUNDI',
         postOfficeName: 'Bundi H.O.',
@@ -492,6 +510,7 @@ class MasterDataService {
       {
         id: 'COL-BN-002',
         colonyName: 'ACC Colony & Cement Works',
+        entityType: 'Commercial Complex',
         pincode: '323803',
         division: 'BUNDI',
         postOfficeName: 'Lakheri S.O.',
@@ -508,6 +527,7 @@ class MasterDataService {
       {
         id: 'COL-BN-003',
         colonyName: 'Nainwa Town Market',
+        entityType: 'Commercial Complex',
         pincode: '323801',
         division: 'BUNDI',
         postOfficeName: 'Nainwa S.O.',
@@ -524,6 +544,7 @@ class MasterDataService {
       {
         id: 'COL-BN-004',
         colonyName: 'Keshoraipatan Temple Enclave',
+        entityType: 'Specific Landmark',
         pincode: '323601',
         division: 'BUNDI',
         postOfficeName: 'Keshoraipatan S.O.',
@@ -540,6 +561,7 @@ class MasterDataService {
       {
         id: 'COL-BN-005',
         colonyName: 'Hindoli Krishi Mandi',
+        entityType: 'Commercial Complex',
         pincode: '323023',
         division: 'BUNDI',
         postOfficeName: 'Hindoli S.O.',
@@ -556,6 +578,7 @@ class MasterDataService {
       {
         id: 'COL-BN-006',
         colonyName: 'Kapren Railway Station Belt',
+        entityType: 'Specific Landmark',
         pincode: '323807',
         division: 'BUNDI',
         postOfficeName: 'Kapren S.O.',
@@ -581,9 +604,16 @@ class MasterDataService {
   }
 
   public addColonyMasterRecord(
-    newColony: Omit<ColonyMasterRecord, 'id' | 'status' | 'createdAt'>
+    newColony: Omit<ColonyMasterRecord, 'id' | 'status' | 'createdAt'>,
+    userRole: 'MASTER_ADMIN' | 'SPM' | 'POSTMAN' | 'CUSTOMER' = 'MASTER_ADMIN',
+    userPincode: string = '324009'
   ): { success: boolean; message: string; updatedColonies: ColonyMasterRecord[]; record?: ColonyMasterRecord } {
-    const result = registerOrUpdateUniqueColony(this.colonyMasterRecords, newColony);
+    const result = registerOrUpdateColonyWithGovernance(
+      this.colonyMasterRecords,
+      newColony,
+      userRole,
+      userPincode
+    );
     if (result.success) {
       this.colonyMasterRecords = result.updatedColonies;
       this.saveColonyMaster();
@@ -595,16 +625,18 @@ class MasterDataService {
       );
       return {
         ...result,
-        record: matched || result.updatedColonies[result.updatedColonies.length - 1],
+        record: matched || result.updatedColonies[0],
       };
     }
     return result;
   }
 
   public registerOrUpdateColony(
-    newColony: Omit<ColonyMasterRecord, 'id' | 'status' | 'createdAt'>
+    newColony: Omit<ColonyMasterRecord, 'id' | 'status' | 'createdAt'>,
+    userRole: 'MASTER_ADMIN' | 'SPM' | 'POSTMAN' | 'CUSTOMER' = 'MASTER_ADMIN',
+    userPincode: string = '324009'
   ): { success: boolean; message: string; updatedColonies: ColonyMasterRecord[]; record?: ColonyMasterRecord } {
-    return this.addColonyMasterRecord(newColony);
+    return this.addColonyMasterRecord(newColony, userRole, userPincode);
   }
 
   public updateColonyMasterRecord(id: string, updates: Partial<ColonyMasterRecord>): boolean {
@@ -616,6 +648,17 @@ class MasterDataService {
       ...updates,
       id: current.id,
     };
+    if (updates.geoTag) {
+      const lat = updates.geoTag.lat !== undefined ? updates.geoTag.lat : current.geoTag.lat;
+      const lng = updates.geoTag.lng !== undefined ? updates.geoTag.lng : current.geoTag.lng;
+      const googleMapsUrl =
+        updates.geoTag.googleMapsUrl || `https://www.google.com/maps?q=${lat},${lng}`;
+      updated.geoTag = {
+        lat,
+        lng,
+        googleMapsUrl,
+      };
+    }
     if (updates.assignedBeat !== undefined) {
       const hasBeat = Boolean(
         updates.assignedBeat &&
@@ -631,10 +674,14 @@ class MasterDataService {
     return true;
   }
 
-  public deleteColonyMasterRecord(id: string): boolean {
-    const beforeCount = this.colonyMasterRecords.length;
-    this.colonyMasterRecords = this.colonyMasterRecords.filter((c) => c.id !== id);
-    if (this.colonyMasterRecords.length !== beforeCount) {
+  public deleteColonyMasterRecord(
+    id: string,
+    userRole: 'MASTER_ADMIN' | 'SPM' | 'POSTMAN' | 'CUSTOMER' = 'MASTER_ADMIN',
+    userPincode: string = '324009'
+  ): boolean {
+    const result = deleteColonyGovernance(this.colonyMasterRecords, id, userRole, userPincode);
+    if (result.success) {
+      this.colonyMasterRecords = result.updatedColonies;
       this.saveColonyMaster();
       this.notify();
       return true;
@@ -2592,6 +2639,7 @@ class MasterDataService {
         totalParcelsDelivered: sPar,
         totalArticlesDelivered: sTotal || (sSp + sReg + sPar),
         pmaDeliveryRate: 100,
+        averageDeliveryPercentage: 100,
         dssSheetCount: beatMonthEntries.length,
         isFullyReconciled: beatMonthEntries.length >= 10,
         territorialCoverage: fuelMapping.territorialCoverage,
@@ -2834,6 +2882,7 @@ class MasterDataService {
       totalParcelsDelivered: totalPar,
       totalArticlesDelivered: totalArticles,
       pmaDeliveryRate: 100,
+      averageDeliveryPercentage: 100,
       dssSheetCount: beatMonthEntries.length,
       isFullyReconciled: beatMonthEntries.length >= 10,
       territorialCoverage: fuelMapping.territorialCoverage,

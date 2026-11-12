@@ -22,6 +22,7 @@ import {
   DEFAULT_STAFF_FALLBACK_PASSWORD,
 } from '../../services/staffPermissionService';
 import { DesignationType } from '../../types/models';
+import SearchableOfficeSelect from '../common/SearchableOfficeSelect';
 
 const DESIGNATION_OPTIONS: DesignationType[] = [
   'Postman',
@@ -291,29 +292,15 @@ export default function StaffProfileModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Assigned Post Office / S.O. (Kota City)
-              </label>
-              <select
+              <SearchableOfficeSelect
                 value={subOffice}
-                onChange={(e) => {
-                  const selected = e.target.value;
-                  setSubOffice(selected);
-                  const matched = KOTA_OFFICE_MASTER_LIST.find(
-                    (o) => o.name === selected || o.name.toLowerCase().includes(selected.toLowerCase())
-                  );
-                  if (matched) {
-                    setOfficePincode(matched.pin);
-                  }
+                pincodeValue={officePincode}
+                onChange={(selected) => {
+                  setSubOffice(selected.officeName);
+                  setOfficePincode(selected.pincode);
                 }}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-700"
-              >
-                {KOTA_OFFICE_MASTER_LIST.map((po) => (
-                  <option key={po.officeId} value={po.name}>
-                    {po.name} - {po.pin}
-                  </option>
-                ))}
-              </select>
+                label="Assigned Postal Office (HO / SO / BO)"
+              />
             </div>
           </div>
 

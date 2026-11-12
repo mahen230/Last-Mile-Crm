@@ -610,6 +610,9 @@ export interface Staff {
   // Beat & Delivery Territory Mapping
   deliveryOfficeMapping?: string;
   assignedColonies?: string[];
+  assignedColoniesWithSectors?: Record<string, string[]>;
+  beatNotes?: string;
+  extraRemarks?: string;
 
   activeAccountsOpened: number;
   doorstepVisits: number;
@@ -625,6 +628,9 @@ export interface Beat {
   pincode: string;
   assignedStaffId: string;
   deliveryLocalities: string[];
+  assignedColoniesWithSectors?: Record<string, string[]>;
+  beatNotes?: string;
+  extraRemarks?: string;
   status: 'Active' | 'Inactive';
 }
 
@@ -684,9 +690,12 @@ export interface ColonyBeatMapping {
   updatedAt: string;
 }
 
+export type ColonyEntityType = 'Residential Colony' | 'Commercial Complex' | 'Specific Landmark';
+
 export interface ColonyMasterRecord {
   id: string;
   colonyName: string;       // यूनीक मुख्य कॉलोनी नाम (जैसे: Keshavpura, Basant Vihar)
+  entityType?: ColonyEntityType; // वर्गीकरण: Residential Colony, Commercial Complex, Specific Landmark
   pincode: string;          // पिनकोड (जैसे: 324009)
   division: 'KOTA' | 'BARAN' | 'BUNDI';
   postOfficeName: string;   // जैसे Dadabari S.O.
@@ -699,6 +708,26 @@ export interface ColonyMasterRecord {
   assignedBeat?: string;
   status: 'ACTIVE' | 'PENDING_BEAT_MAPPING';
   createdAt: string;
+}
+
+export type SectorLandmarkCategory =
+  | 'Temple / Religious'
+  | 'Chowk / Junction'
+  | 'Commercial / Market'
+  | 'Park / Public Spot'
+  | 'School / Hospital'
+  | 'Prominent Resident / Landmark';
+
+export interface SectorLandmarkMapping {
+  id: string;
+  colonyName: string;
+  sectorName: string;
+  landmarkName: string;
+  category?: SectorLandmarkCategory;
+  beatNo?: string;
+  pincode?: string;
+  notes?: string;
+  createdAt?: string;
 }
 
 /**
@@ -744,6 +773,7 @@ export function registerOrUpdateUniqueColony(
     updatedColonies[existingIndex] = {
       ...prev,
       ...newColony,
+      entityType: newColony.entityType || prev.entityType || 'Residential Colony',
       subSectors: mergedSubSectors.length > 0 ? mergedSubSectors : prev.subSectors,
       geoTag: geoTagWithMap,
       status: newColony.assignedBeat !== undefined ? status : prev.status,
@@ -753,16 +783,17 @@ export function registerOrUpdateUniqueColony(
     };
     return {
       success: true,
-      message: `Colony "${newColony.colonyName}" (PIN: ${newColony.pincode}) updated successfully with latest sectors & map link!`,
+      message: `Colony "${newColony.colonyName}" (PIN: ${newColony.pincode}) updated with latest sectors & geo-tag.`,
       updatedColonies,
     };
   }
 
-  // 2. नई यूनीक कॉलोनी रजिस्टर करना
+  // 2. नई यूनीक कॉलोनी जोड़ना
+  const newId = `COL-${Date.now().toString(36).toUpperCase()}`;
   const colonyRecord: ColonyMasterRecord = {
-    id: `COL-${Date.now().toString(36).toUpperCase()}`,
+    id: newId,
     ...newColony,
-    colonyName: newColony.colonyName.trim(),
+    entityType: newColony.entityType || 'Residential Colony',
     geoTag: geoTagWithMap,
     assignedBeat: hasBeat ? newColony.assignedBeat : 'PENDING_ASSIGNMENT',
     status,
@@ -771,8 +802,8 @@ export function registerOrUpdateUniqueColony(
 
   return {
     success: true,
-    message: `New unique colony "${colonyRecord.colonyName}" registered under PIN ${colonyRecord.pincode} with Google Map link!`,
-    updatedColonies: [...existingColonies, colonyRecord],
+    message: `Colony "${newColony.colonyName}" (PIN: ${newColony.pincode}) registered successfully under ${newColony.postOfficeName}.`,
+    updatedColonies: [colonyRecord, ...existingColonies],
   };
 }
 
@@ -822,6 +853,9 @@ export interface StaffProfile {
   officeAddress?: string;
   deliveryOfficeMapping?: string;
   assignedColonies?: string[];
+  assignedColoniesWithSectors?: Record<string, string[]>;
+  beatNotes?: string;
+  extraRemarks?: string;
   fixedKm?: number; // Fixed daily beat distance in KM (e.g. 18, 22, 25)
   permissions: StaffPermission;
   entriesCreatedToday: number;

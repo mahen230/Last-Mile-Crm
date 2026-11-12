@@ -480,7 +480,7 @@ export default function PostmanAllDayArticlesOverview({
 
             <div className="flex items-center gap-2 text-xs">
               <span className="px-2.5 py-1 rounded-full bg-emerald-950/80 border border-emerald-600/50 text-emerald-400 font-mono font-bold">
-                Statutory Rate: ₹{customFuelRate.toFixed(2)} / KM
+                Statutory Rate: ₹{Number(customFuelRate || 3.6).toFixed(2)} / KM
               </span>
               <span className="px-2.5 py-1 rounded-full bg-blue-950/80 border border-blue-600/50 text-blue-300 font-mono font-bold">
                 Working Days: {fuelSummary.workingDays} Days
@@ -561,7 +561,7 @@ export default function PostmanAllDayArticlesOverview({
             <div className="font-mono flex flex-wrap items-center gap-2">
               <span className="text-amber-400 font-bold">Calculation Breakdown:</span>
               <span>
-                {customWorkingDays} Days × {customDailyKm} KM/d = <strong className="text-white">{fuelSummary.totalMonthlyKm} KM</strong> × ₹{customFuelRate.toFixed(2)}/KM ={' '}
+                {customWorkingDays} Days × {customDailyKm} KM/d = <strong className="text-white">{fuelSummary.totalMonthlyKm} KM</strong> × ₹{Number(customFuelRate || 3.6).toFixed(2)}/KM ={' '}
                 <strong className="text-emerald-400 text-base font-black">
                   ₹{fuelSummary.totalClaimAmount.toLocaleString('en-IN')}.00
                 </strong>
@@ -667,7 +667,7 @@ export default function PostmanAllDayArticlesOverview({
             ₹{fuelSummary.totalClaimAmount.toLocaleString('en-IN')}
           </div>
           <div className="text-[10px] text-emerald-700 mt-0.5 font-mono">
-            {fuelSummary.totalMonthlyKm} KM @ ₹{customFuelRate.toFixed(2)}
+            {fuelSummary.totalMonthlyKm} KM @ ₹{Number(customFuelRate || 3.6).toFixed(2)}
           </div>
         </div>
 
@@ -725,7 +725,7 @@ export default function PostmanAllDayArticlesOverview({
             <div className="bg-slate-800/90 border border-slate-700/80 px-3 py-1.5 rounded-xl text-xs flex items-center gap-2">
               <span className="text-[10px] uppercase font-bold text-slate-400">Avg Delivery / PMA:</span>
               <span className="font-black text-emerald-400 font-mono">
-                {fuelSummary.averageDeliveryPercentage.toFixed(2)}%
+                {Number(fuelSummary.averageDeliveryPercentage ?? fuelSummary.pmaDeliveryRate ?? 100).toFixed(2)}%
               </span>
             </div>
 
@@ -734,7 +734,7 @@ export default function PostmanAllDayArticlesOverview({
               <span className="font-black text-emerald-300 font-mono">
                 ₹{fuelSummary.totalClaimAmount.toLocaleString('en-IN')}
               </span>
-              <span className="text-[10px] text-emerald-400/80">({fuelSummary.workingDays}d × {customDailyKm}km @ ₹{customFuelRate.toFixed(2)})</span>
+              <span className="text-[10px] text-emerald-400/80">({fuelSummary.workingDays}d × {customDailyKm}km @ ₹{Number(customFuelRate || 3.6).toFixed(2)})</span>
             </div>
 
             <button
@@ -1104,7 +1104,7 @@ export default function PostmanAllDayArticlesOverview({
                   <div className="flex items-center justify-between text-xs font-black uppercase tracking-wider px-2">
                     <span>Month Totals ({fuelSummary.workingDays} Working Days)</span>
                     <span className="text-amber-400 font-mono text-[11px]">
-                      {fuelSummary.workingDays} Days × {customDailyKm} KM @ ₹{customFuelRate.toFixed(2)}/KM = ₹{fuelSummary.totalClaimAmount.toLocaleString('en-IN')}
+                      {fuelSummary.workingDays} Days × {customDailyKm} KM @ ₹{Number(customFuelRate || 3.6).toFixed(2)}/KM = ₹{fuelSummary.totalClaimAmount.toLocaleString('en-IN')}
                     </span>
                   </div>
                 </td>

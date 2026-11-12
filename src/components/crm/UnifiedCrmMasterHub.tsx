@@ -33,7 +33,7 @@ import {
 import * as XLSX from 'xlsx';
 import { staffPermissionService } from '../../services/staffPermissionService';
 import { masterDataService } from '../../services/masterDataService';
-import { ColonyMasterRecord } from '../../types/models';
+import { ColonyMasterRecord, ColonyEntityType } from '../../types/models';
 
 import { UPDATED_STAFF_LIST } from '../../data/updatedStaffData';
 
@@ -288,6 +288,7 @@ export default function UnifiedCrmMasterHub() {
   const [divisionFilter, setDivisionFilter] = useState<'ALL' | 'KOTA' | 'BARAN' | 'BUNDI' | 'PENDING'>('ALL');
   const [divisionSearch, setDivisionSearch] = useState('');
   const [hadotiColonyName, setHadotiColonyName] = useState('');
+  const [hadotiEntityType, setHadotiEntityType] = useState<ColonyEntityType>('Residential Colony');
   const [hadotiPincode, setHadotiPincode] = useState('324009');
   const [hadotiDivision, setHadotiDivision] = useState<'KOTA' | 'BARAN' | 'BUNDI'>('KOTA');
   const [hadotiPostOfficeName, setHadotiPostOfficeName] = useState('Dadabari S.O.');
@@ -298,6 +299,21 @@ export default function UnifiedCrmMasterHub() {
   const [hadotiStatusMessage, setHadotiStatusMessage] = useState<{ success: boolean; text: string } | null>(null);
   const [inlineBeatEditId, setInlineBeatEditId] = useState<string | null>(null);
   const [inlineBeatValue, setInlineBeatValue] = useState('');
+  const [inlineSectorInputMap, setInlineSectorInputMap] = useState<Record<string, string>>({});
+
+  // Advanced Colony, Landmark & Sector Editing Governance Modal State
+  const [editingHadotiColony, setEditingHadotiColony] = useState<ColonyMasterRecord | null>(null);
+  const [editColonyName, setEditColonyName] = useState('');
+  const [editEntityType, setEditEntityType] = useState<ColonyEntityType>('Residential Colony');
+  const [editPincode, setEditPincode] = useState('');
+  const [editDivision, setEditDivision] = useState<'KOTA' | 'BARAN' | 'BUNDI'>('KOTA');
+  const [editPostOfficeName, setEditPostOfficeName] = useState('');
+  const [editAssignedBeat, setEditAssignedBeat] = useState('');
+  const [editLat, setEditLat] = useState('');
+  const [editLng, setEditLng] = useState('');
+  const [editGoogleMapsUrl, setEditGoogleMapsUrl] = useState('');
+  const [editSubSectors, setEditSubSectors] = useState<string[]>([]);
+  const [newEditSectorInput, setNewEditSectorInput] = useState('');
 
   // Delivery Office Filter (Core User Request)
   const [selectedOfficeFilter, setSelectedOfficeFilter] = useState<string>('Dadabari S.O.');
@@ -316,6 +332,8 @@ export default function UnifiedCrmMasterHub() {
   const [custName, setCustName] = useState('');
   const [custMobile, setCustMobile] = useState('');
   const [custHouseNo, setCustHouseNo] = useState('');
+  const [custSector, setCustSector] = useState('');
+  const [custLandmark, setCustLandmark] = useState('');
   const [selectedColonyId, setSelectedColonyId] = useState('');
   const [custHouseholdType, setCustHouseholdType] = useState<'Residential' | 'Commercial' | 'Government'>('Residential');
 
@@ -373,7 +391,9 @@ export default function UnifiedCrmMasterHub() {
         const matchPin = c.pincode.includes(q);
         const matchPo = c.postOfficeName.toLowerCase().includes(q);
         const matchBeat = (c.assignedBeat || '').toLowerCase().includes(q);
-        if (!matchName && !matchPin && !matchPo && !matchBeat) return false;
+        const matchType = (c.entityType || '').toLowerCase().includes(q);
+        const matchSectors = (c.subSectors || []).some((s) => s.toLowerCase().includes(q));
+        if (!matchName && !matchPin && !matchPo && !matchBeat && !matchType && !matchSectors) return false;
       }
       return true;
     });
@@ -399,6 +419,7 @@ export default function UnifiedCrmMasterHub() {
 
     const res = masterDataService.addColonyMasterRecord({
       colonyName: hadotiColonyName.trim(),
+      entityType: hadotiEntityType,
       pincode: hadotiPincode.trim(),
       division: hadotiDivision,
       postOfficeName: hadotiPostOfficeName.trim(),
@@ -429,6 +450,73 @@ export default function UnifiedCrmMasterHub() {
       setInlineBeatValue('');
       showSuccessNotification('Beat assignment updated successfully!');
     }
+  };
+
+  // Granular Sector & Pocket Management Handlers
+  const handleAddSubSector = (colonyId: string, colonyName: string) => {
+    const rawVal = inlineSectorInputMap[colonyId]?.trim();
+    if (!rawVal) return;
+    const target = divisionColonies.find((c) => c.id === colonyId);
+    if (!target) return;
+    const currentSectors = target.subSectors || [];
+    if (currentSectors.some((s) => s.toLowerCase() === rawVal.toLowerCase())) {
+      alert(`Sector/Pocket "${rawVal}" already exists in ${colonyName}!`);
+      return;
+    }
+    const updatedSectors = [...currentSectors, rawVal];
+    masterDataService.updateColonyMasterRecord(colonyId, { subSectors: updatedSectors });
+    setInlineSectorInputMap((prev) => ({ ...prev, [colonyId]: '' }));
+    showSuccessNotification(`Added pocket/sector "${rawVal}" to ${colonyName}`);
+  };
+
+  const handleRemoveSubSector = (colonyId: string, colonyName: string, sectorName: string) => {
+    const target = divisionColonies.find((c) => c.id === colonyId);
+    if (!target) return;
+    const updatedSectors = (target.subSectors || []).filter((s) => s !== sectorName);
+    masterDataService.updateColonyMasterRecord(colonyId, { subSectors: updatedSectors });
+    showSuccessNotification(`Removed sector "${sectorName}" from ${colonyName}`);
+  };
+
+  // Colony, Landmark & Sector Edit Governance Modal Handlers
+  const handleOpenEditHadotiModal = (col: ColonyMasterRecord) => {
+    setEditingHadotiColony(col);
+    setEditColonyName(col.colonyName);
+    setEditEntityType(col.entityType || 'Residential Colony');
+    setEditPincode(col.pincode);
+    setEditDivision(col.division);
+    setEditPostOfficeName(col.postOfficeName);
+    setEditAssignedBeat(col.assignedBeat && col.assignedBeat !== 'PENDING_ASSIGNMENT' ? col.assignedBeat : '');
+    setEditLat(col.geoTag.lat.toString());
+    setEditLng(col.geoTag.lng.toString());
+    setEditGoogleMapsUrl(col.geoTag.googleMapsUrl || `https://www.google.com/maps?q=${col.geoTag.lat},${col.geoTag.lng}`);
+    setEditSubSectors([...(col.subSectors || [])]);
+    setNewEditSectorInput('');
+  };
+
+  const handleSaveEditedHadotiColony = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingHadotiColony) return;
+    const lat = parseFloat(editLat) || 25.1432;
+    const lng = parseFloat(editLng) || 75.8234;
+    const gUrl = editGoogleMapsUrl.trim() || `https://www.google.com/maps?q=${lat},${lng}`;
+
+    masterDataService.updateColonyMasterRecord(editingHadotiColony.id, {
+      colonyName: editColonyName.trim(),
+      entityType: editEntityType,
+      pincode: editPincode.trim(),
+      division: editDivision,
+      postOfficeName: editPostOfficeName.trim(),
+      assignedBeat: editAssignedBeat.trim() ? editAssignedBeat.trim() : 'PENDING_ASSIGNMENT',
+      geoTag: {
+        lat,
+        lng,
+        googleMapsUrl: gUrl,
+      },
+      subSectors: editSubSectors,
+    });
+
+    showSuccessNotification(`Colony / Landmark record "${editColonyName.trim()}" updated successfully!`);
+    setEditingHadotiColony(null);
   };
 
   const handleDeleteHadotiColony = (id: string, name: string) => {
@@ -549,8 +637,10 @@ export default function UnifiedCrmMasterHub() {
       name: custName.trim(),
       mobile: custMobile.trim(),
       colony: linkedColony ? linkedColony.colonyName : 'Dadabari Main',
-      sector: linkedColony ? linkedColony.sectorPhase : 'Main Area',
-      houseNo: custHouseNo.trim() || 'Standard Delivery',
+      sector: custSector.trim() || (linkedColony ? linkedColony.sectorPhase : 'Main Area'),
+      houseNo: custLandmark.trim()
+        ? `${custHouseNo.trim() || 'Standard Delivery'} (Landmark: ${custLandmark.trim()})`
+        : custHouseNo.trim() || 'Standard Delivery',
       pincode: linkedColony ? linkedColony.pincode : '324009',
       beatNo: linkedColony ? linkedColony.beatNo : 'Beat 2',
       postmanName: linkedColony ? linkedColony.postmanName : 'Mahendra Kumar Meena',
@@ -562,6 +652,8 @@ export default function UnifiedCrmMasterHub() {
     setCustName('');
     setCustMobile('');
     setCustHouseNo('');
+    setCustSector('');
+    setCustLandmark('');
     showSuccessNotification(`✅ Customer '${newCust.name}' mapped to ${newCust.colony} (${newCust.beatNo})!`);
   };
 
@@ -1284,7 +1376,22 @@ export default function UnifiedCrmMasterHub() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Entity Classification <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={hadotiEntityType}
+                      onChange={(e) => setHadotiEntityType(e.target.value as ColonyEntityType)}
+                      className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="Residential Colony">🏠 Residential Colony</option>
+                      <option value="Commercial Complex">🏢 Commercial Complex</option>
+                      <option value="Specific Landmark">🏛️ Specific Landmark</option>
+                    </select>
+                  </div>
+
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Division <span className="text-red-500">*</span>
@@ -1318,7 +1425,9 @@ export default function UnifiedCrmMasterHub() {
                       <option value="BUNDI">Bundi Division</option>
                     </select>
                   </div>
+                </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Postal Pincode <span className="text-red-500">*</span>
@@ -1333,20 +1442,20 @@ export default function UnifiedCrmMasterHub() {
                       className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
                     />
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Registered Post Office <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={hadotiPostOfficeName}
-                    onChange={(e) => setHadotiPostOfficeName(e.target.value)}
-                    placeholder="e.g. Dadabari S.O., Kota H.O., Baran H.O."
-                    className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Registered Post Office <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={hadotiPostOfficeName}
+                      onChange={(e) => setHadotiPostOfficeName(e.target.value)}
+                      placeholder="e.g. Dadabari S.O., Kota H.O., Baran H.O."
+                      className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -1374,17 +1483,14 @@ export default function UnifiedCrmMasterHub() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Sub-Sectors / Pockets (Comma separated)
-                  </label>
-                  <input
-                    type="text"
-                    value={hadotiSubSectors}
-                    onChange={(e) => setHadotiSubSectors(e.target.value)}
-                    placeholder="e.g. Sector 1, Sector 2, Pocket A"
-                    className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-800 text-[11px]">
+                    <ShieldCheck size={13} className="text-indigo-600" />
+                    <span>Streamlined Master Record Rule</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 leading-relaxed">
+                    Colony Directory strictly preserves high-level territory records (Name, Type, PIN, Office, Geo-tag). Granular sectors, blocks, and delivery landmarks are delegated to <strong>Beat Mapping</strong> and <strong>Address Registration</strong>.
+                  </p>
                 </div>
 
                 <div>
@@ -1533,6 +1639,25 @@ export default function UnifiedCrmMasterHub() {
                       <div className="flex flex-wrap items-start justify-between gap-2 pb-2 border-b border-slate-100">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-sm text-slate-900">{col.colonyName}</span>
+
+                          {/* Dynamic Entity Classification Badge */}
+                          {col.entityType === 'Commercial Complex' ? (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1">
+                              <Building2 size={11} className="text-amber-700" />
+                              <span>Commercial Complex</span>
+                            </span>
+                          ) : col.entityType === 'Specific Landmark' ? (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200 inline-flex items-center gap-1">
+                              <Landmark size={11} className="text-teal-700" />
+                              <span>Specific Landmark</span>
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 inline-flex items-center gap-1">
+                              <Home size={11} className="text-indigo-600" />
+                              <span>Residential Colony</span>
+                            </span>
+                          )}
+
                           <span
                             className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
                               col.division === 'KOTA'
@@ -1549,7 +1674,7 @@ export default function UnifiedCrmMasterHub() {
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                               col.status === 'ACTIVE'
@@ -1559,6 +1684,15 @@ export default function UnifiedCrmMasterHub() {
                           >
                             {col.status === 'ACTIVE' ? 'ACTIVE BEAT' : 'PENDING BEAT MAPPING'}
                           </span>
+                          
+                          {/* Live Edit & Delete Actions */}
+                          <button
+                            onClick={() => handleOpenEditHadotiModal(col)}
+                            title="Edit Colony / Landmark Master Record"
+                            className="p-1 hover:bg-blue-50 text-slate-400 hover:text-blue-700 rounded transition cursor-pointer"
+                          >
+                            <Edit2 size={14} />
+                          </button>
                           <button
                             onClick={() => handleDeleteHadotiColony(col.id, col.colonyName)}
                             title="Delete Colony Record"
@@ -1580,17 +1714,22 @@ export default function UnifiedCrmMasterHub() {
 
                         <div>
                           <span className="text-slate-400 block text-[10px] uppercase font-semibold">Geo-Tag (Lat/Lng)</span>
-                          <a
-                            href={`https://www.google.com/maps?q=${col.geoTag.lat},${col.geoTag.lng}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-mono text-indigo-600 hover:underline flex items-center gap-1 mt-0.5"
-                            title="Open in Google Maps"
-                          >
-                            <Navigation size={12} className="shrink-0" />
-                            {col.geoTag.lat.toFixed(4)}, {col.geoTag.lng.toFixed(4)}
-                            <ExternalLink size={11} className="opacity-70" />
-                          </a>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="font-mono text-slate-700 text-xs">
+                              {col.geoTag.lat.toFixed(4)}, {col.geoTag.lng.toFixed(4)}
+                            </span>
+                            <a
+                              href={col.geoTag.googleMapsUrl || `https://www.google.com/maps?q=${col.geoTag.lat},${col.geoTag.lng}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded text-[10px] font-bold flex items-center gap-1 transition"
+                              title="Open in Google Maps"
+                            >
+                              <Navigation size={10} className="shrink-0" />
+                              <span>View Map / Pin</span>
+                              <ExternalLink size={9} className="opacity-70" />
+                            </a>
+                          </div>
                         </div>
 
                         <div>
@@ -1651,19 +1790,14 @@ export default function UnifiedCrmMasterHub() {
                         </div>
                       </div>
 
-                      {col.subSectors && col.subSectors.length > 0 && (
-                        <div className="mt-2.5 pt-2 border-t border-slate-50 flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[10px] text-slate-400 font-semibold uppercase">Sub-Sectors:</span>
-                          {col.subSectors.map((sec, idx) => (
-                            <span
-                              key={idx}
-                              className="text-[10px] font-medium bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200"
-                            >
-                              {sec}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                      {/* Streamlined High-Level Footer Bar */}
+                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                        <span className="font-mono text-slate-400">ID: {col.id}</span>
+                        <span className="text-[10px] text-slate-500 font-medium bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
+                          Sectors & Landmarks managed in Beat & Address forms
+                        </span>
+                        <span className="text-slate-400">Reg: {new Date(col.createdAt).toLocaleDateString()}</span>
+                      </div>
 
                       <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
                         <span className="font-mono">ID: {col.id}</span>
@@ -1733,6 +1867,34 @@ export default function UnifiedCrmMasterHub() {
                   onChange={(e) => setCustHouseNo(e.target.value)}
                   className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
                 />
+              </div>
+
+              {/* Granular Sector & Landmark Delegation during Address Registration */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Sector / Block / Pocket
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Sector 6, Block A, KH Series"
+                    value={custSector}
+                    onChange={(e) => setCustSector(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Nearest Landmark / Sub-Point
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Shiv Mandir, CAD Circle"
+                    value={custLandmark}
+                    onChange={(e) => setCustLandmark(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                  />
+                </div>
               </div>
 
               <div>
@@ -2024,6 +2186,208 @@ export default function UnifiedCrmMasterHub() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Advanced Colony, Landmark & Sector Editing Governance Modal */}
+      {editingHadotiColony && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+            <div className="bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 p-5 text-white flex items-center justify-between border-b border-indigo-900/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-600/30 border border-blue-400/40 flex items-center justify-center text-blue-300">
+                  <Edit2 size={18} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base leading-tight">Edit Colony / Landmark Master Record</h3>
+                  <p className="text-[11px] text-blue-200/80">
+                    ID: {editingHadotiColony.id} • Registered {new Date(editingHadotiColony.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingHadotiColony(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditedHadotiColony} className="p-6 overflow-y-auto space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Colony / Landmark Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editColonyName}
+                    onChange={(e) => setEditColonyName(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Entity Classification <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={editEntityType}
+                    onChange={(e) => setEditEntityType(e.target.value as ColonyEntityType)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="Residential Colony">🏠 Residential Colony</option>
+                    <option value="Commercial Complex">🏢 Commercial Complex</option>
+                    <option value="Specific Landmark">🏛️ Specific Landmark</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Division <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={editDivision}
+                    onChange={(e) => setEditDivision(e.target.value as 'KOTA' | 'BARAN' | 'BUNDI')}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="KOTA">Kota Division</option>
+                    <option value="BARAN">Baran Division</option>
+                    <option value="BUNDI">Bundi Division</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Postal Pincode <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    value={editPincode}
+                    onChange={(e) => setEditPincode(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Registered Post Office <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editPostOfficeName}
+                    onChange={(e) => setEditPostOfficeName(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Assigned Postal Beat</label>
+                  <input
+                    type="text"
+                    value={editAssignedBeat}
+                    onChange={(e) => setEditAssignedBeat(e.target.value)}
+                    placeholder="e.g. Beat 2"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Latitude</label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    value={editLat}
+                    onChange={(e) => {
+                      setEditLat(e.target.value);
+                      if (e.target.value && editLng) {
+                        setEditGoogleMapsUrl(`https://www.google.com/maps?q=${e.target.value},${editLng}`);
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Longitude</label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    value={editLng}
+                    onChange={(e) => {
+                      setEditLng(e.target.value);
+                      if (editLat && e.target.value) {
+                        setEditGoogleMapsUrl(`https://www.google.com/maps?q=${editLat},${e.target.value}`);
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-700">Google Maps Direct URL</label>
+                  {editGoogleMapsUrl && (
+                    <a
+                      href={editGoogleMapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-indigo-600 hover:underline flex items-center gap-1 font-semibold"
+                    >
+                      <Navigation size={11} />
+                      <span>Test Map Link</span>
+                      <ExternalLink size={10} />
+                    </a>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  value={editGoogleMapsUrl}
+                  onChange={(e) => setEditGoogleMapsUrl(e.target.value)}
+                  placeholder="https://www.google.com/maps?q=..."
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Streamlined Architecture Note in Edit Modal */}
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-600 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                  <Layers size={14} className="text-indigo-600" />
+                  <span>Colony Master Boundaries</span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  Colony Directory maintains high-level territory records (Name, Classification, PIN, Office, Geo-tag). Granular sectors, pockets, and landmark points are managed dynamically in <strong>Beat Multi-Colony Mapping</strong>.
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingHadotiColony(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-blue-900 hover:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-md transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check size={14} />
+                  <span>Save Master Changes</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

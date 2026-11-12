@@ -42,9 +42,11 @@ import {
   PasswordComplexityResult,
   LockoutStatus,
 } from '../services/securityAuthService';
+import { createNewSecureSession, getActiveSessionToken } from '../services/authSecurityService';
 import { customerAuthService } from '../services/customerAuthService';
 import { POSTAL_AUTH_DATABASE_SCHEMA_SQL } from '../server/secureAuthBackendReference';
 import { DesignationType } from '../types/models';
+import SearchableOfficeSelect from '../components/common/SearchableOfficeSelect';
 
 const DESIGNATION_LIST: DesignationType[] = [
   'Postman',
@@ -315,6 +317,7 @@ export default function LoginPage({
 
     if (ok) {
       securityAuthService.recordSuccessfulLogin(identifier.trim());
+      await createNewSecureSession(identifier.trim());
       finishLoginAndEnterCRM();
     } else {
       const updatedLockout = securityAuthService.recordFailedAttempt(identifier.trim());
@@ -438,21 +441,23 @@ export default function LoginPage({
     setSuccessMessage('Password securely updated! Logging into Postman CRM...');
     const ok = await signInWithPassword(updated.employeeId || updated.email, newResetPassword.trim());
     if (ok) {
+      await createNewSecureSession(updated.employeeId || updated.email);
       finishLoginAndEnterCRM();
     }
   };
 
-  const handleQuickFillAdmin = () => {
+  const handleQuickFillAdmin = async () => {
     clearMessages();
     setMode('LOGIN');
     setIdentifier('mahen.comtech@gmail.com');
     setPassword('Mahen@2304');
     securityAuthService.recordSuccessfulLogin('mahen.comtech@gmail.com');
+    await createNewSecureSession('mahen.comtech@gmail.com');
     loginAsMasterAdmin();
     finishLoginAndEnterCRM();
   };
 
-  const handleQuickFillStaff = (
+  const handleQuickFillStaff = async (
     staffIdOrEmail: string,
     staffPass: string = DEFAULT_STAFF_FALLBACK_PASSWORD
   ) => {
@@ -461,6 +466,7 @@ export default function LoginPage({
     setIdentifier(staffIdOrEmail);
     setPassword(staffPass);
     securityAuthService.recordSuccessfulLogin(staffIdOrEmail);
+    await createNewSecureSession(staffIdOrEmail);
     switchStaffProfile(staffIdOrEmail);
     finishLoginAndEnterCRM();
   };
@@ -1016,6 +1022,17 @@ export default function LoginPage({
                 </button>
               </div>
 
+              {/* Single Session & Security Status Indicator */}
+              <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center justify-between text-[11px]">
+                <div className="flex items-center gap-1.5 font-semibold">
+                  <ShieldCheck size={13} className="text-emerald-600 shrink-0" />
+                  <span>Single-Device Session & Token Protection Active</span>
+                </div>
+                <span className="font-mono text-[10px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
+                  Anti-Concurrent
+                </span>
+              </div>
+
               {/* Brute-Force Rate Limiting & Account Lockout Banner */}
               {lockoutStatus.isLocked && (
                 <div className="mb-3 p-3 rounded-xl bg-red-950 border border-red-700 text-white space-y-1.5 animate-pulse">
@@ -1190,6 +1207,16 @@ export default function LoginPage({
                       />
                     </div>
                   </div>
+
+                  {/* Module 1: Live Searchable Office Directory with + Add Custom Office */}
+                  <SearchableOfficeSelect
+                    value={regOfficeName}
+                    pincodeValue={regPincode}
+                    onChange={(selected) => {
+                      setRegOfficeName(selected.officeName);
+                      setRegPincode(selected.pincode);
+                    }}
+                  />
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>

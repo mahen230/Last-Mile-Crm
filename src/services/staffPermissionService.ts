@@ -1896,6 +1896,17 @@ class StaffPermissionService {
     this.deleteColonyBeatMapping(id);
   }
 
+  public unmapColonyFromBeat(colonyName: string, beatNumber: string): void {
+    const normCol = colonyName.trim().toLowerCase();
+    const normBeat = beatNumber.replace(/^Beat\s+/i, '').trim().toLowerCase();
+    this.colonyBeatMappings = this.colonyBeatMappings.filter(m => {
+      const mCol = m.colonyName.trim().toLowerCase();
+      const mBeat = (m.beatNumber || m.assignedBeatNumber || '').replace(/^Beat\s+/i, '').trim().toLowerCase();
+      return !(mCol === normCol && (mBeat === normBeat || !beatNumber));
+    });
+    this.saveColonyMappings(true);
+  }
+
   public resolveColonyToBeatAndPincode(
     colonyQuery: string,
     sectorQuery?: string,

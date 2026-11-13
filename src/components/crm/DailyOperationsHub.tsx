@@ -27,6 +27,7 @@ import {
   X,
   Plus,
   Layers,
+  ChevronLeft,
   ChevronRight,
   FileCheck2,
 } from 'lucide-react';
@@ -63,15 +64,28 @@ export default function DailyOperationsHub({
 }: DailyOperationsHubProps) {
   const { userProfile } = useAuth();
   const currentStaff = staffPermissionService.getActiveSession() || userProfile;
+  const isRestrictedStaff = staffPermissionService.isPostmanOrGds(currentStaff);
+  const HUB_PAGE_SIZE = 5;
 
   // Active Tab: Operations Hub Cards vs Fuel Reconciliation Engine
   const [activeSubTab, setActiveSubTab] = useState<'HUB_CARDS' | 'FUEL_RECONCILIATION'>('HUB_CARDS');
+  const [downloadErrorNotice, setDownloadErrorNotice] = useState<string | null>(null);
 
-  // Core Data Collections
-  const [customers, setCustomers] = useState<Customer[]>(() => customerService.getCustomers());
-  const [properties, setProperties] = useState<Property[]>(() => customerService.getProperties());
-  const [leads, setLeads] = useState<Lead[]>(() => customerService.getLeads());
-  const [dailyEntries, setDailyEntries] = useState<DailyArticleEntry[]>(() => operationsService.getDailyEntries());
+  // Core Data Collections (Strictly Scoped to Assigned Beat for Postman/GDS)
+  const [customers, setCustomers] = useState<Customer[]>(() => customerService.getScopedCustomers(currentStaff));
+  const [properties, setProperties] = useState<Property[]>(() => customerService.getScopedProperties(currentStaff));
+  const [leads, setLeads] = useState<Lead[]>(() => customerService.getScopedLeads(currentStaff));
+  const [dailyEntries, setDailyEntries] = useState<DailyArticleEntry[]>(() =>
+    operationsService
+      .getDailyEntries()
+      .filter((d) =>
+        staffPermissionService.matchesUserBeatScope(currentStaff, {
+          beatNo: d.beatNo,
+          assignedStaffName: d.staffName,
+          assignedStaffEmail: d.staffEmail,
+        })
+      )
+  );
 
   // Customer Profile Modal Target
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -85,13 +99,16 @@ export default function DailyOperationsHub({
   // CARD 2: Live Customer & Property Search State
   const [custSearchQuery, setCustSearchQuery] = useState('');
   const [selectedColonyChip, setSelectedColonyChip] = useState<string>('ALL');
+  const [custPage, setCustPage] = useState<number>(1);
 
   // CARD 3: Lead & Task Pipeline State
   const [selectedSchemeFilter, setSelectedSchemeFilter] = useState<string>('ALL');
   const [leadStageFilter, setLeadStageFilter] = useState<string>('ALL');
+  const [leadPage, setLeadPage] = useState<number>(1);
 
   // CARD 4: Colony & Beat Intelligence State
   const [beatIntelligenceQuery, setBeatIntelligenceQuery] = useState('');
+  const [beatPage, setBeatPage] = useState<number>(1);
 
   // =========================================================================
   // ADVANCED FUEL BILL & RECONCILIATION MODULE STATE
@@ -119,19 +136,31 @@ export default function DailyOperationsHub({
   // Refresh listeners
   useEffect(() => {
     const handleUpdate = () => {
-      setCustomers(customerService.getCustomers());
-      setProperties(customerService.getProperties());
-      setLeads(customerService.getLeads());
-      setDailyEntries(operationsService.getDailyEntries());
+      const activeProfile = staffPermissionService.getActiveSession() || userProfile;
+      setCustomers(customerService.getScopedCustomers(activeProfile));
+      setProperties(customerService.getScopedProperties(activeProfile));
+      setLeads(customerService.getScopedLeads(activeProfile));
+      setDailyEntries(
+        operationsService
+          .getDailyEntries()
+          .filter((d) =>
+            staffPermissionService.matchesUserBeatScope(activeProfile, {
+              beatNo: d.beatNo,
+              assignedStaffName: d.staffName,
+              assignedStaffEmail: d.staffEmail,
+            })
+          )
+      );
     };
 
+    handleUpdate();
     const unsubCust = customerService.subscribe(handleUpdate);
     const unsubOps = operationsService.subscribe(handleUpdate);
     return () => {
       unsubCust();
       unsubOps();
     };
-  }, []);
+  }, [userProfile]);
 
   // Update sanctioned KM when beat changes
   useEffect(() => {
@@ -154,27 +183,38 @@ export default function DailyOperationsHub({
   const strokeDashoffset = ringCircumference - (deliveryPercentage / 100) * ringCircumference;
 
   // =========================================================================
-  // CARD 2: Fast Customer / Property Filter
+  // CARD 2: Fast Customer / Property Filter (Max 5 per View)
   // =========================================================================
-  const filteredCustomers = useMemo(() => {
+  const allFilteredCustomers = useMemo(() => {
     const q = custSearchQuery.trim().toLowerCase();
     return customers.filter((c) => {
       if (selectedColonyChip !== 'ALL') {
-        const addr = JSON.stringify(c.address || '').toLowerCase();
+        const addr = `${c.area || ''} ${c.colony || ''} ${c.sector || ''} ${JSON.stringify(c.address || '')}`.toLowerCase();
         if (!addr.includes(selectedColonyChip.toLowerCase())) {
           return false;
         }
       }
       if (!q) return true;
-      const fullText = `${c.name} ${c.mobile} ${c.masterId || ''} ${JSON.stringify(c.address || '')}`.toLowerCase();
+      const fullText = `${c.name} ${c.mobile} ${c.masterId || ''} ${c.area || ''} ${c.houseNo || ''} ${JSON.stringify(c.address || '')}`.toLowerCase();
       return fullText.includes(q);
-    }).slice(0, 8);
+    });
   }, [customers, custSearchQuery, selectedColonyChip]);
 
+  useEffect(() => {
+    setCustPage(1);
+  }, [custSearchQuery, selectedColonyChip]);
+
+  const custTotalPages = Math.max(1, Math.ceil(allFilteredCustomers.length / HUB_PAGE_SIZE));
+  const safeCustPage = Math.min(custPage, custTotalPages);
+  const filteredCustomers = useMemo(
+    () => allFilteredCustomers.slice((safeCustPage - 1) * HUB_PAGE_SIZE, safeCustPage * HUB_PAGE_SIZE),
+    [allFilteredCustomers, safeCustPage]
+  );
+
   // =========================================================================
-  // CARD 3: Scheme Leads Filter
+  // CARD 3: Scheme Leads Filter (Max 5 per View)
   // =========================================================================
-  const filteredLeads = useMemo(() => {
+  const allFilteredLeads = useMemo(() => {
     return leads.filter((l) => {
       if (selectedSchemeFilter !== 'ALL' && !l.productName.toLowerCase().includes(selectedSchemeFilter.toLowerCase())) {
         return false;
@@ -183,23 +223,56 @@ export default function DailyOperationsHub({
         return false;
       }
       return true;
-    }).slice(0, 6);
+    });
   }, [leads, selectedSchemeFilter, leadStageFilter]);
 
+  useEffect(() => {
+    setLeadPage(1);
+  }, [selectedSchemeFilter, leadStageFilter]);
+
+  const leadTotalPages = Math.max(1, Math.ceil(allFilteredLeads.length / HUB_PAGE_SIZE));
+  const safeLeadPage = Math.min(leadPage, leadTotalPages);
+  const filteredLeads = useMemo(
+    () => allFilteredLeads.slice((safeLeadPage - 1) * HUB_PAGE_SIZE, safeLeadPage * HUB_PAGE_SIZE),
+    [allFilteredLeads, safeLeadPage]
+  );
+
   // =========================================================================
-  // CARD 4: Area-wise Beats & Postman Intelligence
+  // CARD 4: Area-wise Beats & Postman Intelligence (Scoped & Max 5 per View)
   // =========================================================================
-  const beatList = useMemo(() => {
+  const scopedFuelBeats = useMemo(() => {
+    if (!isRestrictedStaff) return ALL_33_BEATS_FUEL_DATA;
+    const filtered = ALL_33_BEATS_FUEL_DATA.filter((b) =>
+      staffPermissionService.matchesUserBeatScope(currentStaff, {
+        beatNo: b.beatNumber,
+        assignedStaffName: b.assignedPostmanName,
+      })
+    );
+    return filtered.length > 0 ? filtered : ALL_33_BEATS_FUEL_DATA.filter((b) => b.beatNumber === (currentStaff?.beat || 'Beat 2'));
+  }, [isRestrictedStaff, currentStaff]);
+
+  const allFilteredBeats = useMemo(() => {
     const q = beatIntelligenceQuery.trim().toLowerCase();
-    return ALL_33_BEATS_FUEL_DATA.filter((b) => {
+    return scopedFuelBeats.filter((b) => {
       if (!q) return true;
       return (
         b.beatNumber.toLowerCase().includes(q) ||
         b.assignedPostmanName.toLowerCase().includes(q) ||
         b.routeDescription.toLowerCase().includes(q)
       );
-    }).slice(0, 6);
+    });
+  }, [scopedFuelBeats, beatIntelligenceQuery]);
+
+  useEffect(() => {
+    setBeatPage(1);
   }, [beatIntelligenceQuery]);
+
+  const beatTotalPages = Math.max(1, Math.ceil(allFilteredBeats.length / HUB_PAGE_SIZE));
+  const safeBeatPage = Math.min(beatPage, beatTotalPages);
+  const beatList = useMemo(
+    () => allFilteredBeats.slice((safeBeatPage - 1) * HUB_PAGE_SIZE, safeBeatPage * HUB_PAGE_SIZE),
+    [allFilteredBeats, safeBeatPage]
+  );
 
   // =========================================================================
   // FUEL RECONCILIATION ENGINE CALCULATIONS
@@ -229,7 +302,7 @@ export default function DailyOperationsHub({
       title: `Official Two-Wheeler Fuel Bill: ${selectedBeat} (${monthName})`,
       employeeId: currentStaff?.employeeId || '50457421',
       employeeName: currentStaff?.name || 'Mahendra Kumar Meena',
-      employeeEmail: currentStaff?.email || 'mahen.comtech@gmail.com',
+      employeeEmail: currentStaff?.email || 'Ektamahenmeena@gmail.com',
       beatNo: selectedBeat,
       officeName: currentStaff?.subOffice || 'Dadabari S.O. (324009)',
       fromDate: `${selectedMonth}-01`,
@@ -279,7 +352,8 @@ export default function DailyOperationsHub({
       setTimeout(() => setDownloadSuccessNotice(null), 5000);
     } catch (e) {
       console.error('Error generating fuel bill:', e);
-      alert('Error generating statement. Please retry.');
+      setDownloadErrorNotice('Error generating statement. Please retry.');
+      setTimeout(() => setDownloadErrorNotice(null), 5000);
     }
   };
 
@@ -377,6 +451,17 @@ export default function DailyOperationsHub({
           <div className="mt-4 p-3 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 text-xs font-bold flex items-center gap-2 animate-in fade-in">
             <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
             <span>{downloadSuccessNotice}</span>
+          </div>
+        )}
+        {downloadErrorNotice && (
+          <div className="mt-4 p-3 rounded-xl bg-red-500/20 border border-red-400/40 text-red-100 text-xs font-bold flex items-center justify-between gap-2 animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={16} className="text-amber-300 shrink-0" />
+              <span>{downloadErrorNotice}</span>
+            </div>
+            <button type="button" onClick={() => setDownloadErrorNotice(null)} className="text-red-200 hover:text-white">
+              <X size={14} />
+            </button>
           </div>
         )}
       </div>
@@ -624,8 +709,34 @@ export default function DailyOperationsHub({
             </div>
 
             <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-              <span>Showing {filteredCustomers.length} quick results</span>
-              <span className="font-mono text-[10px]">Instant Local Cache</span>
+              <span>
+                Showing {filteredCustomers.length} of {allFilteredCustomers.length} (Max 5)
+              </span>
+              {allFilteredCustomers.length > HUB_PAGE_SIZE ? (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={safeCustPage <= 1}
+                    onClick={() => setCustPage((p) => Math.max(1, p - 1))}
+                    className="p-1 rounded border border-slate-200 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
+                  >
+                    <ChevronLeft size={12} />
+                  </button>
+                  <span className="font-mono text-[10px] font-bold px-1">
+                    {safeCustPage}/{custTotalPages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={safeCustPage >= custTotalPages}
+                    onClick={() => setCustPage((p) => Math.min(custTotalPages, p + 1))}
+                    className="p-1 rounded border border-slate-200 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
+                  >
+                    <ChevronRight size={12} />
+                  </button>
+                </div>
+              ) : (
+                <span className="font-mono text-[10px]">Instant Local Cache</span>
+              )}
             </div>
           </div>
 
@@ -719,8 +830,34 @@ export default function DailyOperationsHub({
             </div>
 
             <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-              <span className="text-slate-500">Government Target: 100% saturation in Beat 2</span>
-              <span className="font-bold text-amber-700">₹{(leads.length * 25000).toLocaleString('en-IN')} Est. Target</span>
+              <span className="text-slate-500">
+                Showing {filteredLeads.length} of {allFilteredLeads.length} ({isRestrictedStaff ? currentStaff?.beat || 'Beat Scope' : 'All Beats'})
+              </span>
+              {allFilteredLeads.length > HUB_PAGE_SIZE ? (
+                <div className="flex items-center gap-1 text-slate-600">
+                  <button
+                    type="button"
+                    disabled={safeLeadPage <= 1}
+                    onClick={() => setLeadPage((p) => Math.max(1, p - 1))}
+                    className="p-1 rounded border border-slate-200 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
+                  >
+                    <ChevronLeft size={12} />
+                  </button>
+                  <span className="font-mono text-[10px] font-bold px-1">
+                    {safeLeadPage}/{leadTotalPages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={safeLeadPage >= leadTotalPages}
+                    onClick={() => setLeadPage((p) => Math.min(leadTotalPages, p + 1))}
+                    className="p-1 rounded border border-slate-200 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
+                  >
+                    <ChevronRight size={12} />
+                  </button>
+                </div>
+              ) : (
+                <span className="font-bold text-amber-700">₹{(leads.length * 25000).toLocaleString('en-IN')} Est. Target</span>
+              )}
             </div>
           </div>
 
@@ -806,8 +943,38 @@ export default function DailyOperationsHub({
             </div>
 
             <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-              <span>Rajasthan Circle 33 Beats Directory</span>
-              <span className="font-bold text-emerald-700">All 33 Beats Mapped</span>
+              <span>
+                {isRestrictedStaff
+                  ? `Assigned Beat View (${beatList.length})`
+                  : `Showing ${beatList.length} of ${allFilteredBeats.length} Beats`}
+              </span>
+              {allFilteredBeats.length > HUB_PAGE_SIZE ? (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={safeBeatPage <= 1}
+                    onClick={() => setBeatPage((p) => Math.max(1, p - 1))}
+                    className="p-1 rounded border border-slate-200 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
+                  >
+                    <ChevronLeft size={12} />
+                  </button>
+                  <span className="font-mono text-[10px] font-bold px-1">
+                    {safeBeatPage}/{beatTotalPages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={safeBeatPage >= beatTotalPages}
+                    onClick={() => setBeatPage((p) => Math.min(beatTotalPages, p + 1))}
+                    className="p-1 rounded border border-slate-200 hover:bg-slate-100 disabled:opacity-40 cursor-pointer"
+                  >
+                    <ChevronRight size={12} />
+                  </button>
+                </div>
+              ) : (
+                <span className="font-bold text-emerald-700">
+                  {isRestrictedStaff ? `${currentStaff?.beat || 'Beat'} Locked` : 'All 33 Beats Mapped'}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -861,9 +1028,10 @@ export default function DailyOperationsHub({
               <select
                 value={selectedBeat}
                 onChange={(e) => setSelectedBeat(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-700"
+                disabled={isRestrictedStaff}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-700 disabled:bg-slate-100"
               >
-                {ALL_33_BEATS_FUEL_DATA.map((b) => (
+                {scopedFuelBeats.map((b) => (
                   <option key={b.beatNumber} value={b.beatNumber}>
                     {b.beatNumber} — {b.assignedPostmanName} ({b.sanctionedDailyKm} KM/d)
                   </option>

@@ -974,47 +974,48 @@ class CustomerService {
 
   /**
    * Scoped Customers getter:
-   * - Admin: Returns all customer records across the organization
-   * - Postman: Returns only customers linked to properties within the postman's assigned beat or created by them
+   * - Master Admin / Admin: Returns all customer records across the organization
+   * - Postman / GDS: Returns only customers linked to properties/colonies within assigned beat(s) or created by them
    */
   public getScopedCustomers(activeSession?: any): Customer[] {
     const session = activeSession || staffPermissionService.getActiveSession();
-    if (!session || staffPermissionService.isSuperAdmin(session) || session.role === 'ADMIN' || session.role === 'SUPER_ADMIN') {
+    if (!session || !staffPermissionService.isPostmanOrGds(session)) {
       return this.customers;
     }
-    const userBeat = (session.beat || 'Beat 2').replace(/beat\s*/i, '').trim();
-    const allowedBeats = (session.assignedBeats || [session.beat || 'Beat 2']).map((b: string) => b.replace(/beat\s*/i, '').trim());
 
-    return this.customers.filter(c => {
-      const cBeat = (c.beatNo || '2').replace(/beat\s*/i, '').trim();
-      const isMyBeat = cBeat === userBeat || allowedBeats.includes(cBeat);
-      const isCreatedByMe = c.createdBy && (
-        c.createdBy.toUpperCase() === session.employeeId?.toUpperCase() || 
-        c.createdBy === session.id || 
-        c.createdBy === session.name
-      );
-      return isMyBeat || isCreatedByMe;
-    });
+    return this.customers.filter(c =>
+      staffPermissionService.matchesUserBeatScope(session, {
+        beatNo: c.beatNo,
+        createdBy: c.createdBy,
+        assignedStaffEmail: c.createdBy,
+        area: c.area,
+        colonyName: c.area,
+        sector: c.sector,
+      })
+    );
   }
 
   /**
    * Scoped Properties getter:
-   * - Admin: Returns all registered properties
-   * - Postman: Returns only properties belonging to the postman's assigned beat
+   * - Master Admin / Admin: Returns all registered properties
+   * - Postman / GDS: Returns only properties belonging to assigned beat(s) / colonies
    */
   public getScopedProperties(activeSession?: any): Property[] {
     const allProps = this.getProperties();
     const session = activeSession || staffPermissionService.getActiveSession();
-    if (!session || staffPermissionService.isSuperAdmin(session) || session.role === 'ADMIN' || session.role === 'SUPER_ADMIN') {
+    if (!session || !staffPermissionService.isPostmanOrGds(session)) {
       return allProps;
     }
-    const userBeat = (session.beat || 'Beat 2').replace(/beat\s*/i, '').trim();
-    const allowedBeats = (session.assignedBeats || [session.beat || 'Beat 2']).map((b: string) => b.replace(/beat\s*/i, '').trim());
 
-    return allProps.filter(p => {
-      const pBeat = (p.beatNo || '2').replace(/beat\s*/i, '').trim();
-      return pBeat === userBeat || allowedBeats.includes(pBeat);
-    });
+    return allProps.filter(p =>
+      staffPermissionService.matchesUserBeatScope(session, {
+        beatNo: p.beatNo,
+        area: p.area,
+        colonyName: p.area,
+        sector: p.sector,
+        pincode: p.pincode,
+      })
+    );
   }
 
   /**
@@ -1024,16 +1025,14 @@ class CustomerService {
   public canEditRecord(record: { createdBy?: string; beatNo?: string }, activeSession?: any): boolean {
     const session = activeSession || staffPermissionService.getActiveSession();
     if (!session) return true;
-    if (staffPermissionService.isSuperAdmin(session) || session.role === 'ADMIN' || session.role === 'SUPER_ADMIN') {
+    if (!staffPermissionService.isPostmanOrGds(session)) {
       return true;
     }
     if (!record.createdBy) {
-      const userBeat = (session.beat || 'Beat 2').replace(/beat\s*/i, '').trim();
-      const rBeat = (record.beatNo || '2').replace(/beat\s*/i, '').trim();
-      return userBeat === rBeat;
+      return staffPermissionService.matchesUserBeatScope(session, { beatNo: record.beatNo });
     }
     return (
-      record.createdBy.toUpperCase() === session.employeeId?.toUpperCase() || 
+      record.createdBy.toUpperCase() === session.employeeId?.toUpperCase() ||
       record.createdBy === session.id ||
       record.createdBy === session.name
     );
@@ -1053,8 +1052,45 @@ class CustomerService {
     return this.leads;
   }
 
+  public getScopedLeads(activeSession?: any): Lead[] {
+    const session = activeSession || staffPermissionService.getActiveSession();
+    if (!session || !staffPermissionService.isPostmanOrGds(session)) {
+      return this.leads;
+    }
+    return this.leads.filter(l => {
+      const cust = this.getCustomerById(l.customerId);
+      return staffPermissionService.matchesUserBeatScope(session, {
+        beatNo: l.beatNo || cust?.beatNo,
+        assignedStaffId: l.assignedStaffId,
+        assignedStaffName: l.assignedStaffName || (l as any).assignedTo,
+        assignedStaffEmail: l.assignedStaffEmail,
+        assignedTo: (l as any).assignedTo,
+        area: cust?.area || (l as any).area,
+        sector: cust?.sector,
+        officeId: l.officeId || cust?.officeId,
+        pincode: l.pincode || cust?.pincode,
+      });
+    });
+  }
+
   public getFollowUps(): FollowUp[] {
     return this.followUps;
+  }
+
+  public getScopedFollowUps(activeSession?: any): FollowUp[] {
+    const session = activeSession || staffPermissionService.getActiveSession();
+    if (!session || !staffPermissionService.isPostmanOrGds(session)) {
+      return this.followUps;
+    }
+    return this.followUps.filter(f => {
+      const cust = this.getCustomerById(f.customerId);
+      return staffPermissionService.matchesUserBeatScope(session, {
+        beatNo: cust?.beatNo,
+        assignedStaffName: (f as any).assignedTo,
+        area: cust?.area,
+        sector: cust?.sector,
+      });
+    });
   }
 
   public getTickets(): SupportTicket[] {

@@ -1,80 +1,427 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isSignedIn() { return request.auth != null; }
-    
-    // Users & Staff profiles and permissions
-    match /users/{document=**} {
-      allow read, write: if true;
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
     }
 
-    match /staff_permissions/{document=**} {
-      allow read, write: if true;
+    // Core identity & schema primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    function incoming() {
+      return request.resource.data;
+    }
+    function existing() {
+      return resource.data;
+    }
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+    function isMasterAdminEmail() {
+      return isVerified() &&
+        request.auth.token.email is string &&
+        request.auth.token.email.lower() == 'ektamahenmeena@gmail.com';
+    }
+    function isMasterAdmin() {
+      return isMasterAdminEmail() || (
+        isVerified() &&
+        exists(/databases/$(database)/documents/staff_permissions/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/staff_permissions/$(request.auth.uid)).data.role == 'MASTER_ADMIN' &&
+        get(/databases/$(database)/documents/staff_permissions/$(request.auth.uid)).data.isActive == true
+      );
+    }
+    function isAdmin() {
+      return isMasterAdmin() || (
+        isVerified() &&
+        exists(/databases/$(database)/documents/staff_permissions/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/staff_permissions/$(request.auth.uid)).data.role in ['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN'] &&
+        get(/databases/$(database)/documents/staff_permissions/$(request.auth.uid)).data.isActive == true
+      );
+    }
+    function isStaff() {
+      return isAdmin() || (
+        isVerified() &&
+        exists(/databases/$(database)/documents/staff_permissions/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/staff_permissions/$(request.auth.uid)).data.role in ['POSTMAN', 'STAFF', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN'] &&
+        get(/databases/$(database)/documents/staff_permissions/$(request.auth.uid)).data.isActive == true
+      );
+    }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
     }
 
-    // Customers collection
-    match /customers/{document=**} {
-      allow read, write: if true;
-    }
-    
-    // Inquiries collection (public can submit inquiries, authenticated can manage)
-    match /inquiries/{document=**} {
-      allow read, write: if true;
-    }
-    
-    // Support tickets
-    match /support_tickets/{document=**} {
-      allow read, write: if true;
+    // Entity validation helpers (Blueprint-synchronized)
+    function isValidUserAccount(data) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'role']) &&
+        data.keys().hasOnly(['uid', 'name', 'email', 'phone', 'role', 'assignedBeat', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        data.email is string && data.email.size() >= 5 && data.email.size() <= 160 &&
+        data.role in ['CUSTOMER', 'POSTMAN', 'STAFF', 'ADMIN', 'MASTER_ADMIN'] &&
+        (!data.keys().hasAny(['phone']) || (data.phone is string && data.phone.size() >= 10 && data.phone.size() <= 20)) &&
+        (!data.keys().hasAny(['assignedBeat']) || (data.assignedBeat is string && data.assignedBeat.size() <= 40));
     }
 
-    // Leads collection
-    match /leads/{document=**} {
-      allow read, write: if true;
+    function isValidStaffPermission(data) {
+      return data.keys().hasAll(['uid', 'employeeId', 'name', 'email', 'role', 'assignedBeat', 'isActive']) &&
+        data.keys().hasOnly(['uid', 'employeeId', 'name', 'email', 'contact', 'role', 'assignedBeat', 'assignedOffice', 'isActive', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        isValidId(data.employeeId) && data.employeeId.size() <= 40 &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        data.email is string && data.email.size() >= 5 && data.email.size() <= 160 &&
+        data.role in ['POSTMAN', 'STAFF', 'ADMIN', 'MASTER_ADMIN'] &&
+        data.assignedBeat is string && data.assignedBeat.size() >= 1 && data.assignedBeat.size() <= 40 &&
+        data.isActive is bool &&
+        (!data.keys().hasAny(['contact']) || (data.contact is string && data.contact.size() >= 10 && data.contact.size() <= 20)) &&
+        (!data.keys().hasAny(['assignedOffice']) || (data.assignedOffice is string && data.assignedOffice.size() >= 1 && data.assignedOffice.size() <= 120));
     }
 
-    // Follow-ups collection
-    match /follow_ups/{document=**} {
-      allow read, write: if true;
+    function isValidUserSession(data) {
+      return data.keys().hasAll(['sessionId', 'uid', 'deviceFingerprint', 'active']) &&
+        data.keys().hasOnly(['sessionId', 'uid', 'deviceFingerprint', 'active', 'createdAt', 'lastSeenAt', 'revokedAt', 'revokedReason']) &&
+        isValidId(data.sessionId) &&
+        isValidId(data.uid) &&
+        data.deviceFingerprint is string && data.deviceFingerprint.size() >= 16 && data.deviceFingerprint.size() <= 128 &&
+        data.active is bool &&
+        (!data.keys().hasAny(['revokedReason']) || (data.revokedReason is string && data.revokedReason.size() <= 200));
     }
 
-    // Products collection
-    match /products/{document=**} {
-      allow read, write: if true;
+    function isValidCustomer(data) {
+      return data.keys().hasAll(['name', 'mobile', 'ownerUid']) &&
+        data.keys().hasOnly(['id', 'name', 'mobile', 'householdId', 'beatNo', 'ownerUid', 'colony', 'sector', 'houseNo', 'pincode', 'type', 'updatedAt']) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        data.mobile is string && data.mobile.size() >= 10 && data.mobile.size() <= 20 &&
+        isValidId(data.ownerUid) &&
+        (!data.keys().hasAny(['beatNo']) || (data.beatNo is string && data.beatNo.size() <= 40)) &&
+        (!data.keys().hasAny(['pincode']) || (data.pincode is string && data.pincode.matches('^[0-9]{6}$')));
     }
 
-    // Households collection
-    match /households/{document=**} {
-      allow read, write: if true;
-    }
-    
-    // Properties collection
-    match /properties/{document=**} {
-      allow read, write: if true;
-    }
-
-    // Tasks collection
-    match /tasks/{document=**} {
-      allow read, write: if true;
+    function isValidHousehold(data) {
+      return data.keys().hasAll(['id', 'ownerUid']) &&
+        data.keys().hasOnly(['id', 'primaryCustomer', 'beatNo', 'ownerUid', 'pincode', 'updatedAt']) &&
+        isValidId(data.id) &&
+        isValidId(data.ownerUid) &&
+        (!data.keys().hasAny(['primaryCustomer']) || (data.primaryCustomer is string && data.primaryCustomer.size() <= 128)) &&
+        (!data.keys().hasAny(['beatNo']) || (data.beatNo is string && data.beatNo.size() <= 40));
     }
 
-    // Conflicts & Data Quality
-    match /conflicts/{document=**} {
-      allow read, write: if true;
+    function isValidProperty(data) {
+      return data.keys().hasAll(['houseNumber', 'address', 'ownerUid']) &&
+        data.keys().hasOnly(['id', 'houseNumber', 'address', 'pincode', 'beatNo', 'colony', 'status', 'ownerUid', 'updatedAt']) &&
+        data.houseNumber is string && data.houseNumber.size() >= 1 && data.houseNumber.size() <= 60 &&
+        data.address is string && data.address.size() >= 1 && data.address.size() <= 300 &&
+        isValidId(data.ownerUid) &&
+        (!data.keys().hasAny(['pincode']) || (data.pincode is string && data.pincode.matches('^[0-9]{6}$'))) &&
+        (!data.keys().hasAny(['beatNo']) || (data.beatNo is string && data.beatNo.size() <= 40));
     }
 
-    // Audit logs
-    match /audit_logs/{document=**} {
-      allow read, write: if true;
+    function isValidInquiry(data) {
+      return data.keys().hasAll(['name', 'mobile', 'subject', 'status']) &&
+        data.keys().hasOnly(['name', 'mobile', 'subject', 'message', 'status', 'ownerUid', 'createdAt', 'updatedAt']) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        data.mobile is string && data.mobile.size() >= 10 && data.mobile.size() <= 20 &&
+        data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 160 &&
+        data.status in ['Open', 'InProgress', 'Resolved'] &&
+        (!data.keys().hasAny(['message']) || (data.message is string && data.message.size() <= 1000)) &&
+        (!data.keys().hasAny(['ownerUid']) || isValidId(data.ownerUid));
     }
 
-    // Settings & Master sync
-    match /settings/{document=**} {
-      allow read, write: if true;
+    function isValidSupportTicket(data) {
+      return data.keys().hasAll(['title', 'status', 'ownerUid']) &&
+        data.keys().hasOnly(['title', 'description', 'status', 'beatNo', 'ownerUid', 'updatedAt']) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.status in ['Open', 'Assigned', 'Resolved', 'Closed'] &&
+        isValidId(data.ownerUid);
     }
 
-    // Pending Approvals
-    match /pending_approvals/{document=**} {
-      allow read, write: if true;
+    function isValidLead(data) {
+      return data.keys().hasAll(['customerName', 'productCode', 'status', 'ownerUid']) &&
+        data.keys().hasOnly(['customerName', 'productCode', 'status', 'beatNo', 'mobile', 'ownerUid', 'updatedAt']) &&
+        data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 120 &&
+        data.productCode is string && data.productCode.size() >= 1 && data.productCode.size() <= 60 &&
+        data.status in ['New', 'Contacted', 'Converted', 'Closed'] &&
+        isValidId(data.ownerUid);
+    }
+
+    function isValidFollowUp(data) {
+      return data.keys().hasAll(['leadId', 'notes', 'status', 'ownerUid']) &&
+        data.keys().hasOnly(['leadId', 'notes', 'status', 'dueDate', 'ownerUid', 'updatedAt']) &&
+        isValidId(data.leadId) &&
+        data.notes is string && data.notes.size() >= 1 && data.notes.size() <= 500 &&
+        data.status in ['Pending', 'Completed', 'Cancelled'] &&
+        isValidId(data.ownerUid);
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll(['code', 'title', 'category', 'isActive']) &&
+        data.keys().hasOnly(['code', 'title', 'category', 'description', 'isActive', 'updatedAt']) &&
+        data.code is string && data.code.size() >= 1 && data.code.size() <= 60 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 80 &&
+        data.isActive is bool;
+    }
+
+    function isValidTask(data) {
+      return data.keys().hasAll(['title', 'beatNo', 'status', 'ownerUid']) &&
+        data.keys().hasOnly(['title', 'beatNo', 'status', 'notes', 'ownerUid', 'updatedAt']) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.beatNo is string && data.beatNo.size() >= 1 && data.beatNo.size() <= 40 &&
+        data.status in ['Pending', 'InProgress', 'Completed'] &&
+        isValidId(data.ownerUid);
+    }
+
+    function isValidConflictRecord(data) {
+      return data.keys().hasAll(['entityType', 'status', 'ownerUid']) &&
+        data.keys().hasOnly(['entityType', 'status', 'summary', 'ownerUid', 'updatedAt']) &&
+        data.entityType is string && data.entityType.size() >= 1 && data.entityType.size() <= 60 &&
+        data.status in ['Open', 'Resolved', 'Ignored'] &&
+        isValidId(data.ownerUid);
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['actorUid', 'action']) &&
+        data.keys().hasOnly(['actorUid', 'action', 'details', 'createdAt']) &&
+        isValidId(data.actorUid) &&
+        data.action is string && data.action.size() >= 1 && data.action.size() <= 120 &&
+        (!data.keys().hasAny(['details']) || (data.details is string && data.details.size() <= 1000));
+    }
+
+    function isValidSystemSetting(data) {
+      return data.keys().hasAll(['key', 'value', 'updatedByUid']) &&
+        data.keys().hasOnly(['key', 'value', 'updatedByUid', 'updatedAt']) &&
+        data.key is string && data.key.size() >= 1 && data.key.size() <= 100 &&
+        data.value is string && data.value.size() <= 1000 &&
+        isValidId(data.updatedByUid);
+    }
+
+    function isValidPendingApproval(data) {
+      return data.keys().hasAll(['type', 'requestedBy', 'requestedByUid', 'status']) &&
+        data.keys().hasOnly(['type', 'requestedBy', 'requestedByUid', 'status', 'payload', 'reviewedBy', 'reviewedAt', 'createdAt']) &&
+        data.type is string && data.type.size() >= 1 && data.type.size() <= 80 &&
+        data.requestedBy is string && data.requestedBy.size() >= 1 && data.requestedBy.size() <= 120 &&
+        isValidId(data.requestedByUid) &&
+        data.status in ['Pending', 'Approved', 'Rejected'];
+    }
+
+    // 1. Users (PII isolated; prevent role self-escalation)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isMasterAdminEmail() || (isSignedIn() && existing().uid == request.auth.uid);
+      allow create: if isValidId(userId) && isVerified() && isValidUserAccount(incoming()) && (
+        isMasterAdmin() ||
+        (isOwner(userId) && incoming().uid == request.auth.uid && incoming().role == 'CUSTOMER')
+      );
+      allow update: if isValidId(userId) && isVerified() && isValidUserAccount(incoming()) &&
+        incoming().uid == existing().uid && (
+        isMasterAdmin() ||
+        (isOwner(userId) && incoming().role == existing().role &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'updatedAt']))
+      );
+      allow delete: if isValidId(userId) && isMasterAdmin();
+    }
+
+    // 2. Staff Permissions (Master Admin controlled RBAC matrix)
+    match /staff_permissions/{staffId} {
+      allow get: if isValidId(staffId) && (isOwner(staffId) || isAdmin());
+      allow list: if isMasterAdminEmail() || (isSignedIn() && existing().uid == request.auth.uid);
+      allow create: if isValidId(staffId) && isMasterAdmin() && isValidStaffPermission(incoming());
+      allow update: if isValidId(staffId) && isMasterAdmin() && isValidStaffPermission(incoming()) &&
+        incoming().uid == existing().uid;
+      allow delete: if isValidId(staffId) && isMasterAdmin();
+    }
+
+    // 3. Single-Browser User Sessions (Device fingerprint locked)
+    match /user_sessions/{sessionId} {
+      allow get: if isValidId(sessionId) && (isMasterAdmin() || (isSignedIn() && existing().uid == request.auth.uid));
+      allow list: if isMasterAdminEmail() || (isSignedIn() && existing().uid == request.auth.uid);
+      allow create: if isValidId(sessionId) && isVerified() && isValidUserSession(incoming()) &&
+        incoming().uid == request.auth.uid && incoming().active == true;
+      allow update: if isValidId(sessionId) && isVerified() && isValidUserSession(incoming()) &&
+        incoming().uid == existing().uid && (
+        isMasterAdmin() ||
+        (existing().uid == request.auth.uid &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['active', 'revokedAt', 'revokedReason', 'lastSeenAt']))
+      );
+      allow delete: if isValidId(sessionId) && isMasterAdmin();
+    }
+
+    // 4. Customers (Staff/Owner isolated; no anonymous PII exposure)
+    match /customers/{customerId} {
+      allow get: if isValidId(customerId) && (isAdmin() || (isStaff() && existing().ownerUid == request.auth.uid) || (isSignedIn() && existing().ownerUid == request.auth.uid));
+      allow list: if isMasterAdminEmail() || (isSignedIn() && existing().ownerUid == request.auth.uid);
+      allow create: if isValidId(customerId) && isStaff() && isValidCustomer(incoming()) &&
+        incoming().ownerUid == request.auth.uid;
+      allow update: if isValidId(customerId) && isStaff() && isValidCustomer(incoming()) &&
+        incoming().ownerUid == existing().ownerUid && (
+        isAdmin() ||
+        (existing().ownerUid == request.auth.uid &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'mobile', 'householdId', 'colony', 'sector', 'houseNo', 'pincode', 'type', 'updatedAt']))
+      );
+      allow delete: if isValidId(customerId) && isAdmin();
+    }
+
+    // 5. Households
+    match /households/{householdId} {
+      allow get: if isValidId(householdId) && (isAdmin() || (isStaff() && existing().ownerUid == request.auth.uid));
+      allow list: if isMasterAdminEmail() || (isSignedIn() && existing().ownerUid == request.auth.uid);
+      allow create: if isValidId(householdId) && isStaff() && isValidHousehold(incoming()) &&
+        incoming().ownerUid == request.auth.uid;
+      allow update: if isValidId(householdId) && isStaff() && isValidHousehold(incoming()) &&
+        incoming().ownerUid == existing().ownerUid && (
+        isAdmin() ||
+        (existing().ownerUid == request.auth.uid &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['primaryCustomer', 'pincode', 'updatedAt']))
+      );
+      allow delete: if isValidId(householdId) && isAdmin();
+    }
+
+    // 6. Properties
+    match /properties/{propertyId} {
+      allow get: if isValidId(propertyId) && (isAdmin() || (isStaff() && existing().ownerUid == request.auth.uid));
+      allow list: if isMasterAdminEmail() || (isSignedIn() && existing().ownerUid == request.auth.uid);
+      allow create: if isValidId(propertyId) && isStaff() && isValidProperty(incoming()) &&
+        incoming().ownerUid == request.auth.uid;
+      allow update: if isValidId(propertyId) && isStaff() && isValidProperty(incoming()) &&
+        incoming().ownerUid == existing().ownerUid && (
+        isAdmin() ||
+        (existing().ownerUid == request.auth.uid &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['houseNumber', 'address', 'colony', 'status', 'updatedAt']))
+      );
+      allow delete: if isValidId(propertyId) && isAdmin();
+    }
+
+    // 7. Citizen Inquiries (Authenticated owner or Admin read; validated create)
+    match /inquiries/{inquiryId} {
+      allow get: if isValidId(inquiryId) && (isAdmin() || (isSignedIn() && existing().ownerUid == request.auth.uid));
+      allow list: if isMasterAdminEmail() || (isSignedIn() && existing().ownerUid == request.auth.uid);
+      allow create: if isValidId(inquiryId) && isVerified() && isValidInquiry(incoming()) &&
+        incoming().ownerUid == request.auth.uid && incoming().status == 'Open';
+      allow update: if isValidId(inquiryId) && isVerified() && isValidInquiry(incoming()) &&
+        existing().status != 'Resolved' && (
+        isAdmin() ||
+        (existing().ownerUid == request.auth.uid &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['subject', 'message', 'updatedAt']))
+      );
+      allow delete: if isValidId(inquiryId) && isAdmin();
+    }
+
+    // 8. Support Tickets
+    match /support_tickets/{ticketId} {
+      allow get: if isValidId(ticketId) && (isAdmin() || (isSignedIn() && existing().ownerUid == request.auth.uid));
+      allow list: if isMasterAdminEmail() || (isSignedIn() && existing().ownerUid == request.auth.uid);
+      allow create: if isValidId(ticketId) && isVerified() && isValidSupportTicket(incoming()) &&
+        incoming().ownerUid == request.auth.uid && incoming().status == 'Open';
+      allow update: if isValidId(ticketId) && isVerified() && isValidSupportTicket(incoming()) &&
+        incoming().ownerUid == existing().ownerUid && existing().status != 'Closed' && (
+        isAdmin() ||
+        (existing().ownerUid == request.auth.uid &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['description', 'updatedAt']))
+      );
+      allow delete: if isValidId(ticketId) && isAdmin();
+    }
+
+    // 9. Leads
+    match /leads/{leadId} {
+      allow get: if isValidId(leadId) && (isAdmin() || (isStaff() && existing().ownerUid == request.auth.uid));
+      allow list: if isMasterAdminEmail() || (isSignedIn() && existing().ownerUid == request.auth.uid);
+      allow create: if isValidId(leadId) && isStaff() && isValidLead(incoming()) &&
+        incoming().ownerUid == request.auth.uid;
+      allow update: if isValidId(leadId) && isStaff() && isValidLead(incoming()) &&
+        incoming().ownerUid == existing().ownerUid && existing().status != 'Closed' && (
+        isAdmin() ||
+        (existing().ownerUid == request.auth.uid &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'mobile', 'updatedAt']))
+      );
+      allow delete: if isValidId(leadId) && isAdmin();
+    }
+
+    // 10. Follow-ups
+    match /follow_ups/{followUpId} {
+      allow get: if isValidId(followUpId) && (isAdmin() || (isStaff() && existing().ownerUid == request.auth.uid));
+      allow list: if isMasterAdminEmail() || (isSignedIn() && existing().ownerUid == request.auth.uid);
+      allow create: if isValidId(followUpId) && isStaff() && isValidFollowUp(incoming()) &&
+        incoming().ownerUid == request.auth.uid;
+      allow update: if isValidId(followUpId) && isStaff() && isValidFollowUp(incoming()) &&
+        incoming().ownerUid == existing().ownerUid && existing().status == 'Pending' && (
+        isAdmin() ||
+        (existing().ownerUid == request.auth.uid &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['notes', 'status', 'dueDate', 'updatedAt']))
+      );
+      allow delete: if isValidId(followUpId) && isAdmin();
+    }
+
+    // 11. Postal Products (Public active catalog; Admin-only mutations)
+    match /products/{productId} {
+      allow get: if isValidId(productId) && (existing().isActive == true || isAdmin());
+      allow list: if existing().isActive == true || isMasterAdminEmail();
+      allow create: if isValidId(productId) && isAdmin() && isValidProduct(incoming());
+      allow update: if isValidId(productId) && isAdmin() && isValidProduct(incoming());
+      allow delete: if isValidId(productId) && isAdmin();
+    }
+
+    // 12. Beat Tasks
+    match /tasks/{taskId} {
+      allow get: if isValidId(taskId) && (isAdmin() || (isStaff() && existing().ownerUid == request.auth.uid));
+      allow list: if isMasterAdminEmail() || (isSignedIn() && existing().ownerUid == request.auth.uid);
+      allow create: if isValidId(taskId) && isStaff() && isValidTask(incoming()) &&
+        incoming().ownerUid == request.auth.uid;
+      allow update: if isValidId(taskId) && isStaff() && isValidTask(incoming()) &&
+        incoming().ownerUid == existing().ownerUid && existing().status != 'Completed' && (
+        isAdmin() ||
+        (existing().ownerUid == request.auth.uid &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'updatedAt']))
+      );
+      allow delete: if isValidId(taskId) && isAdmin();
+    }
+
+    // 13. Data Quality Conflicts (Admin-managed)
+    match /conflicts/{conflictId} {
+      allow get: if isValidId(conflictId) && isAdmin();
+      allow list: if isMasterAdminEmail() || (isSignedIn() && existing().ownerUid == request.auth.uid);
+      allow create: if isValidId(conflictId) && isAdmin() && isValidConflictRecord(incoming()) &&
+        incoming().ownerUid == request.auth.uid;
+      allow update: if isValidId(conflictId) && isAdmin() && isValidConflictRecord(incoming()) &&
+        incoming().ownerUid == existing().ownerUid;
+      allow delete: if isValidId(conflictId) && isMasterAdmin();
+    }
+
+    // 14. Audit Logs (Append-only, immutable)
+    match /audit_logs/{logId} {
+      allow get: if isValidId(logId) && isAdmin();
+      allow list: if isMasterAdminEmail() || (isSignedIn() && existing().actorUid == request.auth.uid);
+      allow create: if isValidId(logId) && isVerified() && isValidAuditLog(incoming()) &&
+        incoming().actorUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // 15. System Settings (Master Admin only)
+    match /settings/{settingId} {
+      allow get: if isValidId(settingId) && isAdmin();
+      allow list: if isMasterAdminEmail();
+      allow create: if isValidId(settingId) && isMasterAdmin() && isValidSystemSetting(incoming()) &&
+        incoming().updatedByUid == request.auth.uid;
+      allow update: if isValidId(settingId) && isMasterAdmin() && isValidSystemSetting(incoming()) &&
+        incoming().updatedByUid == request.auth.uid;
+      allow delete: if isValidId(settingId) && isMasterAdmin();
+    }
+
+    // 16. Pending Approvals
+    match /pending_approvals/{approvalId} {
+      allow get: if isValidId(approvalId) && (isAdmin() || (isSignedIn() && existing().requestedByUid == request.auth.uid));
+      allow list: if isMasterAdminEmail() || (isSignedIn() && existing().requestedByUid == request.auth.uid);
+      allow create: if isValidId(approvalId) && isStaff() && isValidPendingApproval(incoming()) &&
+        incoming().requestedByUid == request.auth.uid && incoming().status == 'Pending';
+      allow update: if isValidId(approvalId) && isAdmin() && isValidPendingApproval(incoming()) &&
+        existing().status == 'Pending' && incoming().status in ['Approved', 'Rejected'] &&
+        incoming().requestedByUid == existing().requestedByUid &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'reviewedBy', 'reviewedAt']);
+      allow delete: if isValidId(approvalId) && isAdmin();
     }
   }
 }

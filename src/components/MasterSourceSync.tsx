@@ -87,7 +87,7 @@ export default function MasterSourceSync() {
       type: 'SYNC_SHEETS',
       title: 'Confirm Google Sheets Master Backup & Auto-Sync',
       description:
-        'This action will create or update the Google Spreadsheet "India Post CRM Master Backup - Dadabari SO (mahen.comtech@gmail.com)" in your Google Drive and overwrite/update 6 structured tabs with your current CRM data:',
+        'This action will create or update the Google Spreadsheet "India Post CRM Master Backup - Dadabari SO (Ektamahenmeena@gmail.com)" in your Google Drive and overwrite/update 6 structured tabs with your current CRM data:',
       details: [
         `Customers Tab: ${stats.customers} verified customer records`,
         `Properties Tab: ${stats.properties} mapped property/plot records`,
@@ -103,9 +103,9 @@ export default function MasterSourceSync() {
     setConfirmDialog({
       type: period === 'Daily' ? 'SEND_GMAIL_DAILY' : 'SEND_GMAIL_WEEKLY',
       title: `Confirm Sending ${period} Activity & Backup Summary via Gmail`,
-      description: `This action will send an automated ${period} Operations & Database Backup Summary email from your authenticated Gmail account directly to Master Admin (mahen.comtech@gmail.com):`,
+      description: `This action will send an automated ${period} Operations & Database Backup Summary email from your authenticated Gmail account directly to Master Admin (Ektamahenmeena@gmail.com):`,
       details: [
-        `Recipient: mahen.comtech@gmail.com`,
+        `Recipient: Ektamahenmeena@gmail.com`,
         `Subject: [India Post CRM] ${period} Operations & Database Backup Summary - Dadabari S.O.`,
         `Included Summary: ${stats.customers} Customers, ${stats.leads} Leads, ${stats.dailyEntries} Daily Article Logs, ${stats.bills} Reimbursement Bills, and ${stats.tasks} Field Tasks.`,
       ],
@@ -131,10 +131,10 @@ export default function MasterSourceSync() {
         );
       } else {
         const period = actionType === 'SEND_GMAIL_DAILY' ? 'Daily' : 'Weekly';
-        setMessage(`Sending ${period} CRM Activity & Backup Summary email to mahen.comtech@gmail.com...`);
+        setMessage(`Sending ${period} CRM Activity & Backup Summary email to Ektamahenmeena@gmail.com...`);
         await operationsService.sendEmailActivitySummary(token, period);
         setMessage(
-          `${period} Activity & Database Backup Summary successfully sent to mahen.comtech@gmail.com via Gmail!`
+          `${period} Activity & Database Backup Summary successfully sent to Ektamahenmeena@gmail.com via Gmail!`
         );
       }
       updateAllStats();
@@ -291,7 +291,7 @@ export default function MasterSourceSync() {
       <div className="bg-slate-900 text-white p-6 rounded-2xl border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <div className="text-xs font-semibold text-amber-400 tracking-wide">
-            Centralized Data Backup Engine · Master Admin: mahen.comtech@gmail.com
+            Centralized Data Backup Engine · Master Admin: Ektamahenmeena@gmail.com
           </div>
           <h1 className="text-2xl font-bold tracking-tight mt-1">
             Automated Google Sheets & Gmail Backup OS
@@ -414,13 +414,13 @@ export default function MasterSourceSync() {
               Google Sheets Master Database Auto-Sync
             </h2>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Automatically tracks every CRM mutation ({backupState.pendingChangesCount} pending changes in queue) and writes all 6 operational tabs (Customers, Properties, Daily_Entries, Bills_Claims, Tasks, Leads) to Google Sheets under <strong>mahen.comtech@gmail.com</strong>.
+              Automatically tracks every CRM mutation ({backupState.pendingChangesCount} pending changes in queue) and writes all 6 operational tabs (Customers, Properties, Daily_Entries, Bills_Claims, Tasks, Leads) to Google Sheets under <strong>Ektamahenmeena@gmail.com</strong>.
             </p>
 
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
               <div className="flex justify-between">
                 <span className="text-slate-500">Target Account:</span>
-                <strong className="font-mono text-slate-900">mahen.comtech@gmail.com</strong>
+                <strong className="font-mono text-slate-900">Ektamahenmeena@gmail.com</strong>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Last Google Sheets Sync:</span>
@@ -493,13 +493,13 @@ export default function MasterSourceSync() {
               Automated Gmail Activity & Backup Summary Dispatch
             </h2>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Sends formatted HTML activity reports covering verified customers, scheme leads, postman daily article deliveries, COD cash collections, and special reimbursement claims directly to <strong>mahen.comtech@gmail.com</strong>.
+              Sends formatted HTML activity reports covering verified customers, scheme leads, postman daily article deliveries, COD cash collections, and special reimbursement claims directly to <strong>Ektamahenmeena@gmail.com</strong>.
             </p>
 
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
               <div className="flex justify-between">
                 <span className="text-slate-500">Recipient Admin Email:</span>
-                <strong className="font-mono text-slate-900">mahen.comtech@gmail.com</strong>
+                <strong className="font-mono text-slate-900">Ektamahenmeena@gmail.com</strong>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Last Email Backup Sent:</span>

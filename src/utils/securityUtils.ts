@@ -78,6 +78,28 @@ export async function verifyPassword(plainText: string, storedHashOrPlain: strin
 }
 
 /**
+ * Synchronous password verification against $sha256_sync$, $fallback$, or plaintext
+ */
+export function verifyPasswordSync(plainText: string, storedHashOrPlain: string): boolean {
+  const input = (plainText || '').trim();
+  const stored = (storedHashOrPlain || '').trim();
+  if (!input || !stored) return false;
+
+  if (stored.startsWith('$sha256_sync$') || stored.startsWith('$fallback$')) {
+    const computedSync = hashPasswordSync(input);
+    return computedSync === stored || `$fallback$${computedSync.replace('$sha256_sync$', '')}` === stored;
+  }
+
+  // If async $sha256$ hash was stored, synchronous verification cannot compute SubtleCrypto directly;
+  // callers fall back to default/plaintext rules or server check.
+  if (stored.startsWith('$sha256$')) {
+    return false;
+  }
+
+  return input === stored;
+}
+
+/**
  * Sanitize a staff profile for client rendering (strips sensitive password fields)
  */
 export function sanitizeStaffProfile<T extends { password?: string; [key: string]: any }>(profile: T): Omit<T, 'password'> {

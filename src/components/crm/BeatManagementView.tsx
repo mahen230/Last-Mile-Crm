@@ -92,6 +92,10 @@ export default function BeatManagementView({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [beatStatusFilter, setBeatStatusFilter] = useState<string>('ALL');
   const [groupByOffice, setGroupByOffice] = useState<boolean>(true);
+  const [beatPage, setBeatPage] = useState<number>(1);
+  const [beatModalPage, setBeatModalPage] = useState<number>(1);
+  const BEATS_PER_PAGE = 5;
+  const MODAL_CUSTOMERS_PER_PAGE = 5;
 
   // 3. Modals & Drawers
   const [showOfficeMappingDrawer, setShowOfficeMappingDrawer] = useState<boolean>(false);
@@ -127,7 +131,7 @@ export default function BeatManagementView({
   const [unmapNotice, setUnmapNotice] = useState<string | null>(null);
 
   const refreshData = () => {
-    setCustomers([...customerService.getCustomers()]);
+    setCustomers([...customerService.getScopedCustomers(userProfile)]);
     setDynamicBeats([...staffPermissionService.getDynamicBeatsSummary()]);
     setDynamicOffices([...staffPermissionService.getDynamicOffices()]);
     setAllStaffProfiles([...staffPermissionService.getAllStaffProfiles()]);
@@ -210,7 +214,15 @@ export default function BeatManagementView({
       unsubStaff();
       unsubMaster();
     };
-  }, []);
+  }, [userProfile]);
+
+  useEffect(() => {
+    setBeatPage(1);
+  }, [selectedCircleFilter, selectedDivisionFilter, selectedOfficeFilter, selectedBeatFilter, beatStatusFilter, searchQuery]);
+
+  useEffect(() => {
+    setBeatModalPage(1);
+  }, [selectedBeatForModal, beatModalSearch]);
 
   // Determine the Non-Admin Staff / Postmaster's locked officeId & postOfficeName
   const nonAdminAssignedOffice = useMemo(() => {
@@ -1001,17 +1013,10 @@ export default function BeatManagementView({
             userProfile.designationType?.toLowerCase().includes('inspector');
 
           if (!isPostmasterOrAdmin) {
-            const allowedBeats = userProfile.permissions?.allowedBeats || [userProfile.beat];
-            const hasAllBeats =
-              allowedBeats.includes('ALL') || allowedBeats.includes('All Beats');
-            if (!hasAllBeats && allowedBeats.length > 0) {
-              const beatMatch = allowedBeats.some(
-                (ab) =>
-                  ab.toLowerCase() === beat.beatNo.toLowerCase() ||
-                  ab.toLowerCase() === `beat ${beat.beatNo}`.toLowerCase()
-              );
-              // Keep either their assigned beat or beats in their exact assigned office if they are PA/Office staff
-              if (userProfile.role === 'POSTMAN' && !beatMatch) {
+            const scopedBeats = staffPermissionService.getScopedBeatsSet(userProfile);
+            if (scopedBeats && scopedBeats.size > 0) {
+              const normBeat = beat.beatNo.replace(/^Beat\s+/i, '').trim().toLowerCase();
+              if (staffPermissionService.isPostmanOrGds(userProfile) && !scopedBeats.has(normBeat)) {
                 return false;
               }
             }
@@ -1155,7 +1160,18 @@ export default function BeatManagementView({
     allStaffProfiles,
   ]);
 
-  // Group filteredBeats by Post Office for clean Office-wise Grouping
+  const totalBeatPages = Math.max(1, Math.ceil(filteredBeats.length / BEATS_PER_PAGE));
+  const safeBeatPage = Math.min(beatPage, totalBeatPages);
+  const paginatedBeats = useMemo(
+    () =>
+      filteredBeats.slice(
+        (safeBeatPage - 1) * BEATS_PER_PAGE,
+        safeBeatPage * BEATS_PER_PAGE
+      ),
+    [filteredBeats, safeBeatPage]
+  );
+
+  // Group paginatedBeats by Post Office for clean Office-wise Grouping (max 5 beats per page)
   const beatsGroupedByOffice = useMemo(() => {
     const groups = new Map<
       string,
@@ -1170,7 +1186,7 @@ export default function BeatManagementView({
       }
     >();
 
-    filteredBeats.forEach((beat) => {
+    paginatedBeats.forEach((beat) => {
       const existing = groups.get(beat.officeId);
       if (!existing) {
         groups.set(beat.officeId, {
@@ -1188,7 +1204,7 @@ export default function BeatManagementView({
     });
 
     return Array.from(groups.values());
-  }, [filteredBeats]);
+  }, [paginatedBeats]);
 
   // Customers for the selected beat modal
   const beatCustomers = useMemo(() => {
@@ -1216,6 +1232,16 @@ export default function BeatManagementView({
       return true;
     });
   }, [selectedBeatForModal, customers, beatModalSearch]);
+
+  const totalModalCustomerPages = Math.max(
+    1,
+    Math.ceil(beatCustomers.length / MODAL_CUSTOMERS_PER_PAGE)
+  );
+  const safeModalCustomerPage = Math.min(beatModalPage, totalModalCustomerPages);
+  const paginatedBeatCustomers = beatCustomers.slice(
+    (safeModalCustomerPage - 1) * MODAL_CUSTOMERS_PER_PAGE,
+    safeModalCustomerPage * MODAL_CUSTOMERS_PER_PAGE
+  );
 
   const handleOpenBroadcast = (beat: BeatCardItem) => {
     setBroadcastBeat(beat);
@@ -1971,55 +1997,89 @@ export default function BeatManagementView({
             Reset All Filters
           </button>
         </div>
-      ) : groupByOffice ? (
-        /* Office-Wise Grouped Beats Layout */
-        <div className="space-y-6">
-          {beatsGroupedByOffice.map((group) => (
-            <div
-              key={group.officeId}
-              className="bg-slate-100/70 rounded-3xl p-4 sm:p-5 border border-slate-200/90 space-y-4"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200">
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <span
-                    className={`px-2.5 py-1 rounded-xl text-xs font-black ${
-                      group.officeType === 'BO'
-                        ? 'bg-amber-400 text-slate-950'
-                        : 'bg-red-700 text-white'
-                    }`}
-                  >
-                    {group.officeType} HUB
-                  </span>
-                  <h3 className="text-base font-black text-slate-900">
-                    {group.postOfficeName} (PIN {group.pincode})
-                  </h3>
-                  <span className="text-xs text-slate-500 font-medium">
-                    • Parent: <strong>{group.parentOffice}</strong>
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[11px] font-bold text-slate-600 bg-white px-2.5 py-1 rounded-xl border border-slate-200">
-                    {group.beats.length} {group.beats.length === 1 ? 'Beat' : 'Beats'} Mapped
-                  </span>
-                  {group.linkedDeliveryOffices.length > 0 && (
-                    <span className="text-[11px] font-semibold text-blue-800 bg-blue-50 px-2.5 py-1 rounded-xl border border-blue-200">
-                      Linked: {group.linkedDeliveryOffices.join(', ')}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                {group.beats.map((beat) => renderBeatCard(beat))}
-              </div>
-            </div>
-          ))}
-        </div>
       ) : (
-        /* Flat Beats Cards Grid */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {filteredBeats.map((beat) => renderBeatCard(beat))}
+        <div className="space-y-4">
+          {groupByOffice ? (
+            /* Office-Wise Grouped Beats Layout (max 5 beats per page) */
+            <div className="space-y-6">
+              {beatsGroupedByOffice.map((group) => (
+                <div
+                  key={group.officeId}
+                  className="bg-slate-100/70 rounded-3xl p-4 sm:p-5 border border-slate-200/90 space-y-4"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <span
+                        className={`px-2.5 py-1 rounded-xl text-xs font-black ${
+                          group.officeType === 'BO'
+                            ? 'bg-amber-400 text-slate-950'
+                            : 'bg-red-700 text-white'
+                        }`}
+                      >
+                        {group.officeType} HUB
+                      </span>
+                      <h3 className="text-base font-black text-slate-900">
+                        {group.postOfficeName} (PIN {group.pincode})
+                      </h3>
+                      <span className="text-xs text-slate-500 font-medium">
+                        • Parent: <strong>{group.parentOffice}</strong>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[11px] font-bold text-slate-600 bg-white px-2.5 py-1 rounded-xl border border-slate-200">
+                        {group.beats.length} {group.beats.length === 1 ? 'Beat' : 'Beats'} on Page
+                      </span>
+                      {group.linkedDeliveryOffices.length > 0 && (
+                        <span className="text-[11px] font-semibold text-blue-800 bg-blue-50 px-2.5 py-1 rounded-xl border border-blue-200">
+                          Linked: {group.linkedDeliveryOffices.join(', ')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                    {group.beats.map((beat) => renderBeatCard(beat))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* Flat Beats Cards Grid (max 5 beats per page) */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+              {paginatedBeats.map((beat) => renderBeatCard(beat))}
+            </div>
+          )}
+
+          {/* Beat Cards Pagination Footer */}
+          <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <span className="text-slate-600 font-medium">
+              Showing <b className="text-slate-900">{(safeBeatPage - 1) * BEATS_PER_PAGE + 1}</b>–
+              <b className="text-slate-900">{Math.min(safeBeatPage * BEATS_PER_PAGE, filteredBeats.length)}</b> of{' '}
+              <b className="text-slate-900">{filteredBeats.length}</b> delivery beats (5 per page)
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={safeBeatPage <= 1}
+                onClick={() => setBeatPage((p) => Math.max(1, p - 1))}
+                className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 disabled:opacity-40 hover:bg-slate-100 cursor-pointer"
+              >
+                Prev
+              </button>
+              <span className="font-bold text-slate-800 px-1">
+                Page {safeBeatPage} / {totalBeatPages}
+              </span>
+              <button
+                type="button"
+                disabled={safeBeatPage >= totalBeatPages}
+                onClick={() => setBeatPage((p) => Math.min(totalBeatPages, p + 1))}
+                className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 disabled:opacity-40 hover:bg-slate-100 cursor-pointer"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -2258,7 +2318,7 @@ export default function BeatManagementView({
                   No customers currently mapped to Beat {selectedBeatForModal.beatNo} matching your filter.
                 </div>
               ) : (
-                beatCustomers.slice(0, 60).map((c, i) => (
+                paginatedBeatCustomers.map((c, i) => (
                   <div
                     key={c.id || c.masterId || i}
                     className="py-3 flex items-center justify-between gap-3 hover:bg-slate-50/80 px-2 rounded-xl transition"
@@ -2298,7 +2358,36 @@ export default function BeatManagementView({
               )}
             </div>
 
-            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                {beatCustomers.length > 0 && (
+                  <>
+                    <span className="text-slate-600 font-medium">
+                      Showing {(safeModalCustomerPage - 1) * MODAL_CUSTOMERS_PER_PAGE + 1}–
+                      {Math.min(safeModalCustomerPage * MODAL_CUSTOMERS_PER_PAGE, beatCustomers.length)} of {beatCustomers.length}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={safeModalCustomerPage <= 1}
+                      onClick={() => setBeatModalPage((p) => Math.max(1, p - 1))}
+                      className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 disabled:opacity-40 cursor-pointer"
+                    >
+                      Prev
+                    </button>
+                    <span className="font-bold text-slate-800">
+                      {safeModalCustomerPage} / {totalModalCustomerPages}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={safeModalCustomerPage >= totalModalCustomerPages}
+                      onClick={() => setBeatModalPage((p) => Math.min(totalModalCustomerPages, p + 1))}
+                      className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 disabled:opacity-40 cursor-pointer"
+                    >
+                      Next
+                    </button>
+                  </>
+                )}
+              </div>
               <button
                 onClick={() => setSelectedBeatForModal(null)}
                 className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-xl"

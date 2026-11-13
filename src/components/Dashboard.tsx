@@ -245,7 +245,7 @@ export default function Dashboard({
         mobile: leadCustMobile.trim(),
         beatNo: activeBeat,
         financialInterest: leadScheme,
-        enteredBy: userProfile?.email || 'mahen.comtech@gmail.com',
+        enteredBy: userProfile?.email || 'Ektamahenmeena@gmail.com',
         enteredByName: userProfile?.name || 'Postal Staff',
         verificationStatus: 'Verified',
       },
@@ -285,9 +285,9 @@ export default function Dashboard({
     const result = operationsService.patchOrUpsertDailyArticleQuantities(
       {
         date: artDate,
-        employeeId: curUser?.employeeId || curUser?.id || 'CSI-10023401',
-        staffName: curUser?.name || 'Mahendra Kumar Meena',
-        staffEmail: curUser?.email || 'mahen.comtech@gmail.com',
+        employeeId: curUser?.employeeId || curUser?.id || 'MASTER-ADMIN-01',
+        staffName: curUser?.name || 'Ekta Meena',
+        staffEmail: curUser?.email || 'Ektamahenmeena@gmail.com',
         beatNo: activeBeat,
         officeName: curUser?.assignedOffice || 'Dadabari S.O. (324009)',
         attendanceStatus: attendance,
@@ -523,9 +523,10 @@ export default function Dashboard({
       : ALL_POSTAL_SERVICES_HUB.filter((s) => s.category === activeServiceHubCat);
 
   const isAdmin =
+    userProfile?.role === 'MASTER_ADMIN' ||
     userProfile?.role === 'SUPER_ADMIN' ||
     userProfile?.role === 'ADMIN' ||
-    userProfile?.email === 'mahen.comtech@gmail.com';
+    userProfile?.email?.toLowerCase() === 'ektamahenmeena@gmail.com';
 
   return (
     <div className="space-y-6" id="dashboard-view">
@@ -540,7 +541,7 @@ export default function Dashboard({
               <div className="space-y-1.5">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-900/60 border border-red-700/60 text-amber-300 text-xs font-bold tracking-wide">
                   <ShieldCheck size={14} className="text-amber-400" />
-                  <span>Administrative Control Room · Ekta Meena (mahen.comtech@gmail.com)</span>
+                  <span>Administrative Control Room · Ekta Meena (Ektamahenmeena@gmail.com)</span>
                 </div>
                 <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
                   <span>POSTMAN BOOK CRM — Dadabari S.O. Executive Hub</span>
@@ -1710,7 +1711,7 @@ export default function Dashboard({
                     Google Sheets & Gmail Auto-Backup Engine
                   </div>
                   <div className="text-[11px] text-slate-500">
-                    Master Admin: mahen.comtech@gmail.com · {specialBills.length} Bills & {customers.length} Customers
+                    Master Admin: Ektamahenmeena@gmail.com · {specialBills.length} Bills & {customers.length} Customers
                   </div>
                 </div>
                 <ArrowRight size={15} className="text-red-800 shrink-0" />
@@ -1757,7 +1758,7 @@ export default function Dashboard({
           </div>
 
           <div className="divide-y divide-slate-200 text-xs">
-            {customers.slice(0, 6).map((c) => (
+            {customers.slice(0, 5).map((c) => (
               <div
                 key={c.id}
                 className="py-3 flex items-center justify-between hover:bg-slate-50 px-2 rounded-lg transition gap-2"

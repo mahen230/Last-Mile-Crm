@@ -6,6 +6,7 @@ import {
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import { staffPermissionService } from '../../services/staffPermissionService';
 import { staffRegistrationService, ProfileApprovalRequest } from '../../services/staffRegistrationService';
+import { fetchServerCsrfToken, getDeviceFingerprint } from '../../services/authSecurityService';
 
 export default function MyProfileView() {
   const { userProfile, switchStaffProfile } = useAuth();
@@ -43,7 +44,7 @@ export default function MyProfileView() {
     return () => unsub();
   }, [empId]);
 
-  const handlePasswordChange = (e: React.FormEvent) => {
+  const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setPassError(null);
     setPassSuccess(null);
@@ -58,9 +59,26 @@ export default function MyProfileView() {
       return;
     }
 
+    try {
+      const csrf = await fetchServerCsrfToken();
+      const fp = await getDeviceFingerprint();
+      await fetch('/api/v1/auth/staff/change-password', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrf || '',
+          'x-device-fingerprint': fp,
+        },
+        body: JSON.stringify({ identifier: empId, newPassword }),
+      });
+    } catch {
+      // Non-fatal if offline; local update proceeds
+    }
+
     const updated = staffPermissionService.updateOwnPassword(empId, newPassword);
     if (updated) {
-      setPassSuccess('✅ Password changed successfully! Hashed and stored securely.');
+      setPassSuccess('✅ Password changed successfully! Hashed and stored securely. Future logins require your new password.');
       setNewPassword('');
       setConfirmPassword('');
     } else {

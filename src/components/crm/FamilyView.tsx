@@ -1,40 +1,54 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { User, Users, Heart, Shield, Plus, Search, ChevronRight, UserCheck } from 'lucide-react';
 import { Customer } from '../../types/models';
 import { customerService } from '../../services/customerService';
 import CustomerProfileModal from '../customers/CustomerProfileModal';
+import { useAuth } from '../auth/FirebaseAuthProvider';
 
 export default function FamilyView() {
+  const { userProfile } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 5;
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   useEffect(() => {
-    setCustomers(customerService.getCustomers());
+    setCustomers(customerService.getScopedCustomers(userProfile));
     const unsub = customerService.subscribe(() => {
-      setCustomers([...customerService.getCustomers()]);
+      setCustomers([...customerService.getScopedCustomers(userProfile)]);
     });
     return () => unsub();
-  }, []);
+  }, [userProfile]);
 
   // Filter customers with recorded family relations
-  const families = customers.filter(c => {
-    const s = search.toLowerCase();
-    const hasFamilyInfo = !!(c.fatherHusbandName || c.familyMembers?.length || c.remarks?.includes('Late') || c.remarks?.includes('daughter') || c.remarks?.includes('wife'));
-    const matchesSearch = !s ||
-      c.name.toLowerCase().includes(s) ||
-      (c.fatherHusbandName && c.fatherHusbandName.toLowerCase().includes(s)) ||
-      (c.remarks && c.remarks.toLowerCase().includes(s));
-    return hasFamilyInfo && matchesSearch;
-  }).sort((a, b) => {
-    const colA = (a.area || a.sectorLocality || a.address?.area || a.sector || '').trim();
-    const colB = (b.area || b.sectorLocality || b.address?.area || b.sector || '').trim();
-    const colCmp = colA.localeCompare(colB, undefined, { numeric: true, sensitivity: 'base' });
-    if (colCmp !== 0) return colCmp;
-    const hA = (a.houseNo || a.address?.houseNumber || '').trim();
-    const hB = (b.houseNo || b.address?.houseNumber || '').trim();
-    return hA.localeCompare(hB, undefined, { numeric: true, sensitivity: 'base' });
-  });
+  const families = useMemo(() => {
+    return customers.filter(c => {
+      const s = search.toLowerCase();
+      const hasFamilyInfo = !!(c.fatherHusbandName || c.familyMembers?.length || c.remarks?.includes('Late') || c.remarks?.includes('daughter') || c.remarks?.includes('wife'));
+      const matchesSearch = !s ||
+        c.name.toLowerCase().includes(s) ||
+        (c.fatherHusbandName && c.fatherHusbandName.toLowerCase().includes(s)) ||
+        (c.remarks && c.remarks.toLowerCase().includes(s));
+      return hasFamilyInfo && matchesSearch;
+    }).sort((a, b) => {
+      const colA = (a.area || a.sectorLocality || a.address?.area || a.sector || '').trim();
+      const colB = (b.area || b.sectorLocality || b.address?.area || b.sector || '').trim();
+      const colCmp = colA.localeCompare(colB, undefined, { numeric: true, sensitivity: 'base' });
+      if (colCmp !== 0) return colCmp;
+      const hA = (a.houseNo || a.address?.houseNumber || '').trim();
+      const hB = (b.houseNo || b.address?.houseNumber || '').trim();
+      return hA.localeCompare(hB, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [customers, search]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, userProfile]);
+
+  const totalPages = Math.max(1, Math.ceil(families.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedFamilies = families.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   return (
     <div className="space-y-6" id="family-view-root">
@@ -62,7 +76,7 @@ export default function FamilyView() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {families.map((c) => (
+        {paginatedFamilies.map((c) => (
           <div
             key={c.id}
             className="bg-white rounded-2xl border border-slate-200 hover:border-red-300 hover:shadow-md transition p-5 flex flex-col justify-between"
@@ -106,6 +120,35 @@ export default function FamilyView() {
           </div>
         ))}
       </div>
+
+      {families.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white px-5 py-3 rounded-2xl border border-slate-200 text-xs text-slate-600">
+          <span>
+            Showing <strong className="text-slate-900">{(safePage - 1) * PAGE_SIZE + 1}</strong>–<strong className="text-slate-900">{Math.min(safePage * PAGE_SIZE, families.length)}</strong> of <strong className="text-slate-900">{families.length}</strong> family records (5 per page)
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold disabled:opacity-40 hover:bg-slate-50 cursor-pointer"
+            >
+              Prev
+            </button>
+            <span className="font-mono font-bold text-slate-800 px-2">
+              Page {safePage} / {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={safePage >= totalPages}
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold disabled:opacity-40 hover:bg-slate-50 cursor-pointer"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {selectedCustomer && (
         <CustomerProfileModal

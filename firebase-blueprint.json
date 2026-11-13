@@ -1,38 +1,225 @@
 {
   "entities": {
-    "Customer": {
-      "title": "Customer",
-      "description": "Customer record",
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Authenticated user account record with immutable UID and role isolation",
       "type": "object",
       "properties": {
-        "name": { "type": "string", "description": "Customer Name", "minLength": 1, "maxLength": 100 },
-        "mobile": { "type": "string", "description": "Normalized mobile number", "pattern": "^[0-9+ ]+$", "minLength": 10 },
-        "householdId": { "type": "string", "description": "Household ID" }
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "email": { "type": "string", "format": "email", "minLength": 5, "maxLength": 160 },
+        "phone": { "type": "string", "minLength": 10, "maxLength": 20, "pattern": "^[0-9+\\- ]+$" },
+        "role": { "type": "string", "enum": ["CUSTOMER", "POSTMAN", "STAFF", "ADMIN", "MASTER_ADMIN"] },
+        "assignedBeat": { "type": "string", "maxLength": 40 },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["name", "mobile"]
+      "required": ["uid", "name", "email", "role"]
+    },
+    "StaffPermission": {
+      "title": "StaffPermission",
+      "description": "Authoritative RBAC permission and beat scope assignment for postal staff",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "employeeId": { "type": "string", "minLength": 2, "maxLength": 40, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "email": { "type": "string", "format": "email", "minLength": 5, "maxLength": 160 },
+        "contact": { "type": "string", "minLength": 10, "maxLength": 20 },
+        "role": { "type": "string", "enum": ["POSTMAN", "STAFF", "ADMIN", "MASTER_ADMIN"] },
+        "assignedBeat": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "assignedOffice": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "isActive": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "employeeId", "name", "email", "role", "assignedBeat", "isActive"]
+    },
+    "UserSession": {
+      "title": "UserSession",
+      "description": "Single-browser active session binding bound to SHA-256 device fingerprint",
+      "type": "object",
+      "properties": {
+        "sessionId": { "type": "string", "minLength": 8, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "deviceFingerprint": { "type": "string", "minLength": 16, "maxLength": 128 },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "lastSeenAt": { "type": "string", "format": "date-time" },
+        "revokedAt": { "type": "string", "format": "date-time" },
+        "revokedReason": { "type": "string", "maxLength": 200 }
+      },
+      "required": ["sessionId", "uid", "deviceFingerprint", "active"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Customer record scoped by beat and owner",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "mobile": { "type": "string", "pattern": "^[0-9+ ]+$", "minLength": 10, "maxLength": 20 },
+        "householdId": { "type": "string", "maxLength": 128 },
+        "beatNo": { "type": "string", "maxLength": 40 },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" }
+      },
+      "required": ["name", "mobile", "ownerUid"]
     },
     "Household": {
       "title": "Household",
-      "description": "Household record",
+      "description": "Household census record",
       "type": "object",
       "properties": {
-        "id": { "type": "string", "description": "Household ID" },
-        "primaryCustomer": { "type": "string", "description": "ID of primary customer" }
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "primaryCustomer": { "type": "string", "maxLength": 128 },
+        "beatNo": { "type": "string", "maxLength": 40 },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" }
       },
-      "required": ["id"]
+      "required": ["id", "ownerUid"]
     },
     "Property": {
       "title": "Property",
-      "description": "Property record",
+      "description": "Property unit mapped to colony, pincode, and delivery beat",
       "type": "object",
       "properties": {
-        "houseNumber": { "type": "string", "description": "House or Plot number" },
-        "address": { "type": "string", "description": "Address" }
+        "houseNumber": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "address": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "pincode": { "type": "string", "pattern": "^[0-9]{6}$", "minLength": 6, "maxLength": 6 },
+        "beatNo": { "type": "string", "maxLength": 40 },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" }
       },
-      "required": ["houseNumber", "address"]
+      "required": ["houseNumber", "address", "ownerUid"]
+    },
+    "Inquiry": {
+      "title": "Inquiry",
+      "description": "Citizen service inquiry submitted from public portal",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "mobile": { "type": "string", "minLength": 10, "maxLength": 20 },
+        "subject": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["Open", "InProgress", "Resolved"] },
+        "ownerUid": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["name", "mobile", "subject", "status"]
+    },
+    "SupportTicket": {
+      "title": "SupportTicket",
+      "description": "Postal delivery and account support ticket",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "status": { "type": "string", "enum": ["Open", "Assigned", "Resolved", "Closed"] },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" }
+      },
+      "required": ["title", "status", "ownerUid"]
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "Postal financial scheme lead (PLI/RPLI/SSA/IPPB)",
+      "type": "object",
+      "properties": {
+        "customerName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "productCode": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "status": { "type": "string", "enum": ["New", "Contacted", "Converted", "Closed"] },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" }
+      },
+      "required": ["customerName", "productCode", "status", "ownerUid"]
+    },
+    "FollowUp": {
+      "title": "FollowUp",
+      "description": "Scheduled follow-up log for customer outreach",
+      "type": "object",
+      "properties": {
+        "leadId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "notes": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "status": { "type": "string", "enum": ["Pending", "Completed", "Cancelled"] },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" }
+      },
+      "required": ["leadId", "notes", "status", "ownerUid"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Official India Post financial or mail service product",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "category": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["code", "title", "category", "isActive"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Beat-assigned field delivery or verification task",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "beatNo": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "status": { "type": "string", "enum": ["Pending", "InProgress", "Completed"] },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" }
+      },
+      "required": ["title", "beatNo", "status", "ownerUid"]
+    },
+    "ConflictRecord": {
+      "title": "ConflictRecord",
+      "description": "Data quality duplicate or address conflict record",
+      "type": "object",
+      "properties": {
+        "entityType": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "status": { "type": "string", "enum": ["Open", "Resolved", "Ignored"] },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" }
+      },
+      "required": ["entityType", "status", "ownerUid"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable security and operations audit trail entry",
+      "type": "object",
+      "properties": {
+        "actorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "action": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "details": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["actorUid", "action"]
+    },
+    "SystemSetting": {
+      "title": "SystemSetting",
+      "description": "Master administrative configuration setting",
+      "type": "object",
+      "properties": {
+        "key": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "value": { "type": "string", "maxLength": 1000 },
+        "updatedByUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" }
+      },
+      "required": ["key", "value", "updatedByUid"]
+    },
+    "PendingApproval": {
+      "title": "PendingApproval",
+      "description": "Staff change request awaiting administrative approval",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "requestedBy": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "requestedByUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"] }
+      },
+      "required": ["type", "requestedBy", "requestedByUid", "status"]
     }
   },
   "firestore": {
+    "users": {
+      "schema": "UserAccount",
+      "description": "Authenticated user account profiles"
+    },
+    "staff_permissions": {
+      "schema": "StaffPermission",
+      "description": "Staff RBAC profiles and beat assignments"
+    },
+    "user_sessions": {
+      "schema": "UserSession",
+      "description": "Active single-browser session bindings"
+    },
     "customers": {
       "schema": "Customer",
       "description": "Customer collection"
@@ -44,6 +231,46 @@
     "properties": {
       "schema": "Property",
       "description": "Property collection"
+    },
+    "inquiries": {
+      "schema": "Inquiry",
+      "description": "Public citizen inquiries"
+    },
+    "support_tickets": {
+      "schema": "SupportTicket",
+      "description": "Support tickets collection"
+    },
+    "leads": {
+      "schema": "Lead",
+      "description": "Financial scheme leads"
+    },
+    "follow_ups": {
+      "schema": "FollowUp",
+      "description": "Outreach follow-ups"
+    },
+    "products": {
+      "schema": "Product",
+      "description": "Postal products catalog"
+    },
+    "tasks": {
+      "schema": "Task",
+      "description": "Beat tasks collection"
+    },
+    "conflicts": {
+      "schema": "ConflictRecord",
+      "description": "Data quality conflicts"
+    },
+    "audit_logs": {
+      "schema": "AuditLog",
+      "description": "Immutable security audit logs"
+    },
+    "settings": {
+      "schema": "SystemSetting",
+      "description": "Administrative system configuration"
+    },
+    "pending_approvals": {
+      "schema": "PendingApproval",
+      "description": "Pending approval queue"
     }
   }
 }

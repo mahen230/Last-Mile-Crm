@@ -32,6 +32,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { Customer, Lead } from '../../types/models';
 import { customerService } from '../../services/customerService';
+import { useAuth } from '../auth/FirebaseAuthProvider';
+import { staffPermissionService } from '../../services/staffPermissionService';
 import { POSTAL_PRODUCTS } from '../../data/productsData';
 import {
   notificationScannerService,
@@ -106,8 +108,25 @@ interface Message {
 
 export default function AIAssistantView() {
   const navigate = useNavigate();
+  const { userProfile } = useAuth();
+  const currentProfile = staffPermissionService.getActiveSession() || userProfile;
+  const isRestrictedStaff = staffPermissionService.isPostmanOrGds(currentProfile);
+
   const [notifications, setNotifications] = useState<FieldJumpNotification[]>([]);
-  const [verifiedStores, setVerifiedStores] = useState<CommercialStoreEntry[]>(getVerifiedDadabari324009Registry());
+  const [verifiedStores, setVerifiedStores] = useState<CommercialStoreEntry[]>(() => {
+    const stores = getVerifiedDadabari324009Registry();
+    return isRestrictedStaff
+      ? stores.filter(s =>
+          staffPermissionService.matchesUserBeatScope(currentProfile, {
+            beatNo: s.beatNo,
+            area: s.colony,
+            pincode: s.pincode,
+            assignedStaffId: s.assignedStaffId,
+            assignedStaffName: s.assignedStaffName
+          })
+        )
+      : stores;
+  });
   const [ingestedIds, setIngestedIds] = useState<Set<string>>(new Set());
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -125,15 +144,41 @@ export default function AIAssistantView() {
 
   useEffect(() => {
     const update = () => {
-      setNotifications(notificationScannerService.getNotifications());
-      const stores = getVerifiedDadabari324009Registry();
-      setVerifiedStores(stores);
-      setIngestedIds(new Set(stores.filter(s => s.ingestedToCrm).map(s => s.id)));
+      const activeProfile = staffPermissionService.getActiveSession() || userProfile;
+      const restricted = staffPermissionService.isPostmanOrGds(activeProfile);
+      const allNotifs = notificationScannerService.getNotifications();
+      const scopedNotifs = restricted
+        ? allNotifs.filter(n =>
+            staffPermissionService.matchesUserBeatScope(activeProfile, {
+              beatNo: n.beatNo,
+              area: n.colony,
+              pincode: n.pincode,
+              assignedStaffId: n.assignedStaffId,
+              assignedStaffName: n.assignedStaffName
+            })
+          )
+        : allNotifs;
+      setNotifications(scopedNotifs);
+
+      const allStores = getVerifiedDadabari324009Registry();
+      const scopedStores = restricted
+        ? allStores.filter(s =>
+            staffPermissionService.matchesUserBeatScope(activeProfile, {
+              beatNo: s.beatNo,
+              area: s.colony,
+              pincode: s.pincode,
+              assignedStaffId: s.assignedStaffId,
+              assignedStaffName: s.assignedStaffName
+            })
+          )
+        : allStores;
+      setVerifiedStores(scopedStores);
+      setIngestedIds(new Set(scopedStores.filter(s => s.ingestedToCrm).map(s => s.id)));
     };
     update();
     const unsub = notificationScannerService.subscribe(update);
     return () => unsub();
-  }, []);
+  }, [userProfile]);
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -229,16 +274,46 @@ export default function AIAssistantView() {
     const cleanDigits = q.replace(/\D/g, '');
     const is10DigitMobile = cleanDigits.length >= 10;
 
-    const allCustomers = customerService.getCustomers();
-    const allLeads = customerService.getLeads();
-    const allTasks = customerService.getTasks();
-    const verifiedStores = getVerifiedDadabari324009Registry();
-    const cscDirectory = getStoredCscDirectory();
+    const activeProfile = staffPermissionService.getActiveSession() || userProfile;
+    const allCustomers = customerService.getScopedCustomers(activeProfile);
+    const allLeads = customerService.getScopedLeads(activeProfile);
+    const allTasks = customerService
+      .getTasks()
+      .filter(t => staffPermissionService.matchesUserBeatScope(activeProfile, t));
+    const storesPool = getVerifiedDadabari324009Registry().filter(s =>
+      staffPermissionService.matchesUserBeatScope(activeProfile, {
+        beatNo: s.beatNo,
+        area: s.colony,
+        pincode: s.pincode,
+        assignedStaffId: s.assignedStaffId,
+        assignedStaffName: s.assignedStaffName
+      })
+    );
+    const cscDirectory = getStoredCscDirectory().filter(c =>
+      staffPermissionService.matchesUserBeatScope(activeProfile, {
+        beatNo: c.beatNo,
+        area: c.colony,
+        pincode: c.pincode,
+        assignedStaffId: c.assignedStaffId,
+        assignedStaffName: c.assignedStaffName
+      })
+    );
 
     const matchedResidents: ResidentPropertyCardData[] = [];
 
-    // 1. Search in Sequential Properties (Door-to-door sequence)
+    // 1. Search in Sequential Properties (Door-to-door sequence, Beat-scoped)
     DEFAULT_SEQUENTIAL_PROPERTIES.forEach(seq => {
+      if (
+        !staffPermissionService.matchesUserBeatScope(activeProfile, {
+          beatNo: seq.beatNo,
+          area: seq.colony,
+          pincode: seq.pincode,
+          assignedStaffId: seq.assignedStaffId,
+          assignedStaffName: seq.assignedStaffName
+        })
+      ) {
+        return;
+      }
       const matchMobile = cleanDigits && (
         seq.primaryMobile.includes(cleanDigits) || 
         (seq.whatsapp && seq.whatsapp.includes(cleanDigits))
@@ -370,8 +445,8 @@ export default function AIAssistantView() {
       location: t.location || 'Santoshi Nagar / Keshavpura Beat 2'
     }));
 
-    // 4. Search in Verified 324009 Stores
-    const matchedStores = verifiedStores.filter(s => {
+    // 4. Search in Verified 324009 Stores (Beat-scoped)
+    const matchedStores = storesPool.filter(s => {
       return s.storeName.toLowerCase().includes(q) ||
         s.ownerName.toLowerCase().includes(q) ||
         s.colony.toLowerCase().includes(q) ||
@@ -429,8 +504,8 @@ export default function AIAssistantView() {
         aiReply = {
           id: `ai-${Date.now()}`,
           sender: 'ai',
-          text: `Namaskar, Boss! Master Index Match Found across Dadabari S.O. Ecosystem.\n\nMatched ${searchRes.residents.length} resident profile(s) with full family details, delivery jurisdiction, assigned postman credentials, and active scheme leads. You can execute direct actions right from the cards:`,
-          residentResults: searchRes.residents.slice(0, 6),
+          text: `Namaskar, Boss! Master Index Match Found across Dadabari S.O. Ecosystem.\n\nMatched ${searchRes.residents.length} resident profile(s)${searchRes.residents.length > 5 ? ' (showing top 5)' : ''} with full family details, delivery jurisdiction, assigned postman credentials, and active scheme leads. You can execute direct actions right from the cards:`,
+          residentResults: searchRes.residents.slice(0, 5),
           options: [
             'Daily Pending Field Tasks & Deliveries',
             'Reality-Check: Active Stores in Pincode 324009',
@@ -450,8 +525,8 @@ export default function AIAssistantView() {
         aiReply = {
           id: `ai-${Date.now()}`,
           sender: 'ai',
-          text: `Namaskar, Boss! Proactive Field Operations Summary for Dadabari S.O. (Beat 1 to 33).\n\nHere are the active pending deliveries, urgent doorstep tasks, and follow-ups. Use the status toggles to update live or launch GPS directions:`,
-          taskResults: searchRes.tasks.slice(0, 8),
+          text: `Namaskar, Boss! Proactive Field Operations Summary${isRestrictedStaff ? ` (${currentProfile?.beat || 'Assigned Beat'})` : ' for Dadabari S.O. (Beat 1 to 33)'}.\n\nShowing ${Math.min(5, searchRes.tasks.length)} of ${searchRes.tasks.length} active pending deliveries & follow-ups. Use the status toggles to update live or launch GPS directions:`,
+          taskResults: searchRes.tasks.slice(0, 5),
           options: [
             'Search Resident: 8769706002',
             'Beat 2 Resident Directory & Route',
@@ -472,12 +547,12 @@ export default function AIAssistantView() {
         lower.includes('dadabari store') ||
         searchRes.stores.length > 0
       ) {
-        const matched = searchRes.stores.length > 0 ? searchRes.stores : getVerifiedDadabari324009Registry();
+        const matched = searchRes.stores.length > 0 ? searchRes.stores : verifiedStores;
         aiReply = {
           id: `ai-${Date.now()}`,
           sender: 'ai',
-          text: `Namaskar, Boss! Reality-Check Complete for Pincode 324009 (Dadabari S.O. Delivery Ecosystem).\n\nVerified ${matched.length} active, on-ground commercial establishments with Zero Dead Data. All stores are verified operational, mapped to postal beats (Beat 1–33), and bound to designated postman Staff IDs:`,
-          storeResults: matched,
+          text: `Namaskar, Boss! Reality-Check Complete for Pincode 324009 (Dadabari S.O. Delivery Ecosystem).\n\nVerified ${matched.length} active commercial establishments${matched.length > 5 ? ' (showing top 5)' : ''} with Zero Dead Data. All stores are operational, mapped to postal beats, and bound to designated postman Staff IDs:`,
+          storeResults: matched.slice(0, 5),
           options: [
             'Sync All 324009 Stores to CRM',
             'View in Dadabari Commercial Hub (/businesses)',
@@ -494,12 +569,12 @@ export default function AIAssistantView() {
         lower.includes('incomplete') ||
         lower.includes('jump')
       ) {
-        const notifs = notificationScannerService.getNotifications();
+        const notifs = notifications;
         aiReply = {
           id: `ai-${Date.now()}`,
           sender: 'ai',
-          text: `Scanned all modules across Dadabari S.O. Ecosystem.\n\nFound ${notifs.length} active field notifications requiring operational resolution. Each card tracks origin metadata (Module, Beat, Assigned Staff ID) with a direct "[Jump to Field & Fix]" trigger:`,
-          notificationResults: notifs,
+          text: `Scanned ${isRestrictedStaff ? currentProfile?.beat || 'your assigned beat' : 'all modules across Dadabari S.O. Ecosystem'}.\n\nFound ${notifs.length} active field notifications requiring operational resolution${notifs.length > 5 ? ' (showing top 5)' : ''}. Each card tracks origin metadata (Module, Beat, Assigned Staff ID) with a direct "[Jump to Field & Fix]" trigger:`,
+          notificationResults: notifs.slice(0, 5),
           options: [
             'Reality-Check: Active Stores in Pincode 324009',
             'Pending Scheme Leads & PLI Follow-ups',

@@ -38,7 +38,7 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
   const [sortField, setSortField] = useState<'colony' | 'latest' | 'name' | 'masterId' | 'sector' | 'leadScore'>('colony');
   const [sortAsc, setSortAsc] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(50);
+  const [pageSize, setPageSize] = useState<number>(5);
 
   // Modals
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -59,8 +59,17 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
     return () => unsub();
   }, []);
 
-  const isAdmin = userProfile?.role === 'SUPER_ADMIN' || userProfile?.role === 'ADMIN';
-  const canViewAll = userProfile?.permissions?.canViewAllRecords ?? true;
+  const isAdmin = staffPermissionService.isSuperAdmin(userProfile) || userProfile?.role === 'ADMIN';
+  const isRestrictedFieldStaff = staffPermissionService.isPostmanOrGds(userProfile);
+  const scopedBeatsSet = React.useMemo(
+    () => staffPermissionService.getScopedBeatsSet(userProfile),
+    [userProfile]
+  );
+  const allAssignableStaff = React.useMemo(
+    () => staffPermissionService.getAllStaffProfiles(),
+    [customers]
+  );
+  const canViewAll = userProfile?.permissions?.canViewAllRecords ?? false;
   const quotaCheck = userProfile 
     ? staffPermissionService.canUserEnterRecord(userProfile.email) 
     : { allowed: true, limit: 0, todayCount: 0 };
@@ -104,20 +113,33 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
     setAssignTargetCustomer(null);
   };
 
-  // Hierarchical Colony List & Nested Sub-Sector Chips
+  const scopedCustomersForUser = React.useMemo(() => {
+    return customers.filter((c) => staffPermissionService.matchesUserBeatScope(userProfile, c));
+  }, [customers, userProfile]);
+
+  // Hierarchical Colony List & Nested Sub-Sector Chips (Strictly scoped for Postman/GDS)
   const availableColonies = React.useMemo(() => {
-    const fromCustomers = customers.map(c => c.area || c.address?.area || c.sectorLocality || '').filter(Boolean);
+    const fromCustomers = scopedCustomersForUser
+      .map(c => c.area || c.address?.area || c.sectorLocality || '')
+      .filter(Boolean);
+    if (isRestrictedFieldStaff && userProfile) {
+      const assignedCols = [
+        ...(userProfile.assignedColonies || []),
+        ...(userProfile.permissions?.allowedColonies || []),
+      ].filter(c => c && c.toLowerCase() !== 'all colonies');
+      return Array.from(new Set([...assignedCols, ...fromCustomers])).sort();
+    }
     return getHierarchyColoniesList(fromCustomers);
-  }, [customers]);
+  }, [scopedCustomersForUser, isRestrictedFieldStaff, userProfile]);
 
   const customerColonySubSectorChips = React.useMemo(() => {
     if (selectedColony === 'All') return [];
-    const fromCustomers = customers
+    const fromCustomers = scopedCustomersForUser
       .filter(c => matchCustomerToColonyAndSector(c, selectedColony, 'All'))
       .map(c => c.sector || '')
       .filter(Boolean);
     return getHierarchySectorsForColony(selectedColony, fromCustomers);
-  }, [selectedColony, customers]);
+  }, [selectedColony, scopedCustomersForUser]);
 
   const handleColonyChange = (colony: string) => {
     setSelectedColony(colony);
@@ -397,31 +419,47 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
               className="py-1.5 px-3 rounded-xl border border-slate-300 bg-white text-slate-800 font-bold text-xs focus:ring-2 focus:ring-red-600 shadow-xs cursor-pointer"
               id="customer-colony-filter-select"
             >
-              <option value="All">All Major Colonies (Dadabari S.O. 324009)</option>
-              <optgroup label="Official Major Colonies (Pincode 324009 / Beats 1-33)">
-                {OFFICIAL_MAJOR_COLONIES.map((col) => (
-                  <option key={col} value={col}>
-                    {col}
-                  </option>
-                ))}
-              </optgroup>
-              {availableColonies.filter(c => !OFFICIAL_MAJOR_COLONIES.includes(c as any)).length > 0 && (
-                <optgroup label="Additional Registered Areas">
-                  {availableColonies
-                    .filter(c => !OFFICIAL_MAJOR_COLONIES.includes(c as any))
-                    .map((col) => (
+              {isRestrictedFieldStaff ? (
+                <>
+                  <option value="All">My Assigned Colonies ({userProfile?.beat || 'Beat'})</option>
+                  {availableColonies.map((col) => (
+                    <option key={col} value={col}>
+                      {col}
+                    </option>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <option value="All">All Major Colonies (Dadabari S.O. 324009)</option>
+                  <optgroup label="Official Major Colonies (Pincode 324009 / Beats 1-33)">
+                    {OFFICIAL_MAJOR_COLONIES.map((col) => (
                       <option key={col} value={col}>
                         {col}
                       </option>
                     ))}
-                </optgroup>
+                  </optgroup>
+                  {availableColonies.filter(c => !OFFICIAL_MAJOR_COLONIES.includes(c as any)).length > 0 && (
+                    <optgroup label="Additional Registered Areas">
+                      {availableColonies
+                        .filter(c => !OFFICIAL_MAJOR_COLONIES.includes(c as any))
+                        .map((col) => (
+                          <option key={col} value={col}>
+                            {col}
+                          </option>
+                        ))}
+                    </optgroup>
+                  )}
+                </>
               )}
             </select>
           </div>
 
-          {/* Quick Colony Pill Shortcuts for top high-volume hubs */}
+          {/* Quick Colony Pill Shortcuts */}
           <div className="hidden sm:flex items-center gap-1">
-            {['Keshavpura', 'Basant Vihar', 'Dadabari', 'Santoshi Nagar', 'Mahaveer Nagar'].map((col) => (
+            {(isRestrictedFieldStaff
+              ? availableColonies.slice(0, 5)
+              : ['Keshavpura', 'Basant Vihar', 'Dadabari', 'Santoshi Nagar', 'Mahaveer Nagar']
+            ).map((col) => (
               <button
                 key={col}
                 type="button"
@@ -446,12 +484,24 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
                 setSelectedBeat(e.target.value);
                 setCurrentPage(1);
               }}
-              className="py-1.5 px-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-800 font-bold text-xs focus:ring-2 focus:ring-red-600"
+              disabled={isRestrictedFieldStaff && (scopedBeatsSet?.size || 0) <= 1}
+              className="py-1.5 px-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-800 font-bold text-xs focus:ring-2 focus:ring-red-600 disabled:opacity-75"
             >
-              <option value="All">All Beats (1-33)</option>
-              {Array.from({ length: 33 }, (_, i) => String(i + 1)).map((b) => (
-                <option key={b} value={b}>Beat {b}</option>
-              ))}
+              {isRestrictedFieldStaff ? (
+                <>
+                  <option value="All">My Assigned Beat ({userProfile?.beat || 'Scoped'})</option>
+                  {(scopedBeatsSet ? Array.from<string>(scopedBeatsSet) : []).map((b) => (
+                    <option key={b} value={b.toUpperCase()}>Beat {b.toUpperCase()}</option>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <option value="All">All Beats (1-33)</option>
+                  {Array.from({ length: 33 }, (_, i) => String(i + 1)).map((b) => (
+                    <option key={b} value={b}>Beat {b}</option>
+                  ))}
+                </>
+              )}
             </select>
           </div>
 
@@ -509,10 +559,10 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
                   : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
               }`}
             >
-              All {selectedColony} ({customers.filter(c => matchCustomerToColonyAndSector(c, selectedColony, 'All')).length})
+              All {selectedColony} ({scopedCustomersForUser.filter(c => matchCustomerToColonyAndSector(c, selectedColony, 'All')).length})
             </button>
             {customerColonySubSectorChips.map((sec) => {
-              const count = customers.filter(c => matchCustomerToColonyAndSector(c, selectedColony, sec)).length;
+              const count = scopedCustomersForUser.filter(c => matchCustomerToColonyAndSector(c, selectedColony, sec)).length;
               return (
                 <button
                   key={sec}
@@ -786,8 +836,10 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
               }}
               className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-700"
             >
+              <option value={5}>5 / page</option>
+              <option value={10}>10 / page</option>
+              <option value={25}>25 / page</option>
               <option value={50}>50 / page</option>
-              <option value={100}>100 / page</option>
               <option value={500}>Show All ({sortedCustomers.length})</option>
             </select>
             <button
@@ -848,21 +900,11 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
                   onChange={(e) => setAssignStaffEmail(e.target.value)}
                   className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-red-600"
                 >
-                  <option value="ektamahenmeena@gmail.com">
-                    Ekta Meena (ektamahenmeena@gmail.com) • Beat 2
-                  </option>
-                  <option value="mahen.comtech@gmail.com">
-                    Mahendra Meena (mahen.comtech@gmail.com) • Admin
-                  </option>
-                  <option value="muskan.sharma@indiapost.gov.in">
-                    Muskan Sharma • Beat 6
-                  </option>
-                  <option value="govind.prasad@indiapost.gov.in">
-                    Govind Prasad • Beat 1
-                  </option>
-                  <option value="viewer@indiapost.gov.in">
-                    Field Observer (viewer@indiapost.gov.in)
-                  </option>
+                  {allAssignableStaff.map((staff) => (
+                    <option key={staff.id || staff.email} value={staff.email}>
+                      {staff.name} ({staff.employeeId || staff.email}) • {staff.beat || staff.role}
+                    </option>
+                  ))}
                 </select>
               </div>
 

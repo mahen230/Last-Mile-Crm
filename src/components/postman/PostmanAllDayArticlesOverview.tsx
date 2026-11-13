@@ -25,6 +25,7 @@ import {
   RotateCcw,
   ChevronDown,
   ChevronUp,
+  AlertTriangle,
 } from 'lucide-react';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import { staffPermissionService } from '../../services/staffPermissionService';
@@ -66,9 +67,17 @@ export default function PostmanAllDayArticlesOverview({
     masterDataService.getBeatCustomKm(activeStaffBeat)
   );
   const [customFuelRate, setCustomFuelRate] = useState<number>(DEPARTMENTAL_FUEL_RATE_PER_KM);
-  const [customWorkingDays, setCustomWorkingDays] = useState<number>(25);
+  const [customWorkingDays, setCustomWorkingDays] = useState<number>(() => {
+    const initialSummary = masterDataService.generatePostmanMonthlyFuelBill(activeStaffBeat, initialMonth);
+    return initialSummary.workingDays || 25;
+  });
   const [customVehicleNo, setCustomVehicleNo] = useState<string>('RJ-20-SP-2026');
   const [kmSavedNotice, setKmSavedNotice] = useState<string | null>(null);
+  const [syncConfirmNotice, setSyncConfirmNotice] = useState<{
+    title: string;
+    details: string;
+    beat6Line: string;
+  } | null>(null);
 
   // Daily entries & Summary State
   const [allEntries, setAllEntries] = useState<DailyArticleEntry[]>(() => operationsService.getDailyEntries());
@@ -76,7 +85,7 @@ export default function PostmanAllDayArticlesOverview({
     masterDataService.generatePostmanMonthlyFuelBill(activeStaffBeat, initialMonth, {
       customDailyKm: masterDataService.getBeatCustomKm(activeStaffBeat),
       customRatePerKm: DEPARTMENTAL_FUEL_RATE_PER_KM,
-      customWorkingDays: 25,
+      customWorkingDays: initialMonth === '2026-10' ? undefined : 25,
       vehicleNo: 'RJ-20-SP-2026',
     })
   );
@@ -98,6 +107,7 @@ export default function PostmanAllDayArticlesOverview({
   } | null>(null);
 
   const [modalNotice, setModalNotice] = useState<string | null>(null);
+  const [modalNoticeError, setModalNoticeError] = useState<boolean>(false);
 
   // Collapsible Table State
   const [isTableExpanded, setIsTableExpanded] = useState<boolean>(true);
@@ -107,6 +117,12 @@ export default function PostmanAllDayArticlesOverview({
   const [startDateFilter, setStartDateFilter] = useState<string>('');
   const [endDateFilter, setEndDateFilter] = useState<string>('');
   const [searchDayQuery, setSearchDayQuery] = useState('');
+
+  // Effective displayed KM / Rate / Working Days (strictly locked when official Oct 2026 dataset is active)
+  const isLocked = Boolean(fuelSummary.isDepartmentLocked);
+  const effectiveDailyKm = isLocked ? fuelSummary.sanctionedDailyKm : customDailyKm;
+  const effectiveFuelRate = isLocked ? fuelSummary.fuelRatePerKm : customFuelRate;
+  const effectiveWorkingDays = isLocked ? fuelSummary.workingDays : customWorkingDays;
 
   // Keep beat in sync if user changes
   useEffect(() => {
@@ -122,12 +138,12 @@ export default function PostmanAllDayArticlesOverview({
   // Recalculate summary when beat, month, custom KM, rate or working days change
   const refreshSummary = () => {
     const summary = masterDataService.generatePostmanMonthlyFuelBill(selectedBeat, selectedMonth, {
-      customDailyKm,
-      customRatePerKm: customFuelRate,
-      customWorkingDays,
+      customDailyKm: selectedMonth === '2026-10' ? undefined : customDailyKm,
+      customRatePerKm: selectedMonth === '2026-10' ? undefined : customFuelRate,
+      customWorkingDays: selectedMonth === '2026-10' ? undefined : customWorkingDays,
       vehicleNo: customVehicleNo,
-      postmanName: currentStaff?.name,
-      employeeId: currentStaff?.employeeId,
+      postmanName: selectedMonth === '2026-10' ? undefined : currentStaff?.name,
+      employeeId: selectedMonth === '2026-10' ? undefined : currentStaff?.employeeId,
     });
     setFuelSummary(summary);
     setAllEntries([...operationsService.getDailyEntries()]);
@@ -153,13 +169,22 @@ export default function PostmanAllDayArticlesOverview({
   // Handle Beat Selection change
   const handleBeatChange = (newBeat: string) => {
     setSelectedBeat(newBeat);
-    const km = masterDataService.getBeatCustomKm(newBeat);
-    setCustomDailyKm(km);
-    if (newBeat === 'Beat 17' || newBeat === '17') {
-      setCustomWorkingDays(25);
-    } else if (newBeat === 'Beat 5' || newBeat === '5') {
-      setCustomWorkingDays(23);
-    }
+    const nextSummary = masterDataService.generatePostmanMonthlyFuelBill(newBeat, selectedMonth);
+    setCustomDailyKm(nextSummary.sanctionedDailyKm);
+    setCustomFuelRate(nextSummary.fuelRatePerKm);
+    setCustomWorkingDays(nextSummary.workingDays);
+  };
+
+  // 1-Click Verify & Lock Official Oct 2026 DSS & Fuel Claim (All 33 Beats + Beat 6 Focus)
+  const handleVerifyAndLockOfficialSheet = () => {
+    const res = masterDataService.syncAndLockOctober2026BeatData();
+    refreshSummary();
+    const b6 = res.beat6Summary;
+    setSyncConfirmNotice({
+      title: `Official October 2026 DSS & Fuel Ledger Verified and Department Locked (${res.syncedBeatsCount} Beats / ${res.totalEntriesCount} Daily Logs)`,
+      details: `All 33 beats (324009, 324005, 324010) synced with exact 2-decimal precision, zero duplicates, and immutable department locks.`,
+      beat6Line: `Beat 6 (${b6.postmanName} · ID: ${b6.employeeId}) Locked: ${b6.workingDays} Working Days × ${b6.dailyKm} KM = ${b6.totalKm} KM @ ₹3.60/KM = ₹${b6.totalClaimAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} | PDMS: ${b6.pdmsTotal.toLocaleString('en-IN')} | DSS: ${b6.dssTotal.toLocaleString('en-IN')} | Mobile Usage: ${b6.mobileUsageAvg.toFixed(2)}%`,
+    });
   };
 
   // Open Edit Modal for a specific Day Row
@@ -192,6 +217,7 @@ export default function PostmanAllDayArticlesOverview({
       remarks: dssMatch?.remarks || `Field delivery round reconciled for ${row.date}`,
     });
     setModalNotice(null);
+    setModalNoticeError(false);
   };
 
   // Save Day Article Entry (Non-destructive patch adhering to Strict Total Lock Rule)
@@ -224,18 +250,20 @@ export default function PostmanAllDayArticlesOverview({
         beatNo: selectedBeat,
         staffName,
         employeeId: staffEmpId,
-        staffEmail: currentStaff?.email || 'mahen.comtech@gmail.com',
+        staffEmail: currentStaff?.email || 'Ektamahenmeena@gmail.com',
         officeName: fuelSummary.officeName || 'Dadabari S.O. (324009)',
         attendanceStatus: selectedDayEntry.status === 'SUNDAY'
           ? 'Sunday'
           : selectedDayEntry.status === 'HOLIDAY'
           ? 'Gazetted Holiday'
+          : selectedDayEntry.status === 'LEAVE'
+          ? 'On Leave'
           : 'Present - Field Duty',
-        fixedKm: customDailyKm,
+        fixedKm: effectiveDailyKm,
         sanctionedBeatKm: fuelSummary.sanctionedDailyKm,
-        fuelRatePerKm: customFuelRate,
-        dailyFuelAllowance: Math.round(customDailyKm * customFuelRate),
-        monthlyFuelAllowance: Math.round(customDailyKm * customFuelRate * customWorkingDays),
+        fuelRatePerKm: effectiveFuelRate,
+        dailyFuelAllowance: Number((effectiveDailyKm * effectiveFuelRate).toFixed(2)),
+        monthlyFuelAllowance: Number((effectiveDailyKm * effectiveFuelRate * effectiveWorkingDays).toFixed(2)),
         pdmsInvoicedCount: curRow?.pdmsInvoicedCount ?? (dssBenchmark > 0 ? dssBenchmark : undefined),
         dssInvoicedCount: dssBenchmark > 0 ? dssBenchmark : undefined,
         mobileUsagePercent: curRow?.mobileUsagePercent ?? 100,
@@ -265,6 +293,7 @@ export default function PostmanAllDayArticlesOverview({
     );
 
     if (patchResult.success) {
+      setModalNoticeError(false);
       if (wasAutoAdjusted) {
         setModalNotice(`Day ${selectedDayEntry.sn} saved! Master DSS Priority Enforced: Speed Post auto-adjusted to ${finalSpDeliv} (Total locked to ${dssBenchmark}).`);
       } else {
@@ -275,6 +304,9 @@ export default function PostmanAllDayArticlesOverview({
         setSelectedDayEntry(null);
         setModalNotice(null);
       }, 1600);
+    } else {
+      setModalNoticeError(true);
+      setModalNotice(patchResult.message || 'Record is Department Locked and cannot be modified.');
     }
   };
 
@@ -338,8 +370,8 @@ export default function PostmanAllDayArticlesOverview({
       fuelSummary.beatNo,
       fuelSummary.postmanName,
       fuelSummary.employeeId,
-      customDailyKm,
-      customFuelRate,
+      effectiveDailyKm,
+      effectiveFuelRate,
     ]);
 
     const csvContent = [headers.join(','), ...rows.map((r) => r.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
@@ -361,7 +393,7 @@ export default function PostmanAllDayArticlesOverview({
     return fuelSummary.dailyRows.filter((r) => {
       // 1. Quick Filter Chips
       if (quickFilterChip === 'WORKING' && r.status !== 'WORKING') return false;
-      if (quickFilterChip === 'SUNDAY_HOLIDAY' && r.status !== 'SUNDAY' && r.status !== 'HOLIDAY') return false;
+      if (quickFilterChip === 'SUNDAY_HOLIDAY' && r.status !== 'SUNDAY' && r.status !== 'HOLIDAY' && r.status !== 'LEAVE') return false;
       if (quickFilterChip === 'HIGH_VOLUME') {
         const totalCount =
           typeof r.total === 'number'
@@ -408,15 +440,23 @@ export default function PostmanAllDayArticlesOverview({
       <div className="bg-gradient-to-r from-red-950 via-red-900 to-slate-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-red-800/40 space-y-5">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-900/80 border border-amber-400/40 text-amber-300 text-xs font-bold tracking-wide">
-              <ShieldCheck size={14} className="text-amber-400" />
-              <span>Reference Postman Operations · {fuelSummary.postmanName} ({fuelSummary.employeeId})</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-900/80 border border-amber-400/40 text-amber-300 text-xs font-bold tracking-wide">
+                <ShieldCheck size={14} className="text-amber-400" />
+                <span>Reference Postman Operations · {fuelSummary.postmanName} ({fuelSummary.employeeId})</span>
+              </div>
+              {isLocked && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/90 border border-emerald-400/60 text-emerald-300 text-xs font-black tracking-wide shadow-xs">
+                  <Lock size={13} className="text-amber-400" />
+                  <span>Department Locked (Immutable)</span>
+                </div>
+              )}
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-2.5">
               <span>{fuelSummary.beatNo} All-Day Article Entry & Fuel Bill Hub</span>
             </h1>
             <p className="text-xs sm:text-sm text-red-100/90 max-w-3xl leading-relaxed">
-              Official India Post Operations OS (Dadabari S.O. 324009). All 31 days of <strong>{fuelSummary.monthName}</strong> with Speed Post, Registered Letters, Parcels, COD collections, and real-time beat route fuel calculation.
+              Official India Post Operations OS (Dadabari S.O. · Office ID {fuelSummary.officeId || '28660686'} · Pincodes {(fuelSummary.linkedPincodes || ['324009', '324005', '324010']).join(', ')}). All {fuelSummary.totalDaysInMonth} days of <strong>{fuelSummary.monthName}</strong> with Speed Post, Registered Letters, Parcels, PDMS/DSS verification, and exact beat route fuel calculation.
             </p>
           </div>
 
@@ -447,7 +487,16 @@ export default function PostmanAllDayArticlesOverview({
               />
             </div>
 
-            <div className="flex items-end pt-5">
+            <div className="flex items-end gap-2 pt-5">
+              <button
+                type="button"
+                onClick={handleVerifyAndLockOfficialSheet}
+                className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-lg transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                title="Verify & Lock Official October 2026 DSS Sheet across all 33 beats (including Beat 6 Ramkishan Meghwal)"
+              >
+                <Lock size={14} />
+                <span>Verify & Lock Oct 2026 Sheet</span>
+              </button>
               <button
                 type="button"
                 onClick={() => masterDataService.downloadPostmanFuelBillPDF(fuelSummary, { vehicleNo: customVehicleNo })}
@@ -461,6 +510,30 @@ export default function PostmanAllDayArticlesOverview({
           </div>
         </div>
 
+        {/* Confirmation Notice Toast after Verify & Lock */}
+        {syncConfirmNotice && (
+          <div className="p-4 rounded-2xl bg-emerald-950/90 border border-emerald-400/60 text-emerald-100 flex items-start justify-between gap-3 shadow-lg">
+            <div className="flex items-start gap-2.5 text-xs">
+              <CheckCircle2 size={18} className="text-emerald-400 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <div className="font-black text-emerald-300">{syncConfirmNotice.title}</div>
+                <div className="text-emerald-100/90">{syncConfirmNotice.details}</div>
+                <div className="font-mono text-[11px] bg-slate-950/70 border border-emerald-700/60 px-2.5 py-1.5 rounded-lg text-amber-300">
+                  {syncConfirmNotice.beat6Line}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSyncConfirmNotice(null)}
+              className="text-emerald-300 hover:text-white p-1"
+              aria-label="Dismiss confirmation"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        )}
+
         {/* ======================================================== */}
         {/* 2. BEAT TERRITORIAL MAP & CALCULATION ENGINE BOX        */}
         {/* ======================================================== */}
@@ -473,22 +546,27 @@ export default function PostmanAllDayArticlesOverview({
                   Beat Territorial Route Map & Delivery Coverage
                 </span>
                 <span className="text-[11px] text-slate-300">
-                  {fuelSummary.territorialCoverage || 'Keshavpura Sectors 6 & 7, Santoshi Nagar, TVS Circle, CAD Circle corridor'} (PIN: 324009)
+                  {fuelSummary.territorialCoverage || 'Keshavpura Sectors 6 & 7, Santoshi Nagar, TVS Circle, CAD Circle corridor'} (PIN: {(fuelSummary.linkedPincodes || [fuelSummary.pincode || '324009']).join(', ')})
                 </span>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="px-2.5 py-1 rounded-full bg-emerald-950/80 border border-emerald-600/50 text-emerald-400 font-mono font-bold">
-                Statutory Rate: ₹{Number(customFuelRate || 3.6).toFixed(2)} / KM
+                Statutory Rate: ₹{Number(effectiveFuelRate || 3.6).toFixed(2)} / KM
               </span>
               <span className="px-2.5 py-1 rounded-full bg-blue-950/80 border border-blue-600/50 text-blue-300 font-mono font-bold">
                 Working Days: {fuelSummary.workingDays} Days
               </span>
+              {isLocked && (
+                <span className="px-2.5 py-1 rounded-full bg-amber-950/80 border border-amber-500/50 text-amber-300 font-mono font-bold flex items-center gap-1">
+                  <Lock size={11} /> Immutable DSS Lock
+                </span>
+              )}
             </div>
           </div>
 
-          {/* Dynamic Postman KM Adjuster (Before Bill Download) */}
+          {/* Dynamic Postman KM Adjuster (Locked when Official Department Dataset is Active) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs pt-1">
             <div className="bg-slate-900/90 p-3 rounded-xl border border-slate-800">
               <label className="block text-[11px] font-bold text-slate-300 mb-1">
@@ -500,9 +578,10 @@ export default function PostmanAllDayArticlesOverview({
                   step="0.5"
                   min="1"
                   max="100"
-                  value={customDailyKm}
+                  disabled={isLocked}
+                  value={effectiveDailyKm}
                   onChange={(e) => setCustomDailyKm(parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono font-black text-sm focus:border-amber-400 focus:outline-none"
+                  className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono font-black text-sm focus:border-amber-400 focus:outline-none disabled:opacity-75 disabled:cursor-not-allowed"
                 />
                 <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">
                   KM/d
@@ -518,9 +597,10 @@ export default function PostmanAllDayArticlesOverview({
                 <input
                   type="number"
                   step="0.10"
-                  value={customFuelRate}
+                  disabled={isLocked}
+                  value={effectiveFuelRate}
                   onChange={(e) => setCustomFuelRate(parseFloat(e.target.value) || 3.60)}
-                  className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-amber-300 font-mono font-bold text-sm focus:border-amber-400 focus:outline-none"
+                  className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-amber-300 font-mono font-bold text-sm focus:border-amber-400 focus:outline-none disabled:opacity-75 disabled:cursor-not-allowed"
                 />
                 <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">
                   ₹/KM
@@ -536,9 +616,10 @@ export default function PostmanAllDayArticlesOverview({
                 type="number"
                 min="1"
                 max="31"
-                value={customWorkingDays}
+                disabled={isLocked}
+                value={effectiveWorkingDays}
                 onChange={(e) => setCustomWorkingDays(parseInt(e.target.value) || 25)}
-                className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono font-bold text-sm focus:border-amber-400 focus:outline-none"
+                className="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono font-bold text-sm focus:border-amber-400 focus:outline-none disabled:opacity-75 disabled:cursor-not-allowed"
               />
             </div>
 
@@ -561,9 +642,9 @@ export default function PostmanAllDayArticlesOverview({
             <div className="font-mono flex flex-wrap items-center gap-2">
               <span className="text-amber-400 font-bold">Calculation Breakdown:</span>
               <span>
-                {customWorkingDays} Days × {customDailyKm} KM/d = <strong className="text-white">{fuelSummary.totalMonthlyKm} KM</strong> × ₹{Number(customFuelRate || 3.6).toFixed(2)}/KM ={' '}
+                {effectiveWorkingDays} Days × {effectiveDailyKm} KM/d = <strong className="text-white">{fuelSummary.totalMonthlyKm} KM</strong> × ₹{Number(effectiveFuelRate || 3.6).toFixed(2)}/KM ={' '}
                 <strong className="text-emerald-400 text-base font-black">
-                  ₹{fuelSummary.totalClaimAmount.toLocaleString('en-IN')}.00
+                  ₹{fuelSummary.totalClaimAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </strong>
               </span>
             </div>
@@ -574,32 +655,40 @@ export default function PostmanAllDayArticlesOverview({
                   <CheckCircle2 size={13} /> {kmSavedNotice}
                 </span>
               )}
-              <button
-                type="button"
-                onClick={() => {
-                  const def = getBeatFuelMapping(selectedBeat);
-                  setCustomDailyKm(def.sanctionedDailyKm);
-                  setCustomFuelRate(DEPARTMENTAL_FUEL_RATE_PER_KM);
-                  setCustomWorkingDays(25);
-                  masterDataService.resetBeatCustomKm(selectedBeat);
-                  setKmSavedNotice('Reset to beat sanctioned route KM.');
-                  setTimeout(() => setKmSavedNotice(null), 3000);
-                }}
-                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer"
-              >
-                <RotateCcw size={11} /> Reset
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  masterDataService.setBeatCustomKm(selectedBeat, customDailyKm);
-                  setKmSavedNotice(`Saved! ${customDailyKm} KM running set for ${selectedBeat}.`);
-                  setTimeout(() => setKmSavedNotice(null), 3500);
-                }}
-                className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer shadow-xs"
-              >
-                <Check size={12} /> Save KM
-              </button>
+              {isLocked ? (
+                <span className="px-3 py-1 bg-slate-900 border border-amber-500/40 text-amber-300 rounded-lg text-[11px] font-bold flex items-center gap-1.5">
+                  <Lock size={11} /> Locked by Department Audit ({fuelSummary.lockedBy || 'Official DSS'})
+                </span>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const def = getBeatFuelMapping(selectedBeat);
+                      setCustomDailyKm(def.sanctionedDailyKm);
+                      setCustomFuelRate(DEPARTMENTAL_FUEL_RATE_PER_KM);
+                      setCustomWorkingDays(25);
+                      masterDataService.resetBeatCustomKm(selectedBeat);
+                      setKmSavedNotice('Reset to beat sanctioned route KM.');
+                      setTimeout(() => setKmSavedNotice(null), 3000);
+                    }}
+                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer"
+                  >
+                    <RotateCcw size={11} /> Reset
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      masterDataService.setBeatCustomKm(selectedBeat, customDailyKm);
+                      setKmSavedNotice(`Saved! ${customDailyKm} KM running set for ${selectedBeat}.`);
+                      setTimeout(() => setKmSavedNotice(null), 3500);
+                    }}
+                    className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer shadow-xs"
+                  >
+                    <Check size={12} /> Save KM
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -662,19 +751,21 @@ export default function PostmanAllDayArticlesOverview({
         </div>
 
         <div className="bg-emerald-50 p-3.5 rounded-2xl border border-emerald-200 shadow-xs">
-          <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider block">Fuel Allowance</span>
+          <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1">
+            {isLocked && <Lock size={10} className="text-emerald-700" />} Fuel Allowance
+          </span>
           <div className="text-2xl font-black text-emerald-950 font-mono mt-0.5">
-            ₹{fuelSummary.totalClaimAmount.toLocaleString('en-IN')}
+            ₹{fuelSummary.totalClaimAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div className="text-[10px] text-emerald-700 mt-0.5 font-mono">
-            {fuelSummary.totalMonthlyKm} KM @ ₹{Number(customFuelRate || 3.6).toFixed(2)}
+            {fuelSummary.totalMonthlyKm} KM @ ₹{Number(effectiveFuelRate || 3.6).toFixed(2)}
           </div>
         </div>
 
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs col-span-2 sm:col-span-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">PMA Compliance</span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Mobile Usage Avg</span>
           <div className="text-xl font-black text-emerald-700 font-mono mt-0.5">
-            100%
+            {Number(fuelSummary.mobileUsageAvgPercent ?? fuelSummary.averageDeliveryPercentage ?? 100).toFixed(2)}%
           </div>
           <div className="text-[11px] text-slate-500 mt-0.5">
             Doorstep Delivery OK
@@ -732,9 +823,9 @@ export default function PostmanAllDayArticlesOverview({
             <div className="bg-emerald-950/80 border border-emerald-600/50 px-3 py-1.5 rounded-xl text-xs flex items-center gap-2">
               <span className="text-[10px] uppercase font-bold text-emerald-300">Fuel Claim:</span>
               <span className="font-black text-emerald-300 font-mono">
-                ₹{fuelSummary.totalClaimAmount.toLocaleString('en-IN')}
+                ₹{fuelSummary.totalClaimAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
-              <span className="text-[10px] text-emerald-400/80">({fuelSummary.workingDays}d × {customDailyKm}km @ ₹{Number(customFuelRate || 3.6).toFixed(2)})</span>
+              <span className="text-[10px] text-emerald-400/80">({fuelSummary.workingDays}d × {effectiveDailyKm}km @ ₹{Number(effectiveFuelRate || 3.6).toFixed(2)})</span>
             </div>
 
             <button
@@ -772,9 +863,9 @@ export default function PostmanAllDayArticlesOverview({
                   Filters:
                 </span>
                 {[
-                  { id: 'ALL', label: 'All Days (31)' },
+                  { id: 'ALL', label: `All Days (${fuelSummary.dailyRows.length})` },
                   { id: 'WORKING', label: `Working Days (${fuelSummary.workingDays})` },
-                  { id: 'SUNDAY_HOLIDAY', label: `Sundays / Holidays (${31 - fuelSummary.workingDays})` },
+                  { id: 'SUNDAY_HOLIDAY', label: `Off / Leave (${fuelSummary.dailyRows.length - fuelSummary.workingDays})` },
                   { id: 'HIGH_VOLUME', label: 'High Volume (>50 Articles)' },
                 ].map((chip) => (
                   <button
@@ -874,60 +965,41 @@ export default function PostmanAllDayArticlesOverview({
               </div>
             </div>
 
-        {/* Beat 17 Audited Sort Verification Badge */}
-        {selectedBeat === 'Beat 17' && (
-          <div className="mx-4 sm:mx-6 my-4 p-4 rounded-2xl bg-gradient-to-r from-amber-950/80 via-slate-900 to-emerald-950/70 border border-amber-500/50 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+        {/* Official Department Locked Audit Verification Banner */}
+        {isLocked && (
+          <div className="mx-4 sm:mx-6 my-4 p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-red-950/90 to-emerald-950/80 border border-amber-500/50 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
             <div className="flex items-start gap-3">
               <div className="p-2 rounded-xl bg-amber-500/20 text-amber-300 font-bold shrink-0">
-                <ShieldCheck size={20} />
+                <Lock size={20} />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-black text-amber-300 text-sm">Beat 17 Verified Sort Audit · Priyanshu Trivedi</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-black text-amber-300 text-sm">
+                    {fuelSummary.beatNo} Official Department Audit · {fuelSummary.postmanName} ({fuelSummary.employeeId})
+                  </span>
                   <span className="px-2 py-0.5 rounded-full bg-emerald-900/80 border border-emerald-500/50 text-emerald-300 font-bold text-[10px]">
-                    100% Screenshot Audit Match
+                    Department Locked · Immutable
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-slate-800 border border-slate-600 text-slate-200 font-mono text-[10px]">
+                    PIN: {(fuelSummary.linkedPincodes || ['324009']).join(', ')}
                   </span>
                 </div>
                 <p className="text-slate-300 text-[11px] mt-1 leading-relaxed">
-                  Jurisdiction Rules: <strong>Registered Articles: 0</strong> · <strong>PDMS Invoiced Total: 1,138</strong> · <strong>DSS Invoiced Total: 1,136</strong> · <strong>Overall Mobile Usage: 99.76%</strong> (Oct 1: 98.08%, Oct 8: 96.00%, all other 23 working days 100.00%).
+                  Official DSS Sheet ({fuelSummary.departmentLockSource || 'DSS REPORT OCT.26'}):{' '}
+                  <strong>PDMS Invoiced: {(fuelSummary.pdmsInvoicedTotal ?? totalsInvoiced.pdmsSum).toLocaleString('en-IN')}</strong> ·{' '}
+                  <strong>DSS Invoiced: {(fuelSummary.dssInvoicedTotal ?? totalsInvoiced.dssSum).toLocaleString('en-IN')}</strong> ·{' '}
+                  <strong>Mobile Usage Avg: {Number(fuelSummary.mobileUsageAvgPercent ?? totalsInvoiced.mobAvg).toFixed(2)}%</strong> ·{' '}
+                  <strong>Working Days: {fuelSummary.workingDays}</strong>
+                  {(selectedBeat === 'Beat 6' || selectedBeat === '6') && ' (13-10-2026 & 22-10-2026 Absent = LEAVE · Contact: 9664215130)'}
+                  {(selectedBeat === 'Beat 5' || selectedBeat === '5') && ' (19-10-2026 & 21-10-2026 Absent = LEAVE)'}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <div className="text-right">
-                <span className="block text-[10px] uppercase font-bold text-slate-400">Statutory Fuel Claim</span>
+                <span className="block text-[10px] uppercase font-bold text-slate-400">Locked Statutory Fuel Claim</span>
                 <span className="text-sm font-black font-mono text-emerald-400">
-                  25 Days × 28 KM @ ₹3.60 = ₹2,520.00
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Beat 5 Audited Sort Verification Badge */}
-        {(selectedBeat === 'Beat 5' || selectedBeat === '5') && (
-          <div className="mx-4 sm:mx-6 my-4 p-4 rounded-2xl bg-gradient-to-r from-blue-950/80 via-slate-900 to-emerald-950/70 border border-blue-500/50 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-xl bg-blue-500/20 text-blue-300 font-bold shrink-0">
-                <ShieldCheck size={20} />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-black text-blue-300 text-sm">Beat 5 Verified Sort Audit · Mohit Arvind (BEAT_05)</span>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-900/80 border border-emerald-500/50 text-emerald-300 font-bold text-[10px]">
-                    100% Screenshot Audit Match
-                  </span>
-                </div>
-                <p className="text-slate-300 text-[11px] mt-1 leading-relaxed">
-                  Jurisdiction Rules: <strong>Registered Articles: 0</strong> · <strong>PDMS Invoiced Total: 2,178</strong> · <strong>DSS Invoiced Total: 2,178</strong> · <strong>Overall Mobile Usage: 100.00%</strong> (24 working days, 100.00% across all working days).
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="text-right">
-                <span className="block text-[10px] uppercase font-bold text-slate-400">Statutory Fuel Claim</span>
-                <span className="text-sm font-black font-mono text-emerald-400">
-                  24 Days × 19 KM @ ₹3.60 = ₹1,641.60
+                  {fuelSummary.workingDays} Days × {fuelSummary.sanctionedDailyKm} KM @ ₹{fuelSummary.fuelRatePerKm.toFixed(2)} = ₹{fuelSummary.totalClaimAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
@@ -967,6 +1039,7 @@ export default function PostmanAllDayArticlesOverview({
                 const isWorking = r.status === 'WORKING';
                 const isSunday = r.status === 'SUNDAY';
                 const isHoliday = r.status === 'HOLIDAY';
+                const isLeave = r.status === 'LEAVE';
 
                 return (
                   <tr
@@ -976,6 +1049,8 @@ export default function PostmanAllDayArticlesOverview({
                         ? 'bg-blue-50/40 hover:bg-blue-50/70 text-slate-600'
                         : isHoliday
                         ? 'bg-amber-50/50 hover:bg-amber-50/80 text-amber-950 font-semibold'
+                        : isLeave
+                        ? 'bg-rose-50/60 hover:bg-rose-50/90 text-rose-950 font-semibold'
                         : 'hover:bg-slate-50'
                     }`}
                   >
@@ -999,6 +1074,10 @@ export default function PostmanAllDayArticlesOverview({
                             : r.sn === 20
                             ? 'Dussehra / Vijayadashami'
                             : 'Gazetted Holiday'}
+                        </span>
+                      ) : isLeave ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-100 text-rose-900 border border-rose-200 font-bold text-[10px]">
+                          Absent / Leave
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-bold text-[10px]">
@@ -1083,15 +1162,25 @@ export default function PostmanAllDayArticlesOverview({
                     </td>
 
                     <td className="py-2.5 px-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditDay(r)}
-                        className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-300 hover:border-slate-400 rounded-lg text-[11px] font-bold text-slate-700 transition flex items-center gap-1 ml-auto cursor-pointer shadow-2xs"
-                        title={`Edit article counts for Day ${r.sn} (${r.date})`}
-                      >
-                        <Edit3 size={12} className="text-red-700" />
-                        <span>Edit Day</span>
-                      </button>
+                      {isLocked ? (
+                        <span
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-bold text-slate-500 ml-auto cursor-not-allowed"
+                          title="Department Locked (Immutable official DSS record)"
+                        >
+                          <Lock size={11} className="text-amber-600" />
+                          <span>Locked</span>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditDay(r)}
+                          className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-300 hover:border-slate-400 rounded-lg text-[11px] font-bold text-slate-700 transition flex items-center gap-1 ml-auto cursor-pointer shadow-2xs"
+                          title={`Edit article counts for Day ${r.sn} (${r.date})`}
+                        >
+                          <Edit3 size={12} className="text-red-700" />
+                          <span>Edit Day</span>
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -1104,7 +1193,7 @@ export default function PostmanAllDayArticlesOverview({
                   <div className="flex items-center justify-between text-xs font-black uppercase tracking-wider px-2">
                     <span>Month Totals ({fuelSummary.workingDays} Working Days)</span>
                     <span className="text-amber-400 font-mono text-[11px]">
-                      {fuelSummary.workingDays} Days × {customDailyKm} KM @ ₹{Number(customFuelRate || 3.6).toFixed(2)}/KM = ₹{fuelSummary.totalClaimAmount.toLocaleString('en-IN')}
+                      {fuelSummary.workingDays} Days × {effectiveDailyKm} KM @ ₹{Number(effectiveFuelRate || 3.6).toFixed(2)}/KM = ₹{fuelSummary.totalClaimAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                 </td>
@@ -1174,8 +1263,18 @@ export default function PostmanAllDayArticlesOverview({
             </div>
 
             {modalNotice && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-bold flex items-center gap-2">
-                <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+              <div
+                className={`p-3 rounded-xl text-xs font-bold flex items-center gap-2 border ${
+                  modalNoticeError
+                    ? 'bg-rose-50 border-rose-200 text-rose-800'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                }`}
+              >
+                {modalNoticeError ? (
+                  <AlertTriangle size={15} className="text-rose-600 shrink-0" />
+                ) : (
+                  <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+                )}
                 <span>{modalNotice}</span>
               </div>
             )}

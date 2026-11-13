@@ -93,7 +93,10 @@ export default function MasterVerificationDrawer({
   const staffRole = currentStaff?.role || 'POSTMAN';
   const staffName = currentStaff?.name || 'Postal Staff';
   const staffId = currentStaff?.employeeId || currentStaff?.id || '50457421';
-  const isSuperAdmin = staffRole === 'SUPER_ADMIN' || currentStaff?.email === 'mahen.comtech@gmail.com';
+  const isSuperAdmin =
+    staffRole === 'MASTER_ADMIN' ||
+    staffRole === 'SUPER_ADMIN' ||
+    currentStaff?.email?.toLowerCase() === 'ektamahenmeena@gmail.com';
   const isSpm = isSuperAdmin || staffRole === 'ADMIN' || (currentStaff?.designation && currentStaff.designation.includes('SPM'));
   const isPostalAssistant = isSuperAdmin || staffRole === 'PA' || (currentStaff?.designation && currentStaff.designation.includes('Postal Assistant'));
   const isBeatStaff = staffRole === 'POSTMAN' || staffRole === 'GDS' || staffRole === 'STAFF';

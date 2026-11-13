@@ -31,6 +31,8 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { customerService } from '../services/customerService';
+import { useAuth } from './auth/FirebaseAuthProvider';
+import { staffPermissionService } from '../services/staffPermissionService';
 import { Customer, Lead } from '../types/models';
 import { processChat } from '../lib/aiChat';
 import {
@@ -66,6 +68,10 @@ interface ChatMessage {
 }
 
 export default function FloatingAIChatBot() {
+  const { userProfile } = useAuth();
+  const currentProfile = staffPermissionService.getActiveSession() || userProfile;
+  const isRestrictedStaff = staffPermissionService.isPostmanOrGds(currentProfile);
+
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [notifications, setNotifications] = useState<FieldJumpNotification[]>([]);
@@ -96,8 +102,21 @@ export default function FloatingAIChatBot() {
   useEffect(() => {
     // Initial scan and live subscription
     const updateNotifs = () => {
+      const profile = staffPermissionService.getActiveSession() || userProfile;
+      const restricted = staffPermissionService.isPostmanOrGds(profile);
       const all = notificationScannerService.getNotifications();
-      setNotifications([...all]);
+      const scopedNotifs = restricted
+        ? all.filter((n) =>
+            staffPermissionService.matchesUserBeatScope(profile, {
+              beatNo: n.beatNo,
+              area: n.colony,
+              pincode: n.pincode,
+              assignedStaffId: n.assignedStaffId,
+              assignedStaffName: n.assignedStaffName
+            })
+          )
+        : all;
+      setNotifications([...scopedNotifs]);
       const cscs = getStoredCscDirectory();
       const set = new Set(cscs.filter(c => c.ingestedToCrm).map(c => c.id));
       setIngestedIds(set);
@@ -105,7 +124,7 @@ export default function FloatingAIChatBot() {
     updateNotifs();
     const unsub = notificationScannerService.subscribe(updateNotifs);
     return () => unsub();
-  }, []);
+  }, [userProfile]);
 
   useEffect(() => {
     if (isOpen && !isMinimized) {
@@ -166,13 +185,14 @@ export default function FloatingAIChatBot() {
     }
   };
 
-  // Dedicated search utility over Customers & Leads
+  // Dedicated search utility over Customers & Leads (Beat-scoped & capped at 5)
   const performSearch = (query: string): { customers: Customer[]; leads: Lead[] } => {
     const q = query.toLowerCase().trim();
     const cleanDigits = q.replace(/\D/g, '');
+    const activeProfile = staffPermissionService.getActiveSession() || userProfile;
 
-    const allCustomers = customerService.getCustomers();
-    const allLeads = customerService.getLeads();
+    const allCustomers = customerService.getScopedCustomers(activeProfile);
+    const allLeads = customerService.getScopedLeads(activeProfile);
 
     const matchedCustomers = allCustomers.filter(c => {
       const matchName = (c.name || '').toLowerCase().includes(q);
@@ -185,8 +205,19 @@ export default function FloatingAIChatBot() {
       return matchName || matchMobile || matchAlt || matchId || matchHouse || matchBeat || matchArea;
     });
 
-    // Also match in Door-to-door Sequential Properties
+    // Also match in Door-to-door Sequential Properties within beat scope
     DEFAULT_SEQUENTIAL_PROPERTIES.forEach(seq => {
+      if (
+        !staffPermissionService.matchesUserBeatScope(activeProfile, {
+          beatNo: seq.beatNo,
+          area: seq.colony,
+          pincode: seq.pincode,
+          assignedStaffId: seq.assignedStaffId,
+          assignedStaffName: seq.assignedStaffName
+        })
+      ) {
+        return;
+      }
       const matchMobile = cleanDigits && (
         seq.primaryMobile.includes(cleanDigits) ||
         (seq.whatsapp && seq.whatsapp.includes(cleanDigits))
@@ -229,24 +260,35 @@ export default function FloatingAIChatBot() {
       return matchName || matchMobile || matchProd;
     }).slice(0, 5);
 
-    return { customers: matchedCustomers.slice(0, 6), leads: matchedLeads };
+    return { customers: matchedCustomers.slice(0, 5), leads: matchedLeads };
   };
 
-  // Match Kota CSC / eMitra records
+  // Match Kota CSC / eMitra records (Beat-scoped & capped at 5)
   const searchCscDirectory = (query: string): CommercialCscEntity[] => {
     const q = query.toLowerCase().trim();
     const cleanDigits = q.replace(/\D/g, '');
-    const cscList = getStoredCscDirectory();
+    const activeProfile = staffPermissionService.getActiveSession() || userProfile;
+    const cscList = getStoredCscDirectory().filter(c =>
+      staffPermissionService.matchesUserBeatScope(activeProfile, {
+        beatNo: c.beatNo,
+        area: c.colony,
+        pincode: c.pincode,
+        assignedStaffId: c.assignedStaffId,
+        assignedStaffName: c.assignedStaffName
+      })
+    );
 
-    return cscList.filter(c => {
-      const matchName = c.businessName.toLowerCase().includes(q);
-      const matchOp = c.operatorName.toLowerCase().includes(q);
-      const matchCol = c.colony.toLowerCase().includes(q);
-      const matchBeat = c.beatNo.toLowerCase().includes(q);
-      const matchLand = c.landmark.toLowerCase().includes(q);
-      const matchMobile = cleanDigits && (c.primaryMobile.includes(cleanDigits) || c.whatsapp.includes(cleanDigits));
-      return matchName || matchOp || matchCol || matchBeat || matchLand || matchMobile;
-    });
+    return cscList
+      .filter(c => {
+        const matchName = c.businessName.toLowerCase().includes(q);
+        const matchOp = c.operatorName.toLowerCase().includes(q);
+        const matchCol = c.colony.toLowerCase().includes(q);
+        const matchBeat = c.beatNo.toLowerCase().includes(q);
+        const matchLand = c.landmark.toLowerCase().includes(q);
+        const matchMobile = cleanDigits && (c.primaryMobile.includes(cleanDigits) || c.whatsapp.includes(cleanDigits));
+        return matchName || matchOp || matchCol || matchBeat || matchLand || matchMobile;
+      })
+      .slice(0, 5);
   };
 
   const handleSend = async (customQuery?: string) => {
@@ -281,16 +323,28 @@ export default function FloatingAIChatBot() {
       lower.includes('fix') ||
       lower.includes('scan')
     ) {
-      const activeNotifs = notificationScannerService.getNotifications();
+      const activeProfile = staffPermissionService.getActiveSession() || userProfile;
+      const allNotifs = notificationScannerService.getNotifications();
+      const activeNotifs = isRestrictedStaff
+        ? allNotifs.filter((n) =>
+            staffPermissionService.matchesUserBeatScope(activeProfile, {
+              beatNo: n.beatNo,
+              area: n.colony,
+              pincode: n.pincode,
+              assignedStaffId: n.assignedStaffId,
+              assignedStaffName: n.assignedStaffName
+            })
+          )
+        : allNotifs;
       setTimeout(() => {
         setMessages(prev => [
           ...prev,
           {
             id: `bot-notifs-${Date.now()}`,
             role: 'bot',
-            text: `Namaskar, Boss! Scanned all modules across Dadabari S.O. Ecosystem.\n\nFound ${activeNotifs.length} active field notifications requiring attention. You can click "[Jump to Field & Fix]" on any card to directly open the record and resolve it:`,
+            text: `Namaskar, Boss! Scanned ${isRestrictedStaff ? activeProfile?.beat || 'your assigned beat' : 'all modules across Dadabari S.O. Ecosystem'}.\n\nFound ${activeNotifs.length} active field notifications requiring attention${activeNotifs.length > 5 ? ' (showing top 5)' : ''}. You can click "[Jump to Field & Fix]" on any card to directly open the record and resolve it:`,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            notificationResults: activeNotifs
+            notificationResults: activeNotifs.slice(0, 5)
           }
         ]);
         setLoading(false);
@@ -441,14 +495,15 @@ export default function FloatingAIChatBot() {
       return;
     }
 
-    // 6. Fallback AI Processing with Full Kota Ecosystem Context
+    // 6. Fallback AI Processing with Scoped Kota Ecosystem Context
+    const activeProfileForCtx = staffPermissionService.getActiveSession() || userProfile;
     const context = `
-Ecosystem: Dadabari S.O. (324009), Beats 1 to 33, Rajasthan Circle.
-Total Master Customers: ${customerService.getCustomers().length}.
-Active Leads: ${customerService.getLeads().length}.
+Ecosystem: Dadabari S.O. (324009), ${isRestrictedStaff ? `Assigned Scope: ${activeProfileForCtx?.beat || 'Assigned Beat'}` : 'Beats 1 to 33, Rajasthan Circle'}.
+Total Scoped Customers: ${customerService.getScopedCustomers(activeProfileForCtx).length}.
+Active Scoped Leads: ${customerService.getScopedLeads(activeProfileForCtx).length}.
 Authorized CSC & eMitra Kiosks: ${KOTA_COMMERCIAL_CSC_DIRECTORY.length}.
 Active Notifications: ${notifications.length}.
-Available modules: Dashboard (/dashboard), Businesses & CSC (/businesses), Sequence Property Hub (/sequence-properties), Customer List (/customers), Leads (/leads), Staff Directory (/staff-master), Tasks (/tasks).
+Available modules: Dashboard (/dashboard), Businesses & CSC (/businesses), Sequence Property Hub (/sequence-properties), Customer List (/customers), Leads (/leads), Tasks (/tasks).
 `;
 
     try {

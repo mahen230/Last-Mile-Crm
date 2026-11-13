@@ -64,7 +64,7 @@ interface MenuItem {
 export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
-  const { user, userProfile, loginAsMasterAdmin, switchStaffProfile, signOut } = useAuth();
+  const { user, userProfile, switchStaffProfile, signOut } = useAuth();
 
   const [conflictCount, setConflictCount] = useState(0);
   const [leadCount, setLeadCount] = useState(0);
@@ -81,6 +81,17 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
     const updateCounts = () => {
       try {
         const currentProfile = staffPermissionService.getActiveSession() || userProfile;
+        if (!currentProfile) {
+          setConflictCount(0);
+          setLeadCount(0);
+          setCustomerCount(0);
+          setOverdueTaskCount(0);
+          setPendingRegCount(0);
+          setPendingProfileCount(0);
+          setAddressExceptionsCount(0);
+          setAllProfiles([]);
+          return;
+        }
         setConflictCount(customerService.getConflicts().filter((c) => c.status === 'Pending Review').length);
         setLeadCount(
           customerService
@@ -92,7 +103,11 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
             .getCustomers()
             .filter((c) => staffPermissionService.matchesUserBeatScope(currentProfile, c)).length
         );
-        setAllProfiles(staffPermissionService.getAllStaffProfiles());
+        setAllProfiles(
+          staffPermissionService.isSuperAdmin(currentProfile)
+            ? staffPermissionService.getAllStaffProfiles()
+            : []
+        );
 
         const today = new Date().toISOString().split('T')[0];
         const tasks = customerService
@@ -134,7 +149,11 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
   const isSuperAdmin = staffPermissionService.isSuperAdmin(userProfile);
   const isPublicHomeRoute = location.pathname === '/' || location.pathname === '/home';
 
-  const isAdmin = isSuperAdmin || userProfile?.role === 'ADMIN' || userProfile?.role === 'SUPER_ADMIN';
+  const isAdmin =
+    isSuperAdmin ||
+    userProfile?.role === 'MASTER_ADMIN' ||
+    userProfile?.role === 'ADMIN' ||
+    userProfile?.role === 'SUPER_ADMIN';
 
   const menuSections: { group: string; items: MenuItem[] }[] = isAdmin
     ? [
@@ -258,7 +277,7 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
       ]
     : [
         {
-          group: 'MAIN WORKFLOW',
+          group: 'BEAT DELIVERY WORKFLOW',
           items: [
             { name: '1. Dashboard', icon: LayoutDashboard, path: '/dashboard' },
             {
@@ -268,39 +287,20 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
               badge: customerCount ? `${customerCount}` : undefined,
             },
             {
-              name: '3. Colony Directory',
-              icon: Building2,
-              path: '/colony-master',
-              badge: 'Master',
-              badgeColor: 'bg-indigo-600 text-white',
-            },
-            {
-              name: '4. Beat Management',
-              icon: Map,
-              path: '/beats',
-              badge: userProfile?.beat || 'Beat 2',
-              badgeColor: 'bg-red-700 text-white',
-            },
-            {
-              name: '5. Documents & Records',
+              name: '3. Documents & Records',
               icon: FileCheck2,
               path: '/official-documents',
               badge: 'Statutory',
               badgeColor: 'bg-emerald-600 text-white font-black',
             },
             {
-              name: '6. Department (Staff-wise assignment)',
-              icon: Briefcase,
-              path: '/staff',
-            },
-            {
-              name: '7. Products',
+              name: '4. Products',
               icon: Sparkles,
               path: '/services',
               requiredModule: 'productSchemeLeadSection',
             },
             {
-              name: '8. Leads & Pipeline',
+              name: '5. Leads & Pipeline',
               icon: Target,
               path: '/leads',
               badge: leadCount ? `${leadCount}` : undefined,
@@ -627,39 +627,31 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
                 </div>
               </div>
 
-              {/* Right: Staff Controls & Role Switcher */}
+              {/* Right: Staff Controls & Master Admin Profile Switcher */}
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                {/* 1-Click Master Admin Bypass */}
-                {!isSuperAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => loginAsMasterAdmin()}
-                    id="header-master-admin-bypass-btn"
-                    className="hidden lg:flex px-2.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-xl text-xs font-black transition items-center gap-1 shadow-2xs cursor-pointer"
-                    title="Switch to Master Admin profile"
-                  >
-                    <ShieldCheck size={13} />
-                    <span>Admin Bypass</span>
-                  </button>
+                {/* Quick Staff Role & Profile Switcher (Strictly Master Admin Only) */}
+                {isSuperAdmin && (
+                  <div className="hidden md:flex items-center gap-1 bg-slate-50 border border-slate-200 px-2 py-1.5 rounded-xl text-xs">
+                    <Shield size={12} className="text-red-700 shrink-0" />
+                    <select
+                      value={userProfile?.email || 'Ektamahenmeena@gmail.com'}
+                      onChange={(e) => switchStaffProfile(e.target.value)}
+                      className="bg-transparent font-bold text-slate-800 text-xs focus:outline-none cursor-pointer max-w-[150px] lg:max-w-[180px] truncate"
+                      id="top-profile-quick-switch"
+                      title="Master Admin: Switch active operational profile"
+                    >
+                      {allProfiles.slice(0, 25).map((sp) => (
+                        <option key={sp.id} value={sp.email}>
+                          {sp.name} (
+                          {sp.role === 'MASTER_ADMIN' || sp.role === 'SUPER_ADMIN'
+                            ? 'Master Admin'
+                            : `${sp.designation || sp.role} • ${sp.beat}`}
+                          )
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 )}
-
-                {/* Quick Staff Role & Profile Switcher */}
-                <div className="hidden md:flex items-center gap-1 bg-slate-50 border border-slate-200 px-2 py-1.5 rounded-xl text-xs">
-                  <Shield size={12} className={isSuperAdmin ? 'text-red-700 shrink-0' : 'text-slate-500 shrink-0'} />
-                  <select
-                    value={userProfile?.email || 'mahen.comtech@gmail.com'}
-                    onChange={(e) => switchStaffProfile(e.target.value)}
-                    className="bg-transparent font-bold text-slate-800 text-xs focus:outline-none cursor-pointer max-w-[150px] lg:max-w-[180px] truncate"
-                    id="top-profile-quick-switch"
-                    title="Switch active user profile"
-                  >
-                    {allProfiles.slice(0, 25).map((sp) => (
-                      <option key={sp.id} value={sp.email}>
-                        {sp.name} ({sp.role === 'SUPER_ADMIN' ? 'Super Admin' : `${sp.designation || sp.role} • ${sp.beat}`})
-                      </option>
-                    ))}
-                  </select>
-                </div>
 
                 {/* My Profile Button */}
                 <button

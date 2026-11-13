@@ -26,6 +26,9 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
   const [messageLead, setMessageLead] = useState<Lead | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [feedbackBanner, setFeedbackBanner] = useState<string | null>(null);
+  const [tablePage, setTablePage] = useState(1);
+  const [kanbanColumnPages, setKanbanColumnPages] = useState<Record<string, number>>({});
+  const LEADS_PAGE_SIZE = 5;
 
   // New Lead Form State
   const [leadCustomerId, setLeadCustomerId] = useState('CUST-TEMP');
@@ -194,6 +197,15 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
     return true;
   });
 
+  useEffect(() => {
+    setTablePage(1);
+    setKanbanColumnPages({});
+  }, [categoryFilter, beatFilter, searchQuery, viewMode, userProfile]);
+
+  const totalTablePages = Math.max(1, Math.ceil(visibleLeads.length / LEADS_PAGE_SIZE));
+  const safeTablePage = Math.min(tablePage, totalTablePages);
+  const paginatedTableLeads = visibleLeads.slice((safeTablePage - 1) * LEADS_PAGE_SIZE, safeTablePage * LEADS_PAGE_SIZE);
+
   return (
     <div className="space-y-6" id="leads-pipeline-view-root">
       {feedbackBanner && (
@@ -306,6 +318,9 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
         <div className="flex gap-4 overflow-x-auto pb-4 items-start min-h-[600px]">
           {stages.map((stage) => {
             const stageLeads = visibleLeads.filter(l => l.stage === stage);
+            const colTotalPages = Math.max(1, Math.ceil(stageLeads.length / LEADS_PAGE_SIZE));
+            const colPage = Math.min(kanbanColumnPages[stage] || 1, colTotalPages);
+            const paginatedStageLeads = stageLeads.slice((colPage - 1) * LEADS_PAGE_SIZE, colPage * LEADS_PAGE_SIZE);
             return (
               <div
                 key={stage}
@@ -319,7 +334,7 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
                 </div>
 
                 <div className="space-y-3 overflow-y-auto flex-1 pr-1">
-                  {stageLeads.map((lead) => (
+                  {paginatedStageLeads.map((lead) => (
                     <div
                       key={lead.id}
                       className="bg-white rounded-xl p-3.5 border border-slate-200 hover:border-red-300 hover:shadow-xs transition space-y-2 text-xs"
@@ -409,6 +424,30 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
                     </div>
                   )}
                 </div>
+
+                {stageLeads.length > LEADS_PAGE_SIZE && (
+                  <div className="pt-2 mt-2 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-600">
+                    <span>{colPage}/{colTotalPages}</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={colPage <= 1}
+                        onClick={() => setKanbanColumnPages(prev => ({ ...prev, [stage]: Math.max(1, colPage - 1) }))}
+                        className="px-2 py-0.5 rounded bg-white border border-slate-200 font-semibold disabled:opacity-40 cursor-pointer"
+                      >
+                        Prev
+                      </button>
+                      <button
+                        type="button"
+                        disabled={colPage >= colTotalPages}
+                        onClick={() => setKanbanColumnPages(prev => ({ ...prev, [stage]: Math.min(colTotalPages, colPage + 1) }))}
+                        className="px-2 py-0.5 rounded bg-white border border-slate-200 font-semibold disabled:opacity-40 cursor-pointer"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -432,7 +471,7 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {visibleLeads.map((l) => (
+                {paginatedTableLeads.map((l) => (
                   <tr key={l.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3 font-mono font-bold text-slate-900">{l.id}</td>
                     <td className="px-4 py-3">
@@ -476,6 +515,34 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
               </tbody>
             </table>
           </div>
+          {visibleLeads.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 px-4 py-3 border-t border-slate-200 text-xs text-slate-600">
+              <span>
+                Showing <strong className="text-slate-900">{(safeTablePage - 1) * LEADS_PAGE_SIZE + 1}</strong>–<strong className="text-slate-900">{Math.min(safeTablePage * LEADS_PAGE_SIZE, visibleLeads.length)}</strong> of <strong className="text-slate-900">{visibleLeads.length}</strong> leads (5 per page)
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={safeTablePage <= 1}
+                  onClick={() => setTablePage(p => Math.max(1, p - 1))}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold disabled:opacity-40 hover:bg-slate-100 cursor-pointer"
+                >
+                  Prev
+                </button>
+                <span className="font-mono font-bold text-slate-800 px-2">
+                  Page {safeTablePage} / {totalTablePages}
+                </span>
+                <button
+                  type="button"
+                  disabled={safeTablePage >= totalTablePages}
+                  onClick={() => setTablePage(p => Math.min(totalTablePages, p + 1))}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold disabled:opacity-40 hover:bg-slate-100 cursor-pointer"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -604,7 +671,7 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
             <h3 className="font-bold text-slate-900 text-lg mb-4">Link Lead to Household</h3>
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {customerService.getCustomers().filter(c => c.type === 'Household').map(h => (
+              {customerService.getScopedCustomers(userProfile).filter(c => c.type === 'Household').slice(0, 5).map(h => (
                 <button
                   key={h.id}
                   onClick={() => handleLinkToHousehold(h.id)}

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Search,
   MapPin,
@@ -34,8 +34,12 @@ import {
   Clock,
   Send,
   CheckCircle,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { useAuth } from '../auth/FirebaseAuthProvider';
+import { staffPermissionService } from '../../services/staffPermissionService';
 import {
   CONSOLIDATED_BEAT_MATRIX,
   ConsolidatedBeatEntry,
@@ -437,11 +441,19 @@ export const DEFAULT_SEQUENTIAL_PROPERTIES: PropertyItem[] = [
 ];
 
 export default function SequenceWisePropertyHub() {
+  const { userProfile } = useAuth();
+  const currentProfile = staffPermissionService.getActiveSession() || userProfile;
+  const isRestrictedStaff = staffPermissionService.isPostmanOrGds(currentProfile);
+  const SEQ_PAGE_SIZE = 5;
+
   // Main View Switcher: Consolidated Master Matrix vs. Sequence Door-to-Door Route
   const [hubMode, setHubMode] = useState<'SEQUENCE' | 'MATRIX'>('SEQUENCE');
 
   // Dual View Layout Toggle inside Property Hub: Card/Grid View vs. Table/Follow-up View
   const [propertyViewLayout, setPropertyViewLayout] = useState<'CARD' | 'TABLE'>('CARD');
+
+  const [seqPage, setSeqPage] = useState<number>(1);
+  const [matrixPage, setMatrixPage] = useState<number>(1);
 
   // Master matrix local state with persistence
   const [beatMatrix, setBeatMatrix] = useState<ConsolidatedBeatEntry[]>(() => {
@@ -507,35 +519,67 @@ export default function SequenceWisePropertyHub() {
     return DEFAULT_SEQUENTIAL_PROPERTIES;
   });
 
+  // Scoped base datasets for Postman/GDS vs Master Admin
+  const scopedSequentialProperties = useMemo(() => {
+    if (!isRestrictedStaff) return sequentialProperties;
+    return sequentialProperties.filter((p) =>
+      staffPermissionService.matchesUserBeatScope(currentProfile, {
+        beatNo: p.beatNo,
+        area: p.colony,
+        pincode: p.pincode,
+        assignedStaffId: p.assignedStaffId,
+        assignedStaffName: p.assignedStaffName,
+      })
+    );
+  }, [sequentialProperties, isRestrictedStaff, currentProfile]);
+
+  const scopedBeatMatrix = useMemo(() => {
+    if (!isRestrictedStaff) return beatMatrix;
+    return beatMatrix.filter((b) =>
+      staffPermissionService.matchesUserBeatScope(currentProfile, {
+        beatNo: b.beatNumber,
+        officeId: b.deliveryOffice,
+        area: b.coloniesFormatted,
+        pincode: b.pincode,
+        assignedStaffId: b.staffId,
+        assignedStaffName: b.assignedPostmanName,
+      })
+    );
+  }, [beatMatrix, isRestrictedStaff, currentProfile]);
+
   // Distinct Delivery Offices List
   const deliveryOfficeStats = useMemo(() => {
     const map = new Map<string, number>();
-    beatMatrix.forEach((b) => {
+    scopedBeatMatrix.forEach((b) => {
       map.set(b.deliveryOffice, (map.get(b.deliveryOffice) || 0) + 1);
     });
     return Array.from(map.entries()).map(([office, count]) => ({
       office,
       count,
     }));
-  }, [beatMatrix]);
+  }, [scopedBeatMatrix]);
 
   // Distinct Colonies List for Dropdown Selector
   const uniqueColoniesList = useMemo(() => {
     const set = new Set<string>();
-    sequentialProperties.forEach((p) => {
+    scopedSequentialProperties.forEach((p) => {
       if (p.colony) set.add(p.colony.trim());
     });
     return ['All', ...Array.from(set).sort()];
-  }, [sequentialProperties]);
+  }, [scopedSequentialProperties]);
 
-  // All 33 Beats List for Upper Beat Dropdown Filter
+  // All 33 Beats List (restricted to staff's beats when Postman/GDS)
   const all33BeatsList = useMemo(() => {
+    if (isRestrictedStaff) {
+      const allowed = Array.from(staffPermissionService.getScopedBeatsSet(currentProfile));
+      return allowed.length > 0 ? ['All', ...allowed] : ['All', currentProfile?.beat || 'Beat 2'];
+    }
     return ['All', ...Array.from({ length: 33 }, (_, i) => `Beat ${i + 1}`)];
-  }, []);
+  }, [isRestrictedStaff, currentProfile]);
 
   // 1. FILTERED SEQUENTIAL PROPERTIES with multi-parameter inputs
   const filteredAndSortedProperties = useMemo(() => {
-    return sequentialProperties
+    return scopedSequentialProperties
       .filter((p) => {
         // Colony Dropdown Filter
         const matchColony = selectedColony === 'All' || p.colony.toLowerCase() === selectedColony.toLowerCase();
@@ -575,7 +619,7 @@ export default function SequenceWisePropertyHub() {
         return a.houseNoSeq - b.houseNoSeq;
       });
   }, [
-    sequentialProperties,
+    scopedSequentialProperties,
     selectedColony,
     selectedUpperBeat,
     customerNameSearch,
@@ -584,6 +628,29 @@ export default function SequenceWisePropertyHub() {
     propertyTypeFilter,
     seqStatusFilter,
   ]);
+
+  useEffect(() => {
+    setSeqPage(1);
+  }, [
+    selectedColony,
+    selectedUpperBeat,
+    customerNameSearch,
+    houseNoSearch,
+    mobileSearch,
+    propertyTypeFilter,
+    seqStatusFilter,
+  ]);
+
+  const seqTotalPages = Math.max(1, Math.ceil(filteredAndSortedProperties.length / SEQ_PAGE_SIZE));
+  const safeSeqPage = Math.min(seqPage, seqTotalPages);
+  const paginatedProperties = useMemo(
+    () =>
+      filteredAndSortedProperties.slice(
+        (safeSeqPage - 1) * SEQ_PAGE_SIZE,
+        safeSeqPage * SEQ_PAGE_SIZE
+      ),
+    [filteredAndSortedProperties, safeSeqPage]
+  );
 
   // Active Filter Count for reset indicator
   const activePropertyFiltersCount = useMemo(() => {
@@ -618,7 +685,7 @@ export default function SequenceWisePropertyHub() {
 
   // 2. Filtered Consolidated Matrix for Matrix View Tab
   const filteredMatrix = useMemo(() => {
-    return beatMatrix
+    return scopedBeatMatrix
       .filter((entry) => {
         const matchOffice = officeFilter === 'ALL' || entry.deliveryOffice === officeFilter;
         const matchPincode = pincodeFilter === 'ALL' || entry.pincode === pincodeFilter;
@@ -645,14 +712,40 @@ export default function SequenceWisePropertyHub() {
         return matchOffice && matchPincode && matchBeat && matchStaff && matchSearch;
       })
       .sort((a, b) => a.beatSeq - b.beatSeq);
-  }, [beatMatrix, officeFilter, pincodeFilter, selectedBeatNo, selectedStaffFilter, matrixSearch]);
+  }, [scopedBeatMatrix, officeFilter, pincodeFilter, selectedBeatNo, selectedStaffFilter, matrixSearch]);
 
-  // Live Instant Resolver
+  useEffect(() => {
+    setMatrixPage(1);
+  }, [officeFilter, pincodeFilter, selectedBeatNo, selectedStaffFilter, matrixSearch]);
+
+  const matrixTotalPages = Math.max(1, Math.ceil(filteredMatrix.length / SEQ_PAGE_SIZE));
+  const safeMatrixPage = Math.min(matrixPage, matrixTotalPages);
+  const paginatedMatrix = useMemo(
+    () => filteredMatrix.slice((safeMatrixPage - 1) * SEQ_PAGE_SIZE, safeMatrixPage * SEQ_PAGE_SIZE),
+    [filteredMatrix, safeMatrixPage]
+  );
+
+  // Live Instant Resolver (Scoped for Postman/GDS)
   const liveResolvedBeat = useMemo(() => {
     if (!resolverQuery.trim()) return null;
     const pref = officeFilter !== 'ALL' ? officeFilter : pincodeFilter !== 'ALL' ? pincodeFilter : undefined;
-    return resolveAddressToConsolidatedBeat(resolverQuery, pref);
-  }, [resolverQuery, officeFilter, pincodeFilter]);
+    const resolved = resolveAddressToConsolidatedBeat(resolverQuery, pref);
+    if (
+      resolved &&
+      isRestrictedStaff &&
+      !staffPermissionService.matchesUserBeatScope(currentProfile, {
+        beatNo: resolved.beatNumber,
+        officeId: resolved.deliveryOffice,
+        area: resolved.coloniesFormatted,
+        pincode: resolved.pincode,
+        assignedStaffId: resolved.staffId,
+        assignedStaffName: resolved.assignedPostmanName,
+      })
+    ) {
+      return null;
+    }
+    return resolved;
+  }, [resolverQuery, officeFilter, pincodeFilter, isRestrictedStaff, currentProfile]);
 
   // Export Properties to Excel
   const handleExportPropertiesExcel = () => {
@@ -1058,7 +1151,7 @@ export default function SequenceWisePropertyHub() {
           {/* ========================================================================= */}
           {propertyViewLayout === 'CARD' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filteredAndSortedProperties.map((prop, idx) => (
+              {paginatedProperties.map((prop, idx) => (
                 <div
                   key={prop.id}
                   className="bg-white rounded-3xl border border-slate-200/90 hover:border-indigo-400 shadow-xs hover:shadow-lg transition p-5 flex flex-col justify-between space-y-4 group relative overflow-hidden"
@@ -1068,7 +1161,7 @@ export default function SequenceWisePropertyHub() {
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="flex items-center gap-2">
                         <span className="px-2 py-0.5 rounded-lg bg-indigo-950 text-white font-mono text-[11px] font-black">
-                          #{idx + 1}
+                          #{(safeSeqPage - 1) * SEQ_PAGE_SIZE + idx + 1}
                         </span>
                         <h4 className="text-lg font-black text-slate-900 group-hover:text-indigo-600 transition">
                           {prop.housePlotNumber}
@@ -1243,11 +1336,11 @@ export default function SequenceWisePropertyHub() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredAndSortedProperties.map((prop, idx) => (
+                    {paginatedProperties.map((prop, idx) => (
                       <tr key={prop.id} className="hover:bg-indigo-50/40 transition">
                         {/* Seq # */}
                         <td className="py-3 px-3.5 font-mono font-bold text-slate-500 whitespace-nowrap">
-                          #{idx + 1}
+                          #{(safeSeqPage - 1) * SEQ_PAGE_SIZE + idx + 1}
                         </td>
 
                         {/* House / Plot */}
@@ -1354,6 +1447,39 @@ export default function SequenceWisePropertyHub() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {filteredAndSortedProperties.length > 0 && (
+            <div className="bg-white px-5 py-3.5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-600 shadow-xs">
+              <span>
+                Showing <strong>{(safeSeqPage - 1) * SEQ_PAGE_SIZE + 1}</strong>–
+                <strong>{Math.min(safeSeqPage * SEQ_PAGE_SIZE, filteredAndSortedProperties.length)}</strong> of{' '}
+                <strong>{filteredAndSortedProperties.length}</strong> properties (Max 5 per view)
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={safeSeqPage <= 1}
+                  onClick={() => setSeqPage((p) => Math.max(1, p - 1))}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <ChevronLeft size={14} />
+                  <span>Prev</span>
+                </button>
+                <span className="px-2.5 font-mono font-bold text-slate-800">
+                  Page {safeSeqPage} / {seqTotalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={safeSeqPage >= seqTotalPages}
+                  onClick={() => setSeqPage((p) => Math.min(seqTotalPages, p + 1))}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Next</span>
+                  <ChevronRight size={14} />
+                </button>
               </div>
             </div>
           )}
@@ -1489,7 +1615,7 @@ export default function SequenceWisePropertyHub() {
               >
                 <span>All Delivery Offices</span>
                 <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-slate-200 text-slate-700">
-                  {beatMatrix.length}
+                  {scopedBeatMatrix.length}
                 </span>
               </button>
 
@@ -1532,7 +1658,7 @@ export default function SequenceWisePropertyHub() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredMatrix.map((entry) => (
+                  {paginatedMatrix.map((entry) => (
                     <tr key={entry.id} className="hover:bg-indigo-50/40 transition">
                       {/* Beat & PIN */}
                       <td className="py-3.5 px-4 font-bold text-slate-900 whitespace-nowrap">
@@ -1609,20 +1735,57 @@ export default function SequenceWisePropertyHub() {
 
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEdit(entry)}
-                          className="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 transition flex items-center gap-1 mx-auto cursor-pointer"
-                        >
-                          <Edit2 size={12} />
-                          <span>Edit</span>
-                        </button>
+                        {!isRestrictedStaff ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(entry)}
+                            className="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 transition flex items-center gap-1 mx-auto cursor-pointer"
+                          >
+                            <Edit2 size={12} />
+                            <span>Edit</span>
+                          </button>
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-400">Beat Assigned</span>
+                        )}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+
+            {filteredMatrix.length > 0 && (
+              <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-600">
+                <span>
+                  Showing <strong>{(safeMatrixPage - 1) * SEQ_PAGE_SIZE + 1}</strong>–
+                  <strong>{Math.min(safeMatrixPage * SEQ_PAGE_SIZE, filteredMatrix.length)}</strong> of{' '}
+                  <strong>{filteredMatrix.length}</strong> beat rows (Max 5 per view)
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={safeMatrixPage <= 1}
+                    onClick={() => setMatrixPage((p) => Math.max(1, p - 1))}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    <ChevronLeft size={14} />
+                    <span>Prev</span>
+                  </button>
+                  <span className="px-2.5 font-mono font-bold text-slate-800">
+                    Page {safeMatrixPage} / {matrixTotalPages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={safeMatrixPage >= matrixTotalPages}
+                    onClick={() => setMatrixPage((p) => Math.min(matrixTotalPages, p + 1))}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Next</span>
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

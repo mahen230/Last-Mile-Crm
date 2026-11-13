@@ -26,6 +26,7 @@ export default function CustomerPortal({ onSwitchToStaff, onBackToCRM }: { onSwi
   const [inquiryReq, setInquiryReq] = useState('');
   const [preferredContact, setPreferredContact] = useState<'Phone Call' | 'WhatsApp' | 'Doorstep Visit'>('Phone Call');
   const [inquirySuccess, setInquirySuccess] = useState<string | null>(null);
+  const [inquiryError, setInquiryError] = useState<string | null>(null);
 
   // Tracker State
   const [trackPhone, setTrackPhone] = useState('');
@@ -57,8 +58,9 @@ export default function CustomerPortal({ onSwitchToStaff, onBackToCRM }: { onSwi
 
   const handleInquirySubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inquiryName || !inquiryMobile) {
-      alert('Please provide your name and mobile number.');
+    setInquiryError(null);
+    if (!inquiryName.trim() || !inquiryMobile.trim()) {
+      setInquiryError('Please provide your name and 10-digit mobile number.');
       return;
     }
 
@@ -559,6 +561,12 @@ export default function CustomerPortal({ onSwitchToStaff, onBackToCRM }: { onSwi
               </div>
             ) : (
               <form onSubmit={handleInquirySubmit} className="space-y-4 mt-4 text-sm">
+                {inquiryError && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-semibold flex items-center gap-2">
+                    <AlertCircle size={15} className="shrink-0" />
+                    <span>{inquiryError}</span>
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Product of Interest</label>
                   <input

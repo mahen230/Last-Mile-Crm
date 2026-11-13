@@ -17,6 +17,7 @@ import {
   Home,
   Check,
   X,
+  ChevronLeft,
   ChevronRight,
   Phone,
   MessageSquare,
@@ -45,12 +46,15 @@ export default function TasksView() {
   const isSuperAdmin = staffPermissionService.isSuperAdmin(userProfile);
 
   const [tasks, setTasks] = useState<TaskItem[]>(() => customerService.getTasks());
-  const [customers, setCustomers] = useState<Customer[]>(() => customerService.getCustomers());
-  const [leads, setLeads] = useState<Lead[]>(() => customerService.getLeads());
+  const [customers, setCustomers] = useState<Customer[]>(() => customerService.getScopedCustomers(userProfile));
+  const [leads, setLeads] = useState<Lead[]>(() => customerService.getScopedLeads(userProfile));
   const [statusFilter, setStatusFilter] = useState<'All' | 'Pending' | 'In Progress' | 'Completed'>('All');
   const [selectedBeatFilter, setSelectedBeatFilter] = useState<string>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [tasksPage, setTasksPage] = useState<number>(1);
+  const [beatStatsPage, setBeatStatsPage] = useState<number>(1);
+  const TASKS_PAGE_SIZE = 5;
   const [showNewTaskModal, setShowNewTaskModal] = useState(false);
   const [lastUpdatedToast, setLastUpdatedToast] = useState<string | null>(null);
 
@@ -80,12 +84,13 @@ export default function TasksView() {
   useEffect(() => {
     const syncData = () => {
       setTasks(customerService.getTasks());
-      setCustomers(customerService.getCustomers());
-      setLeads(customerService.getLeads());
+      setCustomers(customerService.getScopedCustomers(userProfile));
+      setLeads(customerService.getScopedLeads(userProfile));
     };
+    syncData();
     const unsub = customerService.subscribe(syncData);
     return () => unsub();
-  }, []);
+  }, [userProfile]);
 
   const triggerLiveFeedback = (msg: string) => {
     setLastUpdatedToast(msg);
@@ -94,7 +99,7 @@ export default function TasksView() {
     }, 2800);
   };
 
-  // Scope tasks & customers based on user role/beat permissions
+  // Scope tasks, customers & leads based on user role/beat permissions
   const scopedTasks = useMemo(
     () => tasks.filter(t => staffPermissionService.matchesUserBeatScope(userProfile, t)),
     [tasks, userProfile]
@@ -104,6 +109,20 @@ export default function TasksView() {
     () => customers.filter(c => staffPermissionService.matchesUserBeatScope(userProfile, c)),
     [customers, userProfile]
   );
+
+  const scopedLeads = useMemo(
+    () => leads.filter(l => staffPermissionService.matchesUserBeatScope(userProfile, l)),
+    [leads, userProfile]
+  );
+
+  const availableBeatNumbers = useMemo(() => {
+    const all33 = Array.from({ length: 33 }, (_, i) => String(i + 1));
+    if (isSuperAdmin || !staffPermissionService.isPostmanOrGds(userProfile)) return all33;
+    const allowed = Array.from(staffPermissionService.getScopedBeatsSet(userProfile))
+      .map(b => String(b).replace(/^Beat\s*/i, '').trim())
+      .filter(Boolean);
+    return allowed.length > 0 ? allowed : all33;
+  }, [isSuperAdmin, userProfile]);
 
   // Overall Real-Time Progress Metrics
   const overallMetrics = useMemo(() => {
@@ -268,6 +287,32 @@ export default function TasksView() {
       return true;
     });
   }, [scopedTasks, selectedBeatFilter, statusFilter, categoryFilter, searchQuery]);
+
+  useEffect(() => {
+    setTasksPage(1);
+  }, [selectedBeatFilter, statusFilter, categoryFilter, searchQuery]);
+
+  const beatStatsTotalPages = Math.max(1, Math.ceil(beatCoverageStats.length / TASKS_PAGE_SIZE));
+  const safeBeatStatsPage = Math.min(beatStatsPage, beatStatsTotalPages);
+  const paginatedBeatStats = useMemo(
+    () =>
+      beatCoverageStats.slice(
+        (safeBeatStatsPage - 1) * TASKS_PAGE_SIZE,
+        safeBeatStatsPage * TASKS_PAGE_SIZE
+      ),
+    [beatCoverageStats, safeBeatStatsPage]
+  );
+
+  const tasksTotalPages = Math.max(1, Math.ceil(filteredTasks.length / TASKS_PAGE_SIZE));
+  const safeTasksPage = Math.min(tasksPage, tasksTotalPages);
+  const paginatedTasks = useMemo(
+    () =>
+      filteredTasks.slice(
+        (safeTasksPage - 1) * TASKS_PAGE_SIZE,
+        safeTasksPage * TASKS_PAGE_SIZE
+      ),
+    [filteredTasks, safeTasksPage]
+  );
 
   // Real-time task status update handler
   const handleStatusChange = (task: TaskItem, newStatus: TaskItem['status']) => {
@@ -595,7 +640,7 @@ export default function TasksView() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-          {beatCoverageStats.map(beat => {
+          {paginatedBeatStats.map(beat => {
             const isSelected = selectedBeatFilter === beat.beatNo;
             const barColor =
               beat.taskCompletionPct >= 75
@@ -720,6 +765,38 @@ export default function TasksView() {
             );
           })}
         </div>
+        {beatCoverageStats.length > TASKS_PAGE_SIZE && (
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-600">
+            <span>
+              Showing {(safeBeatStatsPage - 1) * TASKS_PAGE_SIZE + 1}–
+              {Math.min(safeBeatStatsPage * TASKS_PAGE_SIZE, beatCoverageStats.length)} of{' '}
+              <strong>{beatCoverageStats.length}</strong> beats
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={safeBeatStatsPage <= 1}
+                onClick={() => setBeatStatsPage(p => Math.max(1, p - 1))}
+                className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <ChevronLeft size={13} />
+                <span>Prev</span>
+              </button>
+              <span className="px-2 font-mono font-bold text-slate-700">
+                {safeBeatStatsPage}/{beatStatsTotalPages}
+              </span>
+              <button
+                type="button"
+                disabled={safeBeatStatsPage >= beatStatsTotalPages}
+                onClick={() => setBeatStatsPage(p => Math.min(beatStatsTotalPages, p + 1))}
+                className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <span>Next</span>
+                <ChevronRight size={13} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Filter & Search Toolbar */}
@@ -800,7 +877,7 @@ export default function TasksView() {
             </p>
           </div>
         ) : (
-          filteredTasks.map(t => {
+          paginatedTasks.map(t => {
             const targetStops = t.householdsTarget || 5;
             const coveredStops =
               t.status === 'Completed'
@@ -909,7 +986,7 @@ export default function TasksView() {
                           <button
                             type="button"
                             onClick={() => {
-                              const found = customers.find(
+                              const found = scopedCustomers.find(
                                 c =>
                                   c.id === t.linkedCustomerId ||
                                   c.masterId === t.linkedCustomerMasterId ||
@@ -1078,6 +1155,39 @@ export default function TasksView() {
             );
           })
         )}
+
+        {filteredTasks.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-600 shadow-xs">
+            <span>
+              Showing <strong>{(safeTasksPage - 1) * TASKS_PAGE_SIZE + 1}</strong>–
+              <strong>{Math.min(safeTasksPage * TASKS_PAGE_SIZE, filteredTasks.length)}</strong> of{' '}
+              <strong>{filteredTasks.length}</strong> field tasks (Max 5 per view)
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={safeTasksPage <= 1}
+                onClick={() => setTasksPage(p => Math.max(1, p - 1))}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <ChevronLeft size={14} />
+                <span>Prev</span>
+              </button>
+              <span className="px-2.5 font-mono font-bold text-slate-800">
+                Page {safeTasksPage} / {tasksTotalPages}
+              </span>
+              <button
+                type="button"
+                disabled={safeTasksPage >= tasksTotalPages}
+                onClick={() => setTasksPage(p => Math.min(tasksTotalPages, p + 1))}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <span>Next</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add New Field Task Modal */}
@@ -1145,7 +1255,7 @@ export default function TasksView() {
                     disabled={!isSuperAdmin && !!userProfile?.beat}
                     className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-white disabled:bg-slate-100"
                   >
-                    {['1', '2', '3', '4', '5', '6'].map(b => (
+                    {availableBeatNumbers.map(b => (
                       <option key={b} value={b}>
                         Beat {b}
                       </option>
@@ -1249,7 +1359,7 @@ export default function TasksView() {
                       </div>
                     ) : (
                       <div className="max-h-36 overflow-y-auto space-y-1 border border-slate-200 rounded-lg p-1 bg-white">
-                        {customers
+                        {scopedCustomers
                           .filter(c => {
                             if (!linkSelectorSearch.trim()) return true;
                             const q = linkSelectorSearch.toLowerCase();
@@ -1259,7 +1369,7 @@ export default function TasksView() {
                               (c.masterId || c.id || '').toLowerCase().includes(q)
                             );
                           })
-                          .slice(0, 6)
+                          .slice(0, 5)
                           .map(c => (
                             <div
                               key={c.id}
@@ -1325,7 +1435,7 @@ export default function TasksView() {
                       </div>
                     ) : (
                       <div className="max-h-36 overflow-y-auto space-y-1 border border-slate-200 rounded-lg p-1 bg-white">
-                        {leads
+                        {scopedLeads
                           .filter(l => {
                             if (!linkSelectorSearch.trim()) return true;
                             const q = linkSelectorSearch.toLowerCase();
@@ -1336,7 +1446,7 @@ export default function TasksView() {
                               (l.id || '').toLowerCase().includes(q)
                             );
                           })
-                          .slice(0, 6)
+                          .slice(0, 5)
                           .map(l => (
                             <div
                               key={l.id}

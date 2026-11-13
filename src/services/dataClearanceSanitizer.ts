@@ -38,7 +38,12 @@ class DataClearanceSanitizer {
    */
   public resolveContext(staff?: StaffProfile | null, customer?: CustomerSession | null): ClearanceContext {
     if (staff && staff.role) {
-      const isAdmin = staff.role === 'ADMIN' || staff.email === 'mahen.comtech@gmail.com';
+      const normalizedRole = String(staff.role).toUpperCase();
+      const isAdmin =
+        normalizedRole === 'MASTER_ADMIN' ||
+        normalizedRole === 'SUPER_ADMIN' ||
+        normalizedRole === 'ADMIN' ||
+        staff.email?.toLowerCase() === 'ektamahenmeena@gmail.com';
       const allowedBeats = isAdmin
         ? ['All Beats']
         : staff.permissions?.allowedBeats || (staff.beat ? [staff.beat] : []);

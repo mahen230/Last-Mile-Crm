@@ -37,6 +37,7 @@ import * as XLSX from 'xlsx';
 import { staffPermissionService } from '../../services/staffPermissionService';
 import { masterDataService } from '../../services/masterDataService';
 import { ColonyMasterRecord, ColonyEntityType, OfficeJurisdiction } from '../../types/models';
+import { useAuth } from '../auth/FirebaseAuthProvider';
 
 import { UPDATED_STAFF_LIST } from '../../data/updatedStaffData';
 
@@ -264,6 +265,13 @@ const SUB_OFFICES = [
 ];
 
 export default function UnifiedCrmMasterHub() {
+  const { userProfile } = useAuth();
+  const isRestrictedStaff = staffPermissionService.isPostmanOrGds(userProfile);
+  const scopedBeatsSet = useMemo(
+    () => staffPermissionService.getScopedBeatsSet(userProfile),
+    [userProfile]
+  );
+
   // Master Database States (with localStorage persistence)
   const [colonies, setColonies] = useState<ColonyMapping[]>(() => {
     try {
@@ -285,6 +293,12 @@ export default function UnifiedCrmMasterHub() {
 
   // Active View Tab (Colony Directory Master first by default)
   const [activeTab, setActiveTab] = useState<'division-colonies' | 'colonies' | 'customers' | 'bulk'>('division-colonies');
+
+  // Pagination States (Default max 5 entries per card / paginated view)
+  const MASTER_PAGE_SIZE = 5;
+  const [divisionPage, setDivisionPage] = useState<number>(1);
+  const [legacyColonyPage, setLegacyColonyPage] = useState<number>(1);
+  const [customerPage, setCustomerPage] = useState<number>(1);
 
   // Hadoti Division Colony Master State (Kota, Baran, Bundi)
   const [divisionColonies, setDivisionColonies] = useState<ColonyMasterRecord[]>(() =>
@@ -413,16 +427,60 @@ export default function UnifiedCrmMasterHub() {
     return () => unsub();
   }, []);
 
+  useEffect(() => {
+    if (isRestrictedStaff && userProfile?.beat && userProfile.beat !== 'All Beats') {
+      setHadotiAssignedBeat(userProfile.beat);
+      setNewBeatNo(userProfile.beat);
+      const staff = BEAT_STAFF_DIRECTORY[userProfile.beat];
+      if (staff) {
+        setNewPostmanName(staff.name);
+        setNewStaffId(staff.id);
+      } else {
+        setNewPostmanName(userProfile.name);
+        setNewStaffId(userProfile.employeeId || userProfile.id);
+      }
+      if (userProfile.subOffice) {
+        setSelectedOfficeFilter(userProfile.subOffice);
+      }
+    }
+  }, [isRestrictedStaff, userProfile]);
+
+  useEffect(() => {
+    setDivisionPage(1);
+  }, [divisionFilter, pincodeFilter, officeJurisdictionFilter, divisionSearch]);
+
+  // Beat- & Office-Scoped Division Colonies (Unrestricted for Master Admin / Admin)
+  const scopedDivisionColonies = useMemo(() => {
+    if (!isRestrictedStaff) return divisionColonies;
+    return divisionColonies.filter((c) =>
+      staffPermissionService.matchesUserColonyAndOfficeScope(userProfile, {
+        beatNumber: c.assignedBeat === 'PENDING_ASSIGNMENT' ? '' : c.assignedBeat,
+        officeName: c.postOfficeName,
+        pincode: c.pincode,
+        colonyName: c.colonyName,
+      })
+    );
+  }, [divisionColonies, isRestrictedStaff, userProfile]);
+
   // Registered Office Jurisdictions strictly typed with OfficeJurisdiction[]
   const officeJurisdictions = useMemo<OfficeJurisdiction[]>(() => {
-    return masterDataService.getOfficeJurisdictions();
-  }, [divisionColonies]);
+    const allOffices = masterDataService.getOfficeJurisdictions();
+    if (!isRestrictedStaff || !userProfile) return allOffices;
+    const userPin = (userProfile.officePincode || '').trim();
+    const userPo = (userProfile.postOfficeName || userProfile.subOffice || '').trim().toLowerCase();
+    const filtered = allOffices.filter((oj) => {
+      if (userPin && oj.pincode.trim() === userPin) return true;
+      if (userPo && (oj.officeName.toLowerCase().includes(userPo) || userPo.includes(oj.officeName.toLowerCase()))) return true;
+      return false;
+    });
+    return filtered.length > 0 ? filtered : allOffices.filter((oj) => oj.pincode === '324009');
+  }, [divisionColonies, isRestrictedStaff, userProfile]);
 
   // Available unique Pincodes in Colony Master for Pincode Filter dropdown
   const availableMasterPincodes = useMemo(() => {
     type PinSummary = { pincode: string; office: string; count: number };
     const counts = new Map<string, PinSummary>();
-    divisionColonies.forEach((c) => {
+    scopedDivisionColonies.forEach((c) => {
       const pin = c.pincode.trim();
       if (!pin) return;
       const existing = counts.get(pin);
@@ -438,7 +496,7 @@ export default function UnifiedCrmMasterHub() {
     const result: PinSummary[] = [];
     counts.forEach((v) => result.push(v));
     return result.sort((a, b) => a.pincode.localeCompare(b.pincode));
-  }, [divisionColonies]);
+  }, [scopedDivisionColonies]);
 
   // Strict Office & Pincode-Scoped Filtering (Zero cross-pincode leakage)
   const filteredDivisionColonies = useMemo(() => {
@@ -450,7 +508,7 @@ export default function UnifiedCrmMasterHub() {
       selectedOfficePin = (oPin || '').trim();
     }
 
-    return divisionColonies.filter((c) => {
+    return scopedDivisionColonies.filter((c) => {
       if (divisionFilter === 'KOTA' && c.division !== 'KOTA') return false;
       if (divisionFilter === 'BARAN' && c.division !== 'BARAN') return false;
       if (divisionFilter === 'BUNDI' && c.division !== 'BUNDI') return false;
@@ -488,7 +546,14 @@ export default function UnifiedCrmMasterHub() {
       }
       return true;
     });
-  }, [divisionColonies, divisionFilter, pincodeFilter, officeJurisdictionFilter, divisionSearch]);
+  }, [scopedDivisionColonies, divisionFilter, pincodeFilter, officeJurisdictionFilter, divisionSearch]);
+
+  const totalDivisionPages = Math.max(1, Math.ceil(filteredDivisionColonies.length / MASTER_PAGE_SIZE));
+  const safeDivisionPage = Math.min(divisionPage, totalDivisionPages);
+  const paginatedDivisionColonies = filteredDivisionColonies.slice(
+    (safeDivisionPage - 1) * MASTER_PAGE_SIZE,
+    safeDivisionPage * MASTER_PAGE_SIZE
+  );
 
   const scrollToBlock = (block: 'A' | 'B' | 'C' | 'D') => {
     if (block === 'A') {
@@ -1062,6 +1127,37 @@ export default function UnifiedCrmMasterHub() {
     reader.readAsArrayBuffer(file);
   };
 
+  const scopedLegacyColonies = useMemo(() => {
+    if (!isRestrictedStaff) return colonies;
+    return colonies.filter((c) =>
+      staffPermissionService.matchesUserBeatScope(userProfile, {
+        beatNo: c.beatNo,
+        colonyName: c.colonyName,
+        assignedStaffName: c.postmanName,
+        subOffice: c.subOffice,
+        pincode: c.pincode,
+      })
+    );
+  }, [colonies, isRestrictedStaff, userProfile]);
+
+  const scopedLegacyCustomers = useMemo(() => {
+    if (!isRestrictedStaff) return customers;
+    return customers.filter((cust) =>
+      staffPermissionService.matchesUserBeatScope(userProfile, {
+        beatNo: cust.beatNo,
+        colonyName: cust.colony,
+        area: cust.colony,
+        assignedStaffName: cust.postmanName,
+        pincode: cust.pincode,
+      })
+    );
+  }, [customers, isRestrictedStaff, userProfile]);
+
+  useEffect(() => {
+    setLegacyColonyPage(1);
+    setCustomerPage(1);
+  }, [searchQuery, selectedBeatFilter, selectedOfficeFilter, selectedHouseholdFilter]);
+
   // Filtered Colonies (Strict Office-to-Pincode Enforcement with Zero Fallback Leakage)
   const filteredColonies = useMemo(() => {
     const matchedOfficeMeta =
@@ -1069,7 +1165,7 @@ export default function UnifiedCrmMasterHub() {
         ? SUB_OFFICES.find((o) => o.name.toLowerCase() === selectedOfficeFilter.toLowerCase())
         : undefined;
 
-    return colonies.filter((c) => {
+    return scopedLegacyColonies.filter((c) => {
       const matchOffice =
         selectedOfficeFilter === 'ALL' ||
         ((c.subOffice || '').trim().toLowerCase() === selectedOfficeFilter.trim().toLowerCase() &&
@@ -1087,11 +1183,18 @@ export default function UnifiedCrmMasterHub() {
 
       return matchOffice && matchSearch && matchBeat;
     });
-  }, [colonies, searchQuery, selectedBeatFilter, selectedOfficeFilter]);
+  }, [scopedLegacyColonies, searchQuery, selectedBeatFilter, selectedOfficeFilter]);
+
+  const totalLegacyColonyPages = Math.max(1, Math.ceil(filteredColonies.length / MASTER_PAGE_SIZE));
+  const safeLegacyColonyPage = Math.min(legacyColonyPage, totalLegacyColonyPages);
+  const paginatedLegacyColonies = filteredColonies.slice(
+    (safeLegacyColonyPage - 1) * MASTER_PAGE_SIZE,
+    safeLegacyColonyPage * MASTER_PAGE_SIZE
+  );
 
   // Filtered Customers
   const filteredCustomers = useMemo(() => {
-    return customers.filter((cust) => {
+    return scopedLegacyCustomers.filter((cust) => {
       const matchSearch =
         cust.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         cust.mobile.includes(searchQuery) ||
@@ -1104,7 +1207,14 @@ export default function UnifiedCrmMasterHub() {
 
       return matchSearch && matchBeat && matchHousehold;
     });
-  }, [customers, searchQuery, selectedBeatFilter, selectedHouseholdFilter]);
+  }, [scopedLegacyCustomers, searchQuery, selectedBeatFilter, selectedHouseholdFilter]);
+
+  const totalCustomerPages = Math.max(1, Math.ceil(filteredCustomers.length / MASTER_PAGE_SIZE));
+  const safeCustomerPage = Math.min(customerPage, totalCustomerPages);
+  const paginatedCustomers = filteredCustomers.slice(
+    (safeCustomerPage - 1) * MASTER_PAGE_SIZE,
+    safeCustomerPage * MASTER_PAGE_SIZE
+  );
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 bg-slate-50 min-h-screen">
@@ -1221,8 +1331,10 @@ export default function UnifiedCrmMasterHub() {
           </div>
           <div>
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Registered Colonies</div>
-            <div className="text-2xl font-black text-slate-900">{colonies.length}</div>
-            <div className="text-[11px] text-indigo-600 font-medium mt-0.5">Under Dadabari S.O.</div>
+            <div className="text-2xl font-black text-slate-900">{scopedLegacyColonies.length}</div>
+            <div className="text-[11px] text-indigo-600 font-medium mt-0.5">
+              {isRestrictedStaff ? `Scoped to ${userProfile?.beat || 'Assigned Beat'}` : 'Under Dadabari S.O.'}
+            </div>
           </div>
         </div>
 
@@ -1232,7 +1344,7 @@ export default function UnifiedCrmMasterHub() {
           </div>
           <div>
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Mapped Households</div>
-            <div className="text-2xl font-black text-slate-900">{customers.length}</div>
+            <div className="text-2xl font-black text-slate-900">{scopedLegacyCustomers.length}</div>
             <div className="text-[11px] text-emerald-600 font-medium mt-0.5">With Beat Pinning</div>
           </div>
         </div>
@@ -1254,8 +1366,10 @@ export default function UnifiedCrmMasterHub() {
           </div>
           <div>
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Active Postal Beats</div>
-            <div className="text-2xl font-black text-slate-900">6 Beats</div>
-            <div className="text-[11px] text-rose-600 font-medium mt-0.5">100% Pincode 324009</div>
+            <div className="text-2xl font-black text-slate-900">
+              {isRestrictedStaff ? `${scopedBeatsSet?.size || 1} Beat` : '33 Beats'}
+            </div>
+            <div className="text-[11px] text-rose-600 font-medium mt-0.5">PIN {userProfile?.officePincode || '324009'}</div>
           </div>
         </div>
       </div>
@@ -1271,7 +1385,7 @@ export default function UnifiedCrmMasterHub() {
           }`}
         >
           <MapIcon size={16} />
-          <span>Colony Directory Master ({divisionColonies.length})</span>
+          <span>Colony Directory Master ({scopedDivisionColonies.length})</span>
         </button>
         <button
           onClick={() => setActiveTab('colonies')}
@@ -1282,7 +1396,7 @@ export default function UnifiedCrmMasterHub() {
           }`}
         >
           <MapPin size={16} />
-          <span>Beat Sector Directory ({colonies.length})</span>
+          <span>Beat Sector Directory ({scopedLegacyColonies.length})</span>
         </button>
         <button
           onClick={() => setActiveTab('customers')}
@@ -1293,7 +1407,7 @@ export default function UnifiedCrmMasterHub() {
           }`}
         >
           <Users size={16} />
-          <span>Mapped Households & Customers ({customers.length})</span>
+          <span>Mapped Households & Customers ({scopedLegacyCustomers.length})</span>
         </button>
         <button
           onClick={() => setActiveTab('bulk')}
@@ -1391,9 +1505,13 @@ export default function UnifiedCrmMasterHub() {
                     <select
                       value={newBeatNo}
                       onChange={(e) => handleBeatChange(e.target.value)}
-                      className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs font-semibold bg-white"
+                      disabled={isRestrictedStaff}
+                      className="w-full px-2.5 py-2 border border-slate-200 rounded-lg text-xs font-semibold bg-white disabled:opacity-75"
                     >
-                      {DADABARI_ALL_BEATS.map((beat) => {
+                      {(isRestrictedStaff
+                        ? (scopedBeatsSet ? Array.from<string>(scopedBeatsSet) : []).map((b) => `Beat ${b.toUpperCase()}`)
+                        : DADABARI_ALL_BEATS
+                      ).map((beat) => {
                         const staff = BEAT_STAFF_DIRECTORY[beat];
                         return (
                           <option key={beat} value={beat}>
@@ -1460,10 +1578,17 @@ export default function UnifiedCrmMasterHub() {
                   <select
                     value={selectedOfficeFilter}
                     onChange={(e) => setSelectedOfficeFilter(e.target.value)}
-                    className="px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs font-bold bg-white text-slate-700 focus:outline-hidden"
+                    disabled={isRestrictedStaff}
+                    className="px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs font-bold bg-white text-slate-700 focus:outline-hidden disabled:opacity-75"
                   >
-                    <option value="ALL">All Offices</option>
-                    {SUB_OFFICES.map((so) => (
+                    {!isRestrictedStaff && <option value="ALL">All Offices</option>}
+                    {(isRestrictedStaff
+                      ? SUB_OFFICES.filter((so) =>
+                          so.name.toLowerCase().includes((userProfile?.subOffice || 'Dadabari').toLowerCase()) ||
+                          so.pincode === (userProfile?.officePincode || '324009')
+                        )
+                      : SUB_OFFICES
+                    ).map((so) => (
                       <option key={so.name} value={so.name}>
                         {so.name} ({so.pincode})
                       </option>
@@ -1479,17 +1604,29 @@ export default function UnifiedCrmMasterHub() {
                   <select
                     value={selectedBeatFilter}
                     onChange={(e) => setSelectedBeatFilter(e.target.value)}
-                    className="px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs font-bold bg-white text-slate-700 focus:outline-hidden max-w-[130px]"
+                    disabled={isRestrictedStaff && (scopedBeatsSet?.size || 0) <= 1}
+                    className="px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs font-bold bg-white text-slate-700 focus:outline-hidden max-w-[130px] disabled:opacity-75"
                   >
-                    <option value="ALL">All Beats (33)</option>
-                    {DADABARI_ALL_BEATS.map((beat) => {
-                      const staff = BEAT_STAFF_DIRECTORY[beat];
-                      return (
-                        <option key={beat} value={beat}>
-                          {beat} {staff ? `(${staff.name.split(' ')[0]})` : ''}
-                        </option>
-                      );
-                    })}
+                    {isRestrictedStaff ? (
+                      <>
+                        <option value="ALL">My Beat ({userProfile?.beat})</option>
+                        {(scopedBeatsSet ? Array.from<string>(scopedBeatsSet) : []).map((b) => (
+                          <option key={b} value={`Beat ${b.toUpperCase()}`}>Beat {b.toUpperCase()}</option>
+                        ))}
+                      </>
+                    ) : (
+                      <>
+                        <option value="ALL">All Beats (33)</option>
+                        {DADABARI_ALL_BEATS.map((beat) => {
+                          const staff = BEAT_STAFF_DIRECTORY[beat];
+                          return (
+                            <option key={beat} value={beat}>
+                              {beat} {staff ? `(${staff.name.split(' ')[0]})` : ''}
+                            </option>
+                          );
+                        })}
+                      </>
+                    )}
                   </select>
                 </div>
 
@@ -1514,78 +1651,109 @@ export default function UnifiedCrmMasterHub() {
                   </p>
                 </div>
               ) : (
-                filteredColonies.map((col) => (
-                  <div
-                    key={col.id}
-                    className="bg-white p-5 rounded-2xl border border-slate-200/90 hover:border-indigo-300 shadow-xs hover:shadow-md transition space-y-3 group"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-bold text-base text-slate-900 group-hover:text-indigo-600 transition">
-                            {col.colonyName}
-                          </h3>
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                            {col.sectorPhase}
-                          </span>
-                          <span className="text-xs font-mono font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                            PIN {col.pincode}
-                          </span>
+                <>
+                  {paginatedLegacyColonies.map((col) => (
+                    <div
+                      key={col.id}
+                      className="bg-white p-5 rounded-2xl border border-slate-200/90 hover:border-indigo-300 shadow-xs hover:shadow-md transition space-y-3 group"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-bold text-base text-slate-900 group-hover:text-indigo-600 transition">
+                              {col.colonyName}
+                            </h3>
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                              {col.sectorPhase}
+                            </span>
+                            <span className="text-xs font-mono font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                              PIN {col.pincode}
+                            </span>
+                          </div>
+                          <div className="text-xs text-slate-500 flex items-center gap-2">
+                            <Building2 size={13} className="text-slate-400" />
+                            <span>{col.subOffice}</span>
+                            <span>•</span>
+                            <span className="text-slate-600 font-medium">Landmarks: {col.landmarks}</span>
+                          </div>
                         </div>
-                        <div className="text-xs text-slate-500 flex items-center gap-2">
-                          <Building2 size={13} className="text-slate-400" />
-                          <span>{col.subOffice}</span>
-                          <span>•</span>
-                          <span className="text-slate-600 font-medium">Landmarks: {col.landmarks}</span>
+
+                        {/* Beat & Postman Badges with Staff ID */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="text-right space-y-0.5">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-amber-50 text-amber-800 text-xs font-extrabold border border-amber-200">
+                                {col.beatNo}
+                              </span>
+                              {col.staffId && (
+                                <span className="px-1.5 py-0.5 rounded-md bg-purple-100 text-purple-800 font-mono text-[10px] font-black border border-purple-200">
+                                  {col.staffId}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] font-semibold text-slate-700">
+                              {col.postmanName}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleDeleteColony(col.id, col.colonyName)}
+                            className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition"
+                            title="Remove colony mapping"
+                          >
+                            <Trash2 size={16} />
+                          </button>
                         </div>
                       </div>
 
-                      {/* Beat & Postman Badges with Staff ID */}
-                      <div className="flex items-center gap-2 shrink-0">
-                        <div className="text-right space-y-0.5">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-amber-50 text-amber-800 text-xs font-extrabold border border-amber-200">
-                              {col.beatNo}
-                            </span>
-                            {col.staffId && (
-                              <span className="px-1.5 py-0.5 rounded-md bg-purple-100 text-purple-800 font-mono text-[10px] font-black border border-purple-200">
-                                {col.staffId}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[11px] font-semibold text-slate-700">
-                            {col.postmanName}
-                          </div>
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                        <div className="flex items-center gap-4">
+                          <span>
+                            Mapped Households:{' '}
+                            <b className="text-slate-800 font-mono">
+                              {scopedLegacyCustomers.filter((c) => c.colony === col.colonyName).length}
+                            </b>
+                          </span>
+                          <span>
+                            Delivery Volume:{' '}
+                            <b className="text-indigo-600 font-mono">
+                              {col.totalDeliveries || 250}+ articles/mo
+                            </b>
+                          </span>
                         </div>
-                        <button
-                          onClick={() => handleDeleteColony(col.id, col.colonyName)}
-                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition"
-                          title="Remove colony mapping"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        <span className="text-[11px] text-slate-400">Reg: {col.createdAt || 'Standard'}</span>
                       </div>
                     </div>
-
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                      <div className="flex items-center gap-4">
-                        <span>
-                          Mapped Households:{' '}
-                          <b className="text-slate-800 font-mono">
-                            {customers.filter((c) => c.colony === col.colonyName).length}
-                          </b>
-                        </span>
-                        <span>
-                          Delivery Volume:{' '}
-                          <b className="text-indigo-600 font-mono">
-                            {col.totalDeliveries || 250}+ articles/mo
-                          </b>
-                        </span>
-                      </div>
-                      <span className="text-[11px] text-slate-400">Reg: {col.createdAt || 'Standard'}</span>
+                  ))}
+                  {/* Legacy Colonies 5/Page Pagination Footer */}
+                  <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="text-slate-600 font-medium">
+                      Showing <b className="text-slate-900">{(safeLegacyColonyPage - 1) * MASTER_PAGE_SIZE + 1}</b>–
+                      <b className="text-slate-900">{Math.min(safeLegacyColonyPage * MASTER_PAGE_SIZE, filteredColonies.length)}</b> of{' '}
+                      <b className="text-slate-900">{filteredColonies.length}</b> colony entries (5 per page)
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={safeLegacyColonyPage <= 1}
+                        onClick={() => setLegacyColonyPage((p) => Math.max(1, p - 1))}
+                        className="px-3 py-1 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 disabled:opacity-40 hover:bg-slate-50 cursor-pointer"
+                      >
+                        Prev
+                      </button>
+                      <span className="font-bold text-slate-800">
+                        Page {safeLegacyColonyPage} / {totalLegacyColonyPages}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={safeLegacyColonyPage >= totalLegacyColonyPages}
+                        onClick={() => setLegacyColonyPage((p) => Math.min(totalLegacyColonyPages, p + 1))}
+                        className="px-3 py-1 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 disabled:opacity-40 hover:bg-slate-50 cursor-pointer"
+                      >
+                        Next
+                      </button>
                     </div>
                   </div>
-                ))
+                </>
               )}
             </div>
           </div>
@@ -1670,7 +1838,7 @@ export default function UnifiedCrmMasterHub() {
                 <h2 className="text-sm font-black text-slate-900">Quick Metrics & Summary Overview</h2>
               </div>
               <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-                <span>{divisionColonies.length} Master Records</span>
+                <span>{scopedDivisionColonies.length} Master Records</span>
                 {isBlockAOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </div>
             </button>
@@ -1678,8 +1846,10 @@ export default function UnifiedCrmMasterHub() {
             {isBlockAOpen && (
               <div className="p-4 grid grid-cols-2 sm:grid-cols-5 gap-3">
                 <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/90">
-                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Hadoti</div>
-                  <div className="text-xl font-black text-slate-900 mt-0.5">{divisionColonies.length} Colonies</div>
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    {isRestrictedStaff ? 'My Beat Scope' : 'Total Hadoti'}
+                  </div>
+                  <div className="text-xl font-black text-slate-900 mt-0.5">{scopedDivisionColonies.length} Colonies</div>
                   <div className="text-[10px] text-slate-500 font-medium mt-0.5">
                     {officeJurisdictions.length} Office Jurisdictions
                   </div>
@@ -1687,28 +1857,28 @@ export default function UnifiedCrmMasterHub() {
                 <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-200/90">
                   <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">Kota Division</div>
                   <div className="text-xl font-black text-blue-900 mt-0.5">
-                    {divisionColonies.filter((c) => c.division === 'KOTA').length} Colonies
+                    {scopedDivisionColonies.filter((c) => c.division === 'KOTA').length} Colonies
                   </div>
                   <div className="text-[10px] text-blue-600 font-medium mt-0.5">PIN 324xxx Belts</div>
                 </div>
                 <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-200/90">
                   <div className="text-[11px] font-bold text-amber-600 uppercase tracking-wider">Baran Division</div>
                   <div className="text-xl font-black text-amber-900 mt-0.5">
-                    {divisionColonies.filter((c) => c.division === 'BARAN').length} Colonies
+                    {scopedDivisionColonies.filter((c) => c.division === 'BARAN').length} Colonies
                   </div>
                   <div className="text-[10px] text-amber-600 font-medium mt-0.5">PIN 325xxx Belts</div>
                 </div>
                 <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-200/90">
                   <div className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">Bundi Division</div>
                   <div className="text-xl font-black text-emerald-900 mt-0.5">
-                    {divisionColonies.filter((c) => c.division === 'BUNDI').length} Colonies
+                    {scopedDivisionColonies.filter((c) => c.division === 'BUNDI').length} Colonies
                   </div>
                   <div className="text-[10px] text-emerald-600 font-medium mt-0.5">PIN 323xxx Belts</div>
                 </div>
                 <div className="bg-rose-50/50 p-4 rounded-2xl border border-rose-200/90 col-span-2 sm:col-span-1">
                   <div className="text-[11px] font-bold text-rose-600 uppercase tracking-wider">Pending Mapping</div>
                   <div className="text-xl font-black text-rose-700 mt-0.5">
-                    {divisionColonies.filter((c) => c.status === 'PENDING_BEAT_MAPPING').length} Records
+                    {scopedDivisionColonies.filter((c) => c.status === 'PENDING_BEAT_MAPPING').length} Records
                   </div>
                   <div className="text-[10px] text-rose-600 font-medium mt-0.5">Awaiting Beat Allocation</div>
                 </div>
@@ -1936,8 +2106,9 @@ export default function UnifiedCrmMasterHub() {
                         type="text"
                         value={hadotiAssignedBeat}
                         onChange={(e) => setHadotiAssignedBeat(e.target.value)}
+                        readOnly={isRestrictedStaff}
                         placeholder="e.g. Beat 2 (Leave empty if unassigned)"
-                        className="flex-1 text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="flex-1 text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 read-only:opacity-75"
                       />
                       {hadotiAssignedBeat.trim() ? (
                         <span className="px-2.5 py-1.5 rounded-lg font-bold bg-emerald-100 text-emerald-800 text-[10px] whitespace-nowrap">
@@ -1995,7 +2166,7 @@ export default function UnifiedCrmMasterHub() {
               </div>
               <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
                 <span>
-                  Showing {filteredDivisionColonies.length} of {divisionColonies.length}
+                  Showing {filteredDivisionColonies.length} of {scopedDivisionColonies.length}
                 </span>
                 {isBlockCOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </div>
@@ -2015,7 +2186,7 @@ export default function UnifiedCrmMasterHub() {
                           : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
                     >
-                      All ({divisionColonies.length})
+                      All ({scopedDivisionColonies.length})
                     </button>
                     <button
                       type="button"
@@ -2026,7 +2197,7 @@ export default function UnifiedCrmMasterHub() {
                           : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
                       }`}
                     >
-                      Kota ({divisionColonies.filter((c) => c.division === 'KOTA').length})
+                      Kota ({scopedDivisionColonies.filter((c) => c.division === 'KOTA').length})
                     </button>
                     <button
                       type="button"
@@ -2037,7 +2208,7 @@ export default function UnifiedCrmMasterHub() {
                           : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
                       }`}
                     >
-                      Baran ({divisionColonies.filter((c) => c.division === 'BARAN').length})
+                      Baran ({scopedDivisionColonies.filter((c) => c.division === 'BARAN').length})
                     </button>
                     <button
                       type="button"
@@ -2048,7 +2219,7 @@ export default function UnifiedCrmMasterHub() {
                           : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                       }`}
                     >
-                      Bundi ({divisionColonies.filter((c) => c.division === 'BUNDI').length})
+                      Bundi ({scopedDivisionColonies.filter((c) => c.division === 'BUNDI').length})
                     </button>
                     <button
                       type="button"
@@ -2059,7 +2230,7 @@ export default function UnifiedCrmMasterHub() {
                           : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
                       }`}
                     >
-                      Pending ({divisionColonies.filter((c) => c.status === 'PENDING_BEAT_MAPPING').length})
+                      Pending ({scopedDivisionColonies.filter((c) => c.status === 'PENDING_BEAT_MAPPING').length})
                     </button>
                   </div>
 
@@ -2146,7 +2317,7 @@ export default function UnifiedCrmMasterHub() {
                       }}
                       className="w-full bg-transparent text-xs font-mono font-bold text-blue-950 focus:outline-none cursor-pointer"
                     >
-                      <option value="ALL">All Pincodes ({divisionColonies.length})</option>
+                      <option value="ALL">All Pincodes ({scopedDivisionColonies.length})</option>
                       {availableMasterPincodes.map((p) => (
                         <option key={p.pincode} value={p.pincode}>
                           {p.pincode} • {p.office} ({p.count})
@@ -2181,7 +2352,7 @@ export default function UnifiedCrmMasterHub() {
             </button>
 
             {isBlockDOpen && (
-              <div className="p-4 sm:p-5 bg-slate-50/40">
+              <div className="p-4 sm:p-5 bg-slate-50/40 space-y-4">
                 {filteredDivisionColonies.length === 0 ? (
                   <div className="p-10 text-center bg-white rounded-2xl border border-slate-200 text-slate-500 space-y-2">
                     <MapPin className="w-8 h-8 text-slate-300 mx-auto" />
@@ -2194,7 +2365,7 @@ export default function UnifiedCrmMasterHub() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    {filteredDivisionColonies.map((col) => (
+                    {paginatedDivisionColonies.map((col) => (
                       <div
                         key={col.id}
                         className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs hover:border-blue-300 transition space-y-3 flex flex-col justify-between"
@@ -2488,6 +2659,37 @@ export default function UnifiedCrmMasterHub() {
                     ))}
                   </div>
                 )}
+
+                {filteredDivisionColonies.length > 0 && (
+                  <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="text-slate-600 font-medium">
+                      Showing <b className="text-slate-900">{(safeDivisionPage - 1) * MASTER_PAGE_SIZE + 1}</b>–
+                      <b className="text-slate-900">{Math.min(safeDivisionPage * MASTER_PAGE_SIZE, filteredDivisionColonies.length)}</b> of{' '}
+                      <b className="text-slate-900">{filteredDivisionColonies.length}</b> colonies (5 per page)
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={safeDivisionPage <= 1}
+                        onClick={() => setDivisionPage((p) => Math.max(1, p - 1))}
+                        className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 disabled:opacity-40 hover:bg-slate-100 cursor-pointer"
+                      >
+                        Prev
+                      </button>
+                      <span className="font-bold text-slate-800 px-1">
+                        Page {safeDivisionPage} / {totalDivisionPages}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={safeDivisionPage >= totalDivisionPages}
+                        onClick={() => setDivisionPage((p) => Math.min(totalDivisionPages, p + 1))}
+                        className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 disabled:opacity-40 hover:bg-slate-100 cursor-pointer"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2589,7 +2791,7 @@ export default function UnifiedCrmMasterHub() {
                   className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
                 >
                   <option value="">-- Select Registered Colony --</option>
-                  {colonies.map((col) => (
+                  {scopedLegacyColonies.map((col) => (
                     <option key={col.id} value={col.id}>
                       {col.colonyName} ({col.sectorPhase}) → {col.beatNo} ({col.postmanName})
                     </option>
@@ -2662,15 +2864,24 @@ export default function UnifiedCrmMasterHub() {
                 <select
                   value={selectedBeatFilter}
                   onChange={(e) => setSelectedBeatFilter(e.target.value)}
-                  className="px-3 py-1.5 border border-slate-200 rounded-xl text-xs font-semibold bg-white text-slate-700"
+                  disabled={isRestrictedStaff && (scopedBeatsSet?.size || 0) <= 1}
+                  className="px-3 py-1.5 border border-slate-200 rounded-xl text-xs font-semibold bg-white text-slate-700 disabled:opacity-75"
                 >
-                  <option value="ALL">All Beats</option>
-                  <option value="Beat 1">Beat 1</option>
-                  <option value="Beat 2">Beat 2</option>
-                  <option value="Beat 3">Beat 3</option>
-                  <option value="Beat 4">Beat 4</option>
-                  <option value="Beat 5">Beat 5</option>
-                  <option value="Beat 6">Beat 6</option>
+                  {isRestrictedStaff ? (
+                    <>
+                      <option value="ALL">My Beat ({userProfile?.beat})</option>
+                      {(scopedBeatsSet ? Array.from<string>(scopedBeatsSet) : []).map((b) => (
+                        <option key={b} value={`Beat ${b.toUpperCase()}`}>Beat {b.toUpperCase()}</option>
+                      ))}
+                    </>
+                  ) : (
+                    <>
+                      <option value="ALL">All Beats</option>
+                      {DADABARI_ALL_BEATS.map((b) => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                    </>
+                  )}
                 </select>
 
                 <button
@@ -2705,7 +2916,7 @@ export default function UnifiedCrmMasterHub() {
                         </td>
                       </tr>
                     ) : (
-                      filteredCustomers.map((cust) => (
+                      paginatedCustomers.map((cust) => (
                         <tr key={cust.id} className="hover:bg-slate-50/80 transition">
                           <td className="py-3.5 px-4 font-bold text-slate-900">
                             {cust.name}
@@ -2757,6 +2968,36 @@ export default function UnifiedCrmMasterHub() {
                   </tbody>
                 </table>
               </div>
+              {filteredCustomers.length > 0 && (
+                <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="text-slate-600 font-medium">
+                    Showing <b className="text-slate-900">{(safeCustomerPage - 1) * MASTER_PAGE_SIZE + 1}</b>–
+                    <b className="text-slate-900">{Math.min(safeCustomerPage * MASTER_PAGE_SIZE, filteredCustomers.length)}</b> of{' '}
+                    <b className="text-slate-900">{filteredCustomers.length}</b> households (5 per page)
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={safeCustomerPage <= 1}
+                      onClick={() => setCustomerPage((p) => Math.max(1, p - 1))}
+                      className="px-3 py-1 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 disabled:opacity-40 hover:bg-slate-100 cursor-pointer"
+                    >
+                      Prev
+                    </button>
+                    <span className="font-bold text-slate-800 px-1">
+                      Page {safeCustomerPage} / {totalCustomerPages}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={safeCustomerPage >= totalCustomerPages}
+                      onClick={() => setCustomerPage((p) => Math.min(totalCustomerPages, p + 1))}
+                      className="px-3 py-1 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 disabled:opacity-40 hover:bg-slate-100 cursor-pointer"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import React, { useState, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, Link } from 'react-router-dom';
-import { Lock, ShieldAlert, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Lock, ShieldAlert, ArrowRight } from 'lucide-react';
 import Layout from './components/Layout';
 import PublicHomePortal from './components/PublicHomePortal';
 import Dashboard from './components/Dashboard';
@@ -8,7 +8,6 @@ import { FirebaseAuthProvider, useAuth } from './components/auth/FirebaseAuthPro
 import { staffPermissionService } from './services/staffPermissionService';
 import { ServiceModulePermissions } from './types/models';
 import LoginPage from './pages/LoginPage';
-import LoginModal from './components/auth/LoginModal';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { OTAUpdateNotification } from './components/common/OTAUpdateNotification';
 
@@ -65,7 +64,7 @@ function ServiceModuleGuard({
   moduleTitle: string;
   children: React.ReactNode;
 }) {
-  const { userProfile, loginAsMasterAdmin } = useAuth();
+  const { userProfile } = useAuth();
   const allowed = staffPermissionService.canAccessServiceModule(userProfile, moduleKey);
 
   if (allowed) {
@@ -94,24 +93,16 @@ function ServiceModuleGuard({
       </p>
       <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-700 max-w-lg mx-auto text-left space-y-1.5">
         <div className="font-bold text-slate-900">Scoped Access & Approval Engine:</div>
-        <div>• Super Admin (<strong>mahen.comtech@gmail.com</strong>) can approve or revoke access to each of the 5 Service Modules per staff member.</div>
+        <div>• Master Admin (<strong>Ektamahenmeena@gmail.com</strong>) can approve or revoke access to each of the 5 Service Modules per staff member.</div>
         <div>• Assigned Beats Scope: <strong>{(userProfile?.permissions?.allowedBeats || [userProfile?.beat]).join(', ')}</strong></div>
         <div>• Assigned Offices Scope: <strong>{(userProfile?.permissions?.allowedOffices || [userProfile?.subOffice]).join(', ')}</strong></div>
       </div>
       <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-        <button
-          type="button"
-          onClick={() => loginAsMasterAdmin()}
-          className="px-4 py-2.5 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-md cursor-pointer"
-        >
-          <CheckCircle2 size={15} />
-          <span>1-Click Master Admin Bypass (Grant Access)</span>
-        </button>
         <Link
-          to="/staff-master"
+          to="/dashboard"
           className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5"
         >
-          <span>Open Permission Matrix</span>
+          <span>Return to Dashboard</span>
           <ArrowRight size={14} />
         </Link>
       </div>
@@ -122,9 +113,6 @@ function ServiceModuleGuard({
 function AuthenticatedApp() {
   const { user, userProfile } = useAuth();
   const [showPortalMode, setShowPortalMode] = useState(false);
-  const [hasPostmanAuth, setHasPostmanAuth] = useState(() => {
-    return typeof localStorage !== 'undefined' && localStorage.getItem('postman_auth') === 'true';
-  });
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -149,13 +137,6 @@ function AuthenticatedApp() {
   if (showPortalMode) {
     return (
       <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-        {!hasPostmanAuth && (
-          <LoginModal
-            onLoginSuccess={() => {
-              setHasPostmanAuth(true);
-            }}
-          />
-        )}
         <PublicHomePortal
           isStandalone={true}
           onToggleStandalone={() => setShowPortalMode(false)}
@@ -171,13 +152,6 @@ function AuthenticatedApp() {
 
   return (
     <>
-      {!hasPostmanAuth && (
-        <LoginModal
-          onLoginSuccess={() => {
-            setHasPostmanAuth(true);
-          }}
-        />
-      )}
       <Layout onOpenCustomerPortal={() => setShowPortalMode(true)}>
       <Suspense fallback={<div className="p-8 text-center text-sm font-bold text-slate-600">Loading Module...</div>}>
         <Routes>
@@ -222,7 +196,7 @@ function AuthenticatedApp() {
         <Route
           path="/staff-master"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <StaffMasterView />
             </ProtectedRoute>
           }
@@ -230,7 +204,7 @@ function AuthenticatedApp() {
         <Route
           path="/staff"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <StaffView />
             </ProtectedRoute>
           }
@@ -238,7 +212,7 @@ function AuthenticatedApp() {
         <Route
           path="/office-master"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <OfficeMasterView />
             </ProtectedRoute>
           }
@@ -246,7 +220,7 @@ function AuthenticatedApp() {
         <Route
           path="/address-resolution"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <AddressResolutionView />
             </ProtectedRoute>
           }
@@ -254,7 +228,7 @@ function AuthenticatedApp() {
         <Route
           path="/beats"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <BeatManagementView />
             </ProtectedRoute>
           }
@@ -262,7 +236,7 @@ function AuthenticatedApp() {
         <Route
           path="/beat-management"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <BeatManagementView />
             </ProtectedRoute>
           }
@@ -270,7 +244,7 @@ function AuthenticatedApp() {
         <Route
           path="/beats-overview"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <BeatsView />
             </ProtectedRoute>
           }
@@ -566,7 +540,7 @@ function AuthenticatedApp() {
         <Route
           path="/reports"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <ReportsView />
             </ProtectedRoute>
           }
@@ -574,7 +548,7 @@ function AuthenticatedApp() {
         <Route
           path="/data-quality"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <DataQualityView />
             </ProtectedRoute>
           }
@@ -582,7 +556,7 @@ function AuthenticatedApp() {
         <Route
           path="/audit-log"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <AuditLogView />
             </ProtectedRoute>
           }
@@ -590,7 +564,7 @@ function AuthenticatedApp() {
         <Route
           path="/master-data-upload"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <MasterDataUploadView />
             </ProtectedRoute>
           }
@@ -598,7 +572,7 @@ function AuthenticatedApp() {
         <Route
           path="/master-upload"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <MasterDataUploadView />
             </ProtectedRoute>
           }
@@ -622,7 +596,7 @@ function AuthenticatedApp() {
         <Route
           path="/master-data-hub"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <MasterDataHub />
             </ProtectedRoute>
           }
@@ -630,7 +604,7 @@ function AuthenticatedApp() {
         <Route
           path="/colony-master"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <MasterDataHub />
             </ProtectedRoute>
           }
@@ -638,7 +612,7 @@ function AuthenticatedApp() {
         <Route
           path="/unified-master-hub"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <MasterDataHub />
             </ProtectedRoute>
           }
@@ -646,7 +620,7 @@ function AuthenticatedApp() {
         <Route
           path="/master-source"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <MasterSourceSync />
             </ProtectedRoute>
           }
@@ -662,14 +636,14 @@ function AuthenticatedApp() {
         <Route
           path="/settings"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <SettingsView />
             </ProtectedRoute>
           }
         />
 
           <Route path="/staff-gateway" element={<LoginPage initialTier="STAFF" isStaffDirect={true} />} />
-          <Route path="/login" element={<Navigate to="/" replace />} />
+          <Route path="/login" element={<LoginPage initialTier="CUSTOMER" />} />
           <Route
             path="/portal"
             element={

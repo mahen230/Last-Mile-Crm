@@ -42,9 +42,9 @@ import {
   PasswordComplexityResult,
   LockoutStatus,
 } from '../services/securityAuthService';
-import { createNewSecureSession, getActiveSessionToken } from '../services/authSecurityService';
+import { createNewSecureSession, fetchServerCsrfToken, getActiveSessionToken } from '../services/authSecurityService';
 import { customerAuthService } from '../services/customerAuthService';
-import { POSTAL_AUTH_DATABASE_SCHEMA_SQL } from '../server/secureAuthBackendReference';
+import { POSTAL_AUTH_DATABASE_SCHEMA_SQL } from '../data/postalAuthSchemaSql';
 import { DesignationType } from '../types/models';
 import SearchableOfficeSelect from '../components/common/SearchableOfficeSelect';
 
@@ -78,8 +78,6 @@ export default function LoginPage({
     signIn,
     signInWithPassword,
     registerStaff,
-    loginAsMasterAdmin,
-    switchStaffProfile,
     error,
     clearError,
   } = useAuth();
@@ -431,6 +429,24 @@ export default function LoginPage({
       return;
     }
 
+    try {
+      const csrf = await fetchServerCsrfToken();
+      await fetch('/api/v1/auth/staff/reset-password', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrf || '',
+        },
+        body: JSON.stringify({
+          identifier: forgotIdentifier.trim(),
+          newPassword: newResetPassword.trim(),
+        }),
+      });
+    } catch {
+      // Non-fatal if offline; local update proceeds
+    }
+
     const updated = staffPermissionService.updateOwnPassword(forgotIdentifier.trim(), newResetPassword.trim());
     if (!updated) {
       setLocalError('Failed to update password. Please try again.');
@@ -446,29 +462,20 @@ export default function LoginPage({
     }
   };
 
-  const handleQuickFillAdmin = async () => {
+  const handlePreFillMasterAdmin = () => {
     clearMessages();
     setMode('LOGIN');
-    setIdentifier('mahen.comtech@gmail.com');
-    setPassword('Mahen@2304');
-    securityAuthService.recordSuccessfulLogin('mahen.comtech@gmail.com');
-    await createNewSecureSession('mahen.comtech@gmail.com');
-    loginAsMasterAdmin();
-    finishLoginAndEnterCRM();
+    setIdentifier('ektamahenmeena@gmail.com');
+    setPassword('');
+    setSuccessMessage('Master Admin email (ektamahenmeena@gmail.com) pre-filled. Please enter your Admin password to authenticate.');
   };
 
-  const handleQuickFillStaff = async (
-    staffIdOrEmail: string,
-    staffPass: string = DEFAULT_STAFF_FALLBACK_PASSWORD
-  ) => {
+  const handlePreFillStaff = (staffIdOrEmail: string) => {
     clearMessages();
     setMode('LOGIN');
     setIdentifier(staffIdOrEmail);
-    setPassword(staffPass);
-    securityAuthService.recordSuccessfulLogin(staffIdOrEmail);
-    await createNewSecureSession(staffIdOrEmail);
-    switchStaffProfile(staffIdOrEmail);
-    finishLoginAndEnterCRM();
+    setPassword('');
+    setSuccessMessage(`Employee ID ${staffIdOrEmail} selected. Enter your Employee ID or default password (${DEFAULT_STAFF_FALLBACK_PASSWORD}) to authenticate.`);
   };
 
   const handleTestPbkdf2Hash = async () => {
@@ -481,32 +488,50 @@ export default function LoginPage({
 
   const activeError = localError || error;
 
-  // Reusable Preset Buttons Component for high visual clarity
+  // Reusable Preset Buttons Component (Pre-fills ID cleanly; always requires password)
   const presetsList = (
     <div className="space-y-2">
-      {/* 1-Click Master Admin */}
+      {/* Master Admin: Ekta Meena */}
       <button
         type="button"
-        onClick={handleQuickFillAdmin}
-        id="master-admin-bypass-btn"
+        onClick={handlePreFillMasterAdmin}
+        id="master-admin-prefill-btn"
         className="w-full text-left p-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 border border-amber-400/80 transition flex items-center justify-between group shadow-sm cursor-pointer"
       >
         <div className="min-w-0">
           <div className="text-xs font-black uppercase tracking-wide flex items-center gap-1.5 truncate">
             <ShieldCheck size={14} className="shrink-0" />
-            <span className="truncate">1-Click Master Admin Access</span>
+            <span className="truncate">Master Admin • Ekta Meena</span>
           </div>
           <div className="text-[11px] font-mono text-slate-900 mt-0.5 truncate">
-            CSI-10023401 • mahen.comtech@gmail.com
+            MASTER-ADMIN-01 • ektamahenmeena@gmail.com
           </div>
         </div>
         <ArrowRight size={15} className="text-slate-950 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
       </button>
 
+      {/* Beat 2: Mahendra Kumar Meena */}
+      <button
+        type="button"
+        onClick={() => handlePreFillStaff('50457421')}
+        className="w-full text-left p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 transition flex items-center justify-between group text-white cursor-pointer"
+      >
+        <div className="min-w-0">
+          <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5 truncate">
+            <BadgeCheck size={14} className="text-emerald-400 shrink-0" />
+            <span className="truncate">Beat 2 Postman • Mahendra Kumar Meena</span>
+          </div>
+          <div className="text-[10px] font-mono text-slate-300 mt-0.5 truncate">
+            Emp ID: 50457421 • Dadabari S.O. (Delivery Execution Only)
+          </div>
+        </div>
+        <ArrowRight size={14} className="text-slate-300 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
+      </button>
+
       {/* Beat 5: Mohit Arvind */}
       <button
         type="button"
-        onClick={() => handleQuickFillStaff('10310736', DEFAULT_STAFF_FALLBACK_PASSWORD)}
+        onClick={() => handlePreFillStaff('10310736')}
         className="w-full text-left p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-amber-400/40 transition flex items-center justify-between group text-white cursor-pointer"
       >
         <div className="min-w-0">
@@ -515,7 +540,7 @@ export default function LoginPage({
             <span className="truncate">Beat 5 • Mohit Arvind (Mahaveer Nagar)</span>
           </div>
           <div className="text-[10px] font-mono text-slate-200 mt-0.5 truncate">
-            Emp ID: 10310736 • 19 KM/d • ₹1,573 Claim
+            Emp ID: 10310736 • Dadabari S.O.
           </div>
         </div>
         <ArrowRight size={14} className="text-amber-300 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
@@ -524,7 +549,7 @@ export default function LoginPage({
       {/* Beat 17: Priyanshu Trivedi */}
       <button
         type="button"
-        onClick={() => handleQuickFillStaff('50507003', DEFAULT_STAFF_FALLBACK_PASSWORD)}
+        onClick={() => handlePreFillStaff('50507003')}
         className="w-full text-left p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-sky-400/40 transition flex items-center justify-between group text-white cursor-pointer"
       >
         <div className="min-w-0">
@@ -533,27 +558,10 @@ export default function LoginPage({
             <span className="truncate">Beat 17 • Priyanshu Trivedi (Talwandi)</span>
           </div>
           <div className="text-[10px] font-mono text-slate-200 mt-0.5 truncate">
-            Emp ID: 50507003 • 28 KM/d • ₹2,520 Claim
+            Emp ID: 50507003 • Dadabari S.O.
           </div>
         </div>
         <ArrowRight size={14} className="text-sky-300 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
-      </button>
-
-      {/* Beat 2: Ekta Meena */}
-      <button
-        type="button"
-        onClick={() => handleQuickFillStaff('50457421', DEFAULT_STAFF_FALLBACK_PASSWORD)}
-        className="w-full text-left p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 transition flex items-center justify-between group text-white cursor-pointer"
-      >
-        <div className="min-w-0">
-          <div className="text-xs font-semibold text-slate-200 truncate">
-            Beat 2 Staff • Ekta Meena / M.K. Meena
-          </div>
-          <div className="text-[10px] font-mono text-slate-400 mt-0.5 truncate">
-            Emp ID: CSI-10294812 • 18 KM/d • Pass: Post@1234
-          </div>
-        </div>
-        <ArrowRight size={13} className="text-slate-400 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
       </button>
     </div>
   );
@@ -597,7 +605,7 @@ export default function LoginPage({
             </h2>
             <p className="text-xs text-red-100/80 leading-relaxed">
               {authTier === 'STAFF'
-                ? 'Authenticate using your Employee ID (CSI/GDS ID), Mobile, or Email. Default postal directory password is Post@1234.'
+                ? 'Authenticate using your Employee ID (CSI/GDS ID), Mobile, or Email. Staff password is your Employee ID or default Post@1234.'
                 : 'Access postal parcel tracking, Sukanya Samriddhi (SSA), PLI calculators, and doorstep pickup service.'}
             </p>
           </div>
@@ -607,7 +615,7 @@ export default function LoginPage({
             <div className="hidden lg:block pt-2">
               <div className="text-[11px] font-bold text-amber-300 uppercase tracking-wide mb-2 flex items-center gap-1.5">
                 <ShieldCheck size={14} />
-                <span>1-Click Verified Staff Access (Dadabari SO):</span>
+                <span>Quick Directory ID Selection (Password Required):</span>
               </div>
               {presetsList}
             </div>
@@ -1119,7 +1127,7 @@ export default function LoginPage({
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="block text-xs font-bold text-slate-700">
-                        Password (Default: <span className="font-mono text-red-700 font-bold">Post@1234</span>) *
+                        Password (Emp ID or Default: <span className="font-mono text-red-700 font-bold">Post@1234</span>) *
                       </label>
                       <button
                         type="button"
@@ -1153,17 +1161,6 @@ export default function LoginPage({
                     </div>
                   </div>
 
-                  {/* 1-Click Master Admin Instant Bypass */}
-                  <button
-                    type="button"
-                    onClick={handleQuickFillAdmin}
-                    className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
-                  >
-                    <ShieldCheck size={16} />
-                    <span>Enter CRM Dashboard (Master Admin Instant Access)</span>
-                    <ArrowRight size={14} />
-                  </button>
-
                   <button
                     type="submit"
                     disabled={isLoading || lockoutStatus.isLocked}
@@ -1171,7 +1168,7 @@ export default function LoginPage({
                     className="w-full py-2.5 px-4 bg-red-800 hover:bg-red-900 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer min-h-[44px]"
                   >
                     <UserCheck size={16} />
-                    <span>{isLoading ? 'Verifying Credentials...' : 'Sign In with Employee ID'}</span>
+                    <span>{isLoading ? 'Verifying Credentials...' : 'Authenticate & Sign In'}</span>
                   </button>
                 </form>
               )}
@@ -1386,7 +1383,7 @@ export default function LoginPage({
                 >
                   <span className="flex items-center gap-1.5">
                     <ShieldCheck size={14} className="text-amber-600" />
-                    <span>⚡ 1-Click Fast Access (Master Admin, Beat 5, Beat 17)</span>
+                    <span>Directory Staff Presets (Password Required)</span>
                   </span>
                   {showMobilePresets ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                 </button>
@@ -1427,7 +1424,7 @@ export default function LoginPage({
               <span>RBAC Specs</span>
             </button>
           </div>
-          <span className="font-mono tabular-nums">Default: Post@1234</span>
+          <span className="font-mono tabular-nums">Staff Pass: Emp ID / Post@1234</span>
         </div>
       </div>
 

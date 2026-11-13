@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Customer, ProductDefinition } from '../../types/models';
 import { POSTAL_PRODUCTS } from '../../data/productsData';
 import { customerService, cleanPhoneNumber } from '../../services/customerService';
@@ -6,6 +6,8 @@ import {
   X, Share2, Send, Phone, Copy, Check, Users, 
   CheckCircle2, Sparkles, Search, Building 
 } from 'lucide-react';
+import { useAuth } from '../auth/FirebaseAuthProvider';
+import { staffPermissionService } from '../../services/staffPermissionService';
 
 interface Props {
   isOpen: boolean;
@@ -32,20 +34,32 @@ export default function ProductShareModal({ isOpen, onClose, product, preselecte
     preselectedProduct ||
     POSTAL_PRODUCTS[0];
 
+  const { userProfile } = useAuth();
+  const isRestrictedFieldStaff = staffPermissionService.isPostmanOrGds(userProfile);
+  const scopedBeats = useMemo(
+    () => Array.from(staffPermissionService.getScopedBeatsSet(userProfile)).sort((a, b) => Number(a) - Number(b)),
+    [userProfile]
+  );
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedBeat, setSelectedBeat] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [recipientPage, setRecipientPage] = useState<number>(1);
+  const RECIPIENTS_PER_PAGE = 5;
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
   const [mode, setMode] = useState<'individual' | 'multi'>('individual');
   const [copied, setCopied] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  // Load customers
+  // Load scoped customers
   useEffect(() => {
     if (isOpen) {
-      setCustomers(customerService.getCustomers());
+      setCustomers(customerService.getScopedCustomers(userProfile));
     }
-  }, [isOpen]);
+  }, [isOpen, userProfile]);
+
+  useEffect(() => {
+    setRecipientPage(1);
+  }, [searchQuery, selectedBeat, isOpen, userProfile]);
 
   // Generate standard pre-filled product details message
   const generateBrochureMessage = (custName?: string, prod: ProductDefinition = currentProduct) => {
@@ -79,9 +93,13 @@ export default function ProductShareModal({ isOpen, onClose, product, preselecte
       (c.name && c.name.toLowerCase().includes(s)) ||
       (c.mobile && c.mobile.includes(s)) ||
       (c.houseNo && c.houseNo.toLowerCase().includes(s));
-    const matchesBeat = selectedBeat === 'All' || c.beatNo === selectedBeat;
+    const matchesBeat = selectedBeat === 'All' || String(c.beatNo || '').replace(/^Beat\s*/i, '').trim() === selectedBeat;
     return matchesSearch && matchesBeat;
   });
+
+  const totalRecipientPages = Math.max(1, Math.ceil(filteredCustomers.length / RECIPIENTS_PER_PAGE));
+  const safeRecipientPage = Math.min(recipientPage, totalRecipientPages);
+  const paginatedCustomers = filteredCustomers.slice((safeRecipientPage - 1) * RECIPIENTS_PER_PAGE, safeRecipientPage * RECIPIENTS_PER_PAGE);
 
   const handleToggleCustomer = (id: string) => {
     if (mode === 'individual') {
@@ -320,10 +338,12 @@ export default function ProductShareModal({ isOpen, onClose, product, preselecte
                   onChange={(e) => setSelectedBeat(e.target.value)}
                   className="w-full text-xs p-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700"
                 >
-                  <option value="All">All Beats (Dadabari SO)</option>
-                  <option value="1">Beat 1 (Dadabari Circle)</option>
-                  <option value="2">Beat 2 (Keshavpura / Santoshi Nagar)</option>
-                  <option value="6">Beat 6 (Keshavpura Sec 4 & 2)</option>
+                  <option value="All">{isRestrictedFieldStaff ? 'My Assigned Beat(s)' : 'All Beats (Dadabari SO)'}</option>
+                  {(isRestrictedFieldStaff && scopedBeats.length > 0 ? scopedBeats : ['1', '2', '6']).map(b => (
+                    <option key={b} value={b}>
+                      Beat {b}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -354,9 +374,9 @@ export default function ProductShareModal({ isOpen, onClose, product, preselecte
               </div>
             )}
 
-            {/* Customer List Scrollbox */}
-            <div className="max-h-36 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-white">
-              {filteredCustomers.slice(0, 35).map(c => {
+            {/* Customer List Scrollbox (5 per page) */}
+            <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-white">
+              {paginatedCustomers.map(c => {
                 const isSelected = selectedCustomerIds.includes(c.id || c.masterId || '');
                 return (
                   <div
@@ -390,6 +410,32 @@ export default function ProductShareModal({ isOpen, onClose, product, preselecte
                 );
               })}
             </div>
+            {filteredCustomers.length > RECIPIENTS_PER_PAGE && (
+              <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+                <span>
+                  Showing {(safeRecipientPage - 1) * RECIPIENTS_PER_PAGE + 1}–{Math.min(safeRecipientPage * RECIPIENTS_PER_PAGE, filteredCustomers.length)} of {filteredCustomers.length} recipients (5 per page)
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={safeRecipientPage <= 1}
+                    onClick={() => setRecipientPage(p => Math.max(1, p - 1))}
+                    className="px-2 py-0.5 rounded bg-white border border-slate-200 font-semibold disabled:opacity-40 cursor-pointer"
+                  >
+                    Prev
+                  </button>
+                  <span className="font-mono font-bold">{safeRecipientPage}/{totalRecipientPages}</span>
+                  <button
+                    type="button"
+                    disabled={safeRecipientPage >= totalRecipientPages}
+                    onClick={() => setRecipientPage(p => Math.min(totalRecipientPages, p + 1))}
+                    className="px-2 py-0.5 rounded bg-white border border-slate-200 font-semibold disabled:opacity-40 cursor-pointer"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Pre-filled Message Editor */}

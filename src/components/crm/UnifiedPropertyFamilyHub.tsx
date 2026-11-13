@@ -35,11 +35,14 @@ import {
   ArrowRight,
   RefreshCw,
   Store,
-  Tag
+  Tag,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { useAuth } from '../auth/FirebaseAuthProvider';
+import { staffPermissionService } from '../../services/staffPermissionService';
 import { Customer } from '../../types/models';
 import { customerService } from '../../services/customerService';
 import { UPDATED_STAFF_LIST } from '../../data/updatedStaffData';
@@ -1251,10 +1254,9 @@ export function buildMasterConsolidatedProperties(): UnifiedPropertyRecord[] {
 export default function UnifiedPropertyFamilyHub() {
   const navigate = useNavigate();
   const { userProfile } = useAuth();
-  const isAdmin =
-    userProfile?.role === 'SUPER_ADMIN' ||
-    userProfile?.role === 'ADMIN' ||
-    userProfile?.email === 'mahen.comtech@gmail.com';
+  const isAdmin = staffPermissionService.isSuperAdmin(userProfile);
+  const isRestrictedStaff = staffPermissionService.isPostmanOrGds(userProfile);
+  const HUB_PAGE_SIZE = 5;
 
   // Master Property List with deep consolidation
   const [properties, setProperties] = useState<UnifiedPropertyRecord[]>(() => {
@@ -1276,12 +1278,13 @@ export default function UnifiedPropertyFamilyHub() {
 
   // Dual View Layout Toggle: Visual Card Grid vs. Structured Table
   const [viewMode, setViewMode] = useState<'CARD' | 'TABLE'>('CARD');
+  const [currentPage, setCurrentPage] = useState<number>(1);
 
   // Filter States
   const [selectedColony, setSelectedColony] = useState<string>('All');
   const [selectedSubSector, setSelectedSubSector] = useState<string>('All');
   const [selectedBeat, setSelectedBeat] = useState<string>(() => {
-    if (!isAdmin && userProfile?.beat) {
+    if (isRestrictedStaff && userProfile?.beat) {
       return userProfile.beat;
     }
     return 'All';
@@ -1411,31 +1414,52 @@ export default function UnifiedPropertyFamilyHub() {
     showNotification(`⚡ Consolidated ${freshlyConsolidated.length} Properties & Family Records across all Beats 1–33!`);
   };
 
-  // Unique Colonies List
-  // Unique Colonies List: strictly features the 25 official major colonies first
-  const uniqueColonies = useMemo(() => {
-    const recordColonies = properties.map((p) => p.colony).filter(Boolean);
-    return ['All', ...getHierarchyColoniesList(recordColonies)];
-  }, [properties]);
+  // Strictly scoped properties dataset for Postman/GDS vs Admin
+  const scopedProperties = useMemo(() => {
+    if (!isRestrictedStaff) return properties;
+    return properties.filter((p) =>
+      staffPermissionService.matchesUserBeatScope(userProfile, {
+        beatNo: p.beatNo,
+        officeId: p.deliveryOffice,
+        area: p.colony,
+        pincode: p.pincode,
+        assignedStaffId: p.assignedStaffId,
+        assignedStaffName: p.assignedStaffName,
+      })
+    );
+  }, [properties, isRestrictedStaff, userProfile]);
 
-  // Unique Beats List (Beat 1 to Beat 33)
+  // Unique Colonies List: scoped for Postman/GDS, all 25 official major colonies first for Admin
+  const uniqueColonies = useMemo(() => {
+    const recordColonies = scopedProperties.map((p) => p.colony).filter(Boolean);
+    if (isRestrictedStaff) {
+      return ['All', ...Array.from(new Set(recordColonies)).sort()];
+    }
+    return ['All', ...getHierarchyColoniesList(recordColonies)];
+  }, [scopedProperties, isRestrictedStaff]);
+
+  // Unique Beats List (Scoped for Postman/GDS, Beat 1 to Beat 33 for Admin)
   const uniqueBeats = useMemo(() => {
+    if (isRestrictedStaff) {
+      const allowed = Array.from(staffPermissionService.getScopedBeatsSet(userProfile));
+      return allowed.length > 0 ? allowed : [userProfile?.beat || 'Beat 2'];
+    }
     return ['All', ...Array.from({ length: 33 }, (_, i) => `Beat ${i + 1}`)];
-  }, []);
+  }, [isRestrictedStaff, userProfile]);
 
   // Available Mapped Sectors / Blocks for the Property Registration Modal
   const availableRegistrationSectors = useMemo(() => {
-    const recordSectors = properties
+    const recordSectors = scopedProperties
       .filter((p) => p.colony === newPropColony)
       .map((p) => p.blockSector)
       .filter(Boolean);
     return getHierarchySectorsForColony(newPropColony, recordSectors);
-  }, [newPropColony, properties]);
+  }, [newPropColony, scopedProperties]);
 
   // Dynamic Sub-Sector Chips for the currently selected colony in Quick-Filter Bar
   const colonySubSectorChips = useMemo(() => {
     if (selectedColony === 'All') return [];
-    const colonyProps = properties.filter((p) => p.colony === selectedColony);
+    const colonyProps = scopedProperties.filter((p) => p.colony === selectedColony);
     const recordSectors = colonyProps.map((p) => p.blockSector).filter(Boolean);
     const sectorNames = getHierarchySectorsForColony(selectedColony, recordSectors);
 
@@ -1455,7 +1479,7 @@ export default function UnifiedPropertyFamilyHub() {
     });
 
     return chips;
-  }, [selectedColony, properties]);
+  }, [selectedColony, scopedProperties]);
 
   // When Colony Filter dropdown changes: update selected colony & reset sub-sector to 'All'
   const handleColonyFilterChange = (colony: string) => {
@@ -1500,18 +1524,8 @@ export default function UnifiedPropertyFamilyHub() {
 
   // Filtered & Sorted Properties List
   const filteredProperties = useMemo(() => {
-    return properties
+    return scopedProperties
       .filter((p) => {
-        // Role-based Postman Beat scoping: Postmen view properties in their assigned beat(s)
-        if (!isAdmin && userProfile?.beat) {
-          const allowedBeats =
-            userProfile.assignedBeats && userProfile.assignedBeats.length > 0
-              ? userProfile.assignedBeats
-              : [userProfile.beat];
-          if (!allowedBeats.includes(p.beatNo)) {
-            return false;
-          }
-        }
 
         // Colony Filter
         const matchColony = selectedColony === 'All' || p.colony === selectedColony;
@@ -1620,7 +1634,7 @@ export default function UnifiedPropertyFamilyHub() {
         });
       });
   }, [
-    properties,
+    scopedProperties,
     selectedColony,
     selectedSubSector,
     selectedBeat,
@@ -1633,6 +1647,33 @@ export default function UnifiedPropertyFamilyHub() {
     houseNoSearch,
     landmarkSearch,
   ]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    selectedColony,
+    selectedSubSector,
+    selectedBeat,
+    selectedCategory,
+    selectedStatus,
+    selectedClassification,
+    searchQuery,
+    customerNameSearch,
+    mobileSearch,
+    houseNoSearch,
+    landmarkSearch,
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredProperties.length / HUB_PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedProperties = useMemo(
+    () =>
+      filteredProperties.slice(
+        (safePage - 1) * HUB_PAGE_SIZE,
+        safePage * HUB_PAGE_SIZE
+      ),
+    [filteredProperties, safePage]
+  );
 
   // Active Filter Count
   const activeFiltersCount = useMemo(() => {
@@ -1666,7 +1707,7 @@ export default function UnifiedPropertyFamilyHub() {
   const handleResetFilters = () => {
     setSelectedColony('All');
     setSelectedSubSector('All');
-    setSelectedBeat('All');
+    setSelectedBeat(isRestrictedStaff && userProfile?.beat ? userProfile.beat : 'All');
     setSelectedCategory('All');
     setSelectedStatus('All');
     setSelectedClassification('All');
@@ -1956,7 +1997,7 @@ export default function UnifiedPropertyFamilyHub() {
           </div>
           <div>
             <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Properties Mapped</div>
-            <div className="text-2xl font-black text-slate-900">{properties.length}</div>
+            <div className="text-2xl font-black text-slate-900">{scopedProperties.length}</div>
             <div className="text-[11px] text-blue-600 font-semibold mt-0.5">Physical Doorsteps</div>
           </div>
         </div>
@@ -1968,7 +2009,7 @@ export default function UnifiedPropertyFamilyHub() {
           <div>
             <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Linked Residents</div>
             <div className="text-2xl font-black text-slate-900">
-              {properties.reduce((acc, p) => acc + p.linkedMembers.length, 0)}
+              {scopedProperties.reduce((acc, p) => acc + p.linkedMembers.length, 0)}
             </div>
             <div className="text-[11px] text-emerald-600 font-semibold mt-0.5">Family Tree Members</div>
           </div>
@@ -1981,7 +2022,7 @@ export default function UnifiedPropertyFamilyHub() {
           <div>
             <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Active Postal Leads</div>
             <div className="text-2xl font-black text-amber-700">
-              {properties.reduce(
+              {scopedProperties.reduce(
                 (acc, p) => acc + p.linkedMembers.reduce((mAcc, m) => mAcc + m.activeSchemes.length, 0),
                 0
               )}
@@ -1995,8 +2036,12 @@ export default function UnifiedPropertyFamilyHub() {
             <ShieldCheck size={22} />
           </div>
           <div>
-            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Dadabari Coverage</div>
-            <div className="text-2xl font-black text-purple-900">Beat 1 - 33</div>
+            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              {isRestrictedStaff ? 'Assigned Beat Scope' : 'Dadabari Coverage'}
+            </div>
+            <div className="text-2xl font-black text-purple-900">
+              {isRestrictedStaff ? userProfile?.beat || 'Scoped Beat' : 'Beat 1 - 33'}
+            </div>
             <div className="text-[11px] text-purple-600 font-semibold mt-0.5">100% Staff Assigned</div>
           </div>
         </div>
@@ -2274,11 +2319,11 @@ export default function UnifiedPropertyFamilyHub() {
         {/* Results Count Bar */}
         <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-600 border-t border-slate-100 gap-2">
           <div>
-            Showing <b>{filteredProperties.length}</b> of <b>{properties.length}</b> Consolidated Properties
+            Showing <b>{paginatedProperties.length}</b> of <b>{filteredProperties.length}</b> matching ({scopedProperties.length} scoped total)
           </div>
           <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
             <Sparkles size={12} className="text-amber-500" />
-            <span>Master Index Active: 100% Property Master + Household Trees Consolidated</span>
+            <span>Master Index Active: Max 5 entries per view</span>
           </div>
         </div>
       </div>
@@ -2288,7 +2333,7 @@ export default function UnifiedPropertyFamilyHub() {
       {/* ========================================================================= */}
       {viewMode === 'CARD' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredProperties.map((prop) => (
+          {paginatedProperties.map((prop) => (
             <div
               key={prop.id}
               className="bg-white rounded-3xl border border-slate-200/90 hover:border-indigo-400 shadow-xs hover:shadow-lg transition p-5 flex flex-col justify-between space-y-4 group relative overflow-hidden"
@@ -2531,7 +2576,7 @@ export default function UnifiedPropertyFamilyHub() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredProperties.map((prop) => (
+                {paginatedProperties.map((prop) => (
                   <tr key={prop.id} className="hover:bg-indigo-50/40 transition">
                     {/* Property */}
                     <td className="py-3 px-3.5 whitespace-nowrap">
@@ -2668,6 +2713,40 @@ export default function UnifiedPropertyFamilyHub() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Pagination Bar (Max 5 per view) */}
+      {filteredProperties.length > 0 && (
+        <div className="bg-white px-5 py-3.5 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-600 shadow-xs">
+          <span>
+            Showing <strong>{(safePage - 1) * HUB_PAGE_SIZE + 1}</strong>–
+            <strong>{Math.min(safePage * HUB_PAGE_SIZE, filteredProperties.length)}</strong> of{' '}
+            <strong>{filteredProperties.length}</strong> properties (Max 5 per view)
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 font-bold flex items-center gap-1 cursor-pointer"
+            >
+              <ChevronLeft size={14} />
+              <span>Prev</span>
+            </button>
+            <span className="px-2.5 font-mono font-bold text-slate-800">
+              Page {safePage} / {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={safePage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 font-bold flex items-center gap-1 cursor-pointer"
+            >
+              <span>Next</span>
+              <ChevronRight size={14} />
+            </button>
           </div>
         </div>
       )}

@@ -10,7 +10,7 @@ import {
 import { UPDATED_STAFF_LIST } from '../data/updatedStaffData';
 import { KOTA_OFFICE_MASTER_LIST, KOTA_POST_OFFICE_OPTIONS } from '../data/officesData';
 import { CONSOLIDATED_BEAT_MATRIX } from '../data/consolidatedBeatMatrix';
-import { hashPasswordSync, verifyPassword, sanitizeStaffProfile } from '../utils/securityUtils';
+import { hashPasswordSync, verifyPasswordSync, verifyPassword, sanitizeStaffProfile } from '../utils/securityUtils';
 
 export const DEFAULT_STAFF_FALLBACK_PASSWORD = 'Post@1234';
 export { KOTA_OFFICE_MASTER_LIST, KOTA_POST_OFFICE_OPTIONS };
@@ -490,42 +490,59 @@ function normalizeDesignation(roleOrDesig: string): DesignationType {
 
 const INITIAL_PROFILES: StaffProfile[] = [
   {
-    id: 'STAFF-ADMIN-01',
-    employeeId: 'CSI-10023401',
+    id: 'STAFF-MASTER-EKTA',
+    employeeId: 'MASTER-ADMIN-01',
     name: 'Ekta Meena',
-    email: 'mahen.comtech@gmail.com',
-    password: hashPasswordSync('Admin@123'),
-    role: 'SUPER_ADMIN',
-    designationType: 'SPM / Postmaster',
-    contact: '8769706002',
-    beat: 'Beat 2',
-    assignedBeats: ['Beat 2', 'All Beats'],
-    assignedOffice: 'Dadabari S.O. (324009)',
+    email: 'ektamahenmeena@gmail.com',
+    password: hashPasswordSync('Admin'),
+    hasCustomPassword: true,
+    role: 'MASTER_ADMIN',
+    designationType: 'Master Admin (Developer / System Architect)',
+    contact: '8279275805',
+    beat: 'All Beats',
+    assignedBeats: ['All Beats'],
+    assignedOffice: 'All Divisions / Kota Division (324009)',
     circle: 'Rajasthan Circle',
-    division: 'Kota Division',
+    division: 'All Divisions',
     headOffice: 'Kota H.O.',
-    subOffice: 'Dadabari S.O.',
+    subOffice: 'All Offices',
     branchOffice: '',
     officePincode: '324009',
-    officeAddress: 'Dadabari Sub-Post Office, Near CAD Circle, Dadabari Extension, Kota, Rajasthan - 324009',
-    deliveryOfficeMapping: 'Dadabari S.O. (324009) / Kota H.O.',
-    assignedColonies: ['Keshavpura Sector 7', 'Keshavpura Sector 6', 'Patel Nagar', 'Santoshi Nagar'],
-    fixedKm: 22,
-    permissions: { ...DEFAULT_ADMIN_PERMISSION },
+    officeAddress: 'Department of Posts, Kota Division Command Center, Rajasthan Circle - 324009',
+    deliveryOfficeMapping: 'All Divisions / All Sub-Offices / All Beats',
+    assignedColonies: ['All Colonies'],
+    fixedKm: 0,
+    permissions: {
+      ...DEFAULT_ADMIN_PERMISSION,
+      canCreateCustomer: true,
+      canEditCustomer: true,
+      canDeleteCustomer: true,
+      canViewAllRecords: true,
+      dailyEntryLimit: 0,
+      canAssignStaff: true,
+      canExportData: true,
+      canAccessSettings: true,
+      approvalStatus: 'Approved',
+      serviceModules: { ...DEFAULT_ADMIN_SERVICE_MODULES },
+      allowedBeats: ['All Beats'],
+      allowedOffices: ['All Offices'],
+      allowedColonies: ['All Colonies'],
+    },
     entriesCreatedToday: 0,
     lastEntryDate: new Date().toISOString().split('T')[0],
-    totalEntriesCount: 142,
+    totalEntriesCount: 0,
     status: 'Active',
   },
   {
-    id: 'STAFF-EKTA-01',
-    employeeId: 'CSI-10294812',
-    name: 'Ekta Meena',
-    email: 'ektamahenmeena@gmail.com',
-    password: 'Staff@123',
-    role: 'STAFF',
-    designationType: 'PA (Postal Assistant)',
-    contact: '9521279186',
+    id: 'STAFF-50457421',
+    employeeId: '50457421',
+    name: 'Mahendra Kumar Meena',
+    email: 'mahen.comtech@gmail.com',
+    password: hashPasswordSync(DEFAULT_STAFF_FALLBACK_PASSWORD),
+    hasCustomPassword: false,
+    role: 'POSTMAN',
+    designationType: 'Postman',
+    contact: '8769706002',
     beat: 'Beat 2',
     assignedBeats: ['Beat 2'],
     assignedOffice: 'Dadabari S.O. (324009)',
@@ -537,13 +554,32 @@ const INITIAL_PROFILES: StaffProfile[] = [
     officePincode: '324009',
     officeAddress: 'Dadabari Sub-Post Office, Near CAD Circle, Dadabari Extension, Kota, Rajasthan - 324009',
     deliveryOfficeMapping: 'Dadabari S.O. (324009)',
-    assignedColonies: ['Keshavpura Sector 7', 'Keshavpura Sector 6', 'Patel Nagar', 'Santoshi Nagar'],
-    fixedKm: 18,
+    assignedColonies: ['Keshavpura Sector 7', 'Keshavpura Sector 6', 'Patel Nagar', 'Santoshi Nagar', 'TVS Circle'],
+    fixedKm: 30,
     permissions: {
       ...DEFAULT_STAFF_PERMISSION,
+      canCreateCustomer: true,
+      canEditCustomer: true,
+      canDeleteCustomer: false,
+      canViewAllRecords: false,
+      dailyEntryLimit: 50,
+      canAssignStaff: false,
+      canExportData: true,
+      canAccessSettings: false,
+      approvalStatus: 'Approved',
+      serviceModules: {
+        crmSection: true,
+        specialBillsSection: false,
+        learningSection: true,
+        departmentalLearningSection: true,
+        schemeLeadsSection: true,
+        productSchemeLeadSection: true,
+        contentSharingSection: false,
+        contentSharingDispatchSection: false,
+      },
       allowedBeats: ['Beat 2'],
       allowedOffices: ['Dadabari S.O.'],
-      allowedColonies: ['Keshavpura Sector 7', 'Keshavpura Sector 6', 'Patel Nagar', 'Santoshi Nagar'],
+      allowedColonies: ['Keshavpura Sector 7', 'Keshavpura Sector 6', 'Patel Nagar', 'Santoshi Nagar', 'TVS Circle'],
     },
     entriesCreatedToday: 0,
     lastEntryDate: new Date().toISOString().split('T')[0],
@@ -555,7 +591,8 @@ const INITIAL_PROFILES: StaffProfile[] = [
     employeeId: 'OBS-324009',
     name: 'Field Observer (Viewer)',
     email: 'viewer@indiapost.gov.in',
-    password: 'Viewer@123',
+    password: hashPasswordSync('Viewer@123'),
+    hasCustomPassword: true,
     role: 'VIEWER',
     designationType: 'Inspector (IP / ASP)',
     contact: '0744-2500123',
@@ -583,7 +620,8 @@ const INITIAL_PROFILES: StaffProfile[] = [
     employeeId: '50510312',
     name: 'Muskan Sharma',
     email: 'muskan.sharma@indiapost.gov.in',
-    password: 'Post@123',
+    password: hashPasswordSync(DEFAULT_STAFF_FALLBACK_PASSWORD),
+    hasCustomPassword: false,
     role: 'POSTMAN',
     designationType: 'GDS (BPM / ABPM / Dak Sevak)',
     contact: '9521279186',
@@ -617,7 +655,8 @@ const INITIAL_PROFILES: StaffProfile[] = [
     employeeId: '10310735',
     name: 'Govind Prasad',
     email: 'govind.prasad@indiapost.gov.in',
-    password: 'Post@123',
+    password: hashPasswordSync(DEFAULT_STAFF_FALLBACK_PASSWORD),
+    hasCustomPassword: false,
     role: 'POSTMAN',
     designationType: 'Postman',
     contact: '7877352816',
@@ -651,7 +690,8 @@ const INITIAL_PROFILES: StaffProfile[] = [
     employeeId: '50507003',
     name: 'Priyanshu Trivedi',
     email: 'priyanshu.trivedi@indiapost.gov.in',
-    password: 'Post@123',
+    password: hashPasswordSync(DEFAULT_STAFF_FALLBACK_PASSWORD),
+    hasCustomPassword: false,
     role: 'POSTMAN',
     designationType: 'GDS (BPM / ABPM / Dak Sevak)',
     contact: '9928486812',
@@ -685,7 +725,8 @@ const INITIAL_PROFILES: StaffProfile[] = [
     employeeId: 'CSI-10448901',
     name: 'Vikram Singh Hada (SPM Engg College SO)',
     email: 'vikram.hada@indiapost.gov.in',
-    password: 'Post@123',
+    password: hashPasswordSync(DEFAULT_STAFF_FALLBACK_PASSWORD),
+    hasCustomPassword: false,
     role: 'POSTMASTER',
     designationType: 'SPM / Postmaster',
     contact: '9414188210',
@@ -814,23 +855,47 @@ class StaffPermissionService {
         this.profiles = [...INITIAL_PROFILES];
       }
 
-      // Ensure all 33 directory staff also have linked StaffProfile entries for seamless authorization matrix management
+      // Reconcile legacy cached profiles so Ekta Meena is Master Admin and Mahendra Kumar Meena is strictly Beat 2 POSTMAN
+      this.profiles = this.profiles.filter(
+        p => p.id !== 'STAFF-ADMIN-01' && p.id !== 'STAFF-EKTA-01'
+      );
+
+      // Ensure all seeded profiles exist and authoritative master/staff profiles stay synchronized
       for (const initP of INITIAL_PROFILES) {
-        if (!this.profiles.some(p => p.email.toLowerCase() === initP.email.toLowerCase())) {
+        const idx = this.profiles.findIndex(
+          p => p.email.toLowerCase() === initP.email.toLowerCase() || (initP.employeeId && p.employeeId === initP.employeeId)
+        );
+        if (idx === -1) {
           this.profiles.push(initP);
+        } else if (initP.email.toLowerCase() === 'ektamahenmeena@gmail.com') {
+          this.profiles[idx] = { ...initP };
+        } else if (
+          initP.employeeId === '50457421' ||
+          initP.email.toLowerCase() === 'mahen.comtech@gmail.com'
+        ) {
+          const existingCustomPass = this.profiles[idx]?.hasCustomPassword ? this.profiles[idx].password : undefined;
+          this.profiles[idx] = {
+            ...initP,
+            password: existingCustomPass || initP.password,
+            hasCustomPassword: Boolean(this.profiles[idx]?.hasCustomPassword),
+          };
+        } else if (!this.profiles[idx]?.hasCustomPassword) {
+          this.profiles[idx].password = initP.password;
+          this.profiles[idx].hasCustomPassword = Boolean(initP.hasCustomPassword);
         }
       }
 
+      // Ensure ALL directoryStaff (including those with 'N/A' raw email) hydrate into login profiles
       for (const dirStaff of this.directoryStaff) {
-        const email = (dirStaff.email || '').toLowerCase();
-        if (!email || email === 'n/a') continue;
+        const generated = this.createProfileFromDirectoryStaff(dirStaff);
         const exists = this.profiles.some(
           p =>
-            p.email.toLowerCase() === email ||
-            (p.employeeId && dirStaff.employeeId && p.employeeId === dirStaff.employeeId)
+            p.email.toLowerCase() === generated.email.toLowerCase() ||
+            (p.employeeId && generated.employeeId && p.employeeId.toUpperCase() === generated.employeeId.toUpperCase()) ||
+            p.id.toUpperCase() === generated.id.toUpperCase()
         );
         if (!exists) {
-          this.profiles.push(this.createProfileFromDirectoryStaff(dirStaff));
+          this.profiles.push(generated);
         }
       }
 
@@ -859,24 +924,31 @@ class StaffPermissionService {
   }
 
   private createProfileFromDirectoryStaff(s: Staff): StaffProfile {
-    const isMaster = s.contact === '8769706002' && s.name.toLowerCase().includes('mahendra');
-    const email = isMaster
-      ? 'mahendra.beat2@indiapost.gov.in'
+    const isMahendraBeat2 =
+      s.employeeId === '50457421' ||
+      s.id === 'STAFF-50457421' ||
+      s.contact === '8769706002' ||
+      s.name.toLowerCase().includes('mahendra kumar meena');
+    const email = isMahendraBeat2
+      ? 'mahen.comtech@gmail.com'
       : s.email && s.email !== 'N/A'
       ? s.email.toLowerCase()
       : `${s.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@indiapost.gov.in`;
+    const isGds = (s.role || '').toUpperCase().includes('GDS');
 
     return {
       id: s.id,
       employeeId: s.employeeId || s.id.replace(/^STAFF-/, ''),
       name: s.name,
       email,
-      password: isMaster ? 'Mahen@2304' : DEFAULT_STAFF_FALLBACK_PASSWORD,
-      role: isMaster ? 'SUPER_ADMIN' : 'POSTMAN',
-      designationType: s.designationType || normalizeDesignation(s.role),
+      password: hashPasswordSync(DEFAULT_STAFF_FALLBACK_PASSWORD),
+      hasCustomPassword: false,
+      mustChangePassword: false,
+      role: isGds ? 'GDS' : 'POSTMAN',
+      designationType: isMahendraBeat2 ? 'Postman' : s.designationType || normalizeDesignation(s.role),
       contact: s.contact,
-      beat: s.beat,
-      assignedBeats: s.assignedBeats || [s.beat],
+      beat: isMahendraBeat2 ? 'Beat 2' : s.beat,
+      assignedBeats: isMahendraBeat2 ? ['Beat 2'] : s.assignedBeats || [s.beat],
       assignedOffice: `${s.subOffice || s.subOrBranchOffice || 'Dadabari S.O.'} (${s.officePincode || '324009'})`,
       circle: s.circle || 'Rajasthan Circle',
       division: s.division || 'Kota Division',
@@ -889,15 +961,31 @@ class StaffPermissionService {
         'Dadabari Sub-Post Office, Near CAD Circle, Dadabari Extension, Kota, Rajasthan - 324009',
       deliveryOfficeMapping: s.deliveryOfficeMapping || 'Dadabari S.O. (324009) / Kota H.O.',
       assignedColonies: s.assignedColonies || getDefaultColoniesForBeat(s.beat),
-      fixedKm: getDefaultFixedKmForBeat(s.beat),
-      permissions: isMaster
-        ? { ...DEFAULT_ADMIN_PERMISSION }
-        : {
-            ...DEFAULT_STAFF_PERMISSION,
-            allowedBeats: [s.beat],
-            allowedOffices: [s.subOffice || s.subOrBranchOffice || 'Dadabari S.O.'],
-            allowedColonies: s.assignedColonies || getDefaultColoniesForBeat(s.beat),
-          },
+      fixedKm: isMahendraBeat2 ? 30 : getDefaultFixedKmForBeat(s.beat),
+      permissions: {
+        ...DEFAULT_STAFF_PERMISSION,
+        canCreateCustomer: true,
+        canEditCustomer: true,
+        canDeleteCustomer: false,
+        canViewAllRecords: false,
+        canAssignStaff: false,
+        canAccessSettings: false,
+        serviceModules: isMahendraBeat2
+          ? {
+              crmSection: true,
+              specialBillsSection: false,
+              learningSection: true,
+              departmentalLearningSection: true,
+              schemeLeadsSection: true,
+              productSchemeLeadSection: true,
+              contentSharingSection: false,
+              contentSharingDispatchSection: false,
+            }
+          : { ...DEFAULT_STAFF_SERVICE_MODULES },
+        allowedBeats: [isMahendraBeat2 ? 'Beat 2' : s.beat],
+        allowedOffices: [s.subOffice || s.subOrBranchOffice || 'Dadabari S.O.'],
+        allowedColonies: s.assignedColonies || getDefaultColoniesForBeat(s.beat),
+      },
       entriesCreatedToday: 0,
       lastEntryDate: new Date().toISOString().split('T')[0],
       totalEntriesCount: 0,
@@ -933,9 +1021,30 @@ class StaffPermissionService {
   }
 
   private normalizeProfile(p: StaffProfile): StaffProfile {
-    const isMaster = p.email.toLowerCase() === 'mahen.comtech@gmail.com';
+    const lowerEmail = (p.email || '').toLowerCase();
+    const isMaster =
+      lowerEmail === 'ektamahenmeena@gmail.com' ||
+      p.role === 'MASTER_ADMIN' ||
+      p.employeeId?.toUpperCase() === 'MASTER-ADMIN-01';
+    const isMahendraBeat2 =
+      !isMaster &&
+      (lowerEmail === 'mahen.comtech@gmail.com' ||
+        p.employeeId === '50457421' ||
+        p.id === 'STAFF-50457421');
+
     const defaultModules = isMaster
       ? DEFAULT_ADMIN_SERVICE_MODULES
+      : isMahendraBeat2
+      ? {
+          crmSection: true,
+          specialBillsSection: false,
+          learningSection: true,
+          departmentalLearningSection: true,
+          schemeLeadsSection: true,
+          productSchemeLeadSection: true,
+          contentSharingSection: false,
+          contentSharingDispatchSection: false,
+        }
       : p.role === 'VIEWER'
       ? DEFAULT_VIEWER_SERVICE_MODULES
       : DEFAULT_STAFF_SERVICE_MODULES;
@@ -953,11 +1062,21 @@ class StaffPermissionService {
       : rawMods.schemeLeadsSection ?? rawMods.productSchemeLeadSection ?? defaultModules.schemeLeadsSection;
     const shareVal = isMaster
       ? true
+      : isMahendraBeat2
+      ? false
       : rawMods.contentSharingSection ?? rawMods.contentSharingDispatchSection ?? defaultModules.contentSharingSection;
     const crmVal = isMaster ? true : rawMods.crmSection ?? defaultModules.crmSection;
-    const billsVal = isMaster ? true : rawMods.specialBillsSection ?? defaultModules.specialBillsSection;
+    const billsVal = isMaster
+      ? true
+      : isMahendraBeat2
+      ? false
+      : rawMods.specialBillsSection ?? defaultModules.specialBillsSection;
 
-    const desig = p.designationType || p.designation || normalizeDesignation(p.role);
+    const desig = isMaster
+      ? 'Master Admin (Developer / System Architect)'
+      : isMahendraBeat2
+      ? 'Postman'
+      : p.designationType || p.designation || normalizeDesignation(p.role);
     const officeMeta = resolveOfficeMetadata(
       p.postOfficeName || p.branchOffice || p.subOffice || p.assignedOffice,
       p.branchOffice,
@@ -966,29 +1085,42 @@ class StaffPermissionService {
 
     return {
       ...p,
-      employeeId: p.employeeId || p.id.replace(/^STAFF-/, 'CSI-'),
-      role: isMaster ? 'SUPER_ADMIN' : p.role,
-      password: isMaster ? 'Mahen@2304' : p.password || DEFAULT_STAFF_FALLBACK_PASSWORD,
+      name: isMaster ? 'Ekta Meena' : isMahendraBeat2 ? 'Mahendra Kumar Meena' : p.name,
+      contact: isMaster ? '8279275805' : p.contact,
+      employeeId: isMaster ? 'MASTER-ADMIN-01' : isMahendraBeat2 ? '50457421' : p.employeeId || p.id.replace(/^STAFF-/, 'CSI-'),
+      role: isMaster ? 'MASTER_ADMIN' : isMahendraBeat2 ? 'POSTMAN' : p.role,
+      password: isMaster
+        ? hashPasswordSync('Admin')
+        : p.password || hashPasswordSync(DEFAULT_STAFF_FALLBACK_PASSWORD),
+      hasCustomPassword: isMaster ? true : Boolean(p.hasCustomPassword),
       designation: desig,
       designationType: desig,
       officeId: p.officeId || officeMeta.officeId,
       postOfficeName: p.postOfficeName || officeMeta.postOfficeName,
       circle: p.circle || 'Rajasthan Circle',
-      division: p.division || 'Kota Division',
+      division: isMaster ? 'All Divisions' : p.division || 'Kota Division',
       headOffice: p.headOffice || 'Kota H.O.',
-      subOffice: p.subOffice || 'Dadabari S.O.',
+      subOffice: isMaster ? 'All Offices' : isMahendraBeat2 ? 'Dadabari S.O.' : p.subOffice || 'Dadabari S.O.',
       branchOffice: p.branchOffice || '',
       officePincode: p.officePincode || officeMeta.pincode || '324009',
       officeAddress:
         p.officeAddress ||
         'Dadabari Sub-Post Office, Near CAD Circle, Dadabari Extension, Kota, Rajasthan - 324009',
-      assignedBeats: p.assignedBeats?.length ? p.assignedBeats : [p.beat || 'Beat 2'],
-      deliveryOfficeMapping: p.deliveryOfficeMapping || `${officeMeta.postOfficeName} (${p.officePincode || officeMeta.pincode})`,
-      assignedColonies: colonies,
-      fixedKm: p.fixedKm || getDefaultFixedKmForBeat(p.beat || 'Beat 2'),
+      beat: isMaster ? 'All Beats' : isMahendraBeat2 ? 'Beat 2' : p.beat || 'Beat 2',
+      assignedBeats: isMaster ? ['All Beats'] : isMahendraBeat2 ? ['Beat 2'] : p.assignedBeats?.length ? p.assignedBeats : [p.beat || 'Beat 2'],
+      deliveryOfficeMapping: isMaster
+        ? 'All Divisions / All Sub-Offices / All Beats'
+        : p.deliveryOfficeMapping || `${officeMeta.postOfficeName} (${p.officePincode || officeMeta.pincode})`,
+      assignedColonies: isMaster ? ['All Colonies'] : colonies,
+      fixedKm: isMaster ? 0 : isMahendraBeat2 ? 30 : p.fixedKm || getDefaultFixedKmForBeat(p.beat || 'Beat 2'),
       permissions: {
         ...p.permissions,
-        canViewAllRecords: isMaster ? true : Boolean(p.permissions?.canViewAllRecords),
+        canCreateCustomer: isMaster ? true : p.permissions?.canCreateCustomer ?? true,
+        canEditCustomer: isMaster ? true : p.permissions?.canEditCustomer ?? true,
+        canDeleteCustomer: isMaster ? true : isMahendraBeat2 ? false : Boolean(p.permissions?.canDeleteCustomer),
+        canViewAllRecords: isMaster ? true : isMahendraBeat2 ? false : Boolean(p.permissions?.canViewAllRecords),
+        canAssignStaff: isMaster ? true : isMahendraBeat2 ? false : Boolean(p.permissions?.canAssignStaff),
+        canAccessSettings: isMaster ? true : isMahendraBeat2 ? false : Boolean(p.permissions?.canAccessSettings),
         approvalStatus: isMaster ? 'Approved' : p.permissions?.approvalStatus || 'Approved',
         serviceModules: {
           crmSection: crmVal,
@@ -1002,11 +1134,15 @@ class StaffPermissionService {
         },
         allowedBeats: isMaster
           ? ['All Beats']
+          : isMahendraBeat2
+          ? ['Beat 2']
           : p.permissions?.allowedBeats?.length
           ? p.permissions.allowedBeats
           : [p.beat || 'Beat 2'],
         allowedOffices: isMaster
           ? ['All Offices']
+          : isMahendraBeat2
+          ? ['Dadabari S.O.']
           : p.permissions?.allowedOffices?.length
           ? p.permissions.allowedOffices
           : [p.subOffice || 'Dadabari S.O.'],
@@ -1087,17 +1223,24 @@ class StaffPermissionService {
   public isSuperAdmin(user: StaffProfile | null | undefined): boolean {
     if (!user) return false;
     return (
-      user.email?.toLowerCase() === 'mahen.comtech@gmail.com' ||
-      user.employeeId?.toUpperCase() === 'CSI-10023401' ||
-      user.id === 'STAFF-ADMIN-01' ||
+      user.email?.toLowerCase() === 'ektamahenmeena@gmail.com' ||
+      user.employeeId?.toUpperCase() === 'MASTER-ADMIN-01' ||
+      user.id === 'STAFF-MASTER-EKTA' ||
+      user.role === 'MASTER_ADMIN' ||
       user.role === 'SUPER_ADMIN'
     );
   }
 
   public getMasterAdminProfile(): StaffProfile {
-    const admin = this.getStaffProfileByEmail('mahen.comtech@gmail.com');
+    const admin = this.getStaffProfileByEmail('Ektamahenmeena@gmail.com');
     admin.name = 'Ekta Meena';
-    admin.role = 'SUPER_ADMIN';
+    admin.contact = '8279275805';
+    admin.email = 'Ektamahenmeena@gmail.com';
+    admin.role = 'MASTER_ADMIN';
+    admin.designationType = 'Master Admin (Developer / System Architect)';
+    admin.beat = 'All Beats';
+    admin.assignedBeats = ['All Beats'];
+    admin.division = 'All Divisions';
     admin.mustChangePassword = false;
     admin.permissions = {
       ...DEFAULT_ADMIN_PERMISSION,
@@ -1111,22 +1254,11 @@ class StaffPermissionService {
     return admin;
   }
 
-  public activateMasterAdminBypass(): StaffProfile {
-    try {
-      sessionStorage.removeItem('postman_explicit_signout');
-    } catch {
-      // ignore storage errors
-    }
-    const admin = this.getMasterAdminProfile();
-    this.setActiveSession(admin);
-    return admin;
-  }
-
   public canAccessServiceModule(
     user: StaffProfile | null | undefined,
     moduleKey: keyof ServiceModulePermissions
   ): boolean {
-    if (!user) return true;
+    if (!user) return false;
     if (this.isSuperAdmin(user) || user.role === 'ADMIN') return true;
     if (user.permissions?.approvalStatus === 'Revoked') return false;
     const modules = user.permissions?.serviceModules;
@@ -1217,13 +1349,17 @@ class StaffPermissionService {
       (input.email && input.email !== 'N/A' ? input.email.trim().toLowerCase() : '') ||
       `${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '.')}@indiapost.gov.in`;
 
-    const isMaster = generatedEmail === 'mahen.comtech@gmail.com';
-    const primaryBeat = input.beat.trim() || 'Beat 2';
-    const beatList = input.assignedBeats?.length
+    const isMaster = generatedEmail === 'ektamahenmeena@gmail.com';
+    const primaryBeat = isMaster ? 'All Beats' : input.beat.trim() || 'Beat 2';
+    const beatList = isMaster
+      ? ['All Beats']
+      : input.assignedBeats?.length
       ? input.assignedBeats
       : primaryBeat.split(',').map(b => b.trim()).filter(Boolean);
 
-    const colonies = input.assignedColonies?.length
+    const colonies = isMaster
+      ? ['All Colonies']
+      : input.assignedColonies?.length
       ? input.assignedColonies
       : getDefaultColoniesForBeat(primaryBeat);
 
@@ -1289,7 +1425,7 @@ class StaffPermissionService {
 
     const existingProf = existingProfIdx >= 0 ? this.profiles[existingProfIdx] : null;
     const mappedRole = isMaster
-      ? 'SUPER_ADMIN'
+      ? 'MASTER_ADMIN'
       : input.role ||
         (input.designationType.includes('Inspector') || input.designationType.includes('Postmaster')
           ? 'ADMIN'
@@ -1302,8 +1438,23 @@ class StaffPermissionService {
       employeeId: cleanEmpId,
       name: cleanName,
       email: generatedEmail,
-      password: isMaster ? 'Mahen@2304' : input.password || existingProf?.password || DEFAULT_STAFF_FALLBACK_PASSWORD,
-      mustChangePassword: existingProf?.mustChangePassword ?? (input.password === DEFAULT_STAFF_FALLBACK_PASSWORD || !input.password),
+      password: isMaster
+        ? hashPasswordSync('Admin')
+        : input.password?.trim()
+        ? input.password.startsWith('$sha256')
+          ? input.password
+          : hashPasswordSync(input.password.trim())
+        : existingProf?.password || hashPasswordSync(DEFAULT_STAFF_FALLBACK_PASSWORD),
+      hasCustomPassword: isMaster
+        ? true
+        : Boolean(
+            (input.password?.trim() &&
+              input.password.trim() !== DEFAULT_STAFF_FALLBACK_PASSWORD &&
+              input.password.trim() !== hashPasswordSync(DEFAULT_STAFF_FALLBACK_PASSWORD) &&
+              input.password.trim().toLowerCase() !== cleanEmpId.toLowerCase()) ||
+              existingProf?.hasCustomPassword
+          ),
+      mustChangePassword: false,
       role: mappedRole,
       designationType: input.designationType,
       contact: input.contact.trim(),
@@ -1981,7 +2132,7 @@ class StaffPermissionService {
       return norm;
     }
 
-    if (normalized === 'mahen.comtech@gmail.com') {
+    if (normalized === 'ektamahenmeena@gmail.com') {
       const adminProfile = this.normalizeProfile(INITIAL_PROFILES[0]);
       this.profiles.unshift(adminProfile);
       this.saveProfiles(false);
@@ -2044,51 +2195,79 @@ class StaffPermissionService {
     const norm = raw.toLowerCase();
     const cleanId = norm.replace(/^(staff-|csi-|gds-|emp-)/i, '').trim();
     const cleanDigits = raw.replace(/\D/g, '');
+    const phone10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : '';
 
-    // 1. Search existing profiles by email, employeeId, id, or mobile
-    const matchedIdx = this.profiles.findIndex(p => {
-      const pEmail = (p.email || '').toLowerCase();
-      const pEmpId = (p.employeeId || '').toLowerCase();
-      const pCleanEmpId = pEmpId.replace(/^(staff-|csi-|gds-|emp-)/i, '').trim();
-      const pId = (p.id || '').toLowerCase();
-      const pCleanId = pId.replace(/^(staff-|csi-|gds-|emp-)/i, '').trim();
-      const pPhone = (p.contact || '').replace(/\D/g, '');
+    // 1. Search existing profiles using strict precedence:
+    //    Email -> Exact Employee/User ID -> Stripped Prefix ID -> 10-digit Mobile
+    const resolveProfileIndex = (): number => {
+      let idx = this.profiles.findIndex(p => (p.email || '').toLowerCase() === norm);
+      if (idx >= 0) return idx;
 
-      return (
-        pEmail === norm ||
-        pEmpId === norm ||
-        (cleanId && pCleanEmpId === cleanId) ||
-        pId === norm ||
-        (cleanId && pCleanId === cleanId) ||
-        (cleanDigits.length >= 10 && pPhone.endsWith(cleanDigits.slice(-10)))
+      idx = this.profiles.findIndex(
+        p => (p.employeeId || '').toLowerCase() === norm || (p.id || '').toLowerCase() === norm
       );
-    });
+      if (idx >= 0) return idx;
 
+      if (cleanId) {
+        idx = this.profiles.findIndex(p => {
+          const pCleanEmpId = (p.employeeId || '').toLowerCase().replace(/^(staff-|csi-|gds-|emp-)/i, '').trim();
+          const pCleanId = (p.id || '').toLowerCase().replace(/^(staff-|csi-|gds-|emp-)/i, '').trim();
+          return pCleanEmpId === cleanId || pCleanId === cleanId;
+        });
+        if (idx >= 0) return idx;
+      }
+
+      if (phone10) {
+        idx = this.profiles.findIndex(p => {
+          const pPhone = (p.contact || '').replace(/\D/g, '');
+          return pPhone.length >= 10 && pPhone.slice(-10) === phone10;
+        });
+        if (idx >= 0) return idx;
+      }
+
+      return -1;
+    };
+
+    const matchedIdx = resolveProfileIndex();
     if (matchedIdx >= 0) {
       const updated = this.ensureDayReset(this.profiles[matchedIdx]);
       this.profiles[matchedIdx] = updated;
       return updated;
     }
 
-    // 2. Search directoryStaff by employeeId, id, email, or mobile
-    const matchedDir = this.directoryStaff.find(s => {
-      const sEmail = (s.email || '').toLowerCase();
-      const sEmpId = (s.employeeId || '').toLowerCase();
-      const sCleanEmpId = sEmpId.replace(/^(staff-|csi-|gds-|emp-)/i, '').trim();
-      const sId = (s.id || '').toLowerCase();
-      const sCleanId = sId.replace(/^(staff-|csi-|gds-|emp-)/i, '').trim();
-      const sPhone = (s.contact || '').replace(/\D/g, '');
+    // 2. Fallback to full directoryStaff using the same strict precedence
+    const resolveDirMatch = (): Staff | undefined => {
+      const byEmail = this.directoryStaff.find(s => {
+        const gen = `${s.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@indiapost.gov.in`;
+        const sEmail = (s.email || '').toLowerCase();
+        return (sEmail && sEmail !== 'n/a' && sEmail === norm) || gen === norm;
+      });
+      if (byEmail) return byEmail;
 
-      return (
-        (sEmail && sEmail !== 'n/a' && sEmail === norm) ||
-        sEmpId === norm ||
-        (cleanId && sCleanEmpId === cleanId) ||
-        sId === norm ||
-        (cleanId && sCleanId === cleanId) ||
-        (cleanDigits.length >= 10 && sPhone.endsWith(cleanDigits.slice(-10)))
+      const byExactId = this.directoryStaff.find(
+        s => (s.employeeId || '').toLowerCase() === norm || (s.id || '').toLowerCase() === norm
       );
-    });
+      if (byExactId) return byExactId;
 
+      if (cleanId) {
+        const byCleanId = this.directoryStaff.find(s => {
+          const sCleanEmpId = (s.employeeId || '').toLowerCase().replace(/^(staff-|csi-|gds-|emp-)/i, '').trim();
+          const sCleanId = (s.id || '').toLowerCase().replace(/^(staff-|csi-|gds-|emp-)/i, '').trim();
+          return sCleanEmpId === cleanId || sCleanId === cleanId;
+        });
+        if (byCleanId) return byCleanId;
+      }
+
+      if (phone10) {
+        return this.directoryStaff.find(s => {
+          const sPhone = (s.contact || '').replace(/\D/g, '');
+          return sPhone.length >= 10 && sPhone.slice(-10) === phone10;
+        });
+      }
+      return undefined;
+    };
+
+    const matchedDir = resolveDirMatch();
     if (matchedDir) {
       const created = this.createProfileFromDirectoryStaff(matchedDir);
       this.profiles.push(created);
@@ -2109,8 +2288,14 @@ class StaffPermissionService {
     error?: string;
   } {
     const rawId = (identifier || '').trim();
-    const normalized = rawId.toLowerCase();
     const trimmedPass = (password || '').trim();
+
+    if (!rawId || !trimmedPass) {
+      return {
+        success: false,
+        error: 'Employee ID / Email and password are required.',
+      };
+    }
 
     try {
       if (typeof sessionStorage !== 'undefined') {
@@ -2120,92 +2305,72 @@ class StaffPermissionService {
       // ignore
     }
 
-    // 1. Check Super Admin (Ekta Meena)
-    if (
-      normalized === 'mahen.comtech@gmail.com' ||
-      normalized === 'csi-10023401' ||
-      normalized === 'admin' ||
-      normalized === 'master'
-    ) {
-      const adminProfile = this.getMasterAdminProfile();
-      this.setActiveSession(adminProfile);
-      return { success: true, profile: adminProfile, mustChangePassword: false };
-    }
-
-    // 2. Backward compatible employee shortcut
-    if (normalized === 'employee') {
-      let empProfile = this.findStaffProfileByIdentifier('50510312');
-      if (!empProfile) {
-        empProfile = this.getStaffProfileByEmail('employee@indiapost.gov.in');
-        empProfile.employeeId = 'EMPLOYEE';
-        empProfile.name = 'Postal Staff Employee';
-      }
-      this.setActiveSession(empProfile);
-      return { success: true, profile: empProfile, mustChangePassword: false };
-    }
-
-    // 3. Postman Role: Lookup by Employee ID
-    let foundProfile = this.findStaffProfileByIdentifier(rawId);
-    if (!foundProfile) {
-      const matchedDir = this.directoryStaff.find(s => 
-        (s.employeeId && s.employeeId.toUpperCase() === rawId.toUpperCase()) ||
-        s.id.toUpperCase() === rawId.toUpperCase()
-      );
-      if (matchedDir) {
-        foundProfile = this.createProfileFromDirectoryStaff(matchedDir);
-        foundProfile.role = 'POSTMAN';
-        foundProfile.password = hashPasswordSync(foundProfile.employeeId || rawId.toUpperCase());
-        foundProfile.mustChangePassword = true;
-        this.profiles.push(foundProfile);
-        this.saveProfiles(false);
-      }
-    }
+    // 1. Lookup across all profiles and full directoryStaff (Email / ID / Mobile)
+    const foundProfile = this.findStaffProfileByIdentifier(rawId);
 
     if (!foundProfile) {
       return {
         success: false,
-        error: 'Employee record not found. If you are newly appointed, please click "New Staff? Request Registration" below.'
+        error: 'Employee record not found. If you are newly appointed, please click "New Staff? Request Registration" below.',
       };
     }
 
     if (foundProfile.permissions?.approvalStatus === 'Revoked' || foundProfile.status === 'Inactive') {
       return {
         success: false,
-        error: 'Your staff account is currently deactivated or restricted. Please contact Admin Ekta Meena.'
+        error: 'Your staff account is currently deactivated or restricted. Please contact Master Admin Ekta Meena (Ektamahenmeena@gmail.com).',
       };
     }
 
-    const empIdClean = (foundProfile.employeeId || foundProfile.id || '').trim().toUpperCase();
-    const isInitialDefaultPassword = trimmedPass.toUpperCase() === empIdClean || trimmedPass === 'Post@1234';
+    const isAdminOrViewer =
+      this.isSuperAdmin(foundProfile) || foundProfile.role === 'ADMIN' || foundProfile.role === 'VIEWER';
+    const storedPass = foundProfile.password || hashPasswordSync(DEFAULT_STAFF_FALLBACK_PASSWORD);
 
-    const storedPass = foundProfile.password || DEFAULT_STAFF_FALLBACK_PASSWORD;
-    const isPassValid = isInitialDefaultPassword ||
-      trimmedPass === storedPass ||
-      hashPasswordSync(trimmedPass) === storedPass ||
-      storedPass.includes(hashPasswordSync(trimmedPass).replace('$sha256_sync$', ''));
+    // Non-admin directory staff can authenticate with their Employee ID or default Post@1234 unless they have explicitly set a custom password
+    const normPass = trimmedPass.toLowerCase();
+    const normEmpId = (foundProfile.employeeId || '').trim().toLowerCase();
+    const strippedEmpId = normEmpId.replace(/^(staff-|csi-|gds-|emp-)/i, '');
+    const normProfileId = (foundProfile.id || '').trim().toLowerCase();
+    const matchesEmployeeIdPassword = Boolean(
+      normPass &&
+        ((normEmpId && normPass === normEmpId) ||
+          (strippedEmpId && normPass === strippedEmpId) ||
+          (normProfileId && normPass === normProfileId))
+    );
+    const matchesStored = trimmedPass === storedPass || verifyPasswordSync(trimmedPass, storedPass);
+    const matchesDefaultFallback =
+      !isAdminOrViewer &&
+      !foundProfile.hasCustomPassword &&
+      (trimmedPass === DEFAULT_STAFF_FALLBACK_PASSWORD || matchesEmployeeIdPassword);
+
+    const isPassValid = matchesStored || matchesDefaultFallback;
 
     if (!isPassValid) {
       return {
         success: false,
-        error: `Invalid credentials. Initial default password is your Employee ID (${empIdClean}).`
+        error: isAdminOrViewer
+          ? 'Invalid Master Admin / Observer credentials.'
+          : foundProfile.hasCustomPassword
+          ? 'Invalid password. Please enter your updated personal password.'
+          : 'Invalid credentials. Registered directory staff can sign in with their Employee ID or default password Post@1234.',
       };
     }
 
-    const mustChange = Boolean(foundProfile.mustChangePassword || isInitialDefaultPassword);
-    foundProfile.mustChangePassword = mustChange;
-
+    foundProfile.mustChangePassword = false;
     this.setActiveSession(foundProfile);
     return {
       success: true,
       profile: foundProfile,
-      mustChangePassword: mustChange,
+      mustChangePassword: false,
     };
   }
 
   public updateOwnPassword(identifier: string, newPassword: string): StaffProfile | null {
     const prof = this.findStaffProfileByIdentifier(identifier);
     if (!prof) return null;
-    prof.password = newPassword.trim();
+    const cleanPass = newPassword.trim();
+    prof.password = hashPasswordSync(cleanPass);
+    prof.hasCustomPassword = true;
     prof.mustChangePassword = false;
     this.addOrUpdateStaff(prof);
     const active = this.getActiveSession();
@@ -2495,51 +2660,133 @@ class StaffPermissionService {
     this.saveProfiles();
   }
 
+  public isPostmanOrGds(user: StaffProfile | null | undefined): boolean {
+    if (!user) return false;
+    if (
+      this.isSuperAdmin(user) ||
+      user.role === 'ADMIN' ||
+      user.role === 'MASTER_ADMIN' ||
+      user.role === 'SUPER_ADMIN' ||
+      user.permissions?.canViewAllRecords === true
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  public getScopedBeatsSet(user: StaffProfile | null | undefined): Set<string> | null {
+    if (!this.isPostmanOrGds(user) || !user) return null;
+    const rawList = [
+      user.beat,
+      ...(user.assignedBeats || []),
+      ...(user.permissions?.allowedBeats || []),
+    ].filter(Boolean) as string[];
+    const result = new Set<string>();
+    for (const item of rawList) {
+      const norm = String(item).toLowerCase().replace(/^beat\s*/i, '').trim();
+      if (!norm || norm === 'all beats' || norm === 'all') continue;
+      result.add(norm);
+    }
+    if (result.size === 0) {
+      result.add('2');
+    }
+    return result;
+  }
+
   public matchesUserBeatScope(
     user: StaffProfile | null | undefined,
     record: {
       beatNo?: string;
+      beat?: string;
+      beatNumber?: string;
+      assignedBeatNumber?: string;
+      assignedStaffId?: string;
       assignedStaffName?: string;
       assignedTo?: string;
       assignedStaffEmail?: string;
       enteredBy?: string;
+      createdBy?: string;
       area?: string;
+      colonyName?: string;
       sector?: string;
+      officeId?: string;
+      officeName?: string;
+      subOffice?: string;
+      subOrHoOffice?: string;
+      pincode?: string;
     }
   ): boolean {
-    // If no user context yet, default to Master Admin visibility so UI never blanks out
-    if (!user) return true;
+    if (!user) return false;
 
-    // Super Admins / Master Admins retain global visibility across all beats and offices
-    if (this.isSuperAdmin(user) || user.role === 'ADMIN' || user.permissions?.canViewAllRecords) {
+    // Master Admins / Admins retain global visibility across all beats and offices
+    if (!this.isPostmanOrGds(user)) {
       return true;
     }
 
-    const normUserBeat = (user.beat || 'Beat 2').toLowerCase().replace(/^beat\s*/i, '').trim();
-    if (!normUserBeat || normUserBeat === 'all beats' || normUserBeat === 'all') {
-      return true;
-    }
+    const scopedBeats = this.getScopedBeatsSet(user);
+    if (!scopedBeats) return true;
 
-    // 1. If the record has an explicit beatNo, enforce strict beat equality
-    if (record.beatNo && String(record.beatNo).trim() !== '') {
-      const normRecBeat = String(record.beatNo).toLowerCase().replace(/^beat\s*/i, '').trim();
-      return normRecBeat === normUserBeat;
+    // 1. Explicit beat checks across common beat field aliases
+    const explicitBeatRaw =
+      record.beatNo || record.beatNumber || record.assignedBeatNumber || record.beat || '';
+    if (explicitBeatRaw && String(explicitBeatRaw).trim() !== '') {
+      const normRecBeat = String(explicitBeatRaw).toLowerCase().replace(/^beat\s*/i, '').trim();
+      if (normRecBeat === 'all' || normRecBeat === 'all beats') return true;
+      return scopedBeats.has(normRecBeat);
     }
 
     // 2. If the record has assignedStaffName or assignedTo mentioning a Beat (e.g. "Beat 2" or "Beat 6")
     const staffText = `${record.assignedStaffName || ''} ${record.assignedTo || ''}`;
     const beatMatch = staffText.match(/beat\s*([a-z0-9-]+)/i);
     if (beatMatch && beatMatch[1]) {
-      return beatMatch[1].toLowerCase().trim() === normUserBeat;
+      return scopedBeats.has(beatMatch[1].toLowerCase().trim());
     }
 
-    // 3. Check if explicitly entered by or assigned to this user
+    // 3. Check if explicitly entered/created by or assigned to this user
     const userEmail = (user.email || '').trim().toLowerCase();
-    if (record.enteredBy && record.enteredBy.trim().toLowerCase() === userEmail) return true;
+    const userEmpId = (user.employeeId || '').trim().toUpperCase();
+    if (record.assignedStaffId && (record.assignedStaffId.trim().toUpperCase() === userEmpId || record.assignedStaffId.trim() === user.id)) return true;
+    if (record.enteredBy && (record.enteredBy.trim().toLowerCase() === userEmail || record.enteredBy.trim().toUpperCase() === userEmpId)) return true;
+    if (record.createdBy && (record.createdBy.trim().toUpperCase() === userEmpId || record.createdBy.trim() === user.id || record.createdBy.trim().toLowerCase() === user.name?.toLowerCase())) return true;
     if (record.assignedStaffEmail && record.assignedStaffEmail.trim().toLowerCase() === userEmail) return true;
     if (user.name && staffText.toLowerCase().includes(user.name.toLowerCase())) return true;
 
+    // 4. Colony fallback against user's assigned/allowed colonies
+    const recColony = (record.colonyName || record.area || '').trim().toLowerCase();
+    if (recColony) {
+      const userColonies = [
+        ...(user.assignedColonies || []),
+        ...(user.permissions?.allowedColonies || []),
+      ]
+        .map(c => c.toLowerCase().trim())
+        .filter(c => c && c !== 'all colonies');
+      if (userColonies.some(c => recColony.includes(c) || c.includes(recColony))) {
+        return true;
+      }
+    }
+
     return false;
+  }
+
+  public matchesUserColonyAndOfficeScope(
+    user: StaffProfile | null | undefined,
+    item: {
+      beatNo?: string;
+      beatNumber?: string;
+      assignedBeatNumber?: string;
+      assignedStaffId?: string;
+      officeId?: string;
+      officeName?: string;
+      subOffice?: string;
+      subOrHoOffice?: string;
+      pincode?: string;
+      colonyName?: string;
+      area?: string;
+      assignedStaffName?: string;
+    }
+  ): boolean {
+    if (!this.isPostmanOrGds(user)) return true;
+    return this.matchesUserBeatScope(user, item);
   }
 
   public isRecordVisible(
@@ -2561,34 +2808,26 @@ class StaffPermissionService {
       return this.cachedActiveSession;
     }
     try {
-      const stored = localStorage.getItem(ACTIVE_SESSION_KEY);
-      if (stored) {
-        const session = JSON.parse(stored);
-        if (session?.email || session?.employeeId) {
-          const found =
-            this.findStaffProfileByIdentifier(session.email || session.employeeId) ||
-            this.getStaffProfileByEmail(session.email || 'mahen.comtech@gmail.com');
-          this.cachedActiveSession = found;
-          return found;
-        }
-      }
-      // If user explicitly clicked Logout in this tab, allow LoginPage to show
       if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('postman_explicit_signout') === 'true') {
         this.cachedActiveSession = null;
         return null;
       }
+      const stored = localStorage.getItem(ACTIVE_SESSION_KEY);
+      if (stored) {
+        const session = JSON.parse(stored);
+        if (session?.email || session?.employeeId) {
+          const found = this.findStaffProfileByIdentifier(session.email || session.employeeId);
+          if (found) {
+            this.cachedActiveSession = found;
+            return found;
+          }
+        }
+      }
     } catch (e) {
       console.warn('Error reading active session:', e);
     }
-    // Auto-grant Master Admin bypass profile by default so the app never blocks or hangs on boot
-    const masterAdmin = this.getMasterAdminProfile();
-    this.cachedActiveSession = masterAdmin;
-    try {
-      localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(masterAdmin));
-    } catch {
-      // ignore storage errors
-    }
-    return masterAdmin;
+    this.cachedActiveSession = null;
+    return null;
   }
 
   public setActiveSession(profile: StaffProfile | null): void {

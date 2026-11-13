@@ -513,7 +513,7 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
                     </>
                   ) : (
                     <>
-                      <Eye className="w-3.5 h-3.5" /> Super Admin View (mahen.comtech@gmail.com)
+                      <Eye className="w-3.5 h-3.5" /> Master Admin View (Ektamahenmeena@gmail.com)
                     </>
                   )}
                 </button>
@@ -774,7 +774,7 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
               Default Complete Listing is Restricted for Non-Super-Admin Accounts
             </h3>
             <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-              Only the Master Super Admin (<strong>mahen.comtech@gmail.com</strong>) sees all staff and office records by default on page load. General users and staff must execute the <strong>Multi-Level Search Filter</strong> above (select Circle/Division/Office/Pincode or search by Name/Employee ID/Mobile/Beat) to view matching records.
+              Only the Master Admin (<strong>Ektamahenmeena@gmail.com</strong>) sees all staff and office records by default on page load. General users and staff must execute the <strong>Multi-Level Search Filter</strong> above (select Circle/Division/Office/Pincode or search by Name/Employee ID/Mobile/Beat) to view matching records.
             </p>
           </div>
           <div className="flex flex-wrap justify-center gap-3 pt-2">
@@ -1298,19 +1298,19 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
                   Granular Service-Level Access Control & Admin Approval Matrix ({filteredProfiles.length} Users)
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Super Admin (<strong>mahen.comtech@gmail.com</strong>) can approve/revoke users and toggle individual service modules (CRM, Special Bills, Learning LMS, Scheme Leads, Content Sharing) and data scope in real time.
+                  Master Admin (<strong>Ektamahenmeena@gmail.com</strong>) can approve/revoke users and toggle individual service modules (CRM, Special Bills, Learning LMS, Scheme Leads, Content Sharing) and data scope in real time.
                 </p>
               </div>
               {!isActualSuperAdmin && (
                 <span className="px-3 py-1.5 bg-amber-100 text-amber-800 rounded-xl text-xs font-black">
-                  Read-Only Matrix (Only Master Admin mahen.comtech@gmail.com can modify permissions)
+                  Read-Only Matrix (Only Master Admin Ektamahenmeena@gmail.com can modify permissions)
                 </span>
               )}
             </div>
 
             <div className="grid grid-cols-1 gap-4 mt-4">
               {filteredProfiles.map(prof => {
-                const isMaster = prof.email.toLowerCase() === 'mahen.comtech@gmail.com';
+                const isMaster = staffPermissionService.isSuperAdmin(prof);
                 const modules = prof.permissions.serviceModules || DEFAULT_STAFF_SERVICE_MODULES;
                 const approval = prof.permissions.approvalStatus || 'Approved';
 

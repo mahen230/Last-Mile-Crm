@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Customer, ProductDefinition } from '../../types/models';
 import { customerService, cleanPhoneNumber } from '../../services/customerService';
 import { 
@@ -6,6 +6,8 @@ import {
   ExternalLink, Sparkles, User, FileText, CheckCircle2, 
   Share2, ArrowRight, ShieldCheck, RefreshCw 
 } from 'lucide-react';
+import { useAuth } from '../auth/FirebaseAuthProvider';
+import { staffPermissionService } from '../../services/staffPermissionService';
 
 interface Props {
   isOpen: boolean;
@@ -85,20 +87,34 @@ export default function DirectMessageModal({
   initialTemplateKey = 'parcel_ready',
   onSuccess
 }: Props) {
+  const { userProfile } = useAuth();
+  const isRestrictedFieldStaff = staffPermissionService.isPostmanOrGds(userProfile);
+  const scopedBeats = useMemo(
+    () => Array.from(staffPermissionService.getScopedBeatsSet(userProfile)).sort((a, b) => Number(a) - Number(b)),
+    [userProfile]
+  );
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(initialCustomer?.id || initialCustomer?.masterId || '');
   const [customerSearch, setCustomerSearch] = useState('');
   const [selectedBeat, setSelectedBeat] = useState<string>('All');
+  const [recipientPage, setRecipientPage] = useState<number>(1);
+  const RECIPIENTS_PER_PAGE = 5;
   
   const [selectedTemplate, setSelectedTemplate] = useState<string>(initialTemplateKey);
   const [messageText, setMessageText] = useState<string>(initialMessage || '');
   const [copied, setCopied] = useState(false);
   const [dispatchedNotice, setDispatchedNotice] = useState<string | null>(null);
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
+  const [dispatchUrl, setDispatchUrl] = useState<{ label: string; href: string } | null>(null);
 
-  // Sync customers
+  // Sync scoped customers
   useEffect(() => {
-    setCustomers(customerService.getCustomers());
-  }, [isOpen]);
+    setCustomers(customerService.getScopedCustomers(userProfile));
+  }, [isOpen, userProfile]);
+
+  useEffect(() => {
+    setRecipientPage(1);
+  }, [customerSearch, selectedBeat, isOpen, userProfile]);
 
   // Selected customer object
   const activeCustomer = customers.find(c => (c.id === selectedCustomerId || c.masterId === selectedCustomerId)) || initialCustomer || null;
@@ -134,9 +150,13 @@ export default function DirectMessageModal({
       (c.name && c.name.toLowerCase().includes(s)) ||
       (c.mobile && c.mobile.includes(s)) ||
       (c.houseNo && c.houseNo.toLowerCase().includes(s));
-    const matchBeat = selectedBeat === 'All' || c.beatNo === selectedBeat;
+    const matchBeat = selectedBeat === 'All' || String(c.beatNo || '').replace(/^Beat\s*/i, '').trim() === selectedBeat;
     return matchSearch && matchBeat;
   });
+
+  const totalRecipientPages = Math.max(1, Math.ceil(filteredCustomers.length / RECIPIENTS_PER_PAGE));
+  const safeRecipientPage = Math.min(recipientPage, totalRecipientPages);
+  const paginatedRecipients = filteredCustomers.slice((safeRecipientPage - 1) * RECIPIENTS_PER_PAGE, safeRecipientPage * RECIPIENTS_PER_PAGE);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(messageText);
@@ -146,11 +166,13 @@ export default function DirectMessageModal({
 
   const handleSendWhatsApp = () => {
     if (!cleanedMobile) {
-      alert('कृपया मान्य मोबाइल नंबर दर्ज करें!');
+      setErrorNotice('कृपया मान्य मोबाइल नंबर दर्ज करें!');
+      setTimeout(() => setErrorNotice(null), 4000);
       return;
     }
+    setErrorNotice(null);
     const url = `https://wa.me/${cleanedMobile}?text=${encodeURIComponent(messageText)}`;
-    window.open(url, '_blank');
+    setDispatchUrl({ label: 'Open WhatsApp Dispatch', href: url });
 
     // Auto log to communication hub
     customerService.addCommunicationLog({
@@ -164,21 +186,20 @@ export default function DirectMessageModal({
       customerId: activeCustomer?.id || activeCustomer?.masterId
     });
 
-    setDispatchedNotice('WhatsApp संदेश सफलतापूर्वक प्रेषित एवं लॉग किया गया!');
-    setTimeout(() => {
-      setDispatchedNotice(null);
-      if (onSuccess) onSuccess();
-    }, 2500);
+    setDispatchedNotice('WhatsApp संदेश लॉग किया गया! नीचे दिए लिंक से WhatsApp खोलें:');
+    if (onSuccess) onSuccess();
   };
 
   const handleSendSMS = () => {
     if (!rawMobile) {
-      alert('कृपया मान्य मोबाइल नंबर दर्ज करें!');
+      setErrorNotice('कृपया मान्य मोबाइल नंबर दर्ज करें!');
+      setTimeout(() => setErrorNotice(null), 4000);
       return;
     }
+    setErrorNotice(null);
     // Mobile SMS Intent
     const smsUrl = `sms:${rawMobile}?body=${encodeURIComponent(messageText)}`;
-    window.open(smsUrl, '_self');
+    setDispatchUrl({ label: 'Open SMS Composer', href: smsUrl });
 
     // Auto log
     customerService.addCommunicationLog({
@@ -192,11 +213,8 @@ export default function DirectMessageModal({
       customerId: activeCustomer?.id || activeCustomer?.masterId
     });
 
-    setDispatchedNotice('SMS ऐप्लिकेशन ट्रिगर किया गया एवं रिकॉर्ड दर्ज किया गया!');
-    setTimeout(() => {
-      setDispatchedNotice(null);
-      if (onSuccess) onSuccess();
-    }, 2500);
+    setDispatchedNotice('SMS रिकॉर्ड दर्ज किया गया! नीचे दिए लिंक से SMS ऐप खोलें:');
+    if (onSuccess) onSuccess();
   };
 
   const handleSaveOnly = () => {
@@ -245,10 +263,31 @@ export default function DirectMessageModal({
         </div>
 
         {/* Feedback Alert */}
+        {errorNotice && (
+          <div className="bg-red-600 text-white px-5 py-2.5 text-xs font-semibold flex items-center justify-between gap-2 transition animate-in slide-in-from-top duration-200">
+            <span>{errorNotice}</span>
+            <button type="button" onClick={() => setErrorNotice(null)} className="text-white/80 hover:text-white">
+              <X size={14} />
+            </button>
+          </div>
+        )}
         {dispatchedNotice && (
-          <div className="bg-emerald-600 text-white px-5 py-2.5 text-xs font-semibold flex items-center gap-2 transition animate-in slide-in-from-top duration-200">
-            <CheckCircle2 size={16} />
-            <span>{dispatchedNotice}</span>
+          <div className="bg-emerald-600 text-white px-5 py-2.5 text-xs font-semibold flex items-center justify-between gap-2 transition animate-in slide-in-from-top duration-200">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={16} />
+              <span>{dispatchedNotice}</span>
+            </div>
+            {dispatchUrl && (
+              <a
+                href={dispatchUrl.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2.5 py-1 bg-white text-emerald-800 rounded-lg font-bold inline-flex items-center gap-1 hover:bg-emerald-50 shrink-0"
+              >
+                <span>{dispatchUrl.label}</span>
+                <ExternalLink size={12} />
+              </a>
+            )}
           </div>
         )}
 
@@ -304,10 +343,12 @@ export default function DirectMessageModal({
                       onChange={(e) => setSelectedBeat(e.target.value)}
                       className="w-full text-xs p-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700"
                     >
-                      <option value="All">All Beats</option>
-                      <option value="1">Beat 1 (Dadabari)</option>
-                      <option value="2">Beat 2 (Keshavpura)</option>
-                      <option value="6">Beat 6 (Keshavpura Sec 4)</option>
+                      <option value="All">{isRestrictedFieldStaff ? 'My Assigned Beat(s)' : 'All Beats'}</option>
+                      {(isRestrictedFieldStaff && scopedBeats.length > 0 ? scopedBeats : ['1', '2', '6']).map(b => (
+                        <option key={b} value={b}>
+                          Beat {b}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -318,12 +359,38 @@ export default function DirectMessageModal({
                   className="w-full text-xs p-2 bg-white border border-slate-300 rounded-xl font-medium text-slate-900"
                 >
                   <option value="">Select Recipient Customer ({filteredCustomers.length} available)...</option>
-                  {filteredCustomers.slice(0, 40).map(c => (
+                  {paginatedRecipients.map(c => (
                     <option key={c.id || c.masterId} value={c.id || c.masterId}>
                       {c.name} - {c.mobile || 'No Mobile'} (H.No {c.houseNo || 'NA'}, Beat {c.beatNo || '2'})
                     </option>
                   ))}
                 </select>
+                {filteredCustomers.length > RECIPIENTS_PER_PAGE && (
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
+                    <span>
+                      Showing {(safeRecipientPage - 1) * RECIPIENTS_PER_PAGE + 1}–{Math.min(safeRecipientPage * RECIPIENTS_PER_PAGE, filteredCustomers.length)} of {filteredCustomers.length} recipients
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={safeRecipientPage <= 1}
+                        onClick={() => setRecipientPage(p => Math.max(1, p - 1))}
+                        className="px-2 py-0.5 rounded bg-white border border-slate-200 font-semibold disabled:opacity-40 cursor-pointer"
+                      >
+                        Prev
+                      </button>
+                      <span className="font-mono font-bold">{safeRecipientPage}/{totalRecipientPages}</span>
+                      <button
+                        type="button"
+                        disabled={safeRecipientPage >= totalRecipientPages}
+                        onClick={() => setRecipientPage(p => Math.min(totalRecipientPages, p + 1))}
+                        className="px-2 py-0.5 rounded bg-white border border-slate-200 font-semibold disabled:opacity-40 cursor-pointer"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -114,18 +114,26 @@ export default function MasterDataUploadView() {
     masterDataService.getBeatCustomKm(currentStaff?.beat || 'Beat 2')
   );
   const [customFuelRate, setCustomFuelRate] = useState<number>(DEPARTMENTAL_FUEL_RATE_PER_KM);
-  const [customWorkingDays, setCustomWorkingDays] = useState<number>(25);
+  const [customWorkingDays, setCustomWorkingDays] = useState<number>(() => {
+    const s = masterDataService.generatePostmanMonthlyFuelBill(currentStaff?.beat || 'Beat 2', '2026-10');
+    return s.workingDays || 25;
+  });
   const [customVehicleNo, setCustomVehicleNo] = useState<string>('RJ-20-SP-2026');
   const [kmSavedNotice, setKmSavedNotice] = useState<string | null>(null);
+  const [octLockNotice, setOctLockNotice] = useState<string | null>(null);
 
   const [postmanFuelSummary, setPostmanFuelSummary] = useState<PostmanMonthlyFuelSummary>(() =>
     masterDataService.generatePostmanMonthlyFuelBill(currentStaff?.beat || 'Beat 2', '2026-10', {
       customDailyKm: masterDataService.getBeatCustomKm(currentStaff?.beat || 'Beat 2'),
       customRatePerKm: DEPARTMENTAL_FUEL_RATE_PER_KM,
-      customWorkingDays: 25,
       vehicleNo: 'RJ-20-SP-2026',
     })
   );
+
+  const isBillLocked = Boolean(postmanFuelSummary.isDepartmentLocked);
+  const effectiveBillDailyKm = isBillLocked ? postmanFuelSummary.sanctionedDailyKm : customDailyKm;
+  const effectiveBillFuelRate = isBillLocked ? postmanFuelSummary.fuelRatePerKm : customFuelRate;
+  const effectiveBillWorkingDays = isBillLocked ? postmanFuelSummary.workingDays : customWorkingDays;
 
   // Top-Level Navigation Tabs
   const [activeMainTab, setActiveMainTab] = useState<
@@ -137,6 +145,7 @@ export default function MasterDataUploadView() {
   const [reconcileReport, setReconcileReport] = useState<{
     totalChecked: number;
     adjustedCount: number;
+    lockedSkippedCount?: number;
     details: Array<{ date: string; beatNo: string; originalSp: number; newSp: number; dssBenchmark: number }>;
   } | null>(null);
   const [isReconciling, setIsReconciling] = useState(false);
@@ -175,23 +184,27 @@ export default function MasterDataUploadView() {
     }
   }, [currentStaff?.beat]);
 
-  // When beat selection changes, load that beat's saved/default KM
+  // When beat selection changes, load that beat's saved/default KM & working days
   useEffect(() => {
-    const km = masterDataService.getBeatCustomKm(selectedBeatForBill);
-    setCustomDailyKm(km);
-  }, [selectedBeatForBill]);
+    const summary = masterDataService.generatePostmanMonthlyFuelBill(selectedBeatForBill, selectedMonthForBill);
+    setCustomDailyKm(summary.sanctionedDailyKm);
+    setCustomFuelRate(summary.fuelRatePerKm);
+    setCustomWorkingDays(summary.workingDays);
+  }, [selectedBeatForBill, selectedMonthForBill]);
 
   // Dynamic live recalculation when beat, month, custom KM, rate, or working days change
   useEffect(() => {
     const summary = masterDataService.generatePostmanMonthlyFuelBill(
       selectedBeatForBill,
       selectedMonthForBill,
-      {
-        customDailyKm,
-        customRatePerKm: customFuelRate,
-        customWorkingDays,
-        vehicleNo: customVehicleNo,
-      }
+      selectedMonthForBill === '2026-10'
+        ? { vehicleNo: customVehicleNo }
+        : {
+            customDailyKm,
+            customRatePerKm: customFuelRate,
+            customWorkingDays,
+            vehicleNo: customVehicleNo,
+          }
     );
     setPostmanFuelSummary(summary);
   }, [
@@ -263,7 +276,7 @@ export default function MasterDataUploadView() {
         });
       } else if (selectedCategory === 'MONTHLY_DSS_REPORT') {
         jsonRows.forEach((r) => {
-          const beat = r['beatNo'] || r['BeatNo'] || r['Beat'];
+          const beat = r['Beat Name'] || r['beatName'] || r['beatNo'] || r['BeatNo'] || r['Beat'] || r['beat'];
           if (beat) valid++;
           else skipped++;
         });
@@ -293,8 +306,11 @@ export default function MasterDataUploadView() {
   // Derived Staff Role & Authorization checks
   const staffRole = currentStaff?.role || 'POSTMAN';
   const staffName = currentStaff?.name || 'Postal Staff';
-  const staffId = currentStaff?.employeeId || currentStaff?.id || '50457421';
-  const isSuperAdmin = staffRole === 'SUPER_ADMIN' || currentStaff?.email === 'mahen.comtech@gmail.com';
+  const staffId = currentStaff?.employeeId || currentStaff?.id || 'MASTER-ADMIN-01';
+  const isSuperAdmin =
+    staffRole === 'MASTER_ADMIN' ||
+    staffRole === 'SUPER_ADMIN' ||
+    currentStaff?.email?.toLowerCase() === 'ektamahenmeena@gmail.com';
   const isSpm = isSuperAdmin || staffRole === 'ADMIN' || (currentStaff?.designation && currentStaff.designation.includes('SPM'));
 
   // Commit parsed rows to Master Storage or Ingestion Gateway
@@ -302,7 +318,7 @@ export default function MasterDataUploadView() {
     if (!parsedRows || parsedRows.length === 0 || !uploadedFileName) return;
 
     const uploader = currentStaff?.name || 'Administrator';
-    const uploaderId = currentStaff?.employeeId || currentStaff?.email || 'mahen.comtech@gmail.com';
+    const uploaderId = currentStaff?.employeeId || currentStaff?.email || 'Ektamahenmeena@gmail.com';
 
     if (uploadMode === 'VERIFICATION_GATE') {
       const res = masterDataService.ingestRecordsFromUpload(
@@ -539,7 +555,7 @@ export default function MasterDataUploadView() {
     const bill = masterDataService.submitByodBill({
       employeeName: byodStaffName,
       employeeId: byodStaffId,
-      employeeEmail: currentStaff?.email || 'mahen.comtech@gmail.com',
+      employeeEmail: currentStaff?.email || 'Ektamahenmeena@gmail.com',
       beatNo: byodBeatNo,
       officeName: 'Dadabari S.O. (324009)',
       billingMonth: byodMonth,
@@ -607,24 +623,54 @@ export default function MasterDataUploadView() {
 
           <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between text-xs gap-2">
             <div className="font-mono text-slate-300">
-              <span className="text-amber-400 font-bold">Calculation Formula:</span> {postmanFuelSummary.workingDays} Working Days × {postmanFuelSummary.sanctionedDailyKm} KM/d = <strong className="text-white">{postmanFuelSummary.totalMonthlyKm} KM</strong> × ₹{postmanFuelSummary.fuelRatePerKm.toFixed(2)} = <strong className="text-emerald-400 text-sm">₹{postmanFuelSummary.totalClaimAmount.toLocaleString('en-IN')}.00</strong>
+              <span className="text-amber-400 font-bold">Calculation Formula:</span> {postmanFuelSummary.workingDays} Working Days × {postmanFuelSummary.sanctionedDailyKm} KM/d = <strong className="text-white">{postmanFuelSummary.totalMonthlyKm} KM</strong> × ₹{postmanFuelSummary.fuelRatePerKm.toFixed(2)} = <strong className="text-emerald-400 text-sm">₹{postmanFuelSummary.totalClaimAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
             </div>
-            <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
-              <CheckCircle2 size={13} /> Protected DSS Reconciled ({postmanFuelSummary.dailyRows.length} Days)
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              {isBillLocked && (
+                <span className="px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/50 text-amber-300 text-[10px] font-black flex items-center gap-1">
+                  <Lock size={11} /> Department Locked
+                </span>
+              )}
+              <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+                <CheckCircle2 size={13} /> Protected DSS Reconciled ({postmanFuelSummary.dailyRows.length} Days · PIN {(postmanFuelSummary.linkedPincodes || ['324009']).join(', ')})
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold flex items-center gap-1.5 border border-emerald-200">
             <ShieldCheck size={14} />
             <span>Non-Destructive Merge Guard Active</span>
           </span>
-          <span className="px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 text-xs font-mono font-medium">
-            Standard Fuel Rate: ₹{DEPARTMENTAL_FUEL_RATE_PER_KM.toFixed(2)}/KM
-          </span>
+          <button
+            type="button"
+            onClick={() => {
+              const res = masterDataService.syncAndLockOctober2026BeatData();
+              const b6 = res.beat6Summary;
+              setOctLockNotice(
+                `Synced & Locked ${res.syncedBeatsCount} Beats (${res.totalEntriesCount} daily logs) for Oct 2026 (324009, 324005, 324010). Beat 6 (${b6.postmanName} · ID: ${b6.employeeId}): ${b6.workingDays}d × ${b6.dailyKm} KM = ${b6.totalKm} KM = ₹${b6.totalClaimAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} [Department Locked].`
+              );
+            }}
+            className="px-3 py-1.5 rounded-full bg-slate-900 hover:bg-slate-800 text-amber-300 text-xs font-bold flex items-center gap-1.5 border border-slate-700 cursor-pointer transition"
+          >
+            <Lock size={13} />
+            <span>Sync & Lock All 33 Beats (Oct 2026)</span>
+          </button>
         </div>
       </div>
+
+      {octLockNotice && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-300 text-emerald-950 rounded-2xl text-xs font-semibold flex items-center justify-between gap-2 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={16} className="text-emerald-700 shrink-0" />
+            <span>{octLockNotice}</span>
+          </div>
+          <button type="button" onClick={() => setOctLockNotice(null)} className="text-emerald-800 hover:text-emerald-950 font-bold px-2">
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* ======================================================== */}
       {/* PRIMARY NAVIGATION TABS */}
@@ -2012,7 +2058,7 @@ export default function MasterDataUploadView() {
                       const res = operationsService.reconcileAndAutoAdjustEntriesToDss();
                       setReconcileReport(res);
                       setIsReconciling(false);
-                      setExportNotice(`DSS Auto-Reconciliation Complete: ${res.adjustedCount} entries adjusted across ${res.totalChecked} daily sheets checked. Speed Post dynamically balanced to guarantee 100% DSS audit conformity!`);
+                      setExportNotice(`DSS Auto-Reconciliation Complete: ${res.adjustedCount} entries adjusted across ${res.totalChecked} daily sheets checked (${res.lockedSkippedCount} Department Locked rows preserved immutable).`);
                     }, 400);
                   }}
                   className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-black transition flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-50"
@@ -2359,15 +2405,20 @@ export default function MasterDataUploadView() {
           </div>
         </div>
 
-        {/* Postman Route KM & Allowance Customizer Toolbar (Edit Before Download) */}
+        {/* Postman Route KM & Allowance Customizer Toolbar (Locked when Official Department Dataset is Active) */}
         <div className="p-4 bg-gradient-to-r from-amber-50/70 via-orange-50/50 to-slate-50 border border-amber-200/80 rounded-2xl space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="px-2.5 py-1 bg-amber-600 text-white text-[11px] font-bold rounded-lg uppercase tracking-wider flex items-center gap-1">
                 <Fuel size={12} /> Postman KM Customizer
               </span>
+              {isBillLocked && (
+                <span className="px-2.5 py-1 bg-emerald-900 text-amber-300 text-[11px] font-black rounded-lg uppercase tracking-wider flex items-center gap-1">
+                  <Lock size={12} /> Department Locked (Immutable)
+                </span>
+              )}
               <span className="text-xs font-bold text-slate-800">
-                Logged In: <span className="text-red-700">{currentStaff?.name || 'Staff User'}</span> ({currentStaff?.beat || 'Beat 2'})
+                Selected Beat: <span className="text-red-700">{postmanFuelSummary.beatNo} ({postmanFuelSummary.postmanName})</span> · PIN: {(postmanFuelSummary.linkedPincodes || ['324009']).join(', ')}
               </span>
             </div>
 
@@ -2390,9 +2441,10 @@ export default function MasterDataUploadView() {
                   step="0.5"
                   min="1"
                   max="120"
-                  value={customDailyKm}
+                  disabled={isBillLocked}
+                  value={effectiveBillDailyKm}
                   onChange={(e) => setCustomDailyKm(parseFloat(e.target.value) || 0)}
-                  className="w-full p-2 bg-white border border-slate-300 rounded-xl font-mono font-black text-amber-900 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  className="w-full p-2 bg-white border border-slate-300 rounded-xl font-mono font-black text-amber-900 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed"
                   placeholder="e.g. 30"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">
@@ -2412,9 +2464,10 @@ export default function MasterDataUploadView() {
                   step="0.10"
                   min="0.5"
                   max="20"
-                  value={customFuelRate}
+                  disabled={isBillLocked}
+                  value={effectiveBillFuelRate}
                   onChange={(e) => setCustomFuelRate(parseFloat(e.target.value) || 3.60)}
-                  className="w-full p-2 bg-white border border-slate-300 rounded-xl font-mono font-bold text-slate-900 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  className="w-full p-2 bg-white border border-slate-300 rounded-xl font-mono font-bold text-slate-900 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">
                   ₹ / KM
@@ -2425,15 +2478,16 @@ export default function MasterDataUploadView() {
             {/* Total Working Days */}
             <div>
               <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                Monthly Working Days (Excl. Holidays)
+                Monthly Working Days (Excl. Holidays & Leave)
               </label>
               <input
                 type="number"
                 min="1"
                 max="31"
-                value={customWorkingDays}
+                disabled={isBillLocked}
+                value={effectiveBillWorkingDays}
                 onChange={(e) => setCustomWorkingDays(parseInt(e.target.value) || 25)}
-                className="w-full p-2 bg-white border border-slate-300 rounded-xl font-mono font-bold text-slate-900 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                className="w-full p-2 bg-white border border-slate-300 rounded-xl font-mono font-bold text-slate-900 text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed"
               />
             </div>
 
@@ -2455,39 +2509,43 @@ export default function MasterDataUploadView() {
           {/* Quick Action Buttons for KM */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-amber-200/60">
             <span className="text-[11px] text-slate-600">
-              💡 Change KM running as per your physical route coverage before clicking Download.
+              {isBillLocked
+                ? `🔒 Official October 2026 DSS figures are Department Locked (${postmanFuelSummary.lockedBy || 'Department Audit'}) and protected against accidental edits.`
+                : '💡 Change KM running as per your physical route coverage before clicking Download.'}
             </span>
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const defaultMapping = getBeatFuelMapping(selectedBeatForBill);
-                  setCustomDailyKm(defaultMapping.sanctionedDailyKm);
-                  setCustomFuelRate(3.60);
-                  setCustomWorkingDays(25);
-                  masterDataService.resetBeatCustomKm(selectedBeatForBill);
-                  setKmSavedNotice('Reset to official beat sanctioned KM & ₹3.60 rate.');
-                  setTimeout(() => setKmSavedNotice(null), 3000);
-                }}
-                className="px-3 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition"
-              >
-                Reset to Beat Default
-              </button>
+            {!isBillLocked && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const defaultMapping = getBeatFuelMapping(selectedBeatForBill);
+                    setCustomDailyKm(defaultMapping.sanctionedDailyKm);
+                    setCustomFuelRate(3.60);
+                    setCustomWorkingDays(25);
+                    masterDataService.resetBeatCustomKm(selectedBeatForBill);
+                    setKmSavedNotice('Reset to official beat sanctioned KM & ₹3.60 rate.');
+                    setTimeout(() => setKmSavedNotice(null), 3000);
+                  }}
+                  className="px-3 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition"
+                >
+                  Reset to Beat Default
+                </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  masterDataService.setBeatCustomKm(selectedBeatForBill, customDailyKm);
-                  setKmSavedNotice(`Saved! ${customDailyKm} KM is now default for ${selectedBeatForBill}.`);
-                  setTimeout(() => setKmSavedNotice(null), 3500);
-                }}
-                className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-2xs"
-              >
-                <Check size={12} />
-                <span>Save My KM Preference</span>
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    masterDataService.setBeatCustomKm(selectedBeatForBill, customDailyKm);
+                    setKmSavedNotice(`Saved! ${customDailyKm} KM is now default for ${selectedBeatForBill}.`);
+                    setTimeout(() => setKmSavedNotice(null), 3500);
+                  }}
+                  className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-2xs"
+                >
+                  <Check size={12} />
+                  <span>Save My KM Preference</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -2526,7 +2584,7 @@ export default function MasterDataUploadView() {
           <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
             <span className="text-[10px] font-semibold text-emerald-800 uppercase">Total Fuel Claim (INR)</span>
             <div className="text-2xl font-black text-emerald-900 font-mono mt-0.5">
-              ₹{postmanFuelSummary.totalClaimAmount.toLocaleString('en-IN')}
+              ₹{postmanFuelSummary.totalClaimAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className="text-[11px] text-emerald-700 mt-0.5">
               Rate: ₹{postmanFuelSummary.fuelRatePerKm.toFixed(2)}/KM verified
@@ -2534,12 +2592,12 @@ export default function MasterDataUploadView() {
           </div>
 
           <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
-            <span className="text-[10px] font-semibold text-slate-500 uppercase">Articles Handled (PMA)</span>
-            <div className="text-xl font-black text-slate-900 font-mono mt-1">
+            <span className="text-[10px] font-semibold text-slate-500 uppercase">Articles Handled (DSS)</span>
+            <div className="text-xl font-black text-slate-900 font-mono mt-0.5">
               {postmanFuelSummary.totalArticlesDelivered}
             </div>
             <div className="text-[11px] text-slate-500 mt-0.5">
-              SP: {postmanFuelSummary.totalSpeedPostDelivered} | Reg: {postmanFuelSummary.totalRegistryDelivered}
+              PDMS: {postmanFuelSummary.pdmsInvoicedTotal ?? postmanFuelSummary.totalArticlesDelivered} | Mob: {Number(postmanFuelSummary.mobileUsageAvgPercent ?? 100).toFixed(2)}%
             </div>
           </div>
         </div>

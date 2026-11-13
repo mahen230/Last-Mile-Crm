@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Property, Customer } from '../../types/models';
 import { customerService } from '../../services/customerService';
+import { useAuth } from '../auth/FirebaseAuthProvider';
 import CustomerProfileModal from '../customers/CustomerProfileModal';
 import SequenceWisePropertyHub from './SequenceWisePropertyHub';
 import UnifiedPropertyFamilyHub from './UnifiedPropertyFamilyHub';
@@ -38,10 +39,13 @@ const formatPropertyAddress = (address: any): string => {
 };
 
 export default function PropertiesView() {
+  const { userProfile } = useAuth();
   const [activeViewTab, setActiveViewTab] = useState<'sequence' | 'unified' | 'grid'>('sequence');
   const [properties, setProperties] = useState<Property[]>([]);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('All');
+  const [currentPage, setCurrentPage] = useState(1);
+  const PROPERTIES_PER_PAGE = 5;
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -56,7 +60,7 @@ export default function PropertiesView() {
   };
 
   const loadProperties = () => {
-    const data = customerService.getProperties();
+    const data = customerService.getScopedProperties(userProfile);
     setProperties(data);
   };
 
@@ -64,7 +68,11 @@ export default function PropertiesView() {
     loadProperties();
     const unsub = customerService.subscribe(loadProperties);
     return () => unsub();
-  }, []);
+  }, [userProfile]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, filterType]);
 
   const handleEditProperty = (prop: Property) => {
     setSelectedProperty(prop);
@@ -101,19 +109,28 @@ export default function PropertiesView() {
     }
   };
 
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
+
   // Remove property entry while keeping members intact
   const handleRemoveProperty = (prop: Property) => {
-    const confirmMsg = `Are you sure you want to remove property '${prop.propertyCode || formatPropertyAddress(prop.address)}'?\n\nNote: Resident members/customers will NOT be deleted; they will remain safely in the customer directory.`;
-    if (window.confirm(confirmMsg)) {
-      const result = customerService.removeProperty(prop.id);
-      if (result.success) {
-        if (selectedProperty?.id === prop.id) {
-          setSelectedProperty(null);
-          setIsEditModalOpen(false);
+    const confirmMsg = `Remove property '${prop.propertyCode || formatPropertyAddress(prop.address)}'? Resident members/customers will NOT be deleted; they will remain safely in the customer directory.`;
+    setPendingConfirm({
+      message: confirmMsg,
+      onConfirm: () => {
+        const result = customerService.removeProperty(prop.id);
+        if (result.success) {
+          if (selectedProperty?.id === prop.id) {
+            setSelectedProperty(null);
+            setIsEditModalOpen(false);
+          }
+          showToast(`✅ Property removed from registry. ${result.membersPreserved} member(s) safely preserved in CRM.`);
         }
-        showToast(`✅ Property removed from registry. ${result.membersPreserved} member(s) safely preserved in CRM.`);
-      }
-    }
+        setPendingConfirm(null);
+      },
+    });
   };
 
   // Bulk: Set all properties without house numbers to Vacant & clear members
@@ -124,10 +141,14 @@ export default function PropertiesView() {
 
   // Bulk: Remove properties without house numbers completely (members preserved)
   const handleBulkRemoveNoHouseNo = () => {
-    if (window.confirm("Remove all property entries where house number is missing?\n\nCustomer/member profiles will NOT be deleted; they will remain safe in the CRM database.")) {
-      const result = customerService.removePropertiesWithoutHouseNo();
-      showToast(`✅ ${result.removedCount} property entries without house numbers removed. All member records were kept safe in CRM!`);
-    }
+    setPendingConfirm({
+      message: 'Remove all property entries where house number is missing? Customer/member profiles will NOT be deleted; they will remain safe in the CRM database.',
+      onConfirm: () => {
+        const result = customerService.removePropertiesWithoutHouseNo();
+        showToast(`✅ ${result.removedCount} property entries without house numbers removed. All member records were kept safe in CRM!`);
+        setPendingConfirm(null);
+      },
+    });
   };
 
   // Statistics
@@ -173,6 +194,13 @@ export default function PropertiesView() {
       return hA.localeCompare(hB, undefined, { numeric: true, sensitivity: 'base' });
     });
   }, [properties, search, filterType]);
+
+  const totalPropertyPages = Math.max(1, Math.ceil(filteredProperties.length / PROPERTIES_PER_PAGE));
+  const safePropertyPage = Math.min(currentPage, totalPropertyPages);
+  const paginatedProperties = filteredProperties.slice(
+    (safePropertyPage - 1) * PROPERTIES_PER_PAGE,
+    safePropertyPage * PROPERTIES_PER_PAGE
+  );
 
   return (
     <div className="space-y-6" id="properties-view-root">
@@ -223,6 +251,27 @@ export default function PropertiesView() {
       ) : (
         <>
           {/* Toast Alert */}
+      {pendingConfirm && (
+        <div className="bg-amber-50 border border-amber-300 text-amber-950 p-4 rounded-2xl shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <span className="text-xs font-bold">{pendingConfirm.message}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={pendingConfirm.onConfirm}
+              className="px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-bold cursor-pointer"
+            >
+              Confirm Removal
+            </button>
+            <button
+              type="button"
+              onClick={() => setPendingConfirm(null)}
+              className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-semibold border border-slate-300 cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       {toastMessage && (
         <div className="bg-emerald-900 text-white p-4 rounded-2xl shadow-xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top duration-300 border border-emerald-700">
           <div className="flex items-center gap-2.5 text-sm font-semibold">
@@ -351,7 +400,7 @@ export default function PropertiesView() {
             </p>
           </div>
         ) : (
-          filteredProperties.map((prop) => {
+          paginatedProperties.map((prop) => {
             const hasHouseNo = Boolean(
               prop.housePlotNumber &&
               prop.housePlotNumber.trim() &&
@@ -494,6 +543,38 @@ export default function PropertiesView() {
           })
         )}
       </div>
+
+      {/* Pagination Bar (5 properties per page) */}
+      {filteredProperties.length > 0 && (
+        <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="text-slate-600 font-medium">
+            Showing <span className="font-bold text-slate-900">{(safePropertyPage - 1) * PROPERTIES_PER_PAGE + 1}</span> to{' '}
+            <span className="font-bold text-slate-900">{Math.min(safePropertyPage * PROPERTIES_PER_PAGE, filteredProperties.length)}</span> of{' '}
+            <span className="font-bold text-slate-900">{filteredProperties.length}</span> properties (5 per page)
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={safePropertyPage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 disabled:opacity-40 hover:bg-slate-100 cursor-pointer"
+            >
+              Prev
+            </button>
+            <span className="font-bold text-slate-800 px-2">
+              Page {safePropertyPage} / {totalPropertyPages}
+            </span>
+            <button
+              type="button"
+              disabled={safePropertyPage >= totalPropertyPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPropertyPages, p + 1))}
+              className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 disabled:opacity-40 hover:bg-slate-100 cursor-pointer"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* View Property Detail Modal */}
       {selectedProperty && !isEditModalOpen && (

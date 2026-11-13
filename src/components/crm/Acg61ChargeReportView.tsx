@@ -72,7 +72,7 @@ export default function Acg61ChargeReportView() {
       title: `Form ACG-61: ${relievedOfficerName} → ${relievingOfficerName} (${placeName})`,
       employeeId: userProfile?.employeeId || '50457421',
       employeeName: relievedOfficerName,
-      employeeEmail: userProfile?.email || 'mahen.comtech@gmail.com',
+      employeeEmail: userProfile?.email || 'Ektamahenmeena@gmail.com',
       beatNo: userProfile?.beat || 'Beat 2',
       officeName: placeName,
       fromDate: reportDate,

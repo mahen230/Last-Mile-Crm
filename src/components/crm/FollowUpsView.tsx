@@ -22,6 +22,8 @@ export default function FollowUpsView() {
   const [outcomeText, setOutcomeText] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [feedbackBanner, setFeedbackBanner] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 5;
 
   // Add / Edit Form
   const [formCustName, setFormCustName] = useState('');
@@ -92,6 +94,14 @@ export default function FollowUpsView() {
     
     return matchesSearch && matchesFilter;
   });
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, actionTypeFilter, beatFilter, searchQuery, userProfile]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredFollowUps.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedFollowUps = filteredFollowUps.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const handleCreateFollowUp = (e: React.FormEvent) => {
     e.preventDefault();
@@ -234,7 +244,7 @@ export default function FollowUpsView() {
 
       {/* Follow-ups List */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredFollowUps.map((fol) => (
+        {paginatedFollowUps.map((fol) => (
           <div
             key={fol.id}
             className="bg-white rounded-2xl border border-slate-200 hover:border-red-300 hover:shadow-xs transition p-5 flex flex-col justify-between"
@@ -285,7 +295,7 @@ export default function FollowUpsView() {
                   const cust =
                     (fol.customerId ? customerService.getCustomerById(fol.customerId) : undefined) ||
                     customerService.getCustomerByMobile(fol.customerMobile) ||
-                    customerService.getCustomers().find(c => c.name.toLowerCase() === fol.customerName.toLowerCase());
+                    customerService.getScopedCustomers(userProfile).find(c => c.name.toLowerCase() === fol.customerName.toLowerCase());
                   if (cust) {
                     setSelectedCustomer(cust);
                   } else {
@@ -344,6 +354,35 @@ export default function FollowUpsView() {
           </div>
         )}
       </div>
+
+      {filteredFollowUps.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white px-5 py-3 rounded-2xl border border-slate-200 text-xs text-slate-600">
+          <span>
+            Showing <strong className="text-slate-900">{(safePage - 1) * PAGE_SIZE + 1}</strong>–<strong className="text-slate-900">{Math.min(safePage * PAGE_SIZE, filteredFollowUps.length)}</strong> of <strong className="text-slate-900">{filteredFollowUps.length}</strong> follow-ups (5 per page)
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold disabled:opacity-40 hover:bg-slate-50 cursor-pointer"
+            >
+              Prev
+            </button>
+            <span className="font-mono font-bold text-slate-800 px-2">
+              Page {safePage} / {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={safePage >= totalPages}
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold disabled:opacity-40 hover:bg-slate-50 cursor-pointer"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Log Outcome Modal */}
       {selectedFollowUpForOutcome && (

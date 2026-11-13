@@ -1,6 +1,6 @@
 import { Timestamp } from 'firebase/firestore';
 
-export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'POSTMASTER' | 'POSTMAN' | 'STAFF' | 'BPM' | 'BO_STAFF' | 'SALES_SUPPORT' | 'VIEWER' | string;
+export type UserRole = 'MASTER_ADMIN' | 'SUPER_ADMIN' | 'ADMIN' | 'POSTMASTER' | 'POSTMAN' | 'STAFF' | 'BPM' | 'BO_STAFF' | 'SALES_SUPPORT' | 'VIEWER' | string;
 export type VerificationStatus = 'Verified' | 'Pending Verification' | 'Conflict' | 'Unverified' | string;
 export type ApprovalStatus = 'Draft' | 'Pending' | 'Pending Approval' | 'Approved' | 'Rejected' | string;
 export type LivingStatus = 'Owner' | 'Tenant' | 'Family Member' | 'Vacant' | 'Other' | string;
@@ -175,6 +175,10 @@ export interface FuelLedgerEntry {
   paymentMode: 'Cash' | 'UPI / DakPay' | 'IPPB' | 'Card';
   dssReconciliationStatus: 'Reconciled with DSS' | 'Verified by SPM' | 'Pending DSS Audit';
   remarks?: string;
+  isDepartmentLocked?: boolean;
+  lockedAt?: string;
+  lockedBy?: string;
+  departmentLockSource?: string;
   createdAt: string;
 }
 
@@ -875,6 +879,7 @@ export interface StaffProfile {
   name: string;
   email: string;
   password?: string;
+  hasCustomPassword?: boolean;
   mustChangePassword?: boolean;
   role: UserRole;
   designation?: string;
@@ -961,6 +966,10 @@ export interface DailyArticleEntry {
   // Scheme / Doorstep
   doorstepInquiriesLogged: number;
   remarks?: string;
+  isDepartmentLocked?: boolean;
+  lockedAt?: string;
+  lockedBy?: string;
+  departmentLockSource?: string;
   createdAt: string;
   updatedAt?: string;
 }
@@ -1018,7 +1027,53 @@ export interface SpecialBillRecord {
     timestamp: string;
     notes?: string;
   }[];
+  isDepartmentLocked?: boolean;
+  lockedAt?: string;
+  lockedBy?: string;
+  departmentLockSource?: string;
   createdAt: string;
+}
+
+export interface FuelRecord {
+  id: string;
+  beatNo: string;
+  beatSeq: number;
+  postmanName: string;
+  employeeId: string;
+  officeId: string;
+  officeName: string;
+  linkedPincodes: string[];
+  month: string; // YYYY-MM
+  workingDays: number;
+  leaveOrOffDays: number;
+  sanctionedDailyKm: number;
+  totalVerifiedKm: number;
+  fuelRatePerKm: number;
+  approvedClaimAmount: number;
+  pdmsInvoicedTotal: number;
+  dssInvoicedTotal: number;
+  mobileUsageAvgPercent: number;
+  isDepartmentLocked: boolean;
+  lockedBy?: string;
+  lockedAt?: string;
+  sourceDocument?: string;
+}
+
+export interface BeatSettlementRecord {
+  id: string;
+  date: string; // YYYY-MM-DD
+  beatNo: string;
+  postmanName: string;
+  officeId: string;
+  officeName: string;
+  pdmsInvoicedCount: number;
+  dssInvoicedCount: number;
+  mobileUsagePercent: number;
+  dailyKm: number;
+  fuelRatePerKm: number;
+  dailyFuelClaim: number;
+  dutyStatus: 'WORKING' | 'SUNDAY' | 'HOLIDAY' | 'LEAVE';
+  isDepartmentLocked: boolean;
 }
 
 export interface FieldTask {

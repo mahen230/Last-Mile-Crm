@@ -5,7 +5,7 @@ import { customerAuthService } from '../../services/customerAuthService';
 import { staffPermissionService } from '../../services/staffPermissionService';
 import { dataClearanceSanitizer, SecurityClearanceLevel } from '../../services/dataClearanceSanitizer';
 import { ServiceModulePermissions, UserRole } from '../../types/models';
-import { ShieldAlert, Lock, ArrowRight, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { ShieldAlert, Lock, ArrowRight, ShieldCheck } from 'lucide-react';
 
 export type StaffRole =
   | 'MASTER_ADMIN'
@@ -41,7 +41,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredBeat,
   fallbackRedirect = '/login',
 }) => {
-  const { user, userProfile, loading, loginAsMasterAdmin } = useAuth();
+  const { user, userProfile, loading } = useAuth();
   const location = useLocation();
 
   // 1. Loading State: Do not mount or leak child component tree
@@ -110,7 +110,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // 4. Role-Based Access Control (RBAC) Check
   if (allowedRoles && allowedRoles.length > 0 && userProfile) {
     const userRole = userProfile.role as StaffRole;
-    const isMasterAdmin = userProfile.email === 'mahen.comtech@gmail.com';
+    const isMasterAdmin = staffPermissionService.isSuperAdmin(userProfile);
     const hasRole = isMasterAdmin || allowedRoles.includes(userRole);
 
     if (!hasRole) {
@@ -131,14 +131,6 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
             <strong>{userProfile.name}</strong>) has role <span className="font-mono font-bold">{userRole}</span>.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => loginAsMasterAdmin()}
-              className="px-4 py-2.5 bg-red-800 hover:bg-red-900 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-md"
-            >
-              <CheckCircle2 size={15} />
-              <span>1-Click Master Admin Bypass</span>
-            </button>
             <Link
               to="/dashboard"
               className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5"
@@ -168,17 +160,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
             Permission Required: {String(requiredModule)}
           </h2>
           <p className="text-xs text-slate-600 leading-relaxed max-w-lg mx-auto">
-            Your staff account is not assigned active permission for this service module. Please contact the Sub-Postmaster or Super Admin (mahen.comtech@gmail.com) for authorization.
+            Your staff account is not assigned active permission for this service module. Please contact Master Admin Ekta Meena (Ektamahenmeena@gmail.com) for authorization.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => loginAsMasterAdmin()}
-              className="px-4 py-2.5 bg-red-800 hover:bg-red-900 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-md"
-            >
-              <CheckCircle2 size={15} />
-              <span>1-Click Master Admin Bypass</span>
-            </button>
             <Link
               to="/dashboard"
               className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5"

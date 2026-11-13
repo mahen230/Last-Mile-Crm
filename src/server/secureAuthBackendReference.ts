@@ -18,11 +18,15 @@
  *    - Double-Submit CSRF cookie defense.
  */
 
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { Request, Response, NextFunction } from 'express';
 
 // Extend Express Request type for authenticated session context
 export interface AuthenticatedUserContext {
   id: string;
+  sessionId?: string;
   tier: 'CUSTOMER' | 'STAFF' | 'ADMIN';
   role?: string;
   name: string;
@@ -31,6 +35,7 @@ export interface AuthenticatedUserContext {
   assignedBeat?: string;
   assignedOffice?: string;
   allowedBeats?: string[];
+  deviceFingerprintHash?: string;
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -41,74 +46,7 @@ export interface AuthenticatedRequest extends Request {
 // ============================================================================
 // 1. DATABASE SCHEMA REFERENCE (PostgreSQL / Cloud SQL / Drizzle ORM)
 // ============================================================================
-export const POSTAL_AUTH_DATABASE_SCHEMA_SQL = `
--- 1. Dual-Tier Staff Authentication & Security Schema
-CREATE TABLE staff_credentials (
-    id VARCHAR(64) PRIMARY KEY,
-    employee_id VARCHAR(32) NOT NULL UNIQUE,
-    email VARCHAR(255) NOT NULL UNIQUE,
-    mobile VARCHAR(15) NOT NULL,
-    password_hash VARCHAR(255) NOT NULL, -- bcrypt (cost 12) or Argon2id
-    password_salt VARCHAR(64) NOT NULL,
-    role VARCHAR(32) NOT NULL DEFAULT 'POSTMAN', -- 'POSTMAN' | 'SPM' | 'PA' | 'MASTER_ADMIN'
-    assigned_beat VARCHAR(32) NOT NULL, -- e.g. 'Beat 5', 'Beat 17'
-    assigned_office VARCHAR(64) NOT NULL DEFAULT 'Dadabari S.O. (324009)',
-    
-    -- Security & Account Lockout Attributes
-    failed_login_attempts INT NOT NULL DEFAULT 0,
-    lockout_until TIMESTAMP WITH TIME ZONE NULL,
-    password_last_changed TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    
-    -- Two-Factor / OTP Attributes
-    two_factor_secret VARCHAR(64) NULL,
-    is_two_factor_enabled BOOLEAN NOT NULL DEFAULT FALSE,
-    
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
-
--- 2. Customer / Citizen Accounts Table (Tier-1 Public)
-CREATE TABLE customer_citizens (
-    id VARCHAR(64) PRIMARY KEY,
-    mobile VARCHAR(15) UNIQUE NULL,
-    email VARCHAR(255) UNIQUE NULL,
-    full_name VARCHAR(128) NOT NULL,
-    auth_provider VARCHAR(32) NOT NULL, -- 'GOOGLE' | 'MOBILE_OTP'
-    is_phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    last_login_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
-
--- 3. Cryptographically Secure Password Reset Tokens (Single-Use, 10-Minute TTL)
-CREATE TABLE password_reset_tokens (
-    id VARCHAR(64) PRIMARY KEY,
-    staff_id VARCHAR(64) NOT NULL REFERENCES staff_credentials(id) ON DELETE CASCADE,
-    token_hash VARCHAR(255) NOT NULL UNIQUE,
-    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    is_used BOOLEAN NOT NULL DEFAULT FALSE,
-    ip_address VARCHAR(45) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
-
--- 4. Immutable Security Audit Log Table
-CREATE TABLE security_audit_logs (
-    id BIGSERIAL PRIMARY KEY,
-    timestamp TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    event_type VARCHAR(64) NOT NULL, -- 'LOGIN_SUCCESS', 'LOGIN_FAILED', 'LOCKED_OUT', 'UNAUTHORIZED_ACCESS_BLOCKED'
-    employee_id VARCHAR(32) NOT NULL,
-    ip_address VARCHAR(45) NOT NULL,
-    user_agent TEXT NOT NULL,
-    status_code INT NOT NULL,
-    metadata JSONB NULL
-);
-
-CREATE INDEX idx_staff_emp_id ON staff_credentials(employee_id);
-CREATE INDEX idx_customer_mobile ON customer_citizens(mobile);
-CREATE INDEX idx_reset_token ON password_reset_tokens(token_hash);
-CREATE INDEX idx_audit_time ON security_audit_logs(timestamp DESC);
-`;
+export { POSTAL_AUTH_DATABASE_SCHEMA_SQL } from '../data/postalAuthSchemaSql';
 
 // ============================================================================
 // 2. HTTP SECURITY HEADERS MIDDLEWARE (Helmet / CSP / HSTS / FrameGuard)
@@ -223,7 +161,7 @@ export function clearFailedLogin(ip: string, employeeId: string) {
 export function setSecureSessionCookie(res: Response, token: string, cookieName: string = 'postman_gov_token') {
   res.cookie(cookieName, token, {
     httpOnly: true, // Prevents XSS token theft
-    secure: process.env.NODE_ENV === 'production', // Enforces HTTPS
+    secure: true, // Enforces HTTPS / Secure transport
     sameSite: 'strict', // Neutralizes CSRF vectors
     maxAge: 8 * 60 * 60 * 1000, // 8-hour shift expiry
     path: '/',
@@ -236,7 +174,7 @@ export function setSecureSessionCookie(res: Response, token: string, cookieName:
 export function clearSecureSessionCookie(res: Response, cookieName: string = 'postman_gov_token') {
   res.clearCookie(cookieName, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: true,
     sameSite: 'strict',
     path: '/',
   });
@@ -246,20 +184,18 @@ export function clearSecureSessionCookie(res: Response, cookieName: string = 'po
  * Double-submit CSRF token validation middleware
  */
 export function validateCsrfHeader(req: Request, res: Response, next: NextFunction): void {
-  // Safe HTTP methods do not require CSRF checks
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
     return next();
   }
 
-  const headerToken = req.headers['x-csrf-token'] || req.body?.csrfToken;
-  const cookieToken = req.cookies?.['csrf_token_secret'];
+  const headerToken = String(req.headers['x-csrf-token'] || req.body?.csrfToken || '');
+  const cookieToken = String(req.cookies?.['csrf_token_secret'] || '');
 
-  // If in dev or token present and verified
-  if (!headerToken) {
+  if (!headerToken || (cookieToken && headerToken !== cookieToken)) {
     res.status(403).json({
       success: false,
       error: 'CSRF_VALIDATION_FAILED',
-      message: 'Missing anti-CSRF verification header.',
+      message: 'Missing or mismatched anti-CSRF verification header.',
     });
     return;
   }
@@ -320,7 +256,9 @@ export function requireClearance(
     // 4. Role Check for Staff
     if (allowedRoles && allowedRoles.length > 0 && session.tier !== 'CUSTOMER') {
       const userRole = session.role || 'POSTMAN';
-      const isMasterAdmin = session.email === 'mahen.comtech@gmail.com' || session.role === 'MASTER_ADMIN';
+      const isMasterAdmin =
+        session.role === 'MASTER_ADMIN' ||
+        session.email?.toLowerCase() === 'ektamahenmeena@gmail.com';
 
       if (!isMasterAdmin && !allowedRoles.includes(userRole)) {
         res.status(403).json({
@@ -477,6 +415,38 @@ export async function handleStaffLogin(req: Request, res: Response): Promise<voi
     return;
   }
 
+  // Verify password against custom password, Employee ID, or default fallback Post@1234
+  const providedPass = String(password || '').trim();
+  const isAdmin = user.role === 'MASTER_ADMIN' || user.role === 'ADMIN';
+  const expectedAdminHash = crypto.createHash('sha256').update('Admin').digest('hex');
+  const providedHash = crypto.createHash('sha256').update(providedPass).digest('hex');
+  const normPass = providedPass.toLowerCase();
+  const normEmpId = String(user.employeeId || '').trim().toLowerCase();
+  const strippedEmpId = normEmpId.replace(/^(staff-|csi-|gds-|emp-)/i, '');
+  const matchesEmpIdPass = Boolean(
+    normPass && ((normEmpId && normPass === normEmpId) || (strippedEmpId && normPass === strippedEmpId))
+  );
+  const isPasswordValid = isAdmin
+    ? providedHash === (user.passwordSha256 || expectedAdminHash)
+    : user.hasCustomPassword
+    ? providedHash === user.passwordSha256
+    : providedPass === 'Post@1234' ||
+      matchesEmpIdPass ||
+      (user.passwordSha256 && providedHash === user.passwordSha256);
+
+  if (!isPasswordValid) {
+    const { remainingAttempts, isLocked } = registerFailedLogin(ip, employeeId);
+    res.status(401).json({
+      success: false,
+      error: 'INVALID_CREDENTIALS',
+      message: isLocked
+        ? 'Account locked for 15 minutes due to 5 consecutive failed login attempts.'
+        : `Invalid Employee ID or password. ${remainingAttempts} attempts remaining.`,
+      remainingAttempts,
+    });
+    return;
+  }
+
   // Check lockout
   if (user.lockoutUntil && new Date(user.lockoutUntil) > new Date()) {
     res.status(423).json({
@@ -528,12 +498,19 @@ export async function handleLogout(req: Request, res: Response): Promise<void> {
 // ============================================================================
 // HELPER UTILITIES
 // ============================================================================
+const REF_SIGNING_SECRET =
+  process.env.AUTH_SESSION_SECRET ||
+  crypto.createHash('sha256').update('indiapost-crm-hmac-signing-key').digest('hex');
+
 function generateSessionJwt(payload: AuthenticatedUserContext): string {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
   const body = Buffer.from(
     JSON.stringify({ ...payload, exp: Math.floor(Date.now() / 1000) + 8 * 3600 })
   ).toString('base64url');
-  const signature = 'gov_sig_' + Math.random().toString(36).slice(2);
+  const signature = crypto
+    .createHmac('sha256', REF_SIGNING_SECRET)
+    .update(`${header}.${body}`)
+    .digest('base64url');
   return `${header}.${body}.${signature}`;
 }
 
@@ -541,7 +518,15 @@ function verifySessionToken(token: string): AuthenticatedUserContext | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+    const [header, body, sig] = parts;
+    const expected = crypto
+      .createHmac('sha256', REF_SIGNING_SECRET)
+      .update(`${header}.${body}`)
+      .digest('base64url');
+    const a = Buffer.from(sig);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
     if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
     return payload;
   } catch {
@@ -549,43 +534,82 @@ function verifySessionToken(token: string): AuthenticatedUserContext | null {
   }
 }
 
-async function findUserByEmployeeIdParameterized(employeeId: string): Promise<any> {
-  const clean = String(employeeId).trim().toUpperCase();
-  if (clean === '50510312' || clean === 'MAHEN.COMTECH@GMAIL.COM' || clean === '50457421') {
-    return {
+async function findUserByEmployeeIdParameterized(identifier: string): Promise<any> {
+  const clean = String(identifier || '').trim().toLowerCase();
+  if (!clean) return null;
+  const stripped = clean.replace(/^(staff-|csi-|gds-|emp-)/i, '');
+  const digits = clean.replace(/\D/g, '');
+  const phone10 = digits.length >= 10 ? digits.slice(-10) : '';
+
+  const seedDirectory: any[] = [
+    {
+      id: 'STAFF-MASTER-EKTA',
+      employeeId: 'MASTER-ADMIN-01',
+      name: 'Ekta Meena',
+      role: 'MASTER_ADMIN',
+      assignedBeat: 'All Beats',
+      assignedOffice: 'All Divisions / Kota Division (324009)',
+      email: 'ektamahenmeena@gmail.com',
+      mobile: '8279275805',
+      hasCustomPassword: true,
+      passwordSha256: crypto.createHash('sha256').update('Admin').digest('hex'),
+      lockoutUntil: null,
+    },
+    {
       id: 'STAFF-50457421',
       employeeId: '50457421',
       name: 'Mahendra Kumar Meena',
-      role: 'MASTER_ADMIN',
+      role: 'POSTMAN',
       assignedBeat: 'Beat 2',
       assignedOffice: 'Dadabari S.O. (324009)',
       email: 'mahen.comtech@gmail.com',
+      mobile: '8769706002',
+      hasCustomPassword: false,
+      passwordSha256: crypto.createHash('sha256').update('Post@1234').digest('hex'),
       lockoutUntil: null,
-    };
+    },
+  ];
+
+  try {
+    const seedPath = path.resolve(process.cwd(), 'src/data/staffDirectorySeed.json');
+    if (fs.existsSync(seedPath)) {
+      const parsed = JSON.parse(fs.readFileSync(seedPath, 'utf8')) as any[];
+      for (const s of parsed) {
+        const empId = String(s.id || '').replace(/^STAFF-/, '');
+        if (seedDirectory.some((x) => x.employeeId === empId || x.id === s.id)) continue;
+        seedDirectory.push({
+          id: s.id,
+          employeeId: empId,
+          name: s.name,
+          role: String(s.role || '').toUpperCase().includes('GDS') ? 'GDS' : 'POSTMAN',
+          assignedBeat: s.beat,
+          assignedOffice: `${s.subOrBranchOffice || 'Dadabari S.O.'} (324009)`,
+          email:
+            s.email && s.email !== 'N/A'
+              ? s.email.toLowerCase()
+              : `${String(s.name).toLowerCase().replace(/[^a-z0-9]/g, '.')}@indiapost.gov.in`,
+          mobile: String(s.contact || '').replace(/\D/g, '').slice(-10),
+          hasCustomPassword: false,
+          passwordSha256: crypto.createHash('sha256').update('Post@1234').digest('hex'),
+          lockoutUntil: null,
+        });
+      }
+    }
+  } catch {
+    // Fallback to in-memory seed
   }
-  if (clean === '10310736') {
-    return {
-      id: 'STAFF-10310736',
-      employeeId: '10310736',
-      name: 'Mohit Arvind',
-      role: 'POSTMAN',
-      assignedBeat: 'Beat 5',
-      assignedOffice: 'Dadabari S.O. (324009)',
-      email: 'mohit.arvind@indiapost.gov.in',
-      lockoutUntil: null,
-    };
-  }
-  if (clean === '50507003') {
-    return {
-      id: 'STAFF-50507003',
-      employeeId: '50507003',
-      name: 'Priyanshu Trivedi',
-      role: 'POSTMAN',
-      assignedBeat: 'Beat 17',
-      assignedOffice: 'Dadabari S.O. (324009)',
-      email: 'priyanshu.trivedi@indiapost.gov.in',
-      lockoutUntil: null,
-    };
-  }
-  return null;
+
+  return (
+    seedDirectory.find((u) => u.email.toLowerCase() === clean) ||
+    seedDirectory.find((u) => u.employeeId.toLowerCase() === clean || u.id.toLowerCase() === clean) ||
+    (stripped
+      ? seedDirectory.find(
+          (u) =>
+            u.employeeId.toLowerCase().replace(/^(staff-|csi-|gds-|emp-)/i, '') === stripped ||
+            u.id.toLowerCase().replace(/^(staff-|csi-|gds-|emp-)/i, '') === stripped
+        )
+      : undefined) ||
+    (phone10 ? seedDirectory.find((u) => String(u.mobile || '').slice(-10) === phone10) : null) ||
+    null
+  );
 }

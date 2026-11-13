@@ -13,6 +13,7 @@ import {
   Table,
   RefreshCw,
   FileCheck2,
+  Lock,
 } from 'lucide-react';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import { operationsService } from '../../services/operationsService';
@@ -28,6 +29,7 @@ import {
   downloadOfficialFuelBillPDF,
   extractBeatNumberOnly,
 } from '../../utils/fuelBillPdfGenerator';
+import { getOctober2026OfficialBeatSchedule } from '../../data/october2026DssDataset';
 import { downloadOfficialAcg61Pdf } from '../../utils/acg61PdfGenerator';
 
 function calculateDaysBetween(fromStr: string, toStr: string): number {
@@ -64,7 +66,7 @@ export default function SpecialFormsView() {
   // Auto-filled Profile Context (defaults to Official MAHEN FUEL.pdf Reference Profile)
   const autoEmpId = userProfile?.employeeId || '50457421';
   const autoEmpName = userProfile?.name || 'MAHENDRA KUMAR MEENA';
-  const autoEmpEmail = userProfile?.email || 'mahen.comtech@gmail.com';
+  const autoEmpEmail = userProfile?.email || 'Ektamahenmeena@gmail.com';
   const autoBeat = userProfile?.beat || 'Beat 2';
   const autoOffice = userProfile?.assignedOffice || 'Dadabari s.o.';
   const autoFixedKm = userProfile?.fixedKm || 30;
@@ -125,7 +127,7 @@ export default function SpecialFormsView() {
   const handleAddFuelLedgerSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const netKm = Math.max(0, Number(fledClosingKm) - Number(fledOpeningKm));
-    const totalCost = Math.round((Number(fledFuelLitres) || 0) * (Number(fledPricePerLitre) || 104.88));
+    const totalCost = Number(((Number(fledFuelLitres) || 0) * (Number(fledPricePerLitre) || 104.88)).toFixed(2));
     const created = operationsService.addFuelLedgerEntry({
       date: fledDate,
       employeeId,
@@ -195,7 +197,7 @@ export default function SpecialFormsView() {
   const scheduleTotals = useMemo(() => calculateFuelScheduleTotals(dailyRows), [dailyRows]);
   const workingDays = Math.max(1, totalCalendarDays - (Number(fuelLeaveDays) || 0));
   const totalDistanceKm = workingDays * (Number(fixedKm) || 0);
-  const totalFuelAmount = Math.round(totalDistanceKm * (Number(fuelRatePerKm) || 0));
+  const totalFuelAmount = Number((totalDistanceKm * (Number(fuelRatePerKm) || 0)).toFixed(2));
 
   const handleLoadMahenReferencePreset = () => {
     setEmployeeId('50457421');
@@ -211,7 +213,25 @@ export default function SpecialFormsView() {
     setFuelRatePerKm(3.6);
     setVehicleNo('RJ-20-SS-4521');
     setDailyRows(MAHEN_FUEL_REFERENCE_ROWS.map((r) => ({ ...r })));
-    setStatusMessage('Loaded exact official reference data from MAHEN FUEL.pdf (30 KM × 25 Days = 750 KM × ₹3.60 = ₹2,700).');
+    setStatusMessage('Loaded exact official reference data from MAHEN FUEL.pdf (30 KM × 25 Days = 750 KM × ₹3.60 = ₹2,700.00).');
+  };
+
+  const handleLoadRamkishanBeat6Preset = () => {
+    setEmployeeId('10317473');
+    setEmployeeName('RAM KISHAN MEGHWAL');
+    setBeatNo('Beat 6');
+    setOfficeName('Dadabari S.O. (324009, 324005)');
+    setFixedKm(22);
+    setFromDate('2026-10-01');
+    setToDate('2026-10-31');
+    setClaimMonth('OCTOBER');
+    setClaimYear('2026');
+    setFuelLeaveDays(8); // 4 Sundays + 2 Holidays + 2 Leave Days (Oct 13 & Oct 22) = 8 Off/Leave Days (23 Working Days)
+    setFuelRatePerKm(3.6);
+    setVehicleNo('RJ-20-RK-6006');
+    setFuelRemarks('Department Locked Official Oct 2026 DSS · Contact: 9664215130 · Linked PIN: 324009, 324005');
+    setDailyRows(getOctober2026OfficialBeatSchedule('Beat 6').map((r) => ({ ...r })));
+    setStatusMessage('Loaded & verified official Department Locked data for Beat 6 (Ramkishan Meghwal · ID: 10317473) October 2026: 23 Working Days × 22 KM = 506 KM @ ₹3.60 = ₹1,821.60 | PDMS: 1,248 | DSS: 1,227 | Mobile Usage: 97.94%');
   };
 
   const handleLoadMohitBeat5Preset = () => {
@@ -224,11 +244,11 @@ export default function SpecialFormsView() {
     setToDate('2026-10-31');
     setClaimMonth('OCTOBER');
     setClaimYear('2026');
-    setFuelLeaveDays(7); // 4 Sundays + 2 Holidays + 1 Leave Day = 7 Off Days (24 Working Days)
+    setFuelLeaveDays(8); // 4 Sundays + 2 Holidays + 2 Leave Days (Oct 19 & Oct 21) = 8 Off/Leave Days (23 Working Days)
     setFuelRatePerKm(3.6);
     setVehicleNo('RJ-20-MB-8112');
     setDailyRows(MOHIT_BEAT_5_OCTOBER_2026_ROWS.map((r) => ({ ...r })));
-    setStatusMessage('Loaded official audited data for Beat 5 (Mohit Arvind) October 2026: 24 Working Days × 19 KM @ ₹3.60 = ₹1,641.60 | Total Accountable Articles: 2,178 | Mobile Usage: 100% | Registered: 0');
+    setStatusMessage('Loaded official audited data for Beat 5 (Mohit Arvind) October 2026: 23 Working Days × 19 KM = 437 KM @ ₹3.60 = ₹1,573.20 | PDMS: 2,477 | DSS: 2,439 | Mobile Usage: 99.51% | Registered: 0');
   };
 
   const handleLoadPriyanshuBeat17Preset = () => {
@@ -625,9 +645,18 @@ export default function SpecialFormsView() {
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
+                  onClick={handleLoadRamkishanBeat6Preset}
+                  className="px-2.5 py-1.5 bg-emerald-950 hover:bg-emerald-900 text-amber-300 border border-emerald-600/60 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                  title="23 Working Days · 22 KM/day = 506 KM @ ₹3.60 = ₹1,821.60 | PDMS: 1,248 | DSS: 1,227 | Mob: 97.94% | Department Locked"
+                >
+                  <Lock size={12} />
+                  <span>Beat 6 (Ramkishan Meghwal - Oct 2026)</span>
+                </button>
+                <button
+                  type="button"
                   onClick={handleLoadMohitBeat5Preset}
                   className="px-2.5 py-1.5 bg-blue-900/90 hover:bg-blue-800 text-blue-200 border border-blue-600/50 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
-                  title="24 Working Days · 19 KM/day @ ₹3.60 = ₹1,641.60 · Articles: 2,178 · Reg: 0 · 100% Mobile"
+                  title="23 Working Days · 19 KM/day = 437 KM @ ₹3.60 = ₹1,573.20 · PDMS: 2,477 · DSS: 2,439 · Mob: 99.51%"
                 >
                   <RefreshCw size={12} />
                   <span>Beat 5 (Mohit Arvind - Oct 2026)</span>
@@ -1016,7 +1045,7 @@ export default function SpecialFormsView() {
                   Total Amount ({totalDistanceKm}×{fuelRatePerKm.toFixed(2)})
                 </span>
                 <span className="text-2xl font-black font-mono tabular-nums text-amber-400">
-                  ₹{totalFuelAmount.toLocaleString('en-IN')}
+                  ₹{totalFuelAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
@@ -1459,7 +1488,7 @@ export default function SpecialFormsView() {
           <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
             <span className="text-slate-500 font-semibold block">Total Fuel Receipt Cost</span>
             <span className="text-xl font-black text-red-800 font-mono tabular-nums mt-0.5 block">
-              ₹{fuelLedger.reduce((s, e) => s + e.totalFuelCost, 0).toLocaleString('en-IN')}
+              ₹{fuelLedger.reduce((s, e) => s + e.totalFuelCost, 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
             <span className="text-[11px] text-slate-500">Actual Bunk Receipts Logged</span>
           </div>
@@ -1614,7 +1643,14 @@ export default function SpecialFormsView() {
                     <div className="text-[10px] text-slate-500">{entry.id}</div>
                   </td>
                   <td className="py-2.5 px-3">
-                    <div className="font-semibold text-slate-900">{entry.employeeName}</div>
+                    <div className="font-semibold text-slate-900 flex items-center gap-1.5">
+                      <span>{entry.employeeName}</span>
+                      {entry.isDepartmentLocked && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-900 text-amber-300 text-[9px] font-black">
+                          <Lock size={9} /> Dept Locked
+                        </span>
+                      )}
+                    </div>
                     <div className="text-[11px] font-mono text-slate-500">
                       {entry.beatNo} · {entry.vehicleNo}
                     </div>
@@ -1629,7 +1665,7 @@ export default function SpecialFormsView() {
                     {entry.fuelVolumeLitres} L <span className="text-[10px] text-slate-400">(@₹{entry.fuelPricePerLitre})</span>
                   </td>
                   <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900 tabular-nums whitespace-nowrap">
-                    ₹{entry.totalFuelCost.toLocaleString('en-IN')}
+                    ₹{entry.totalFuelCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="py-2.5 px-3">
                     <div className="font-mono font-bold text-red-800">{entry.receiptNumber}</div>
@@ -1649,7 +1685,11 @@ export default function SpecialFormsView() {
                     </span>
                   </td>
                   <td className="py-2.5 px-3 text-right whitespace-nowrap">
-                    {entry.dssReconciliationStatus !== 'Reconciled with DSS' ? (
+                    {entry.isDepartmentLocked ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-[11px] font-mono font-bold text-amber-800">
+                        <Lock size={10} /> Immutable
+                      </span>
+                    ) : entry.dssReconciliationStatus !== 'Reconciled with DSS' ? (
                       <button
                         type="button"
                         onClick={() =>
@@ -1707,7 +1747,14 @@ export default function SpecialFormsView() {
                     {b.billNumber}
                   </td>
                   <td className="py-3 px-3">
-                    <div className="font-bold text-slate-900">{b.title}</div>
+                    <div className="font-bold text-slate-900 flex flex-wrap items-center gap-1.5">
+                      <span>{b.title}</span>
+                      {b.isDepartmentLocked && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-900 text-amber-300 text-[9px] font-black">
+                          <Lock size={9} /> Dept Locked
+                        </span>
+                      )}
+                    </div>
                     <div className="text-[11px] text-slate-500">
                       {b.type.replace('_', ' ')} · {b.officeName}
                     </div>
@@ -1727,7 +1774,7 @@ export default function SpecialFormsView() {
                   <td className="py-3 px-3 text-right font-mono font-bold text-slate-900 tabular-nums whitespace-nowrap">
                     {b.type === 'CHARGE_REPORT'
                       ? 'Official Handover'
-                      : `₹${b.totalAmount.toLocaleString('en-IN')}`}
+                      : `₹${b.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                   </td>
                   <td className="py-3 px-3">
                     <span className="font-semibold text-slate-800">{b.status}</span>
@@ -1752,7 +1799,7 @@ export default function SpecialFormsView() {
                         <Printer size={12} />
                         <span>Preview / Print</span>
                       </button>
-                      {userProfile?.role === 'SUPER_ADMIN' && b.status !== 'Sanctioned' && (
+                      {userProfile?.role === 'SUPER_ADMIN' && b.status !== 'Sanctioned' && !b.isDepartmentLocked && (
                         <button
                           type="button"
                           onClick={() =>
@@ -1853,7 +1900,8 @@ export default function SpecialFormsView() {
                   selectedBillForPrint.fromDate,
                   selectedBillForPrint.toDate,
                   d.leaveDays,
-                  d.dailyRows
+                  d.dailyRows,
+                  selectedBillForPrint.beatNo
                 );
                 const tots = calculateFuelScheduleTotals(rows);
                 const wDays = Number(
@@ -1862,7 +1910,7 @@ export default function SpecialFormsView() {
                 const fKm = Number(selectedBillForPrint.fixedKm) || 30;
                 const dist = Number(d.totalDistanceKm) || fKm * wDays;
                 const rate = Number(d.ratePerKm) || 3.6;
-                const amt = Number(selectedBillForPrint.totalAmount) || Math.round(dist * rate);
+                const amt = Number(selectedBillForPrint.totalAmount) || Number((dist * rate).toFixed(2));
 
                 return (
                   <div className="space-y-8 text-black font-sans text-xs">
@@ -2064,7 +2112,7 @@ export default function SpecialFormsView() {
                           </tr>
                           <tr>
                             <td colSpan={8} className="border border-black px-2 py-1">
-                              Total Amount Claimed= {dist}*{rate.toFixed(2)}= {amt}
+                              Total Amount Claimed= {dist}*{rate.toFixed(2)}= {amt.toFixed(2)}
                             </td>
                           </tr>
                         </tbody>

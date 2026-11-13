@@ -5,18 +5,21 @@ import {
 } from 'lucide-react';
 import { staffPermissionService } from '../../services/staffPermissionService';
 import { staffRegistrationService } from '../../services/staffRegistrationService';
+import { useAuth } from './FirebaseAuthProvider';
 
 interface LoginModalProps {
   onLoginSuccess: () => void;
 }
 
 export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
+  const { signInWithPassword } = useAuth();
   const [viewMode, setViewMode] = useState<'LOGIN' | 'FIRST_LOGIN_CHANGE' | 'REGISTER' | 'FORGOT_PASSWORD'>('LOGIN');
 
   // Login Form State
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
   // First Login Password Change State
@@ -40,34 +43,32 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
   const [resetNewPass, setResetNewPass] = useState('');
   const [otpStep, setOtpStep] = useState<'ID' | 'VERIFY'>('ID');
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setStatusMessage('');
     const rawUser = username.trim();
     const rawPass = password.trim();
 
     if (!rawUser || !rawPass) {
-      setError('Please enter Employee ID and Password.');
+      setError('Please enter Employee ID / Email and Password.');
       return;
     }
 
     setLoading(true);
-    const authResult = staffPermissionService.authenticateWithPassword(rawUser, rawPass);
+    const ok = await signInWithPassword(rawUser, rawPass);
     setLoading(false);
 
-    if (authResult.success && authResult.profile) {
-      localStorage.setItem('postman_auth', 'true');
-      
-      // Check if user must change password
-      if (authResult.mustChangePassword) {
-        setPendingEmployeeId(authResult.profile.employeeId || rawUser);
+    if (ok) {
+      const active = staffPermissionService.getActiveSession();
+      if (active?.mustChangePassword) {
+        setPendingEmployeeId(active.employeeId || rawUser);
         setViewMode('FIRST_LOGIN_CHANGE');
         return;
       }
-
       onLoginSuccess();
     } else {
-      setError(authResult.error || 'Invalid credentials. Default password is your Employee ID.');
+      setError('Invalid credentials or session locked. Please verify your Employee ID and password.');
     }
   };
 
@@ -149,7 +150,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
       setUsername(forgotId);
       setPassword(resetNewPass);
       setError('');
-      alert('✅ Password reset successful! Please login with your new password.');
+      setStatusMessage('Password reset successful. Please sign in with your new password.');
     } else {
       setError('Failed to reset password.');
     }
@@ -170,6 +171,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
         {error && (
           <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400 text-center mb-4">
             {error}
+          </div>
+        )}
+
+        {statusMessage && (
+          <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-400 text-center mb-4">
+            {statusMessage}
           </div>
         )}
 
@@ -239,9 +246,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
               </button>
 
               <div className="text-[11px] text-slate-500">
-                Default Credentials: <span className="text-slate-300 font-mono">Employee ID</span> (Initial Password = Employee ID)
+                Sign in with your assigned <span className="text-slate-300 font-mono">Employee ID</span> or departmental email.
                 <br />
-                Admin: <span className="text-slate-300 font-mono">admin</span> (Ekta Meena) • Quick Postman: <span className="text-slate-300 font-mono">employee</span>
+                Master Admin: <span className="text-slate-300 font-mono">Ektamahenmeena@gmail.com</span>
               </div>
             </div>
           </form>

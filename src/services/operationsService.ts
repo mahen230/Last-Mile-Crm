@@ -1,13 +1,16 @@
 import { DailyArticleEntry, SpecialBillRecord, SpecialBillType, FuelLedgerEntry, ArticleQuantityPatch } from '../types/models';
 import { customerService } from './customerService';
 import { staffPermissionService } from './staffPermissionService';
-import { getBeatFuelMapping, buildAll33BeatsFuelDirectory, calculateBeatFuelBill, BeatFuelMapping } from '../data/beatFuelData';
+import { getBeatFuelMapping, buildAll33BeatsFuelDirectory, BeatFuelMapping } from '../data/beatFuelData';
 import {
   MAHEN_FUEL_REFERENCE_ROWS,
-  OCTOBER_2026_FUEL_REFERENCE_ROWS,
-  PRIYANSHU_BEAT_17_OCTOBER_2026_ROWS,
-  MOHIT_BEAT_5_OCTOBER_2026_ROWS,
 } from '../utils/fuelBillPdfGenerator';
+import {
+  OCTOBER_2026_ALL_33_BEATS_SCHEDULE,
+  OCTOBER_2026_BEAT_METADATA,
+  getOctober2026BeatMeta,
+  getOctober2026OfficialBeatSchedule,
+} from '../data/october2026DssDataset';
 import {
   createBackupSpreadsheet,
   ensureSheetTabsExist,
@@ -36,6 +39,15 @@ const STORAGE_KEY_FUEL_LEDGER = 'indiapost_fuel_ledger_dss_v1';
 const STORAGE_KEY_LMS_TOPICS = 'indiapost_lms_completed_topics_v1';
 const STORAGE_KEY_LMS_QUIZZES = 'indiapost_lms_quiz_attempts_v1';
 const STORAGE_KEY_BACKUP_STATE = 'indiapost_backup_engine_state_v1';
+const STORAGE_KEY_OCT2026_LOCK_SYNC = 'indiapost_oct2026_all33_lock_v1';
+
+function normalizeBeatLabel(beatNo: string): string {
+  const match = (beatNo || '').match(/\d+/);
+  if (match) {
+    return `Beat ${parseInt(match[0], 10)}`;
+  }
+  return (beatNo || '').trim() || 'Beat 2';
+}
 
 export type LMSTopicItem = LMSExtendedTopic;
 export type LMSModule = LMSExtendedModule;
@@ -148,6 +160,22 @@ class OperationsService {
     });
   }
 
+  private deduplicateDailyEntries(entries: DailyArticleEntry[]): DailyArticleEntry[] {
+    const byKey = new Map<string, DailyArticleEntry>();
+    entries.forEach((entry) => {
+      if (!entry || !entry.date) return;
+      const normalizedBeat = normalizeBeatLabel(entry.beatNo);
+      const key = `${normalizedBeat.toLowerCase()}__${entry.date}`;
+      const existing = byKey.get(key);
+      if (!existing) {
+        byKey.set(key, { ...entry, beatNo: normalizedBeat });
+      } else if (entry.isDepartmentLocked && !existing.isDepartmentLocked) {
+        byKey.set(key, { ...entry, beatNo: normalizedBeat });
+      }
+    });
+    return Array.from(byKey.values());
+  }
+
   private loadDailyEntries() {
     const today = new Date().toISOString().split('T')[0];
     try {
@@ -155,73 +183,46 @@ class OperationsService {
       if (raw) {
         const parsed: DailyArticleEntry[] = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Normalize with beat fuel mapping while preserving all existing historical DSS data
-          this.dailyEntries = parsed.map((entry) => {
-            const fuelData = getBeatFuelMapping(entry.beatNo);
-            return {
-              ...entry,
-              sanctionedBeatKm: entry.sanctionedBeatKm || fuelData.sanctionedDailyKm,
-              fixedKm: entry.fixedKm || fuelData.sanctionedDailyKm,
-              fuelRatePerKm: entry.fuelRatePerKm || fuelData.fuelRatePerKm,
-              dailyFuelAllowance: entry.dailyFuelAllowance || fuelData.dailyFuelAllowance,
-              monthlyFuelAllowance: entry.monthlyFuelAllowance || fuelData.monthlyFuelAllowance,
-              dssStatus: entry.dssStatus || 'Reconciled with DSS',
-              dssArticleAuditTrail: entry.dssArticleAuditTrail || [],
-            };
-          });
-
-          // Ensure October 2026 DSS records are populated and synced for Postman Beat Fuel sheets
-          const hasOct2026 = this.dailyEntries.some(
-            (e) => e.date && e.date.startsWith('2026-10') && (e.beatNo === 'Beat 2' || e.beatNo === '2')
+          this.dailyEntries = this.deduplicateDailyEntries(
+            parsed.map((entry) => {
+              const normalizedBeat = normalizeBeatLabel(entry.beatNo);
+              const fuelData = getBeatFuelMapping(normalizedBeat);
+              return {
+                ...entry,
+                beatNo: normalizedBeat,
+                sanctionedBeatKm: entry.sanctionedBeatKm || fuelData.sanctionedDailyKm,
+                fixedKm: entry.fixedKm || fuelData.sanctionedDailyKm,
+                fuelRatePerKm: entry.fuelRatePerKm || fuelData.fuelRatePerKm,
+                dailyFuelAllowance:
+                  entry.dailyFuelAllowance !== undefined
+                    ? entry.dailyFuelAllowance
+                    : fuelData.dailyFuelAllowance,
+                monthlyFuelAllowance:
+                  entry.monthlyFuelAllowance !== undefined
+                    ? entry.monthlyFuelAllowance
+                    : fuelData.monthlyFuelAllowance,
+                dssStatus: entry.dssStatus || 'Reconciled with DSS',
+                dssArticleAuditTrail: entry.dssArticleAuditTrail || [],
+              };
+            })
           );
-          if (!hasOct2026) {
-            const octEntries = this.generateOctober2026SeedEntries();
-            this.dailyEntries.push(...octEntries);
-            this.saveDailyEntries();
+
+          const syncMarker = localStorage.getItem(STORAGE_KEY_OCT2026_LOCK_SYNC);
+          const octEntries = this.dailyEntries.filter((e) => e.date && e.date.startsWith('2026-10'));
+          const beat6OctEntries = octEntries.filter((e) => e.beatNo === 'Beat 6' && e.isDepartmentLocked);
+          const beat6Working = beat6OctEntries.filter((e) => e.attendanceStatus === 'Present - Field Duty').length;
+          const lockedBeatCount = new Set(
+            octEntries.filter((e) => e.isDepartmentLocked).map((e) => e.beatNo)
+          ).size;
+
+          if (
+            syncMarker !== 'SYNCED_ALL_33_V1' ||
+            lockedBeatCount < 33 ||
+            beat6OctEntries.length !== 31 ||
+            beat6Working !== 23
+          ) {
+            this.syncOctober2026All33BeatsInternal(false);
           }
-
-          // Ensure Beat 17 (Priyanshu Trivedi) entries are populated & synced with official screenshot
-          const hasBeat17Oct2026 = this.dailyEntries.some(
-            (e) => e.date && e.date.startsWith('2026-10') && (e.beatNo === 'Beat 17' || e.beatNo === '17')
-          );
-          const needsBeat17Refresh =
-            !hasBeat17Oct2026 ||
-            this.dailyEntries.some(
-              (e) =>
-                (e.beatNo === 'Beat 17' || e.beatNo === '17') &&
-                e.date.startsWith('2026-10') &&
-                (e.registryDelivered > 0 || (e.date === '2026-10-01' && e.speedPostDelivered + e.registryDelivered + e.parcelDelivered !== 51))
-            );
-
-          if (needsBeat17Refresh) {
-            this.dailyEntries = this.dailyEntries.filter(
-              (e) => !((e.beatNo === 'Beat 17' || e.beatNo === '17') && e.date.startsWith('2026-10'))
-            );
-            this.dailyEntries.push(...this.generateBeat17October2026SeedEntries());
-            this.saveDailyEntries();
-          }
-
-          // Ensure Beat 5 (Mohit Arvind) entries are populated & synced with official screenshot
-          const hasBeat5Oct2026 = this.dailyEntries.some(
-            (e) => e.date && e.date.startsWith('2026-10') && (e.beatNo === 'Beat 5' || e.beatNo === '5')
-          );
-          const needsBeat5Refresh =
-            !hasBeat5Oct2026 ||
-            this.dailyEntries.some(
-              (e) =>
-                (e.beatNo === 'Beat 5' || e.beatNo === '5') &&
-                e.date.startsWith('2026-10') &&
-                (e.registryDelivered > 0 || (e.date === '2026-10-01' && e.speedPostDelivered + e.registryDelivered + e.parcelDelivered !== 75) || (e.date === '2026-10-03' && e.speedPostDelivered + e.registryDelivered + e.parcelDelivered !== 251))
-            );
-
-          if (needsBeat5Refresh) {
-            this.dailyEntries = this.dailyEntries.filter(
-              (e) => !((e.beatNo === 'Beat 5' || e.beatNo === '5') && e.date.startsWith('2026-10'))
-            );
-            this.dailyEntries.push(...this.generateBeat5October2026SeedEntries());
-            this.saveDailyEntries();
-          }
-
           return;
         }
       }
@@ -229,413 +230,281 @@ class OperationsService {
       console.warn('Failed to parse stored daily article entries:', e);
     }
 
-    // Seed initial daily article entries for Dadabari SO Beats with full fuel mapping
+    // Seed initial non-Oct-2026 current day operational samples + complete locked 33-beat October 2026 dataset
     const b2Fuel = getBeatFuelMapping('Beat 2');
     const b1Fuel = getBeatFuelMapping('Beat 1');
     const b4Fuel = getBeatFuelMapping('Beat 4');
 
-    this.dailyEntries = [
-      {
-        id: 'ART-2026-001',
-        date: today,
-        employeeId: '50457421',
-        staffName: 'Mahendra Kumar Meena',
-        staffEmail: 'mahen.comtech@gmail.com',
-        beatNo: 'Beat 2',
-        officeName: 'Dadabari S.O. (324009)',
-        attendanceStatus: 'Present - Field Duty',
-        fixedKm: 30,
-        sanctionedBeatKm: b2Fuel.sanctionedDailyKm,
-        fuelRatePerKm: 3.60,
-        dailyFuelAllowance: Math.round(30 * 3.60),
-        monthlyFuelAllowance: Math.round(30 * 3.60 * 25),
-        dssStatus: 'Reconciled with DSS',
-        registryReceived: 42,
-        registryDelivered: 39,
-        registryReturned: 2,
-        registryDeposit: 1,
-        speedPostReceived: 68,
-        speedPostDelivered: 65,
-        speedPostReturned: 2,
-        speedPostDeposit: 1,
-        parcelReceived: 19,
-        parcelDelivered: 18,
-        parcelReturned: 1,
-        parcelDeposit: 0,
-        codAmountCollected: 14850,
-        doorstepInquiriesLogged: 6,
-        remarks: 'Keshavpura Sector 6 & 7 100% beat round completed via PMA.',
-        dssArticleAuditTrail: [],
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'ART-2026-002',
-        date: today,
-        employeeId: '50510312',
-        staffName: 'Muskan Sharma',
-        staffEmail: 'muskan.sharma@indiapost.gov.in',
-        beatNo: 'Beat 1',
-        officeName: 'Dadabari S.O. (324009)',
-        attendanceStatus: 'Present - Field Duty',
-        fixedKm: b1Fuel.sanctionedDailyKm,
-        sanctionedBeatKm: b1Fuel.sanctionedDailyKm,
-        fuelRatePerKm: 3.60,
-        dailyFuelAllowance: Math.round(b1Fuel.sanctionedDailyKm * 3.60),
-        monthlyFuelAllowance: Math.round(b1Fuel.sanctionedDailyKm * 3.60 * 25),
-        dssStatus: 'Reconciled with DSS',
-        registryReceived: 35,
-        registryDelivered: 33,
-        registryReturned: 1,
-        registryDeposit: 1,
-        speedPostReceived: 54,
-        speedPostDelivered: 52,
-        speedPostReturned: 1,
-        speedPostDeposit: 1,
-        parcelReceived: 14,
-        parcelDelivered: 13,
-        parcelReturned: 0,
-        parcelDeposit: 1,
-        codAmountCollected: 8400,
-        doorstepInquiriesLogged: 4,
-        remarks: 'Dadabari Main Sector 1 & 2 commercial & residential delivery done.',
-        dssArticleAuditTrail: [],
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'ART-2026-003',
-        date: today,
-        employeeId: '10310735',
-        staffName: 'Govind Prasad',
-        staffEmail: 'govind.prasad@indiapost.gov.in',
-        beatNo: 'Beat 4',
-        officeName: 'Dadabari S.O. (324009)',
-        attendanceStatus: 'Present - Field Duty',
-        fixedKm: b4Fuel.sanctionedDailyKm,
-        sanctionedBeatKm: b4Fuel.sanctionedDailyKm,
-        fuelRatePerKm: 3.60,
-        dailyFuelAllowance: Math.round(b4Fuel.sanctionedDailyKm * 3.60),
-        monthlyFuelAllowance: Math.round(b4Fuel.sanctionedDailyKm * 3.60 * 25),
-        dssStatus: 'Reconciled with DSS',
-        registryReceived: 38,
-        registryDelivered: 36,
-        registryReturned: 2,
-        registryDeposit: 0,
-        speedPostReceived: 61,
-        speedPostDelivered: 58,
-        speedPostReturned: 2,
-        speedPostDeposit: 1,
-        parcelReceived: 16,
-        parcelDelivered: 15,
-        parcelReturned: 1,
-        parcelDeposit: 0,
-        codAmountCollected: 11200,
-        doorstepInquiriesLogged: 5,
-        remarks: '3 new SSA leads collected during Speed Post delivery.',
-        dssArticleAuditTrail: [],
-        createdAt: new Date().toISOString(),
-      },
-      ...this.generateOctober2026SeedEntries(),
-    ];
+    const initialTodayEntries: DailyArticleEntry[] = today.startsWith('2026-10')
+      ? []
+      : [
+          {
+            id: 'ART-2026-001',
+            date: today,
+            employeeId: '50457421',
+            staffName: 'Mahendra Kumar Meena',
+            staffEmail: 'mahen.comtech@gmail.com',
+            beatNo: 'Beat 2',
+            officeName: 'Dadabari S.O. (324009)',
+            attendanceStatus: 'Present - Field Duty',
+            fixedKm: b2Fuel.sanctionedDailyKm,
+            sanctionedBeatKm: b2Fuel.sanctionedDailyKm,
+            fuelRatePerKm: 3.60,
+            dailyFuelAllowance: Number((b2Fuel.sanctionedDailyKm * 3.60).toFixed(2)),
+            monthlyFuelAllowance: Number((b2Fuel.sanctionedDailyKm * 3.60 * 25).toFixed(2)),
+            dssStatus: 'Reconciled with DSS',
+            registryReceived: 42,
+            registryDelivered: 39,
+            registryReturned: 2,
+            registryDeposit: 1,
+            speedPostReceived: 68,
+            speedPostDelivered: 65,
+            speedPostReturned: 2,
+            speedPostDeposit: 1,
+            parcelReceived: 19,
+            parcelDelivered: 18,
+            parcelReturned: 1,
+            parcelDeposit: 0,
+            codAmountCollected: 14850,
+            doorstepInquiriesLogged: 6,
+            remarks: 'Keshavpura Sector 6 & 7 100% beat round completed via PMA.',
+            dssArticleAuditTrail: [],
+            createdAt: new Date().toISOString(),
+          },
+          {
+            id: 'ART-2026-002',
+            date: today,
+            employeeId: '50510312',
+            staffName: 'Muskan Sharma',
+            staffEmail: 'muskan.sharma@indiapost.gov.in',
+            beatNo: 'Beat 1',
+            officeName: 'Dadabari S.O. (324009)',
+            attendanceStatus: 'Present - Field Duty',
+            fixedKm: b1Fuel.sanctionedDailyKm,
+            sanctionedBeatKm: b1Fuel.sanctionedDailyKm,
+            fuelRatePerKm: 3.60,
+            dailyFuelAllowance: Number((b1Fuel.sanctionedDailyKm * 3.60).toFixed(2)),
+            monthlyFuelAllowance: Number((b1Fuel.sanctionedDailyKm * 3.60 * 25).toFixed(2)),
+            dssStatus: 'Reconciled with DSS',
+            registryReceived: 35,
+            registryDelivered: 33,
+            registryReturned: 1,
+            registryDeposit: 1,
+            speedPostReceived: 54,
+            speedPostDelivered: 52,
+            speedPostReturned: 1,
+            speedPostDeposit: 1,
+            parcelReceived: 14,
+            parcelDelivered: 13,
+            parcelReturned: 0,
+            parcelDeposit: 1,
+            codAmountCollected: 8400,
+            doorstepInquiriesLogged: 4,
+            remarks: 'Dadabari Main Sector 1 & 2 commercial & residential delivery done.',
+            dssArticleAuditTrail: [],
+            createdAt: new Date().toISOString(),
+          },
+          {
+            id: 'ART-2026-003',
+            date: today,
+            employeeId: '10310735',
+            staffName: 'Govind Prasad',
+            staffEmail: 'govind.prasad@indiapost.gov.in',
+            beatNo: 'Beat 4',
+            officeName: 'Dadabari S.O. (324009)',
+            attendanceStatus: 'Present - Field Duty',
+            fixedKm: b4Fuel.sanctionedDailyKm,
+            sanctionedBeatKm: b4Fuel.sanctionedDailyKm,
+            fuelRatePerKm: 3.60,
+            dailyFuelAllowance: Number((b4Fuel.sanctionedDailyKm * 3.60).toFixed(2)),
+            monthlyFuelAllowance: Number((b4Fuel.sanctionedDailyKm * 3.60 * 25).toFixed(2)),
+            dssStatus: 'Reconciled with DSS',
+            registryReceived: 38,
+            registryDelivered: 36,
+            registryReturned: 2,
+            registryDeposit: 0,
+            speedPostReceived: 61,
+            speedPostDelivered: 58,
+            speedPostReturned: 2,
+            speedPostDeposit: 1,
+            parcelReceived: 16,
+            parcelDelivered: 15,
+            parcelReturned: 1,
+            parcelDeposit: 0,
+            codAmountCollected: 11200,
+            doorstepInquiriesLogged: 5,
+            remarks: '3 new SSA leads collected during Speed Post delivery.',
+            dssArticleAuditTrail: [],
+            createdAt: new Date().toISOString(),
+          },
+        ];
+
+    this.dailyEntries = this.deduplicateDailyEntries([
+      ...initialTodayEntries,
+      ...this.generateAll33BeatsOctober2026SeedEntries(),
+    ]);
+    try {
+      localStorage.setItem(STORAGE_KEY_OCT2026_LOCK_SYNC, 'SYNCED_ALL_33_V1');
+    } catch {
+      // ignore storage errors
+    }
     this.saveDailyEntries();
   }
 
-  private generateOctober2026SeedEntries(): DailyArticleEntry[] {
+  private syncOctober2026All33BeatsInternal(shouldNotify: boolean) {
+    const nonOctEntries = this.dailyEntries.filter(
+      (e) => !(e.date && e.date.startsWith('2026-10'))
+    );
+    const octAll33 = this.generateAll33BeatsOctober2026SeedEntries();
+    this.dailyEntries = this.deduplicateDailyEntries([...nonOctEntries, ...octAll33]);
+    try {
+      localStorage.setItem(STORAGE_KEY_OCT2026_LOCK_SYNC, 'SYNCED_ALL_33_V1');
+    } catch {
+      // ignore storage errors
+    }
+    this.saveDailyEntries();
+    if (shouldNotify) {
+      this.notify();
+    }
+  }
+
+  public syncAndLockOctober2026All33Beats(): {
+    syncedBeatsCount: number;
+    totalEntriesCount: number;
+    beat6Summary: {
+      beatNo: string;
+      postmanName: string;
+      employeeId: string;
+      workingDays: number;
+      dailyKm: number;
+      totalKm: number;
+      totalClaimAmount: number;
+      pdmsTotal: number;
+      dssTotal: number;
+      mobileUsageAvg: number;
+      isDepartmentLocked: boolean;
+    };
+  } {
+    this.syncOctober2026All33BeatsInternal(true);
+    this.ensureLockedBeat6BillingRecords(true);
+    const beat6Meta = OCTOBER_2026_BEAT_METADATA[6];
+    const beat6Fuel = getBeatFuelMapping('Beat 6');
+    const beat6TotalKm = beat6Fuel.sanctionedDailyKm * beat6Meta.workingDays;
+    const beat6Claim = Number((beat6TotalKm * 3.6).toFixed(2));
+    return {
+      syncedBeatsCount: 33,
+      totalEntriesCount: 33 * 31,
+      beat6Summary: {
+        beatNo: 'Beat 6',
+        postmanName: beat6Meta.postmanName,
+        employeeId: beat6Fuel.assignedStaffId.replace(/^STAFF-/, ''),
+        workingDays: beat6Meta.workingDays,
+        dailyKm: beat6Fuel.sanctionedDailyKm,
+        totalKm: beat6TotalKm,
+        totalClaimAmount: beat6Claim,
+        pdmsTotal: beat6Meta.pdmsTotal,
+        dssTotal: beat6Meta.dssTotal,
+        mobileUsageAvg: beat6Meta.mobileUsageAvg,
+        isDepartmentLocked: true,
+      },
+    };
+  }
+
+  public generateAll33BeatsOctober2026SeedEntries(): DailyArticleEntry[] {
     const entries: DailyArticleEntry[] = [];
-    const b2Fuel = getBeatFuelMapping('Beat 2');
-    const b1Fuel = getBeatFuelMapping('Beat 1');
-    const b4Fuel = getBeatFuelMapping('Beat 4');
+    for (let seq = 1; seq <= 33; seq++) {
+      const beatLabel = `Beat ${seq}`;
+      const meta = OCTOBER_2026_BEAT_METADATA[seq];
+      const schedule = OCTOBER_2026_ALL_33_BEATS_SCHEDULE[seq] || getOctober2026OfficialBeatSchedule(beatLabel) || [];
+      const fuelMap = getBeatFuelMapping(beatLabel);
+      const staffIdClean = (fuelMap.assignedStaffId || '').replace(/^STAFF-/, '') || `BEAT${seq}`;
+      const dailyKm = fuelMap.sanctionedDailyKm;
+      const dailyAllowance = Number((dailyKm * 3.6).toFixed(2));
+      const monthlyAllowance = Number((dailyKm * 3.6 * (meta?.workingDays ?? 25)).toFixed(2));
+      const postmanName = meta?.postmanName || fuelMap.assignedPostmanName;
 
-    // 1. Beat 2: Reference Postman Mahendra Kumar Meena (50457421)
-    OCTOBER_2026_FUEL_REFERENCE_ROWS.forEach((r) => {
-      const isSun = r.status === 'SUNDAY';
-      const isHol = r.status === 'HOLIDAY';
-      const sp = typeof r.sp === 'number' ? r.sp : 0;
-      const reg = typeof r.reg === 'number' ? r.reg : 0;
-      const par = typeof r.others === 'number' ? r.others : 0;
+      schedule.forEach((r) => {
+        const isSun = r.status === 'SUNDAY';
+        const isHol = r.status === 'HOLIDAY';
+        const isLeave = r.status === 'LEAVE';
+        const isWorking = r.status === 'WORKING';
+        const sp = typeof r.sp === 'number' ? r.sp : 0;
+        const reg = typeof r.reg === 'number' ? r.reg : 0;
+        const par = typeof r.others === 'number' ? r.others : 0;
+        const dayTotal = typeof r.total === 'number' ? r.total : sp + reg + par;
+        const pdms = typeof r.pdmsInvoicedCount === 'number' ? r.pdmsInvoicedCount : dayTotal;
+        const dss = typeof r.dssInvoicedCount === 'number' ? r.dssInvoicedCount : dayTotal;
+        const mob = typeof r.mobileUsagePercent === 'number' ? r.mobileUsagePercent : 100;
 
-      entries.push({
-        id: `DSS-B2-202610-${String(r.sn).padStart(2, '0')}`,
-        date: r.isoDate,
-        employeeId: '50457421',
-        staffName: 'Mahendra Kumar Meena',
-        staffEmail: 'mahen.comtech@gmail.com',
-        beatNo: 'Beat 2',
-        officeName: 'Dadabari S.O. (324009)',
-        attendanceStatus: isSun
-          ? 'Sunday'
-          : isHol
-          ? 'Gazetted Holiday'
-          : 'Present - Field Duty',
-        fixedKm: 30,
-        sanctionedBeatKm: b2Fuel.sanctionedDailyKm,
-        fuelRatePerKm: 3.60,
-        dailyFuelAllowance: Math.round(30 * 3.60),
-        monthlyFuelAllowance: Math.round(30 * 3.60 * 25),
-        dssStatus: 'Reconciled with DSS',
-        registryReceived: isSun || isHol ? 0 : reg + (reg > 0 ? 1 : 0),
-        registryDelivered: isSun || isHol ? 0 : reg,
-        registryReturned: isSun || isHol ? 0 : reg > 0 ? 1 : 0,
-        registryDeposit: 0,
-        speedPostReceived: isSun || isHol ? 0 : sp + 2,
-        speedPostDelivered: isSun || isHol ? 0 : sp,
-        speedPostReturned: isSun || isHol ? 0 : 2,
-        speedPostDeposit: 0,
-        parcelReceived: isSun || isHol ? 0 : par + (par > 2 ? 1 : 0),
-        parcelDelivered: isSun || isHol ? 0 : par,
-        parcelReturned: isSun || isHol ? 0 : par > 2 ? 1 : 0,
-        parcelDeposit: 0,
-        codAmountCollected: isSun || isHol ? 0 : 2400 + (r.sn % 6) * 1150,
-        doorstepInquiriesLogged: isSun || isHol ? 0 : 3 + (r.sn % 4),
-        remarks: isSun
-          ? 'Sunday - Office Off'
-          : isHol
-          ? r.sn === 2
-            ? 'Gazetted Holiday: Mahatma Gandhi Birthday (Gandhi Jayanti)'
-            : 'Gazetted Holiday: Dussehra (Vijayadashami)'
-          : `Keshavpura Sectors 6 & 7 delivery round completed (${sp + reg + par} accountable articles). PMA 100% sync.`,
-        dssArticleAuditTrail: [],
-        createdAt: new Date('2026-10-01T08:00:00Z').toISOString(),
+        entries.push({
+          id: `DSS-B${String(seq).padStart(2, '0')}-202610-${String(r.sn).padStart(2, '0')}`,
+          date: r.isoDate,
+          employeeId: staffIdClean,
+          staffName: postmanName,
+          staffEmail: `${postmanName.toLowerCase().replace(/[^a-z0-9]+/g, '.')}@indiapost.gov.in`,
+          beatNo: beatLabel,
+          officeName: 'Dadabari S.O. (324009)',
+          attendanceStatus: isSun
+            ? 'Sunday'
+            : isHol
+            ? 'Gazetted Holiday'
+            : isLeave
+            ? 'On Leave'
+            : 'Present - Field Duty',
+          fixedKm: dailyKm,
+          sanctionedBeatKm: dailyKm,
+          fuelRatePerKm: 3.60,
+          dailyFuelAllowance: isWorking ? dailyAllowance : 0,
+          monthlyFuelAllowance: monthlyAllowance,
+          pdmsInvoicedCount: isWorking ? pdms : undefined,
+          dssInvoicedCount: isWorking ? dss : undefined,
+          mobileUsagePercent: isWorking ? mob : undefined,
+          dssStatus: 'Reconciled with DSS',
+          isDepartmentLocked: true,
+          lockedAt: '2026-11-01T09:00:00Z',
+          lockedBy: 'Department DSS Audit (Office 28660686 / BATCH_01)',
+          departmentLockSource: 'DSS_REPORT_OCT_2026_OFFICIAL',
+          registryReceived: 0,
+          registryDelivered: 0,
+          registryReturned: 0,
+          registryDeposit: 0,
+          speedPostReceived: isWorking ? pdms : 0,
+          speedPostDelivered: isWorking ? sp : 0,
+          speedPostReturned: isWorking ? Math.max(0, pdms - dss) : 0,
+          speedPostDeposit: 0,
+          parcelReceived: isWorking ? par : 0,
+          parcelDelivered: isWorking ? par : 0,
+          parcelReturned: 0,
+          parcelDeposit: 0,
+          codAmountCollected: isWorking ? Math.round(dayTotal * 45) : 0,
+          doorstepInquiriesLogged: isWorking ? 2 : 0,
+          remarks: isSun
+            ? 'Sunday - Office Off'
+            : isHol
+            ? r.sn === 2
+              ? 'Gazetted Holiday: Mahatma Gandhi Birthday (Gandhi Jayanti)'
+              : 'Gazetted Holiday: Dussehra (Vijayadashami)'
+            : isLeave
+            ? `Absent / On Leave (No DSS dispatch on ${r.date})`
+            : `${beatLabel} (${postmanName}) Official DSS Verified · PDMS: ${pdms}, DSS: ${dss}, Mobile Usage: ${mob}% (${fuelMap.linkedPincodes.join(', ')}) [Department Locked]`,
+          dssArticleAuditTrail: [],
+          createdAt: '2026-11-01T09:00:00Z',
+        });
       });
-    });
-
-    // 2. Beat 1: Muskan Sharma (50510312)
-    OCTOBER_2026_FUEL_REFERENCE_ROWS.forEach((r) => {
-      const isSun = r.status === 'SUNDAY';
-      const isHol = r.status === 'HOLIDAY';
-      const sp = typeof r.sp === 'number' ? Math.round(r.sp * 0.85) : 0;
-      const reg = typeof r.reg === 'number' ? Math.max(1, r.reg) : 0;
-      const par = typeof r.others === 'number' ? Math.round(r.others * 0.8) : 0;
-
-      entries.push({
-        id: `DSS-B1-202610-${String(r.sn).padStart(2, '0')}`,
-        date: r.isoDate,
-        employeeId: '50510312',
-        staffName: 'Muskan Sharma',
-        staffEmail: 'muskan.sharma@indiapost.gov.in',
-        beatNo: 'Beat 1',
-        officeName: 'Dadabari S.O. (324009)',
-        attendanceStatus: isSun
-          ? 'Sunday'
-          : isHol
-          ? 'Gazetted Holiday'
-          : 'Present - Field Duty',
-        fixedKm: b1Fuel.sanctionedDailyKm,
-        sanctionedBeatKm: b1Fuel.sanctionedDailyKm,
-        fuelRatePerKm: 3.60,
-        dailyFuelAllowance: Math.round(b1Fuel.sanctionedDailyKm * 3.60),
-        monthlyFuelAllowance: Math.round(b1Fuel.sanctionedDailyKm * 3.60 * 25),
-        dssStatus: 'Reconciled with DSS',
-        registryReceived: isSun || isHol ? 0 : reg + 1,
-        registryDelivered: isSun || isHol ? 0 : reg,
-        registryReturned: isSun || isHol ? 0 : 1,
-        registryDeposit: 0,
-        speedPostReceived: isSun || isHol ? 0 : sp + 2,
-        speedPostDelivered: isSun || isHol ? 0 : sp,
-        speedPostReturned: isSun || isHol ? 0 : 2,
-        speedPostDeposit: 0,
-        parcelReceived: isSun || isHol ? 0 : par + 1,
-        parcelDelivered: isSun || isHol ? 0 : par,
-        parcelReturned: isSun || isHol ? 0 : 1,
-        parcelDeposit: 0,
-        codAmountCollected: isSun || isHol ? 0 : 1800 + (r.sn % 5) * 800,
-        doorstepInquiriesLogged: isSun || isHol ? 0 : 3,
-        remarks: isSun || isHol ? 'Off' : `Dadabari Extension delivery completed (${sp + reg + par} articles).`,
-        dssArticleAuditTrail: [],
-        createdAt: new Date('2026-10-01T08:00:00Z').toISOString(),
-      });
-    });
-
-    // 3. Beat 4: Govind Prasad (10310735)
-    OCTOBER_2026_FUEL_REFERENCE_ROWS.forEach((r) => {
-      const isSun = r.status === 'SUNDAY';
-      const isHol = r.status === 'HOLIDAY';
-      const sp = typeof r.sp === 'number' ? Math.round(r.sp * 0.9) : 0;
-      const reg = typeof r.reg === 'number' ? r.reg : 0;
-      const par = typeof r.others === 'number' ? r.others : 0;
-
-      entries.push({
-        id: `DSS-B4-202610-${String(r.sn).padStart(2, '0')}`,
-        date: r.isoDate,
-        employeeId: '10310735',
-        staffName: 'Govind Prasad',
-        staffEmail: 'govind.prasad@indiapost.gov.in',
-        beatNo: 'Beat 4',
-        officeName: 'Dadabari S.O. (324009)',
-        attendanceStatus: isSun
-          ? 'Sunday'
-          : isHol
-          ? 'Gazetted Holiday'
-          : 'Present - Field Duty',
-        fixedKm: b4Fuel.sanctionedDailyKm,
-        sanctionedBeatKm: b4Fuel.sanctionedDailyKm,
-        fuelRatePerKm: 3.60,
-        dailyFuelAllowance: Math.round(b4Fuel.sanctionedDailyKm * 3.60),
-        monthlyFuelAllowance: Math.round(b4Fuel.sanctionedDailyKm * 3.60 * 25),
-        dssStatus: 'Reconciled with DSS',
-        registryReceived: isSun || isHol ? 0 : reg + 1,
-        registryDelivered: isSun || isHol ? 0 : reg,
-        registryReturned: isSun || isHol ? 0 : 1,
-        registryDeposit: 0,
-        speedPostReceived: isSun || isHol ? 0 : sp + 2,
-        speedPostDelivered: isSun || isHol ? 0 : sp,
-        speedPostReturned: isSun || isHol ? 0 : 2,
-        speedPostDeposit: 0,
-        parcelReceived: isSun || isHol ? 0 : par + 1,
-        parcelDelivered: isSun || isHol ? 0 : par,
-        parcelReturned: isSun || isHol ? 0 : 1,
-        parcelDeposit: 0,
-        codAmountCollected: isSun || isHol ? 0 : 2100 + (r.sn % 4) * 950,
-        doorstepInquiriesLogged: isSun || isHol ? 0 : 4,
-        remarks: isSun || isHol ? 'Off' : `Keshavpura Vistar delivery completed (${sp + reg + par} articles).`,
-        dssArticleAuditTrail: [],
-        createdAt: new Date('2026-10-01T08:00:00Z').toISOString(),
-      });
-    });
-
-    // 4. Beat 17: Priyanshu Trivedi (50507003 / STAFF-50507003) - Anantpura / Industrial Area
-    entries.push(...this.generateBeat17October2026SeedEntries());
-
-    // 5. Beat 5: Mohit Arvind (10310736 / STAFF-10310736) - Mahaveer Nagar Vistar / Samrat Chowk
-    entries.push(...this.generateBeat5October2026SeedEntries());
-
+    }
     return entries;
   }
 
-  /**
-   * Generates exact October 2026 daily article entries for Beat 17 (Priyanshu Trivedi)
-   * Derived 100% identically from official India Post PDMS/DSS screenshot:
-   * 24 Working Days | Totals: 2,252 (Avg: 93.83, Max: 251)
-   * Registered: 0 (Numeric zero) | Mobile Usage: 100% | Sanctioned KM: 28 KM/day | Rate: ₹3.60/KM
-   */
+  private generateOctober2026SeedEntries(): DailyArticleEntry[] {
+    return this.generateAll33BeatsOctober2026SeedEntries();
+  }
+
   public generateBeat17October2026SeedEntries(): DailyArticleEntry[] {
-    const entries: DailyArticleEntry[] = [];
-    const b17Fuel = getBeatFuelMapping('Beat 17');
-
-    PRIYANSHU_BEAT_17_OCTOBER_2026_ROWS.forEach((r) => {
-      const isSun = r.status === 'SUNDAY';
-      const isHol = r.status === 'HOLIDAY';
-      const sp = typeof r.sp === 'number' ? r.sp : 0;
-      const reg = typeof r.reg === 'number' ? r.reg : 0; // strictly numeric 0
-      const par = typeof r.others === 'number' ? r.others : 0;
-      const dayTotal = typeof r.total === 'number' ? r.total : 0;
-
-      entries.push({
-        id: `DSS-B17-202610-${String(r.sn).padStart(2, '0')}`,
-        date: r.isoDate,
-        employeeId: '50507003',
-        staffName: 'Priyanshu Trivedi',
-        staffEmail: 'priyanshu.trivedi@indiapost.gov.in',
-        beatNo: 'Beat 17',
-        officeName: 'Dadabari S.O. (324009)',
-        attendanceStatus: isSun
-          ? 'Sunday'
-          : isHol
-          ? 'Gazetted Holiday'
-          : 'Present - Field Duty',
-        fixedKm: 28,
-        sanctionedBeatKm: b17Fuel.sanctionedDailyKm,
-        fuelRatePerKm: 3.60,
-        dailyFuelAllowance: isSun || isHol ? 0 : 100.80, // 28 KM * ₹3.60
-        monthlyFuelAllowance: 2520, // 25 working days * 28 KM * ₹3.60 = ₹2,520.00
-        pdmsInvoicedCount: r.pdmsInvoicedCount,
-        dssInvoicedCount: r.dssInvoicedCount,
-        mobileUsagePercent: r.mobileUsagePercent,
-        dssStatus: 'Reconciled with DSS',
-        registryReceived: 0,
-        registryDelivered: 0, // Registered articles nil as per statutory jurisdiction
-        registryReturned: 0,
-        registryDeposit: 0,
-        speedPostReceived: isSun || isHol ? 0 : sp + 2,
-        speedPostDelivered: isSun || isHol ? 0 : sp,
-        speedPostReturned: isSun || isHol ? 0 : 2,
-        speedPostDeposit: 0,
-        parcelReceived: isSun || isHol ? 0 : par + (par > 2 ? 1 : 0),
-        parcelDelivered: isSun || isHol ? 0 : par,
-        parcelReturned: isSun || isHol ? 0 : par > 2 ? 1 : 0,
-        parcelDeposit: 0,
-        codAmountCollected: isSun || isHol ? 0 : 3200 + (r.sn % 6) * 1400,
-        doorstepInquiriesLogged: isSun || isHol ? 0 : 4,
-        remarks: isSun
-          ? 'Sunday - Office Off'
-          : isHol
-          ? r.sn === 2
-            ? 'Gazetted Holiday: Mahatma Gandhi Birthday (Gandhi Jayanti)'
-            : 'Gazetted Holiday: Dussehra (Vijayadashami)'
-          : `Beat 17 (Anantpura Industrial Area) round completed: ${dayTotal} accountable articles delivered (Speed Post: ${sp}, Reg: Nil [0], Parcels: ${par}). PDMS Invoiced Count: ${r.pdmsInvoicedCount}, DSS Invoiced Count: ${r.dssInvoicedCount}, Mobile Usage %: ${r.mobileUsagePercent}%.`,
-        dssArticleAuditTrail: [],
-        createdAt: new Date('2026-10-01T08:00:00Z').toISOString(),
-      });
-    });
-
-    return entries;
+    return this.generateAll33BeatsOctober2026SeedEntries().filter((e) => e.beatNo === 'Beat 17');
   }
 
   public generateBeat5October2026SeedEntries(): DailyArticleEntry[] {
-    const entries: DailyArticleEntry[] = [];
-    const b5Fuel = getBeatFuelMapping('Beat 5');
-
-    MOHIT_BEAT_5_OCTOBER_2026_ROWS.forEach((r) => {
-      const isSun = r.status === 'SUNDAY';
-      const isHol = r.status === 'HOLIDAY';
-      const isLeave = r.status === 'LEAVE';
-      const sp = typeof r.sp === 'number' ? r.sp : 0;
-      const reg = 0; // Strictly zero as instructed
-      const par = typeof r.others === 'number' ? r.others : 0;
-      const dayTotal = typeof r.total === 'number' ? r.total : 0;
-
-      entries.push({
-        id: `DSS-B05-202610-${String(r.sn).padStart(2, '0')}`,
-        date: r.isoDate,
-        employeeId: '10310736',
-        staffName: 'Mohit Arvind',
-        staffEmail: 'mohit.arvind@indiapost.gov.in',
-        beatNo: 'Beat 5',
-        officeName: 'Dadabari S.O. (324009)',
-        attendanceStatus: isSun
-          ? 'Sunday'
-          : isHol
-          ? 'Gazetted Holiday'
-          : isLeave
-          ? 'On Leave'
-          : 'Present - Field Duty',
-        fixedKm: 19,
-        sanctionedBeatKm: b5Fuel.sanctionedDailyKm,
-        fuelRatePerKm: 3.60,
-        dailyFuelAllowance: isSun || isHol || isLeave ? 0 : 68.40, // 19 KM * ₹3.60
-        monthlyFuelAllowance: 1642, // 24 working days * 19 KM * ₹3.60 = ₹1,641.60
-        pdmsInvoicedCount: r.pdmsInvoicedCount,
-        dssInvoicedCount: r.dssInvoicedCount,
-        mobileUsagePercent: r.mobileUsagePercent,
-        dssStatus: 'Reconciled with DSS',
-        registryReceived: 0,
-        registryDelivered: 0, // Registered articles zero as instructed
-        registryReturned: 0,
-        registryDeposit: 0,
-        speedPostReceived: isSun || isHol || isLeave ? 0 : sp + 2,
-        speedPostDelivered: isSun || isHol || isLeave ? 0 : sp,
-        speedPostReturned: isSun || isHol || isLeave ? 0 : 2,
-        speedPostDeposit: 0,
-        parcelReceived: isSun || isHol || isLeave ? 0 : par + (par > 2 ? 1 : 0),
-        parcelDelivered: isSun || isHol || isLeave ? 0 : par,
-        parcelReturned: isSun || isHol || isLeave ? 0 : par > 2 ? 1 : 0,
-        parcelDeposit: 0,
-        codAmountCollected: isSun || isHol || isLeave ? 0 : 2800 + (r.sn % 5) * 1200,
-        doorstepInquiriesLogged: isSun || isHol || isLeave ? 0 : 3,
-        remarks: isSun
-          ? 'Sunday - Office Off'
-          : isHol
-          ? r.sn === 2
-            ? 'Gazetted Holiday: Mahatma Gandhi Birthday (Gandhi Jayanti)'
-            : 'Gazetted Holiday: Dussehra (Vijayadashami)'
-          : isLeave
-          ? 'Leave / Off Day'
-          : `Beat 5 (Mahaveer Nagar Vistar / Samrat Chowk) round completed: ${dayTotal} accountable articles delivered (Speed Post: ${sp}, Reg: 0, Parcels: ${par}). PDMS Invoiced Count: ${r.pdmsInvoicedCount}, DSS Invoiced Count: ${r.dssInvoicedCount}, Mobile Usage %: ${r.mobileUsagePercent}%.`,
-        dssArticleAuditTrail: [],
-        createdAt: new Date('2026-10-01T08:00:00Z').toISOString(),
-      });
-    });
-
-    return entries;
+    return this.generateAll33BeatsOctober2026SeedEntries().filter((e) => e.beatNo === 'Beat 5');
   }
 
   private saveDailyEntries() {
@@ -653,18 +522,20 @@ class OperationsService {
   public addDailyEntry(
     entry: Omit<DailyArticleEntry, 'id' | 'createdAt'>
   ): DailyArticleEntry {
-    const fuelData = getBeatFuelMapping(entry.beatNo);
+    const normalizedBeat = normalizeBeatLabel(entry.beatNo);
+    const fuelData = getBeatFuelMapping(normalizedBeat);
     const resolvedKm = entry.fixedKm && entry.fixedKm > 0 ? entry.fixedKm : fuelData.sanctionedDailyKm;
-    const dailyFuel = Math.round(resolvedKm * fuelData.fuelRatePerKm);
+    const dailyFuel = Number((resolvedKm * fuelData.fuelRatePerKm).toFixed(2));
 
     const newEntry: DailyArticleEntry = {
       ...entry,
+      beatNo: normalizedBeat,
       id: `ART-${Date.now().toString().slice(-6)}`,
       fixedKm: resolvedKm,
       sanctionedBeatKm: fuelData.sanctionedDailyKm,
       fuelRatePerKm: fuelData.fuelRatePerKm,
       dailyFuelAllowance: dailyFuel,
-      monthlyFuelAllowance: dailyFuel * 24,
+      monthlyFuelAllowance: Number((dailyFuel * 24).toFixed(2)),
       dssStatus: entry.dssStatus || 'Reconciled with DSS',
       dssArticleAuditTrail: entry.dssArticleAuditTrail || [],
       createdAt: new Date().toISOString(),
@@ -682,12 +553,13 @@ class OperationsService {
    * Updates ONLY specific accountable article quantities (Speed Post, Registered, Parcels, COD)
    * Strictly preserves core Daily Summary Sheet (DSS) metadata, historical verification logs,
    * beat assignments, and attendance status without object replacement or data loss.
+   * Respects immutable `isDepartmentLocked` records.
    */
   public patchArticleQuantities(
     selector: { id?: string; date?: string; beatNo?: string },
     patch: ArticleQuantityPatch,
     auditMeta: { updatedBy: string; remarks?: string }
-  ): { success: boolean; entry?: DailyArticleEntry; message: string } {
+  ): { success: boolean; entry?: DailyArticleEntry; message: string; isLocked?: boolean } {
     let index = -1;
 
     if (selector.id) {
@@ -709,6 +581,14 @@ class OperationsService {
     }
 
     const target = this.dailyEntries[index];
+    if (target.isDepartmentLocked) {
+      return {
+        success: false,
+        entry: { ...target },
+        isLocked: true,
+        message: `Department Locked (Immutable): ${target.beatNo} on ${target.date} (${target.staffName}) is locked by ${target.lockedBy || 'Department DSS Audit'} and cannot be modified.`,
+      };
+    }
     const previousCounts: Record<string, number> = {};
     const newCounts: Record<string, number> = {};
     const changedFields: string[] = [];
@@ -843,12 +723,24 @@ class OperationsService {
   public patchOrUpsertDailyArticleQuantities(
     entryData: Omit<DailyArticleEntry, 'id' | 'createdAt'> & { id?: string },
     auditMeta: { updatedBy: string; remarks?: string }
-  ): { success: boolean; entry: DailyArticleEntry; isUpdate: boolean } {
+  ): { success: boolean; entry: DailyArticleEntry; isUpdate: boolean; isLocked?: boolean; message?: string } {
+    const normalizedBeat = normalizeBeatLabel(entryData.beatNo);
     const existing = this.dailyEntries.find(
-      (e) => (entryData.id && e.id === entryData.id) || (e.date === entryData.date && e.beatNo === entryData.beatNo)
+      (e) =>
+        (entryData.id && e.id === entryData.id) ||
+        (e.date === entryData.date && normalizeBeatLabel(e.beatNo).toLowerCase() === normalizedBeat.toLowerCase())
     );
 
     if (existing) {
+      if (existing.isDepartmentLocked) {
+        return {
+          success: false,
+          entry: existing,
+          isUpdate: true,
+          isLocked: true,
+          message: `Department Locked (Immutable): ${existing.beatNo} (${existing.date}) cannot be overwritten by manual edit or bulk upload.`,
+        };
+      }
       const patchRes = this.patchArticleQuantities(
         { id: existing.id },
         {
@@ -871,12 +763,14 @@ class OperationsService {
         auditMeta
       );
       return {
-        success: true,
+        success: patchRes.success,
         entry: patchRes.entry || existing,
         isUpdate: true,
+        isLocked: patchRes.isLocked,
+        message: patchRes.message,
       };
     } else {
-      const created = this.addDailyEntry(entryData);
+      const created = this.addDailyEntry({ ...entryData, beatNo: normalizedBeat });
       return {
         success: true,
         entry: created,
@@ -887,9 +781,7 @@ class OperationsService {
 
   /**
    * Reconciles all daily entries against Master DSS benchmarks.
-   * If any day's delivered articles (Speed Post + Registered + Parcels) do not equal
-   * the official DSS benchmark, dynamically auto-adjusts Speed Post so that
-   * the master DSS totals and delivery percentages remain 100% undisturbed.
+   * Respects immutable `isDepartmentLocked` records — locked department rows are never modified.
    */
   public reconcileAndAutoAdjustEntriesToDss(
     targetBeat?: string,
@@ -897,10 +789,12 @@ class OperationsService {
   ): {
     totalChecked: number;
     adjustedCount: number;
+    lockedSkippedCount: number;
     details: Array<{ date: string; beatNo: string; originalSp: number; newSp: number; dssBenchmark: number }>;
   } {
     let adjustedCount = 0;
     let totalChecked = 0;
+    let lockedSkippedCount = 0;
     const details: Array<{ date: string; beatNo: string; originalSp: number; newSp: number; dssBenchmark: number }> = [];
 
     const cleanBeat = targetBeat ? targetBeat.replace(/beat\s*/i, '').trim().toLowerCase() : null;
@@ -911,6 +805,11 @@ class OperationsService {
       if (targetMonth && !entry.date.startsWith(targetMonth)) return;
 
       totalChecked++;
+
+      if (entry.isDepartmentLocked) {
+        lockedSkippedCount++;
+        return;
+      }
 
       const benchmark =
         typeof entry.dssInvoicedCount === 'number' && entry.dssInvoicedCount > 0
@@ -954,7 +853,7 @@ class OperationsService {
       this.notify();
     }
 
-    return { totalChecked, adjustedCount, details };
+    return { totalChecked, adjustedCount, lockedSkippedCount, details };
   }
 
   /**
@@ -973,8 +872,12 @@ class OperationsService {
     try {
       const raw = localStorage.getItem(STORAGE_KEY_SPECIAL_BILLS);
       if (raw) {
-        this.specialBills = JSON.parse(raw);
-        return;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this.specialBills = parsed;
+          this.ensureLockedBeat6BillingRecords(false);
+          return;
+        }
       }
     } catch (e) {
       console.warn(e);
@@ -1060,8 +963,8 @@ class OperationsService {
           relievedOfficerId: 'CSI-10089231',
           relievedDesignation: 'Postman Beat 2',
           relievingOfficerName: 'Mahendra Kumar Meena',
-          relievingOfficerId: 'CSI-10023401',
-          relievingDesignation: 'Postal Operator / Admin',
+          relievingOfficerId: '50457421',
+          relievingDesignation: 'Postman Beat 2',
           sessionType: 'Forenoon (F/N)',
           reasonForTransfer: 'Earned Leave Arrangement & Beat Audit',
           cashAndStampsHandedOver: 'PMA Device #KT-02, Beat 2 Key Set, Postage Due Balance ₹0',
@@ -1126,7 +1029,7 @@ class OperationsService {
         auditTrail: [
           { action: 'Draft Created', performedBy: 'Priyanshu Trivedi (Postman)', timestamp: '2026-10-25T11:00:00Z', notes: 'Initial generation' },
           { action: 'DSS Reconciled', performedBy: 'AI Data Sync Agent', timestamp: '2026-10-25T14:20:00Z', notes: '100% matched with screenshot sort audit' },
-          { action: 'Verified & Approved', performedBy: 'Mahendra Kumar Meena (Admin)', timestamp: '2026-10-26T09:30:00Z', notes: 'Sanctioned under sub-office contingency' },
+          { action: 'Verified & Approved', performedBy: 'Ekta Meena (Master Admin)', timestamp: '2026-10-26T09:30:00Z', notes: 'Sanctioned under sub-office contingency' },
         ],
         createdAt: today,
       },
@@ -1232,7 +1135,118 @@ class OperationsService {
         createdAt: today,
       },
     ];
+    this.ensureLockedBeat6BillingRecords(false);
     this.saveSpecialBills();
+  }
+
+  private ensureLockedBeat6BillingRecords(shouldNotify: boolean) {
+    const beat6Meta = OCTOBER_2026_BEAT_METADATA[6];
+    const beat6Rows = getOctober2026OfficialBeatSchedule('Beat 6') || [];
+    const lockedBill: SpecialBillRecord = {
+      id: 'BILL-BEAT6-OCT2026-LOCKED',
+      billNumber: 'DOP/KOTA/FUEL/2026/B06',
+      type: 'FUEL_BILL',
+      title: 'Official Two-Wheeler Fuel Bill: October 2026 (Beat 6 - RAM KISHAN MEGHWAL) [Department Locked]',
+      employeeId: '10317473',
+      employeeName: 'RAM KISHAN MEGHWAL',
+      employeeEmail: 'ramkishan.meghwal@indiapost.gov.in',
+      beatNo: 'Beat 6',
+      officeName: 'Dadabari S.O. (324009)',
+      fromDate: '2026-10-01',
+      toDate: '2026-10-31',
+      totalDays: 23,
+      fixedKm: 22,
+      totalAmount: 1821.60,
+      status: 'Sanctioned',
+      isDepartmentLocked: true,
+      lockedAt: '2026-11-01T09:00:00Z',
+      lockedBy: 'Department DSS Audit (Office 28660686 / BATCH_01)',
+      departmentLockSource: 'DSS_REPORT_OCT_2026_OFFICIAL',
+      details: {
+        claimMonth: 'OCTOBER',
+        claimYear: '2026',
+        calendarDays: 31,
+        workingDays: 23,
+        leaveDays: 8,
+        sundaysAndHolidays: 6,
+        absentDays: ['13-10-2026', '22-10-2026'],
+        totalDistanceKm: 506,
+        totalMonthlyKm: 506,
+        sanctionedDailyKm: 22,
+        ratePerKm: 3.60,
+        vehicleNo: 'RJ-20-RK-1031',
+        registeredArticles: 0,
+        pdmsInvoicedCount: beat6Meta?.pdmsTotal ?? 1248,
+        dssInvoicedCount: beat6Meta?.dssTotal ?? 1227,
+        totalArticlesDelivered: beat6Meta?.dssTotal ?? 1227,
+        mobileUsagePercentage: beat6Meta?.mobileUsageAvg ?? 97.94,
+        linkedPincodes: ['324009', '324005'],
+        dailyRows: beat6Rows,
+        remarks:
+          'Department-Locked Beat 6 (Ramkishan Meghwal | ID: 10317473 | Contact: 9664215130): 23 Working Days (Oct 13 & Oct 22 LEAVE) × 22 KM/day = 506 KM @ ₹3.60/KM = ₹1,821.60 | PDMS: 1,248 | DSS: 1,227 | Mobile Usage: 97.94%.',
+        spmVerificationNote: 'Department DSS Audit Verified & Immutable Lock Applied (Office 28660686 / BATCH_01).',
+      },
+      documentCategory: 'FUEL_ALLOWANCE',
+      auditTrail: [
+        {
+          action: 'Department DSS Ingested & Locked',
+          performedBy: 'Department DSS Audit (Office 28660686)',
+          timestamp: '2026-11-01T09:00:00Z',
+          notes: 'Locked Beat 6 official Oct 2026 dataset: 23 working days, 506 KM, ₹1,821.60, 97.94% mobile usage.',
+        },
+      ],
+      createdAt: '2026-11-01',
+    };
+
+    const existingIdx = this.specialBills.findIndex((b) => b.id === lockedBill.id);
+    if (existingIdx === -1) {
+      this.specialBills = [lockedBill, ...this.specialBills];
+      this.saveSpecialBills();
+    } else {
+      this.specialBills[existingIdx] = lockedBill;
+      this.saveSpecialBills();
+    }
+
+    const lockedLedger: FuelLedgerEntry = {
+      id: 'FLED-BEAT6-OCT2026-LOCKED',
+      date: '2026-10-31',
+      employeeId: '10317473',
+      employeeName: 'RAM KISHAN MEGHWAL',
+      beatNo: 'Beat 6',
+      officeName: 'Dadabari S.O. (324009)',
+      vehicleNo: 'RJ-20-RK-1031',
+      openingKmReading: 28400,
+      closingKmReading: 28906,
+      netKmRun: 506,
+      sanctionedBeatKm: 506,
+      fuelVolumeLitres: 17.37,
+      fuelPricePerLitre: 104.87,
+      totalFuelCost: 1821.60,
+      receiptNumber: 'DOP-OCT2026-BEAT06-LOCKED',
+      fuelStationName: 'Department Verified Monthly Fuel Claim (23 Days × 22 KM @ ₹3.60)',
+      paymentMode: 'UPI / DakPay',
+      dssReconciliationStatus: 'Reconciled with DSS',
+      isDepartmentLocked: true,
+      lockedAt: '2026-11-01T09:00:00Z',
+      lockedBy: 'Department DSS Audit (Office 28660686 / BATCH_01)',
+      departmentLockSource: 'DSS_REPORT_OCT_2026_OFFICIAL',
+      remarks:
+        'Immutable Department Lock: Beat 6 Ramkishan Meghwal (9664215130) · 23 Working Days (Oct 13 & Oct 22 Absent/Leave) · 506 KM × ₹3.60 = ₹1,821.60 · PDMS 1,248 / DSS 1,227 (97.94% Mobile Usage).',
+      createdAt: '2026-11-01T09:00:00Z',
+    };
+
+    const ledIdx = this.fuelLedgerEntries.findIndex((f) => f.id === lockedLedger.id);
+    if (ledIdx === -1) {
+      this.fuelLedgerEntries = [lockedLedger, ...this.fuelLedgerEntries];
+      this.saveFuelLedger();
+    } else {
+      this.fuelLedgerEntries[ledIdx] = lockedLedger;
+      this.saveFuelLedger();
+    }
+
+    if (shouldNotify) {
+      this.notify();
+    }
   }
 
   private saveSpecialBills() {
@@ -1278,6 +1292,9 @@ class OperationsService {
   ): SpecialBillRecord | undefined {
     const found = this.specialBills.find((b) => b.id === id);
     if (!found) return undefined;
+    if (found.isDepartmentLocked) {
+      return found;
+    }
     found.status = status;
     this.saveSpecialBills();
     this.incrementPendingSync();
@@ -1290,8 +1307,12 @@ class OperationsService {
     try {
       const raw = localStorage.getItem(STORAGE_KEY_FUEL_LEDGER);
       if (raw) {
-        this.fuelLedgerEntries = JSON.parse(raw);
-        return;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this.fuelLedgerEntries = parsed;
+          this.ensureLockedBeat6BillingRecords(false);
+          return;
+        }
       }
     } catch (e) {
       console.warn(e);
@@ -1409,6 +1430,7 @@ class OperationsService {
         createdAt: '2026-08-25T17:10:00Z',
       },
     ];
+    this.ensureLockedBeat6BillingRecords(false);
     this.saveFuelLedger();
   }
 
@@ -1447,6 +1469,9 @@ class OperationsService {
   ): FuelLedgerEntry | undefined {
     const idx = this.fuelLedgerEntries.findIndex((e) => e.id === id);
     if (idx === -1) return undefined;
+    if (this.fuelLedgerEntries[idx].isDepartmentLocked) {
+      return this.fuelLedgerEntries[idx];
+    }
     const updated = { ...this.fuelLedgerEntries[idx], dssReconciliationStatus: status };
     this.fuelLedgerEntries = [
       ...this.fuelLedgerEntries.slice(0, idx),
@@ -1616,7 +1641,7 @@ class OperationsService {
       console.warn(e);
     }
     return {
-      masterAdminEmail: 'mahen.comtech@gmail.com',
+      masterAdminEmail: 'Ektamahenmeena@gmail.com',
       autoSyncEnabled: true,
       backupFrequency: 'Daily',
       linkedSpreadsheetId: '',
@@ -1655,7 +1680,7 @@ class OperationsService {
 
   /**
    * Synchronizes all 6 core CRM & Operations datasets directly to Google Sheets
-   * under the Master Admin account (mahen.comtech@gmail.com).
+   * under the Master Admin account (Ektamahenmeena@gmail.com).
    */
   public async syncAllToGoogleSheets(accessToken: string): Promise<{
     spreadsheetId: string;
@@ -1695,7 +1720,7 @@ class OperationsService {
     if (!spreadsheetId) {
       const created = await createBackupSpreadsheet(
         accessToken,
-        `India Post CRM Master Backup - Dadabari SO (mahen.comtech@gmail.com)`,
+        `India Post CRM Master Backup - Dadabari SO (Ektamahenmeena@gmail.com)`,
         requiredTabs
       );
       spreadsheetId = created.spreadsheetId;
@@ -1730,7 +1755,7 @@ class OperationsService {
         c.beatNo || 'Beat 2',
         c.verificationStatus || 'Verified',
         c.financialInterest || '',
-        c.enteredBy || 'mahen.comtech@gmail.com',
+        c.enteredBy || 'Ektamahenmeena@gmail.com',
         c.remarks || '',
       ]),
     ];
@@ -1912,7 +1937,7 @@ class OperationsService {
 
   /**
    * Sends a comprehensive Daily/Weekly CRM Activity & Database Backup Summary Email
-   * directly to mahen.comtech@gmail.com via the Gmail API.
+   * directly to Ektamahenmeena@gmail.com via the Gmail API.
    */
   public async sendEmailActivitySummary(
     accessToken: string,
@@ -1955,7 +1980,7 @@ class OperationsService {
             Department of Posts • Dadabari Sub-Post Office (324009)
           </div>
           <h2 style="margin: 6px 0 4px; font-size: 20px;">${reportPeriod} CRM & Postman Operations Backup Report</h2>
-          <p style="margin: 0; font-size: 12px; color: #fecaca;">Master Admin Account: mahen.comtech@gmail.com • Generated on ${dateLabel}</p>
+          <p style="margin: 0; font-size: 12px; color: #fecaca;">Master Admin Account: Ektamahenmeena@gmail.com • Generated on ${dateLabel}</p>
         </div>
         <div style="padding: 24px; background: #ffffff; color: #0f172a;">
           <h3 style="margin-top: 0; font-size: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">1. Core CRM & Master Database Totals</h3>
@@ -1998,7 +2023,7 @@ class OperationsService {
       </div>
     `;
 
-    await sendGmailMessage(accessToken, 'mahen.comtech@gmail.com', subject, htmlBody);
+    await sendGmailMessage(accessToken, 'Ektamahenmeena@gmail.com', subject, htmlBody);
 
     const nowStr = new Date().toLocaleString('en-IN', {
       dateStyle: 'medium',
@@ -2011,7 +2036,7 @@ class OperationsService {
       timestamp: nowStr,
       type: 'GMAIL_BACKUP',
       status: 'Success',
-      summary: `Dispatched ${reportPeriod} CRM Activity & Backup Summary email to mahen.comtech@gmail.com.`,
+      summary: `Dispatched ${reportPeriod} CRM Activity & Backup Summary email to Ektamahenmeena@gmail.com.`,
     });
     this.saveBackupState();
     this.notify();
@@ -2034,7 +2059,7 @@ class OperationsService {
       Beat: c.beatNo || 'Beat 2',
       Status: c.verificationStatus,
       'Financial Interest': c.financialInterest || '',
-      'Entered By': c.enteredBy || 'mahen.comtech@gmail.com',
+      'Entered By': c.enteredBy || 'Ektamahenmeena@gmail.com',
       Remarks: c.remarks || '',
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(customers), 'Customers');

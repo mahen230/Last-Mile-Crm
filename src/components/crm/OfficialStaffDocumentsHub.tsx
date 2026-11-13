@@ -50,6 +50,7 @@ export default function OfficialStaffDocumentsHub() {
   // Document Records State
   const [documents, setDocuments] = useState<SpecialBillRecord[]>([]);
   const [statusNotice, setStatusNotice] = useState<string | null>(null);
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
 
   // Filters
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
@@ -191,7 +192,8 @@ export default function OfficialStaffDocumentsHub() {
       setTimeout(() => setStatusNotice(null), 4000);
     } catch (err) {
       console.error('Download error:', err);
-      alert('Error generating document PDF. Please check data format.');
+      setErrorNotice('Error generating document PDF. Please check data format.');
+      setTimeout(() => setErrorNotice(null), 5000);
     }
   };
 
@@ -219,7 +221,7 @@ export default function OfficialStaffDocumentsHub() {
       title,
       employeeId: newDocStaffId,
       employeeName: newDocStaffName,
-      employeeEmail: currentStaff?.email || 'mahen.comtech@gmail.com',
+      employeeEmail: currentStaff?.email || 'Ektamahenmeena@gmail.com',
       beatNo: newDocBeat,
       officeName: 'Dadabari S.O. (324009)',
       fromDate: newDocFromDate,
@@ -384,6 +386,17 @@ export default function OfficialStaffDocumentsHub() {
             <span>{statusNotice}</span>
           </div>
           <button onClick={() => setStatusNotice(null)} className="text-emerald-700 hover:text-emerald-950">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+      {errorNotice && (
+        <div className="bg-red-50 border border-red-300 text-red-950 px-5 py-3.5 rounded-2xl flex items-center justify-between text-xs font-bold shadow-xs animate-fade-in">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={18} className="text-red-600 shrink-0" />
+            <span>{errorNotice}</span>
+          </div>
+          <button type="button" onClick={() => setErrorNotice(null)} className="text-red-700 hover:text-red-950">
             <X size={16} />
           </button>
         </div>

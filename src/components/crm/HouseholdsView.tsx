@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Home, Users, MapPin, Phone, Plus, Search, ShieldCheck, ChevronRight } from 'lucide-react';
 import { Customer, Household } from '../../types/models';
 import { customerService } from '../../services/customerService';
 import CustomerProfileModal from '../customers/CustomerProfileModal';
 import AddMemberModal from '../customers/AddMemberModal';
 import AssociateMemberModal from '../customers/AssociateMemberModal';
+import { useAuth } from '../auth/FirebaseAuthProvider';
+import { staffPermissionService } from '../../services/staffPermissionService';
 
 // Safe formatter for household addresses
 const formatHouseholdAddress = (addr: any): string => {
@@ -17,8 +19,11 @@ const formatHouseholdAddress = (addr: any): string => {
 };
 
 export default function HouseholdsView({ onAddLead }: { onAddLead?: (customer: Customer) => void }) {
+  const { userProfile } = useAuth();
   const [households, setHouseholds] = useState<Household[]>([]);
   const [search, setSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 5;
   const [selectedHousehold, setSelectedHousehold] = useState<Household | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showAddMember, setShowAddMember] = useState(false);
@@ -32,29 +37,48 @@ export default function HouseholdsView({ onAddLead }: { onAddLead?: (customer: C
     return () => unsub();
   }, []);
 
-  const filteredHouseholds = households.filter(h => {
-    const s = search.toLowerCase().replace(/\s+/g, '');
-    const mobileS = search.replace(/\D/g, '');
-    
-    // Normalize household data for search
-    const houseNo = (h.address?.houseNo || '').toLowerCase().replace(/\s+/g, '');
-    const headName = (h.headOfHouseholdName || '').toLowerCase().replace(/\s+/g, '');
-    const primaryMobile = (h.primaryContactNumber || '').replace(/\D/g, '');
-    
-    return !s ||
-      houseNo.includes(s) ||
-      headName.includes(s) ||
-      (mobileS && primaryMobile.includes(mobileS)) ||
-      h.members.some(m => m.name.toLowerCase().replace(/\s+/g, '').includes(s));
-  }).sort((a, b) => {
-    const colA = (a.address?.sectorLocality || a.address?.area || '').trim();
-    const colB = (b.address?.sectorLocality || b.address?.area || '').trim();
-    const colCmp = colA.localeCompare(colB, undefined, { numeric: true, sensitivity: 'base' });
-    if (colCmp !== 0) return colCmp;
-    const hA = (a.address?.houseNo || '').trim();
-    const hB = (b.address?.houseNo || '').trim();
-    return hA.localeCompare(hB, undefined, { numeric: true, sensitivity: 'base' });
-  });
+  const scopedHouseholds = useMemo(() => {
+    return households.filter(h =>
+      staffPermissionService.matchesUserBeatScope(userProfile, {
+        beatNo: h.beatId,
+        area: h.address?.area || h.address?.sectorLocality || h.address?.colony
+      })
+    );
+  }, [households, userProfile]);
+
+  const filteredHouseholds = useMemo(() => {
+    return scopedHouseholds.filter(h => {
+      const s = search.toLowerCase().replace(/\s+/g, '');
+      const mobileS = search.replace(/\D/g, '');
+      
+      // Normalize household data for search
+      const houseNo = (h.address?.houseNo || '').toLowerCase().replace(/\s+/g, '');
+      const headName = (h.headOfHouseholdName || '').toLowerCase().replace(/\s+/g, '');
+      const primaryMobile = (h.primaryContactNumber || '').replace(/\D/g, '');
+      
+      return !s ||
+        houseNo.includes(s) ||
+        headName.includes(s) ||
+        (mobileS && primaryMobile.includes(mobileS)) ||
+        h.members.some(m => m.name.toLowerCase().replace(/\s+/g, '').includes(s));
+    }).sort((a, b) => {
+      const colA = (a.address?.sectorLocality || a.address?.area || '').trim();
+      const colB = (b.address?.sectorLocality || b.address?.area || '').trim();
+      const colCmp = colA.localeCompare(colB, undefined, { numeric: true, sensitivity: 'base' });
+      if (colCmp !== 0) return colCmp;
+      const hA = (a.address?.houseNo || '').trim();
+      const hB = (b.address?.houseNo || '').trim();
+      return hA.localeCompare(hB, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [scopedHouseholds, search]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, userProfile]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredHouseholds.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedHouseholds = filteredHouseholds.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   return (
     <div className="space-y-6" id="households-view-root">
@@ -66,7 +90,7 @@ export default function HouseholdsView({ onAddLead }: { onAddLead?: (customer: C
             <span>Household Registry & Family Units</span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Normalized family units grouped by shared address and primary telephone ({households.length} Households)
+            Normalized family units grouped by shared address and primary telephone ({scopedHouseholds.length} Households)
           </p>
         </div>
 
@@ -86,7 +110,7 @@ export default function HouseholdsView({ onAddLead }: { onAddLead?: (customer: C
 
       {/* Grid of Household Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredHouseholds.map((hh, index) => (
+        {paginatedHouseholds.map((hh, index) => (
           <div
             key={hh.householdId || `hh-${index}`}
             className="bg-white rounded-2xl border border-slate-200 hover:border-red-300 hover:shadow-md transition p-5 flex flex-col justify-between"
@@ -156,6 +180,36 @@ export default function HouseholdsView({ onAddLead }: { onAddLead?: (customer: C
           </div>
         ))}
       </div>
+
+      {/* Pagination Bar (Default 5 entries per page) */}
+      {filteredHouseholds.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white px-5 py-3 rounded-2xl border border-slate-200 text-xs text-slate-600">
+          <span>
+            Showing <strong className="text-slate-900">{(safePage - 1) * PAGE_SIZE + 1}</strong>–<strong className="text-slate-900">{Math.min(safePage * PAGE_SIZE, filteredHouseholds.length)}</strong> of <strong className="text-slate-900">{filteredHouseholds.length}</strong> households (5 per page)
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold disabled:opacity-40 hover:bg-slate-50 cursor-pointer"
+            >
+              Prev
+            </button>
+            <span className="font-mono font-bold text-slate-800 px-2">
+              Page {safePage} / {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={safePage >= totalPages}
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold disabled:opacity-40 hover:bg-slate-50 cursor-pointer"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Household Detail Modal */}
       {selectedHousehold && (

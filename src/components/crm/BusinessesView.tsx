@@ -42,8 +42,13 @@ import {
 } from '../../data/kotaCommercialCscData';
 import { notificationScannerService } from '../../services/notificationScannerService';
 import CustomerProfileModal from '../customers/CustomerProfileModal';
+import { useAuth } from '../auth/FirebaseAuthProvider';
+import { staffPermissionService } from '../../services/staffPermissionService';
 
 export default function BusinessesView() {
+  const { userProfile } = useAuth();
+  const isRestrictedFieldStaff = staffPermissionService.isPostmanOrGds(userProfile);
+  const scopedBeatsSet = useMemo(() => staffPermissionService.getScopedBeatsSet(userProfile), [userProfile]);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -59,6 +64,8 @@ export default function BusinessesView() {
   const [selectedColonyFilter, setSelectedColonyFilter] = useState<string>('ALL');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('ALL');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('ALL');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const PAGE_SIZE = 5;
 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [selectedStoreForModal, setSelectedStoreForModal] = useState<CommercialStoreEntry | null>(null);
@@ -71,12 +78,12 @@ export default function BusinessesView() {
   };
 
   useEffect(() => {
-    setCustomers(customerService.getCustomers());
+    setCustomers(customerService.getScopedCustomers(userProfile));
     const unsub = customerService.subscribe(() => {
-      setCustomers([...customerService.getCustomers()]);
+      setCustomers([...customerService.getScopedCustomers(userProfile)]);
     });
     return () => unsub();
-  }, []);
+  }, [userProfile]);
 
   // Update initial search if location state changes
   useEffect(() => {
@@ -118,14 +125,34 @@ export default function BusinessesView() {
     }) || [];
   }, [customers, search]);
 
-  // Unique Colonies in Verified 324009 Registry
+  const scopedVerifiedStores = useMemo(() => {
+    return verifiedStores.filter((item) =>
+      staffPermissionService.matchesUserBeatScope(userProfile, {
+        beatNo: item.beatNo,
+        area: item.colony,
+        pincode: item.pincode
+      })
+    );
+  }, [verifiedStores, userProfile]);
+
+  const scopedCscEntities = useMemo(() => {
+    return cscEntities.filter((item) =>
+      staffPermissionService.matchesUserBeatScope(userProfile, {
+        beatNo: item.beatNo,
+        area: item.colony,
+        pincode: item.pincode
+      })
+    );
+  }, [cscEntities, userProfile]);
+
+  // Unique Colonies in Verified 324009 Registry (scoped)
   const uniqueDadabariColonies = useMemo(() => {
-    return Array.from(new Set(verifiedStores.map((c) => c.colony))).sort();
-  }, [verifiedStores]);
+    return Array.from(new Set(scopedVerifiedStores.map((c) => c.colony))).sort();
+  }, [scopedVerifiedStores]);
 
   // Filtered 324009 Verified Stores (Zero dead data, only active ground stores in 324009)
   const filteredVerified324009Stores = useMemo(() => {
-    return verifiedStores.filter((item) => {
+    return scopedVerifiedStores.filter((item) => {
       const q = search.toLowerCase().trim();
       const matchesSearch =
         !q ||
@@ -155,11 +182,11 @@ export default function BusinessesView() {
       if (colCmp !== 0) return colCmp;
       return (a.housePlotNumber || '').trim().localeCompare((b.housePlotNumber || '').trim(), undefined, { numeric: true, sensitivity: 'base' });
     });
-  }, [verifiedStores, search, selectedBeatFilter, selectedColonyFilter, selectedCategoryFilter, selectedStatusFilter]);
+  }, [scopedVerifiedStores, search, selectedBeatFilter, selectedColonyFilter, selectedCategoryFilter, selectedStatusFilter]);
 
   // Filtered CSC Entities
   const filteredCsc = useMemo(() => {
-    return cscEntities.filter((item) => {
+    return scopedCscEntities.filter((item) => {
       const q = search.toLowerCase().trim();
       const matchesSearch =
         !q ||
@@ -179,7 +206,32 @@ export default function BusinessesView() {
       if (colCmp !== 0) return colCmp;
       return (a.housePlotNumber || '').trim().localeCompare((b.housePlotNumber || '').trim(), undefined, { numeric: true, sensitivity: 'base' });
     });
-  }, [cscEntities, search, selectedBeatFilter]);
+  }, [scopedCscEntities, search, selectedBeatFilter]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, search, selectedBeatFilter, selectedColonyFilter, selectedCategoryFilter, selectedStatusFilter, userProfile]);
+
+  const activeListLength =
+    activeTab === 'dadabari_324009'
+      ? filteredVerified324009Stores.length
+      : activeTab === 'csc_emitra'
+      ? filteredCsc.length
+      : merchants.length;
+  const totalPages = Math.max(1, Math.ceil(activeListLength / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedVerified324009Stores = filteredVerified324009Stores.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const paginatedCsc = filteredCsc.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const paginatedMerchants = merchants.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  const availableBeatOptions = useMemo(() => {
+    if (isRestrictedFieldStaff && scopedBeatsSet.size > 0) {
+      return Array.from(scopedBeatsSet)
+        .sort((a, b) => Number(a) - Number(b))
+        .map(b => `Beat ${b}`);
+    }
+    return ['Beat 1', 'Beat 2', 'Beat 3', 'Beat 4', 'Beat 5', 'Beat 6', 'Beat 7', 'Beat 8', 'Beat 9', 'Beat 10', 'Beat 33'];
+  }, [isRestrictedFieldStaff, scopedBeatsSet]);
 
   // Handle 1-Click Ingest for 324009 Verified Store
   const handleIngest324009Store = (store: CommercialStoreEntry) => {
@@ -192,15 +244,15 @@ export default function BusinessesView() {
     }
   };
 
-  // Bulk Sync All 324009 Stores
+  // Bulk Sync Scoped 324009 Stores
   const handleBulkSync324009All = () => {
     let count = 0;
-    verifiedStores.forEach((store) => {
+    scopedVerifiedStores.forEach((store) => {
       ingestVerifiedStoreToCrm(store);
       count++;
     });
     setVerifiedStores(getVerifiedDadabari324009Registry());
-    showToast(`✅ Reality-Check Complete! All ${count} active commercial stores in Pincode 324009 synced to CRM Master.`);
+    showToast(`✅ Reality-Check Complete! ${count} active commercial stores in your scope synced to CRM Master.`);
   };
 
   // Save Store Edit Modal
@@ -305,7 +357,7 @@ export default function BusinessesView() {
             className="px-4 py-2.5 bg-gradient-to-r from-red-800 to-slate-950 hover:from-red-900 hover:to-black text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md cursor-pointer"
           >
             <Sparkles size={14} className="text-amber-400" />
-            <span>1-Click Sync All 324009 Stores ({verifiedStores.length})</span>
+            <span>1-Click Sync Scoped 324009 Stores ({scopedVerifiedStores.length})</span>
           </button>
           <button
             type="button"
@@ -330,7 +382,7 @@ export default function BusinessesView() {
           }`}
         >
           <ShieldCheck size={16} className={activeTab === 'dadabari_324009' ? 'text-amber-300' : 'text-red-700'} />
-          <span>Pincode 324009 Verified Stores ({verifiedStores.length})</span>
+          <span>Pincode 324009 Verified Stores ({scopedVerifiedStores.length})</span>
           <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950">
             Audit-Grade
           </span>
@@ -346,7 +398,7 @@ export default function BusinessesView() {
           }`}
         >
           <Sparkles size={16} className={activeTab === 'csc_emitra' ? 'text-slate-950' : 'text-amber-500'} />
-          <span>Kota eMitra & CSC Directory ({cscEntities.length})</span>
+          <span>Kota eMitra & CSC Directory ({scopedCscEntities.length})</span>
         </button>
 
         <button
@@ -403,8 +455,8 @@ export default function BusinessesView() {
                 onChange={(e) => setSelectedBeatFilter(e.target.value)}
                 className="px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs font-bold bg-white text-slate-700 focus:outline-hidden"
               >
-                <option value="ALL">All Beats</option>
-                {['Beat 1', 'Beat 2', 'Beat 3', 'Beat 4', 'Beat 5', 'Beat 6', 'Beat 7', 'Beat 8', 'Beat 9', 'Beat 10', 'Beat 33'].map((b) => (
+                <option value="ALL">{isRestrictedFieldStaff ? 'My Assigned Beat(s)' : 'All Beats'}</option>
+                {availableBeatOptions.map((b) => (
                   <option key={b} value={b}>
                     {b} (324009)
                   </option>
@@ -470,7 +522,7 @@ export default function BusinessesView() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredVerified324009Stores.map((store) => (
+            {paginatedVerified324009Stores.map((store) => (
               <div
                 key={store.id}
                 className="bg-white rounded-3xl border border-slate-200 hover:border-red-400 hover:shadow-lg transition flex flex-col justify-between overflow-hidden group"
@@ -623,7 +675,7 @@ export default function BusinessesView() {
       {/* TAB 2: GENERAL KOTA CSC & EMITRA KIOSKS */}
       {activeTab === 'csc_emitra' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredCsc.map((csc) => (
+          {paginatedCsc.map((csc) => (
             <div
               key={csc.id}
               className="bg-white rounded-3xl border border-slate-200 hover:border-amber-400 p-5 space-y-3"
@@ -663,7 +715,7 @@ export default function BusinessesView() {
       {/* TAB 3: CUSTOMER MERCHANTS */}
       {activeTab === 'merchants' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {merchants.map((b) => (
+          {paginatedMerchants.map((b) => (
             <div
               key={b.id}
               className="bg-white rounded-3xl border border-slate-200 hover:border-indigo-300 p-5 space-y-3"
@@ -683,6 +735,36 @@ export default function BusinessesView() {
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Shared Pagination Bar (Default 5 entries per page) */}
+      {activeListLength > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white px-5 py-3 rounded-2xl border border-slate-200 text-xs text-slate-600">
+          <span>
+            Showing <strong className="text-slate-900">{(safePage - 1) * PAGE_SIZE + 1}</strong>–<strong className="text-slate-900">{Math.min(safePage * PAGE_SIZE, activeListLength)}</strong> of <strong className="text-slate-900">{activeListLength}</strong> records (5 per page)
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={safePage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold disabled:opacity-40 hover:bg-slate-50 cursor-pointer"
+            >
+              Prev
+            </button>
+            <span className="font-mono font-bold text-slate-800 px-2">
+              Page {safePage} / {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={safePage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold disabled:opacity-40 hover:bg-slate-50 cursor-pointer"
+            >
+              Next
+            </button>
+          </div>
         </div>
       )}
 
@@ -859,10 +941,11 @@ export default function BusinessesView() {
                   <label className="block font-bold text-slate-700 mb-1">Postal Beat</label>
                   <select
                     value={editingStore.beatNo}
+                    disabled={isRestrictedFieldStaff}
                     onChange={(e) => setEditingStore({ ...editingStore, beatNo: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-white focus:outline-hidden"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-bold bg-white focus:outline-hidden disabled:bg-slate-100 disabled:text-slate-500"
                   >
-                    {['Beat 1', 'Beat 2', 'Beat 3', 'Beat 4', 'Beat 5', 'Beat 6', 'Beat 7', 'Beat 8', 'Beat 9', 'Beat 10', 'Beat 33'].map((b) => (
+                    {availableBeatOptions.map((b) => (
                       <option key={b} value={b}>
                         {b} (Dadabari S.O.)
                       </option>

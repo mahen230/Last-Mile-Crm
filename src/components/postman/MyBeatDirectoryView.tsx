@@ -10,6 +10,8 @@ import { customerService } from '../../services/customerService';
 export default function MyBeatDirectoryView() {
   const { userProfile } = useAuth();
   const navigate = useNavigate();
+  const [colonyPage, setColonyPage] = React.useState(1);
+  const COLONIES_PER_PAGE = 5;
 
   const beatNo = userProfile?.beat || 'Beat 2';
   const colonies = userProfile?.assignedColonies || ['Keshavpura Sector 7', 'Keshavpura Sector 6', 'Patel Nagar', 'Santoshi Nagar'];
@@ -18,6 +20,13 @@ export default function MyBeatDirectoryView() {
 
   const beatProps = customerService.getScopedProperties(userProfile);
   const beatCustomers = customerService.getScopedCustomers(userProfile);
+
+  const totalColonyPages = Math.max(1, Math.ceil(colonies.length / COLONIES_PER_PAGE));
+  const safeColonyPage = Math.min(colonyPage, totalColonyPages);
+  const paginatedColonies = colonies.slice(
+    (safeColonyPage - 1) * COLONIES_PER_PAGE,
+    safeColonyPage * COLONIES_PER_PAGE
+  );
 
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6">
@@ -74,17 +83,24 @@ export default function MyBeatDirectoryView() {
 
       {/* Colonies in Beat */}
       <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-        <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-          <MapPin size={16} className="text-red-700" />
-          <span>Covered Colonies, Sectors & Landmarks</span>
-        </h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <MapPin size={16} className="text-red-700" />
+            <span>Covered Colonies, Sectors & Landmarks ({colonies.length})</span>
+          </h2>
+          {totalColonyPages > 1 && (
+            <span className="text-[11px] font-bold text-slate-500">
+              Page {safeColonyPage} / {totalColonyPages}
+            </span>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {colonies.map((col, idx) => (
-            <div key={idx} className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
+          {paginatedColonies.map((col, idx) => (
+            <div key={`${col}-${idx}`} className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between">
               <div className="space-y-0.5">
                 <div className="text-xs font-bold text-slate-800">{col}</div>
-                <div className="text-[10px] text-slate-500">PIN 324009 • Dadabari S.O. Beat {beatNo}</div>
+                <div className="text-[10px] text-slate-500">PIN {userProfile?.officePincode || '324009'} • {office} • {beatNo}</div>
               </div>
               <button
                 onClick={() => navigate('/properties')}
@@ -96,6 +112,32 @@ export default function MyBeatDirectoryView() {
             </div>
           ))}
         </div>
+
+        {totalColonyPages > 1 && (
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+            <span className="text-slate-500 font-medium">
+              Showing {(safeColonyPage - 1) * COLONIES_PER_PAGE + 1}–{Math.min(safeColonyPage * COLONIES_PER_PAGE, colonies.length)} of {colonies.length} colonies
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={safeColonyPage <= 1}
+                onClick={() => setColonyPage((p) => Math.max(1, p - 1))}
+                className="px-3 py-1 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 disabled:opacity-40 hover:bg-slate-50 cursor-pointer"
+              >
+                Prev
+              </button>
+              <button
+                type="button"
+                disabled={safeColonyPage >= totalColonyPages}
+                onClick={() => setColonyPage((p) => Math.min(totalColonyPages, p + 1))}
+                className="px-3 py-1 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 disabled:opacity-40 hover:bg-slate-50 cursor-pointer"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Quick Links */}

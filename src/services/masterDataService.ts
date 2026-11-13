@@ -22,6 +22,7 @@ import {
   SpecialBillRecord,
   ColonyMasterRecord,
   OfficeJurisdiction,
+  FuelRecord,
   registerColonyToMaster,
   registerOrUpdateUniqueColony,
 } from '../types/models';
@@ -34,10 +35,34 @@ import {
   FuelDailyRow,
   downloadOfficialFuelBillPDF,
   formatIsoToDDMMYYYY,
-  PRIYANSHU_BEAT_17_OCTOBER_2026_ROWS,
-  MOHIT_BEAT_5_OCTOBER_2026_ROWS,
 } from '../utils/fuelBillPdfGenerator';
+import {
+  OCTOBER_2026_BEAT_METADATA,
+  getOctober2026BeatMeta,
+  getOctober2026OfficialBeatSchedule,
+} from '../data/october2026DssDataset';
 import { downloadOfficialAcg61Pdf } from '../utils/acg61PdfGenerator';
+
+function parseFlexibleDateToIso(rawDate: any): string {
+  const s = String(rawDate || '').trim();
+  if (!s) return new Date().toISOString().split('T')[0];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const ddmmyyyy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (ddmmyyyy) {
+    const [, d, m, y] = ddmmyyyy;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  return s;
+}
+
+function normalizeBeatHeader(rawBeat: any): string {
+  const s = String(rawBeat || '').trim();
+  const match = s.match(/\d+/);
+  if (match) {
+    return `Beat ${parseInt(match[0], 10)}`;
+  }
+  return s.startsWith('Beat') ? s : `Beat ${s || '2'}`;
+}
 
 export type MasterUploadCategory =
   | 'CUSTOMERS_PROPERTIES'
@@ -75,6 +100,7 @@ export interface PostmanMonthlyFuelSummary {
   postmanName: string;
   employeeId: string;
   officeName: string;
+  officeId?: string;
   month: string; // e.g. "2026-10"
   monthName: string; // e.g. "October 2026"
   totalDaysInMonth: number;
@@ -88,14 +114,22 @@ export interface PostmanMonthlyFuelSummary {
   totalRegistryDelivered: number;
   totalParcelsDelivered: number;
   totalArticlesDelivered: number;
+  pdmsInvoicedTotal?: number;
+  dssInvoicedTotal?: number;
+  mobileUsageAvgPercent?: number;
   pmaDeliveryRate: number;
   averageDeliveryPercentage?: number;
   dssSheetCount: number;
   isFullyReconciled: boolean;
+  isDepartmentLocked?: boolean;
+  lockedAt?: string;
+  lockedBy?: string;
+  departmentLockSource?: string;
   territorialCoverage?: string;
   terrainClassification?: string;
   routeDescription?: string;
   pincode?: string;
+  linkedPincodes?: string[];
   dailyRows: FuelDailyRow[];
   isStaffApproved?: boolean;
   staffApprovedBy?: string;
@@ -939,22 +973,29 @@ class MasterDataService {
     return this.fuelApprovals[key] || null;
   }
 
-  public saveCustomFuelDailyRows(beatNo: string, month: string, rows: FuelDailyRow[]) {
-    const cleanBeat = beatNo.startsWith('Beat') ? beatNo : `Beat ${beatNo}`;
+  public saveCustomFuelDailyRows(beatNo: string, month: string, rows: FuelDailyRow[]): { success: boolean; message?: string } {
+    const cleanBeat = normalizeBeatHeader(beatNo);
+    if (month === '2026-10' && getOctober2026BeatMeta(cleanBeat)?.isDepartmentLocked) {
+      return {
+        success: false,
+        message: `Department Locked (Immutable): Official October 2026 DSS schedule for ${cleanBeat} cannot be overridden.`,
+      };
+    }
     const key = `${cleanBeat}_${month}`;
     this.customDayRowsOverrides[key] = rows;
     this.saveCustomDayRows();
     this.notify();
+    return { success: true };
   }
 
   public getCustomFuelDailyRows(beatNo: string, month: string): FuelDailyRow[] | null {
-    const cleanBeat = beatNo.startsWith('Beat') ? beatNo : `Beat ${beatNo}`;
+    const cleanBeat = normalizeBeatHeader(beatNo);
     const key = `${cleanBeat}_${month}`;
     return this.customDayRowsOverrides[key] || null;
   }
 
   public resetCustomFuelDailyRows(beatNo: string, month: string) {
-    const cleanBeat = beatNo.startsWith('Beat') ? beatNo : `Beat ${beatNo}`;
+    const cleanBeat = normalizeBeatHeader(beatNo);
     const key = `${cleanBeat}_${month}`;
     delete this.customDayRowsOverrides[key];
     this.saveCustomDayRows();
@@ -1115,7 +1156,7 @@ class MasterDataService {
     rawRows: Record<string, any>[],
     fileName: string,
     uploaderName: string,
-    uploaderId: string = 'mahen.comtech@gmail.com'
+    uploaderId: string = 'Ektamahenmeena@gmail.com'
   ): { total: number; batchId: string; validCount: number; skippedCount: number; message: string } {
     const batchId = `BATCH-${Date.now().toString().slice(-6)}`;
     let validCount = 0;
@@ -1141,10 +1182,11 @@ class MasterDataService {
           row['BeatNo'] ||
           row['Beat'] ||
           row['beat'] ||
+          row['Beat Name'] ||
           row['beatNumber'] ||
           'Beat 2'
       ).trim();
-      const beatNo = beatRaw.startsWith('Beat') ? beatRaw : `Beat ${beatRaw}`;
+      const beatNo = normalizeBeatHeader(beatRaw);
       const fuelMapping = getBeatFuelMapping(beatNo);
 
       const mobile = String(
@@ -1473,7 +1515,7 @@ class MasterDataService {
           beatNo: record.beatNo,
           staffName: record.assignedStaffName,
           employeeId: record.assignedStaffId,
-          staffEmail: 'mahen.comtech@gmail.com',
+          staffEmail: record.beatNo === 'Beat 2' ? 'mahen.comtech@gmail.com' : 'Ektamahenmeena@gmail.com',
           officeName: 'Dadabari S.O. (324009)',
           attendanceStatus: record.dssData.attendanceStatus,
           fixedKm: km,
@@ -1683,7 +1725,7 @@ class MasterDataService {
         fileName: 'Keshavpura_SantoshiNagar_Master_Directory.csv',
         uploadedAt: hoursAgo(18),
         uploadedBy: 'Ekta Meena (Super Admin)',
-        uploadedById: 'mahen.comtech@gmail.com',
+        uploadedById: 'Ektamahenmeena@gmail.com',
         beatNo: 'Beat 2',
         assignedStaffId: '50457421',
         assignedStaffName: 'Mahendra Kumar Meena',
@@ -1706,7 +1748,7 @@ class MasterDataService {
             stage: 'INGESTION',
             action: 'Stage A: Master Admin Ingested & Auto-Routed',
             performedBy: 'Ekta Meena (Super Admin)',
-            performedById: 'mahen.comtech@gmail.com',
+            performedById: 'Ektamahenmeena@gmail.com',
             performedByRole: 'SUPER_ADMIN',
             timestamp: hoursAgo(18),
             notes: 'Auto-routed to Beat 2 based on Keshavpura Sector 7 territory matrix.',
@@ -1723,7 +1765,7 @@ class MasterDataService {
         fileName: 'Keshavpura_SantoshiNagar_Master_Directory.csv',
         uploadedAt: hoursAgo(24),
         uploadedBy: 'Ekta Meena (Super Admin)',
-        uploadedById: 'mahen.comtech@gmail.com',
+        uploadedById: 'Ektamahenmeena@gmail.com',
         beatNo: 'Beat 2',
         assignedStaffId: '50457421',
         assignedStaffName: 'Mahendra Kumar Meena',
@@ -1749,7 +1791,7 @@ class MasterDataService {
             stage: 'INGESTION',
             action: 'Stage A: Master Admin Ingested & Auto-Routed',
             performedBy: 'Ekta Meena (Super Admin)',
-            performedById: 'mahen.comtech@gmail.com',
+            performedById: 'Ektamahenmeena@gmail.com',
             performedByRole: 'SUPER_ADMIN',
             timestamp: hoursAgo(24),
           },
@@ -1774,7 +1816,7 @@ class MasterDataService {
         fileName: 'Keshavpura_SantoshiNagar_Master_Directory.csv',
         uploadedAt: hoursAgo(30),
         uploadedBy: 'Ekta Meena (Super Admin)',
-        uploadedById: 'mahen.comtech@gmail.com',
+        uploadedById: 'Ektamahenmeena@gmail.com',
         beatNo: 'Beat 2',
         assignedStaffId: '50457421',
         assignedStaffName: 'Mahendra Kumar Meena',
@@ -1803,7 +1845,7 @@ class MasterDataService {
             stage: 'INGESTION',
             action: 'Stage A: Master Admin Ingested & Auto-Routed',
             performedBy: 'Ekta Meena (Super Admin)',
-            performedById: 'mahen.comtech@gmail.com',
+            performedById: 'Ektamahenmeena@gmail.com',
             performedByRole: 'SUPER_ADMIN',
             timestamp: hoursAgo(30),
           },
@@ -1922,7 +1964,7 @@ class MasterDataService {
         fileName: 'Dadabari_Main_Market_Directory.xlsx',
         uploadedAt: hoursAgo(8),
         uploadedBy: 'Ekta Meena (Super Admin)',
-        uploadedById: 'mahen.comtech@gmail.com',
+        uploadedById: 'Ektamahenmeena@gmail.com',
         beatNo: 'Beat 1',
         assignedStaffId: '50510312',
         assignedStaffName: 'Muskan Sharma',
@@ -1944,7 +1986,7 @@ class MasterDataService {
             stage: 'INGESTION',
             action: 'Stage A: Master Admin Ingested & Auto-Routed',
             performedBy: 'Ekta Meena (Super Admin)',
-            performedById: 'mahen.comtech@gmail.com',
+            performedById: 'Ektamahenmeena@gmail.com',
             performedByRole: 'SUPER_ADMIN',
             timestamp: hoursAgo(8),
             notes: 'Auto-routed to Beat 1 (Muskan Sharma).',
@@ -1961,7 +2003,7 @@ class MasterDataService {
         fileName: 'Dadabari_Main_Market_Directory.xlsx',
         uploadedAt: hoursAgo(15),
         uploadedBy: 'Ekta Meena (Super Admin)',
-        uploadedById: 'mahen.comtech@gmail.com',
+        uploadedById: 'Ektamahenmeena@gmail.com',
         beatNo: 'Beat 1',
         assignedStaffId: '50510312',
         assignedStaffName: 'Muskan Sharma',
@@ -1986,7 +2028,7 @@ class MasterDataService {
             stage: 'INGESTION',
             action: 'Stage A: Master Admin Ingested & Auto-Routed',
             performedBy: 'Ekta Meena (Super Admin)',
-            performedById: 'mahen.comtech@gmail.com',
+            performedById: 'Ektamahenmeena@gmail.com',
             performedByRole: 'SUPER_ADMIN',
             timestamp: hoursAgo(15),
           },
@@ -2011,7 +2053,7 @@ class MasterDataService {
         fileName: 'Keshavpura_Vistar_ChhotiBasti.csv',
         uploadedAt: hoursAgo(5),
         uploadedBy: 'Ekta Meena (Super Admin)',
-        uploadedById: 'mahen.comtech@gmail.com',
+        uploadedById: 'Ektamahenmeena@gmail.com',
         beatNo: 'Beat 4',
         assignedStaffId: '10310735',
         assignedStaffName: 'Govind Prasad',
@@ -2033,7 +2075,7 @@ class MasterDataService {
             stage: 'INGESTION',
             action: 'Stage A: Master Admin Ingested & Auto-Routed',
             performedBy: 'Ekta Meena (Super Admin)',
-            performedById: 'mahen.comtech@gmail.com',
+            performedById: 'Ektamahenmeena@gmail.com',
             performedByRole: 'SUPER_ADMIN',
             timestamp: hoursAgo(5),
           },
@@ -2049,7 +2091,7 @@ class MasterDataService {
         fileName: 'Keshavpura_Vistar_ChhotiBasti.csv',
         uploadedAt: hoursAgo(20),
         uploadedBy: 'Ekta Meena (Super Admin)',
-        uploadedById: 'mahen.comtech@gmail.com',
+        uploadedById: 'Ektamahenmeena@gmail.com',
         beatNo: 'Beat 4',
         assignedStaffId: '10310735',
         assignedStaffName: 'Govind Prasad',
@@ -2078,7 +2120,7 @@ class MasterDataService {
             stage: 'INGESTION',
             action: 'Stage A: Master Admin Ingested & Auto-Routed',
             performedBy: 'Ekta Meena (Super Admin)',
-            performedById: 'mahen.comtech@gmail.com',
+            performedById: 'Ektamahenmeena@gmail.com',
             performedByRole: 'SUPER_ADMIN',
             timestamp: hoursAgo(20),
           },
@@ -2111,7 +2153,7 @@ class MasterDataService {
         fileName: 'Dadabari_Sector_4_5_Survey.xlsx',
         uploadedAt: hoursAgo(3),
         uploadedBy: 'Ekta Meena (Super Admin)',
-        uploadedById: 'mahen.comtech@gmail.com',
+        uploadedById: 'Ektamahenmeena@gmail.com',
         beatNo: 'Beat 7',
         assignedStaffId: '50321901',
         assignedStaffName: 'Hari Om Meena',
@@ -2133,7 +2175,7 @@ class MasterDataService {
             stage: 'INGESTION',
             action: 'Stage A: Master Admin Ingested & Auto-Routed',
             performedBy: 'Ekta Meena (Super Admin)',
-            performedById: 'mahen.comtech@gmail.com',
+            performedById: 'Ektamahenmeena@gmail.com',
             performedByRole: 'SUPER_ADMIN',
             timestamp: hoursAgo(3),
           },
@@ -2148,7 +2190,7 @@ class MasterDataService {
         fileName: 'Talwandi_Commercial_Enclave.csv',
         uploadedAt: hoursAgo(10),
         uploadedBy: 'Ekta Meena (Super Admin)',
-        uploadedById: 'mahen.comtech@gmail.com',
+        uploadedById: 'Ektamahenmeena@gmail.com',
         beatNo: 'Beat 13',
         assignedStaffId: '50678234',
         assignedStaffName: 'Naresh Kumar',
@@ -2173,7 +2215,7 @@ class MasterDataService {
             stage: 'INGESTION',
             action: 'Stage A: Master Admin Ingested & Auto-Routed',
             performedBy: 'Ekta Meena (Super Admin)',
-            performedById: 'mahen.comtech@gmail.com',
+            performedById: 'Ektamahenmeena@gmail.com',
             performedByRole: 'SUPER_ADMIN',
             timestamp: hoursAgo(10),
           },
@@ -2196,7 +2238,7 @@ class MasterDataService {
         fileName: 'Keshavpura_SantoshiNagar_Master_Directory.csv',
         uploadedAt: hoursAgo(40),
         uploadedBy: 'Ekta Meena (Super Admin)',
-        uploadedById: 'mahen.comtech@gmail.com',
+        uploadedById: 'Ektamahenmeena@gmail.com',
         beatNo: 'Beat 2',
         assignedStaffId: '50457421',
         assignedStaffName: 'Mahendra Kumar Meena',
@@ -2220,7 +2262,7 @@ class MasterDataService {
         stageCVerifiedById: '50102941',
         stageCVerifiedAt: hoursAgo(20),
         stageDApprovedBy: 'Ekta Meena (Super Admin)',
-        stageDApprovedById: 'mahen.comtech@gmail.com',
+        stageDApprovedById: 'Ektamahenmeena@gmail.com',
         stageDApprovedAt: hoursAgo(15),
         isFuelBillUnlocked: true,
         auditTrail: [
@@ -2228,7 +2270,7 @@ class MasterDataService {
             stage: 'INGESTION',
             action: 'Stage A: Master Admin Ingested & Auto-Routed',
             performedBy: 'Ekta Meena (Super Admin)',
-            performedById: 'mahen.comtech@gmail.com',
+            performedById: 'Ektamahenmeena@gmail.com',
             performedByRole: 'SUPER_ADMIN',
             timestamp: hoursAgo(40),
           },
@@ -2252,7 +2294,7 @@ class MasterDataService {
             stage: 'FULLY_SYNCED',
             action: 'Stage D: Supervisory Audit & Synchronized to Live Database',
             performedBy: 'Ekta Meena (Super Admin)',
-            performedById: 'mahen.comtech@gmail.com',
+            performedById: 'Ektamahenmeena@gmail.com',
             performedByRole: 'SUPER_ADMIN',
             timestamp: hoursAgo(15),
             notes: 'Approved by Super Admin. Written to official Property master.',
@@ -2269,7 +2311,7 @@ class MasterDataService {
         fileName: 'Dadabari_Main_Market_Directory.xlsx',
         uploadedAt: hoursAgo(45),
         uploadedBy: 'Ekta Meena (Super Admin)',
-        uploadedById: 'mahen.comtech@gmail.com',
+        uploadedById: 'Ektamahenmeena@gmail.com',
         beatNo: 'Beat 1',
         assignedStaffId: '50510312',
         assignedStaffName: 'Muskan Sharma',
@@ -2301,7 +2343,7 @@ class MasterDataService {
             stage: 'INGESTION',
             action: 'Stage A: Master Admin Ingested & Auto-Routed',
             performedBy: 'Ekta Meena (Super Admin)',
-            performedById: 'mahen.comtech@gmail.com',
+            performedById: 'Ektamahenmeena@gmail.com',
             performedByRole: 'SUPER_ADMIN',
             timestamp: hoursAgo(45),
           },
@@ -2482,20 +2524,43 @@ class MasterDataService {
     rawRows: Record<string, any>[],
     fileName: string,
     uploaderName: string
-  ): { success: boolean; validCount: number; skippedCount: number; message: string } {
+  ): { success: boolean; validCount: number; skippedCount: number; lockedSkippedCount?: number; message: string } {
     let validCount = 0;
     let skippedCount = 0;
+    let lockedSkippedCount = 0;
+    const seenBeatDateKeys = new Set<string>();
 
-    rawRows.forEach((row, idx) => {
-      const date = String(row['date'] || row['Date'] || new Date().toISOString().split('T')[0]).trim();
-      const beatNo = String(row['beatNo'] || row['BeatNo'] || row['Beat'] || 'Beat 2').trim();
-      const staffName = String(row['staffName'] || row['StaffName'] || row['PostmanName'] || 'Postal Staff').trim();
-      const employeeId = String(row['employeeId'] || row['EmployeeId'] || row['StaffId'] || 'CSI-10023401').trim();
+    rawRows.forEach((row) => {
+      const date = parseFlexibleDateToIso(
+        row['Invoiced Date'] || row['invoicedDate'] || row['date'] || row['Date'] || row['Date of Entry']
+      );
+      const beatRaw = row['Beat Name'] || row['beatName'] || row['beatNo'] || row['BeatNo'] || row['Beat'] || 'Beat 2';
+      const normalizedBeat = normalizeBeatHeader(beatRaw);
+      const dedupKey = `${normalizedBeat.toLowerCase()}__${date}`;
+      if (seenBeatDateKeys.has(dedupKey)) {
+        skippedCount++;
+        return;
+      }
+      seenBeatDateKeys.add(dedupKey);
+
+      const fuelData = getBeatFuelMapping(normalizedBeat);
+      const staffName = String(
+        row['Postman Name'] || row['postmanName'] || row['staffName'] || row['StaffName'] || row['PostmanName'] || fuelData.assignedPostmanName
+      ).trim();
+      const employeeId = String(
+        row['employeeId'] || row['EmployeeId'] || row['StaffId'] || fuelData.assignedStaffId.replace(/^STAFF-/, '')
+      ).trim();
       const attendance = (row['attendanceStatus'] || row['Attendance'] || 'Present - Field Duty') as DailyArticleEntry['attendanceStatus'];
 
-      const spRecd = Number(row['speedPostReceived'] || row['SpeedPostRecd'] || row['spRecd'] || 0);
-      const spDeliv = Number(row['speedPostDelivered'] || row['SpeedPostDeliv'] || row['spDeliv'] || 0);
-      const spDep = Number(row['speedPostDeposit'] || row['SpeedPostDeposit'] || row['spDeposit'] || 0);
+      const hasOfficialCounts =
+        row['PDMS Invoiced Count'] !== undefined ||
+        row['DSS Invoiced Count'] !== undefined ||
+        row['pdmsInvoicedCount'] !== undefined ||
+        row['dssInvoicedCount'] !== undefined;
+
+      const pdmsVal = Number(row['PDMS Invoiced Count'] ?? row['pdmsInvoicedCount'] ?? 0) || 0;
+      const dssVal = Number(row['DSS Invoiced Count'] ?? row['dssInvoicedCount'] ?? pdmsVal) || 0;
+      const mobPercent = Number(row['Mobile Usage %'] ?? row['mobileUsagePercent'] ?? 100);
 
       const regRecd = Number(row['registryReceived'] || row['RegRecd'] || row['regRecd'] || 0);
       const regDeliv = Number(row['registryDelivered'] || row['RegDeliv'] || row['regDeliv'] || 0);
@@ -2505,28 +2570,42 @@ class MasterDataService {
       const parDeliv = Number(row['parcelDelivered'] || row['ParcelDeliv'] || row['parDeliv'] || 0);
       const parDep = Number(row['parcelDeposit'] || row['ParcelDeposit'] || row['parDeposit'] || 0);
 
-      const codCash = Number(row['codAmountCollected'] || row['CodCash'] || row['cod'] || 0);
-      const remarks = String(row['remarks'] || row['Remarks'] || `Imported via DSS Monthly Upload: ${fileName}`).trim();
+      const spRecdRaw = Number(row['speedPostReceived'] || row['SpeedPostRecd'] || row['spRecd'] || 0);
+      const spDelivRaw = Number(row['speedPostDelivered'] || row['SpeedPostDeliv'] || row['spDeliv'] || 0);
+      const spDep = Number(row['speedPostDeposit'] || row['SpeedPostDeposit'] || row['spDeposit'] || 0);
 
-      const normalizedBeat = beatNo.startsWith('Beat') ? beatNo : `Beat ${beatNo}`;
-      const fuelData = getBeatFuelMapping(normalizedBeat);
+      const spDeliv = hasOfficialCounts && spDelivRaw === 0 ? Math.max(0, dssVal - (regDeliv + parDeliv)) : spDelivRaw;
+      const spRecd = hasOfficialCounts && spRecdRaw === 0 ? pdmsVal : spRecdRaw;
+
+      const codCash = Number(row['codAmountCollected'] || row['CodCash'] || row['cod'] || 0);
+      const remarks = String(
+        row['remarks'] ||
+          row['Remarks'] ||
+          `Imported via DSS Monthly Upload: ${fileName} (Office ${row['Office ID'] || '28660686'} / ${row['Batch Name'] || 'BATCH_01'})`
+      ).trim();
+
       const customKm = this.customBeatKmOverrides[normalizedBeat] || fuelData.sanctionedDailyKm;
+      const dailyAllowance = Number((customKm * DEPARTMENTAL_FUEL_RATE_PER_KM).toFixed(2));
+      const monthlyAllowance = Number((customKm * DEPARTMENTAL_FUEL_RATE_PER_KM * STANDARD_MONTHLY_WORKING_DAYS).toFixed(2));
 
       try {
-        operationsService.patchOrUpsertDailyArticleQuantities(
+        const res = operationsService.patchOrUpsertDailyArticleQuantities(
           {
             date,
             beatNo: normalizedBeat,
             staffName,
             employeeId,
-            staffEmail: 'mahen.comtech@gmail.com',
-            officeName: 'Dadabari S.O. (324009)',
+            staffEmail: normalizedBeat === 'Beat 2' ? 'mahen.comtech@gmail.com' : 'Ektamahenmeena@gmail.com',
+            officeName: String(row['Office Name'] || 'Dadabari S.O. (324009)'),
             attendanceStatus: attendance,
             fixedKm: customKm,
             sanctionedBeatKm: customKm,
             fuelRatePerKm: DEPARTMENTAL_FUEL_RATE_PER_KM,
-            dailyFuelAllowance: Math.round(customKm * DEPARTMENTAL_FUEL_RATE_PER_KM),
-            monthlyFuelAllowance: Math.round(customKm * DEPARTMENTAL_FUEL_RATE_PER_KM * STANDARD_MONTHLY_WORKING_DAYS),
+            dailyFuelAllowance: dailyAllowance,
+            monthlyFuelAllowance: monthlyAllowance,
+            pdmsInvoicedCount: hasOfficialCounts ? pdmsVal : undefined,
+            dssInvoicedCount: hasOfficialCounts ? dssVal : undefined,
+            mobileUsagePercent: !isNaN(mobPercent) ? mobPercent : undefined,
             dssStatus: 'Reconciled with DSS',
             speedPostReceived: spRecd,
             speedPostDelivered: spDeliv,
@@ -2549,7 +2628,14 @@ class MasterDataService {
             remarks: `Imported from DSS file: ${fileName}`,
           }
         );
-        validCount++;
+        if (res.isLocked) {
+          lockedSkippedCount++;
+          skippedCount++;
+        } else if (res.success) {
+          validCount++;
+        } else {
+          skippedCount++;
+        }
       } catch (e) {
         console.warn('Failed to upsert DSS row:', e);
         skippedCount++;
@@ -2566,18 +2652,22 @@ class MasterDataService {
       validRows: validCount,
       skippedRows: skippedCount,
       uploadedBy: uploaderName,
-      status: skippedCount === 0 ? 'SUCCESS' : validCount > 0 ? 'PARTIAL' : 'FAILED',
-      summary: `Parsed ${validCount} DSS daily delivery sheets. Individual postman fuel bills are now ready for download.`,
+      status: validCount > 0 && skippedCount === 0 ? 'SUCCESS' : validCount > 0 || lockedSkippedCount > 0 ? 'PARTIAL' : 'FAILED',
+      summary: `Parsed ${validCount} DSS daily delivery sheets (${lockedSkippedCount} department-locked rows preserved immutable).`,
     };
 
     this.uploadLogs.unshift(log);
     this.saveLogs();
 
     return {
-      success: validCount > 0,
+      success: validCount > 0 || lockedSkippedCount > 0,
       validCount,
       skippedCount,
-      message: `Successfully processed ${validCount} DSS records. Postmen can now download their monthly fuel bills.`,
+      lockedSkippedCount,
+      message:
+        lockedSkippedCount > 0
+          ? `Processed ${validCount} DSS records; ${lockedSkippedCount} department-locked rows were preserved immutable.`
+          : `Successfully processed ${validCount} DSS records. Postmen can now download their monthly fuel bills.`,
     };
   }
 
@@ -2599,7 +2689,7 @@ class MasterDataService {
       keysAndEquipment: string;
       remarks?: string;
     },
-    userEmail: string = 'mahen.comtech@gmail.com'
+    userEmail: string = 'Ektamahenmeena@gmail.com'
   ): SpecialBillRecord {
     const bill = operationsService.createSpecialBill({
       type: 'CHARGE_REPORT',
@@ -2673,7 +2763,7 @@ class MasterDataService {
       title: `BYOD Mobile PMA Allowance Bill: ${data.billingMonth} (${data.employeeName} - ${data.beatNo})`,
       employeeId: data.employeeId,
       employeeName: data.employeeName,
-      employeeEmail: data.employeeEmail || 'mahen.comtech@gmail.com',
+      employeeEmail: data.employeeEmail || 'Ektamahenmeena@gmail.com',
       beatNo: data.beatNo,
       officeName: data.officeName || 'Dadabari S.O. (324009)',
       fromDate,
@@ -2749,17 +2839,8 @@ class MasterDataService {
       employeeId?: string;
     }
   ): PostmanMonthlyFuelSummary {
-    const cleanBeat = beatNo.startsWith('Beat') ? beatNo : `Beat ${beatNo}`;
+    const cleanBeat = normalizeBeatHeader(beatNo);
     const fuelMapping = getBeatFuelMapping(cleanBeat);
-    const customKm =
-      overrides?.customDailyKm !== undefined && overrides.customDailyKm > 0
-        ? overrides.customDailyKm
-        : (this.customBeatKmOverrides[cleanBeat] || fuelMapping.sanctionedDailyKm);
-
-    const fuelRate =
-      overrides?.customRatePerKm !== undefined && overrides.customRatePerKm > 0
-        ? overrides.customRatePerKm
-        : DEPARTMENTAL_FUEL_RATE_PER_KM;
 
     const [yearStr, monthStr] = targetMonthYear.split('-');
     const year = parseInt(yearStr, 10);
@@ -2771,6 +2852,89 @@ class MasterDataService {
       'July', 'August', 'September', 'October', 'November', 'December',
     ];
     const monthName = `${monthNames[month - 1]} ${year}`;
+
+    // Check Official Department-Locked October 2026 Sheet (All 33 Beats from DSS_REPORT_OCT_8ca7e4a8.26)
+    const octMeta = targetMonthYear === '2026-10' ? getOctober2026BeatMeta(cleanBeat) : undefined;
+    const octSchedule = targetMonthYear === '2026-10' ? getOctober2026OfficialBeatSchedule(cleanBeat) : undefined;
+
+    if (octMeta && octSchedule && octSchedule.length > 0) {
+      let totalSp = 0;
+      let totalReg = 0;
+      let totalPar = 0;
+      let totalArticles = 0;
+
+      octSchedule.forEach((r) => {
+        if (r.status === 'WORKING') {
+          totalSp += typeof r.sp === 'number' ? r.sp : 0;
+          totalReg += typeof r.reg === 'number' ? r.reg : 0;
+          totalPar += typeof r.others === 'number' ? r.others : 0;
+          totalArticles += typeof r.total === 'number' ? r.total : 0;
+        }
+      });
+
+      const sanctionedKm = fuelMapping.sanctionedDailyKm;
+      const fuelRate = DEPARTMENTAL_FUEL_RATE_PER_KM;
+      const workingDays = octMeta.workingDays;
+      const totalMonthlyKm = Number((workingDays * sanctionedKm).toFixed(2));
+      const totalClaimAmount = Number((totalMonthlyKm * fuelRate).toFixed(2));
+      const approval = this.getFuelBillApproval(cleanBeat, targetMonthYear);
+      const staffIdClean = (fuelMapping.assignedStaffId || '').replace(/^STAFF-/, '') || `BEAT${octMeta.beatSeq}`;
+
+      return {
+        beatNo: cleanBeat,
+        postmanName: octMeta.postmanName,
+        employeeId: staffIdClean,
+        officeName: `${fuelMapping.officeName}`,
+        officeId: octMeta.officeId,
+        month: targetMonthYear,
+        monthName,
+        totalDaysInMonth,
+        workingDays,
+        sundaysAndHolidays: octMeta.sundaysAndHolidays,
+        sanctionedDailyKm: sanctionedKm,
+        fuelRatePerKm: fuelRate,
+        totalMonthlyKm,
+        totalClaimAmount,
+        totalSpeedPostDelivered: totalSp,
+        totalRegistryDelivered: totalReg,
+        totalParcelsDelivered: totalPar,
+        totalArticlesDelivered: totalArticles,
+        pdmsInvoicedTotal: octMeta.pdmsTotal,
+        dssInvoicedTotal: octMeta.dssTotal,
+        mobileUsageAvgPercent: octMeta.mobileUsageAvg,
+        pmaDeliveryRate: octMeta.mobileUsageAvg,
+        averageDeliveryPercentage: octMeta.mobileUsageAvg,
+        dssSheetCount: octSchedule.length,
+        isFullyReconciled: true,
+        isDepartmentLocked: octMeta.isDepartmentLocked,
+        lockedAt: '2026-11-01T09:00:00Z',
+        lockedBy: `Department DSS Audit (Office ${octMeta.officeId} / ${octMeta.batchName})`,
+        departmentLockSource: octMeta.lockSource,
+        territorialCoverage: fuelMapping.territorialCoverage,
+        terrainClassification: fuelMapping.terrainClassification,
+        routeDescription: fuelMapping.routeDescription,
+        pincode: fuelMapping.pincode,
+        linkedPincodes: fuelMapping.linkedPincodes,
+        dailyRows: octSchedule,
+        isStaffApproved: approval ? approval.isApproved : true,
+        staffApprovedBy: approval?.staffName || 'Department DSS Audit',
+        staffApprovedById: approval?.staffId || octMeta.officeId,
+        staffApprovedAt: approval?.timestamp || '2026-11-01T09:00:00Z',
+        approvalNotes:
+          approval?.notes ||
+          `Department Locked Official Oct 2026 Dataset · ${workingDays} Working Days × ${sanctionedKm} KM = ${totalMonthlyKm} KM @ ₹${fuelRate.toFixed(2)} = ₹${totalClaimAmount.toFixed(2)}`,
+      };
+    }
+
+    const customKm =
+      overrides?.customDailyKm !== undefined && overrides.customDailyKm > 0
+        ? overrides.customDailyKm
+        : (this.customBeatKmOverrides[cleanBeat] || fuelMapping.sanctionedDailyKm);
+
+    const fuelRate =
+      overrides?.customRatePerKm !== undefined && overrides.customRatePerKm > 0
+        ? overrides.customRatePerKm
+        : DEPARTMENTAL_FUEL_RATE_PER_KM;
 
     // Get all daily entries for this beat and month
     const allEntries = operationsService.getDailyEntries();
@@ -2807,7 +2971,7 @@ class MasterDataService {
 
       const effectiveWorking = overrides?.customWorkingDays || savedWorking;
       const totalKm = customKmSum > 0 ? customKmSum : effectiveWorking * customKm;
-      const totalClaim = Math.round(totalKm * fuelRate);
+      const totalClaim = Number((totalKm * fuelRate).toFixed(2));
       const approval = this.getFuelBillApproval(cleanBeat, targetMonthYear);
 
       return {
@@ -2815,6 +2979,7 @@ class MasterDataService {
         postmanName: overrides?.postmanName || fuelMapping.assignedPostmanName,
         employeeId: overrides?.employeeId || fuelMapping.assignedStaffId,
         officeName: fuelMapping.officeName,
+        officeId: fuelMapping.officeId,
         month: targetMonthYear,
         monthName,
         totalDaysInMonth,
@@ -2836,6 +3001,7 @@ class MasterDataService {
         terrainClassification: fuelMapping.terrainClassification,
         routeDescription: fuelMapping.routeDescription,
         pincode: fuelMapping.pincode,
+        linkedPincodes: fuelMapping.linkedPincodes,
         dailyRows: savedCustomRows,
         isStaffApproved: approval ? approval.isApproved : false,
         staffApprovedBy: approval?.staffName,
@@ -2845,14 +3011,13 @@ class MasterDataService {
       };
     }
 
-    // Build day-by-day 1..N schedule
+    // Build day-by-day 1..N schedule for non-locked months
     const dailyRows: FuelDailyRow[] = [];
     let workingDaysCount = 0;
     let sundaysAndHolidays = 0;
     let totalSp = 0;
     let totalReg = 0;
     let totalPar = 0;
-    let totalPma = 0;
 
     for (let day = 1; day <= totalDaysInMonth; day++) {
       const dayStr = String(day).padStart(2, '0');
@@ -2860,108 +3025,7 @@ class MasterDataService {
       const dObj = new Date(year, month - 1, day);
       const isSunday = dObj.getDay() === 0;
 
-      // October 2026 Gazetted Holidays: Oct 2 (Gandhi Jayanti) & Oct 20 (Dussehra)
-      const isHoliday =
-        (targetMonthYear === '2026-10' && (day === 2 || day === 20)) ||
-        dssMatchOrAttIsHoliday(isoDate, beatMonthEntries);
-
-      // Check Beat 17 verified audit row for October 2026
-      if (cleanBeat === 'Beat 17' && targetMonthYear === '2026-10') {
-        const refRow = PRIYANSHU_BEAT_17_OCTOBER_2026_ROWS.find((r) => r.sn === day);
-        if (refRow) {
-          if (refRow.status === 'SUNDAY') {
-            sundaysAndHolidays++;
-            dailyRows.push({ ...refRow });
-            continue;
-          }
-          if (refRow.status === 'HOLIDAY') {
-            sundaysAndHolidays++;
-            dailyRows.push({ ...refRow });
-            continue;
-          }
-          workingDaysCount++;
-          const spDeliv = typeof refRow.sp === 'number' ? refRow.sp : 0;
-          const regDeliv = 0; // Strictly zero as instructed
-          const parDeliv = typeof refRow.others === 'number' ? refRow.others : 0;
-          const dayTotal = typeof refRow.total === 'number' ? refRow.total : 0;
-          const pmaHandled = typeof refRow.pmaHandled === 'number' ? refRow.pmaHandled : dayTotal;
-          const pmaPercent = refRow.pmaPercent !== undefined ? refRow.pmaPercent : 100;
-
-          totalSp += spDeliv;
-          totalReg += 0;
-          totalPar += parDeliv;
-          totalPma += pmaHandled;
-
-          dailyRows.push({
-            sn: day,
-            date: formatIsoToDDMMYYYY(isoDate),
-            isoDate,
-            status: 'WORKING',
-            sp: spDeliv,
-            reg: 0,
-            others: parDeliv,
-            total: dayTotal,
-            pmaHandled,
-            pmaPercent,
-            pdmsInvoicedCount: refRow.pdmsInvoicedCount !== undefined ? refRow.pdmsInvoicedCount : dayTotal,
-            dssInvoicedCount: refRow.dssInvoicedCount !== undefined ? refRow.dssInvoicedCount : dayTotal,
-            mobileUsagePercent: refRow.mobileUsagePercent !== undefined ? refRow.mobileUsagePercent : pmaPercent,
-          });
-          continue;
-        }
-      }
-
-      // Check Beat 5 verified audit row for October 2026 (Mohit Arvind)
-      if (cleanBeat === 'Beat 5' && targetMonthYear === '2026-10') {
-        const refRow = MOHIT_BEAT_5_OCTOBER_2026_ROWS.find((r) => r.sn === day);
-        if (refRow) {
-          if (refRow.status === 'SUNDAY') {
-            sundaysAndHolidays++;
-            dailyRows.push({ ...refRow });
-            continue;
-          }
-          if (refRow.status === 'HOLIDAY') {
-            sundaysAndHolidays++;
-            dailyRows.push({ ...refRow });
-            continue;
-          }
-          if (refRow.status === 'LEAVE') {
-            dailyRows.push({ ...refRow });
-            continue;
-          }
-          workingDaysCount++;
-          const spDeliv = typeof refRow.sp === 'number' ? refRow.sp : 0;
-          const regDeliv = 0; // Strictly zero as instructed
-          const parDeliv = typeof refRow.others === 'number' ? refRow.others : 0;
-          const dayTotal = typeof refRow.total === 'number' ? refRow.total : 0;
-          const pmaHandled = typeof refRow.pmaHandled === 'number' ? refRow.pmaHandled : dayTotal;
-          const pmaPercent = refRow.pmaPercent !== undefined ? refRow.pmaPercent : 100;
-
-          totalSp += spDeliv;
-          totalReg += 0;
-          totalPar += parDeliv;
-          totalPma += pmaHandled;
-
-          dailyRows.push({
-            sn: day,
-            date: formatIsoToDDMMYYYY(isoDate),
-            isoDate,
-            status: 'WORKING',
-            sp: spDeliv,
-            reg: 0,
-            others: parDeliv,
-            total: dayTotal,
-            pmaHandled,
-            pmaPercent,
-            pdmsInvoicedCount: refRow.pdmsInvoicedCount !== undefined ? refRow.pdmsInvoicedCount : dayTotal,
-            dssInvoicedCount: refRow.dssInvoicedCount !== undefined ? refRow.dssInvoicedCount : dayTotal,
-            mobileUsagePercent: refRow.mobileUsagePercent !== undefined ? refRow.mobileUsagePercent : pmaPercent,
-          });
-          continue;
-        }
-      }
-
-      // Find matching DSS entry for this day
+      const isHoliday = dssMatchOrAttIsHoliday(isoDate, beatMonthEntries);
       const dssMatch = beatMonthEntries.find((e) => e.date === isoDate);
 
       if (isSunday) {
@@ -3024,7 +3088,6 @@ class MasterDataService {
         totalSp += spDeliv;
         totalReg += regDeliv;
         totalPar += parDeliv;
-        totalPma += dayTotal;
 
         dailyRows.push({
           sn: day,
@@ -3051,13 +3114,14 @@ class MasterDataService {
         : (workingDaysCount > 0 ? workingDaysCount : 25);
 
     const totalMonthlyKm = effectiveWorkingDays * customKm;
-    const totalClaimAmount = Math.round(totalMonthlyKm * fuelRate);
+    const totalClaimAmount = Number((totalMonthlyKm * fuelRate).toFixed(2));
 
     return {
       beatNo: cleanBeat,
       postmanName: overrides?.postmanName || fuelMapping.assignedPostmanName,
       employeeId: overrides?.employeeId || fuelMapping.assignedStaffId,
       officeName: fuelMapping.officeName,
+      officeId: fuelMapping.officeId,
       month: targetMonthYear,
       monthName,
       totalDaysInMonth,
@@ -3079,6 +3143,7 @@ class MasterDataService {
       terrainClassification: fuelMapping.terrainClassification,
       routeDescription: fuelMapping.routeDescription,
       pincode: fuelMapping.pincode,
+      linkedPincodes: fuelMapping.linkedPincodes,
       dailyRows,
       isStaffApproved: this.getFuelBillApproval(cleanBeat, targetMonthYear)?.isApproved || false,
       staffApprovedBy: this.getFuelBillApproval(cleanBeat, targetMonthYear)?.staffName,
@@ -3088,17 +3153,58 @@ class MasterDataService {
     };
   }
 
+  public getAll33BeatsOct2026FuelRecords(): FuelRecord[] {
+    const records: FuelRecord[] = [];
+    for (let seq = 1; seq <= 33; seq++) {
+      const beatLabel = `Beat ${seq}`;
+      const summary = this.generatePostmanMonthlyFuelBill(beatLabel, '2026-10');
+      const meta = OCTOBER_2026_BEAT_METADATA[seq];
+      records.push({
+        id: `FUEL-OCT2026-B${String(seq).padStart(2, '0')}`,
+        beatNo: summary.beatNo,
+        beatSeq: seq,
+        postmanName: summary.postmanName,
+        employeeId: summary.employeeId,
+        officeId: summary.officeId || '28660686',
+        officeName: summary.officeName,
+        linkedPincodes: summary.linkedPincodes || ['324009'],
+        month: summary.month,
+        workingDays: summary.workingDays,
+        leaveOrOffDays: meta ? (meta.sundaysAndHolidays + meta.leaveDays) : Math.max(0, 31 - summary.workingDays),
+        sanctionedDailyKm: summary.sanctionedDailyKm,
+        totalVerifiedKm: summary.totalMonthlyKm,
+        fuelRatePerKm: summary.fuelRatePerKm,
+        approvedClaimAmount: summary.totalClaimAmount,
+        pdmsInvoicedTotal: summary.pdmsInvoicedTotal ?? summary.totalArticlesDelivered,
+        dssInvoicedTotal: summary.dssInvoicedTotal ?? summary.totalArticlesDelivered,
+        mobileUsageAvgPercent: summary.mobileUsageAvgPercent ?? 100,
+        isDepartmentLocked: Boolean(summary.isDepartmentLocked),
+        lockedBy: summary.lockedBy,
+        lockedAt: summary.lockedAt,
+        sourceDocument: summary.departmentLockSource || 'DSS_REPORT_OCT_2026',
+      });
+    }
+    return records;
+  }
+
+  public syncAndLockOctober2026BeatData() {
+    const res = operationsService.syncAndLockOctober2026All33Beats();
+    this.notify();
+    return {
+      ...res,
+      records: this.getAll33BeatsOct2026FuelRecords(),
+    };
+  }
+
   /**
    * AI-Powered Monthly DSS Report Ingestion & Auto-Sync Engine:
-   * Parses uploaded spreadsheet rows, detects beat/date mappings, compares them against
-   * the official DSS invoiced benchmark, and applies the statutory Speed Post balancing rule:
-   * Adjusted Speed Post = max(0, dssInvoicedCount - (registryDelivered + parcelDelivered))
-   * Previews records in a review state before staff approval.
+   * Parses uploaded spreadsheet rows (supporting official India Post headers),
+   * deduplicates strictly per (beatNo, date), and respects immutable department-locked records.
    */
   public reconcileDssRowsWithAI(
     rawRows: Record<string, any>[],
-    fileName: string,
-    uploaderName: string
+    _fileName: string,
+    _uploaderName: string
   ): {
     previewRows: Array<{
       id: string;
@@ -3133,17 +3239,26 @@ class MasterDataService {
     let adjustedCount = 0;
     let perfectMatchCount = 0;
     const beatsSet = new Set<string>();
+    const seenBeatDates = new Set<string>();
 
     rawRows.forEach((row, idx) => {
-      const rawDate = row['date'] || row['Date'] || row['Date of Entry'] || row['entryDate'];
-      const date = String(rawDate || new Date().toISOString().split('T')[0]).trim();
-      const rawBeat = row['beatNo'] || row['BeatNo'] || row['Beat'] || row['beat'] || 'Beat 2';
-      const beatNo = String(rawBeat).trim().startsWith('Beat') ? String(rawBeat).trim() : `Beat ${rawBeat}`;
+      const date = parseFlexibleDateToIso(
+        row['Invoiced Date'] || row['invoicedDate'] || row['date'] || row['Date'] || row['Date of Entry'] || row['entryDate']
+      );
+      const rawBeat = row['Beat Name'] || row['beatName'] || row['beatNo'] || row['BeatNo'] || row['Beat'] || row['beat'] || 'Beat 2';
+      const beatNo = normalizeBeatHeader(rawBeat);
+      const key = `${beatNo.toLowerCase()}__${date}`;
+      if (seenBeatDates.has(key)) return;
+      seenBeatDates.add(key);
       beatsSet.add(beatNo);
 
       const fuelData = getBeatFuelMapping(beatNo);
-      const staffName = String(row['staffName'] || row['StaffName'] || row['PostmanName'] || fuelData.assignedPostmanName).trim();
-      const employeeId = String(row['employeeId'] || row['EmployeeId'] || row['StaffId'] || fuelData.assignedStaffId).trim();
+      const staffName = String(
+        row['Postman Name'] || row['postmanName'] || row['staffName'] || row['StaffName'] || row['PostmanName'] || fuelData.assignedPostmanName
+      ).trim();
+      const employeeId = String(
+        row['employeeId'] || row['EmployeeId'] || row['StaffId'] || fuelData.assignedStaffId.replace(/^STAFF-/, '')
+      ).trim();
       const attendance = String(row['attendanceStatus'] || row['Attendance'] || row['Status'] || 'Present - Field Duty').trim();
 
       const reg = Number(row['registryDelivered'] || row['RegDeliv'] || row['regDeliv'] || row['reg'] || row['Registry'] || 0);
@@ -3196,15 +3311,21 @@ class MasterDataService {
     });
 
     const uniqueBeats = Array.from(beatsSet);
-    const totalClaimSum = uniqueBeats.reduce((sum, b) => {
-      const bKm = this.customBeatKmOverrides[b] || getBeatFuelMapping(b).sanctionedDailyKm;
-      return sum + Math.round(bKm * DEPARTMENTAL_FUEL_RATE_PER_KM * 24);
-    }, 0);
+    const totalClaimSum = Number(
+      uniqueBeats
+        .reduce((sum, b) => {
+          const octMeta = getOctober2026BeatMeta(b);
+          const days = octMeta?.workingDays ?? STANDARD_MONTHLY_WORKING_DAYS;
+          const bKm = octMeta ? getBeatFuelMapping(b).sanctionedDailyKm : (this.customBeatKmOverrides[b] || getBeatFuelMapping(b).sanctionedDailyKm);
+          return sum + bKm * DEPARTMENTAL_FUEL_RATE_PER_KM * days;
+        }, 0)
+        .toFixed(2)
+    );
 
     return {
       previewRows,
       stats: {
-        totalRows: rawRows.length,
+        totalRows: previewRows.length,
         adjustedCount,
         perfectMatchCount,
         beatsCount: uniqueBeats.length,
@@ -3237,7 +3358,7 @@ class MasterDataService {
       title: `Official Two-Wheeler Fuel Bill: ${summary.monthName} (${summary.postmanName} - ${summary.beatNo})`,
       employeeId: summary.employeeId,
       employeeName: summary.postmanName,
-      employeeEmail: 'mahen.comtech@gmail.com',
+      employeeEmail: summary.beatNo === 'Beat 2' ? 'mahen.comtech@gmail.com' : 'Ektamahenmeena@gmail.com',
       beatNo: summary.beatNo,
       officeName: summary.officeName,
       fromDate: `${summary.month}-01`,
@@ -3245,9 +3366,17 @@ class MasterDataService {
       totalDays: summary.workingDays,
       fixedKm: summary.sanctionedDailyKm,
       totalAmount: summary.totalClaimAmount,
-      status: summary.isStaffApproved ? 'Verified by SPM' : 'Submitted',
+      status: summary.isDepartmentLocked ? 'Sanctioned' : summary.isStaffApproved ? 'Verified by SPM' : 'Submitted',
+      isDepartmentLocked: summary.isDepartmentLocked,
+      lockedAt: summary.lockedAt,
+      lockedBy: summary.lockedBy,
+      departmentLockSource: summary.departmentLockSource,
       details: {
-        dssReconciliationStatus: summary.isStaffApproved ? 'Staff Approved & Reconciled with DSS' : 'Reconciled with DSS',
+        dssReconciliationStatus: summary.isDepartmentLocked
+          ? 'Department Locked (Immutable DSS Audit)'
+          : summary.isStaffApproved
+          ? 'Staff Approved & Reconciled with DSS'
+          : 'Reconciled with DSS',
         spmVerificationNote: summary.isStaffApproved
           ? `Verified & Approved by ${summary.staffApprovedBy} (${summary.staffApprovedById}) on ${summary.staffApprovedAt ? new Date(summary.staffApprovedAt).toLocaleDateString() : 'Official'} - 100% DSS Reconciled.`
           : 'Pending Final Staff Sign-Off.',
@@ -3256,6 +3385,9 @@ class MasterDataService {
         totalDistanceKm: summary.totalMonthlyKm,
         totalMonthlyKm: summary.totalMonthlyKm,
         articlesDelivered: summary.totalArticlesDelivered,
+        pdmsInvoicedCount: summary.pdmsInvoicedTotal,
+        dssInvoicedCount: summary.dssInvoicedTotal,
+        mobileUsagePercentage: summary.mobileUsageAvgPercent,
         dailyRows: summary.dailyRows,
         vehicleNo: options?.vehicleNo || 'RJ-20-SP-2026',
         workingDays: summary.workingDays,
@@ -3264,6 +3396,7 @@ class MasterDataService {
         territorialCoverage: summary.territorialCoverage,
         routeDescription: summary.routeDescription,
         pincode: summary.pincode,
+        linkedPincodes: summary.linkedPincodes,
         remarks: options?.remarks || `Official DSS Fuel Bill claim for ${summary.beatNo} (${summary.postmanName})`,
       },
       createdAt: new Date().toISOString(),
@@ -3355,7 +3488,7 @@ class MasterDataService {
       backupTimestamp: new Date().toISOString(),
       postalOffice: 'Dadabari S.O. (PIN 324009, Kota Division, Rajasthan Circle)',
       systemVersion: 'POSTMAN BOOK CRM v3.2 Enterprise',
-      superAdmin: 'Mahendra Kumar Meena (mahen.comtech@gmail.com)',
+      superAdmin: 'Ekta Meena (Ektamahenmeena@gmail.com)',
       customers: customerService.getCustomers(),
       dailyArticles: operationsService.getDailyEntries(),
       ingestedRecords: this.ingestedRecords,

@@ -9,6 +9,7 @@ import {
   Plus,
   Filter,
   ShieldCheck,
+  Building,
   Building2,
   Phone,
   FileSpreadsheet,
@@ -19,7 +20,7 @@ import {
   ArrowRight,
   Sparkles,
   Layers,
-  Map,
+  Map as MapIcon,
   X,
   Check,
   RefreshCw,
@@ -29,11 +30,13 @@ import {
   Globe,
   Navigation,
   ExternalLink,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { staffPermissionService } from '../../services/staffPermissionService';
 import { masterDataService } from '../../services/masterDataService';
-import { ColonyMasterRecord, ColonyEntityType } from '../../types/models';
+import { ColonyMasterRecord, ColonyEntityType, OfficeJurisdiction } from '../../types/models';
 
 import { UPDATED_STAFF_LIST } from '../../data/updatedStaffData';
 
@@ -253,8 +256,10 @@ export const DADABARI_ALL_BEATS = Array.from({ length: 33 }, (_, i) => `Beat ${i
 
 const SUB_OFFICES = [
   { name: 'Dadabari S.O.', pincode: '324009' },
-  { name: 'Engineering College S.O.', pincode: '324010' },
+  { name: 'PIP Office / Talwandi S.O.', pincode: '324005' },
+  { name: 'Mahaveer Nagar S.O.', pincode: '324005' },
   { name: 'Vigyan Nagar S.O.', pincode: '324005' },
+  { name: 'Engineering College S.O.', pincode: '324010' },
   { name: 'Kota H.O.', pincode: '324001' },
 ];
 
@@ -278,15 +283,28 @@ export default function UnifiedCrmMasterHub() {
     }
   });
 
-  // Active View Tab
-  const [activeTab, setActiveTab] = useState<'colonies' | 'division-colonies' | 'customers' | 'bulk'>('colonies');
+  // Active View Tab (Colony Directory Master first by default)
+  const [activeTab, setActiveTab] = useState<'division-colonies' | 'colonies' | 'customers' | 'bulk'>('division-colonies');
 
   // Hadoti Division Colony Master State (Kota, Baran, Bundi)
   const [divisionColonies, setDivisionColonies] = useState<ColonyMasterRecord[]>(() =>
     masterDataService.getColonyMasterRecords()
   );
   const [divisionFilter, setDivisionFilter] = useState<'ALL' | 'KOTA' | 'BARAN' | 'BUNDI' | 'PENDING'>('ALL');
+  const [pincodeFilter, setPincodeFilter] = useState<string>('ALL');
+  const [officeJurisdictionFilter, setOfficeJurisdictionFilter] = useState<string>('ALL');
   const [divisionSearch, setDivisionSearch] = useState('');
+
+  // Block-wise Collapsible Section States & Quick-Jump Refs (Module 1)
+  const [isBlockAOpen, setIsBlockAOpen] = useState<boolean>(true);
+  const [isBlockBOpen, setIsBlockBOpen] = useState<boolean>(false);
+  const [isBlockCOpen, setIsBlockCOpen] = useState<boolean>(true);
+  const [isBlockDOpen, setIsBlockDOpen] = useState<boolean>(true);
+  const blockARef = useRef<HTMLDivElement>(null);
+  const blockBRef = useRef<HTMLDivElement>(null);
+  const blockCRef = useRef<HTMLDivElement>(null);
+  const blockDRef = useRef<HTMLDivElement>(null);
+
   const [hadotiColonyName, setHadotiColonyName] = useState('');
   const [hadotiEntityType, setHadotiEntityType] = useState<ColonyEntityType>('Residential Colony');
   const [hadotiPincode, setHadotiPincode] = useState('324009');
@@ -294,12 +312,17 @@ export default function UnifiedCrmMasterHub() {
   const [hadotiPostOfficeName, setHadotiPostOfficeName] = useState('Dadabari S.O.');
   const [hadotiLat, setHadotiLat] = useState('25.1432');
   const [hadotiLng, setHadotiLng] = useState('75.8234');
-  const [hadotiSubSectors, setHadotiSubSectors] = useState('Sector 1, Sector 2, Pocket A');
+  const [hadotiSubSectors, setHadotiSubSectors] = useState('Sector 1, Sector 2');
+  const [hadotiBlocks, setHadotiBlocks] = useState('Block A, Block B');
+  const [hadotiLandmarks, setHadotiLandmarks] = useState('');
+  const [hadotiHouseNumberRange, setHadotiHouseNumberRange] = useState('');
   const [hadotiAssignedBeat, setHadotiAssignedBeat] = useState('Beat 2');
   const [hadotiStatusMessage, setHadotiStatusMessage] = useState<{ success: boolean; text: string } | null>(null);
   const [inlineBeatEditId, setInlineBeatEditId] = useState<string | null>(null);
   const [inlineBeatValue, setInlineBeatValue] = useState('');
   const [inlineSectorInputMap, setInlineSectorInputMap] = useState<Record<string, string>>({});
+  const [inlineLandmarkInputMap, setInlineLandmarkInputMap] = useState<Record<string, string>>({});
+  const [warningToast, setWarningToast] = useState<string | null>(null);
 
   // Advanced Colony, Landmark & Sector Editing Governance Modal State
   const [editingHadotiColony, setEditingHadotiColony] = useState<ColonyMasterRecord | null>(null);
@@ -313,7 +336,20 @@ export default function UnifiedCrmMasterHub() {
   const [editLng, setEditLng] = useState('');
   const [editGoogleMapsUrl, setEditGoogleMapsUrl] = useState('');
   const [editSubSectors, setEditSubSectors] = useState<string[]>([]);
+  const [editBlocks, setEditBlocks] = useState<string[]>([]);
+  const [editLandmarks, setEditLandmarks] = useState<string[]>([]);
+  const [editHouseNumberRange, setEditHouseNumberRange] = useState('');
   const [newEditSectorInput, setNewEditSectorInput] = useState('');
+  const [newEditBlockInput, setNewEditBlockInput] = useState('');
+  const [newEditLandmarkInput, setNewEditLandmarkInput] = useState('');
+
+  // In-app Delete Confirmation Modal State (zero window.confirm usage)
+  const [pendingDeleteTarget, setPendingDeleteTarget] = useState<{
+    type: 'division' | 'legacy-colony' | 'customer';
+    id: string;
+    name: string;
+    pincode?: string;
+  } | null>(null);
 
   // Delivery Office Filter (Core User Request)
   const [selectedOfficeFilter, setSelectedOfficeFilter] = useState<string>('Dadabari S.O.');
@@ -377,13 +413,57 @@ export default function UnifiedCrmMasterHub() {
     return () => unsub();
   }, []);
 
-  // Filtered Hadoti Division Colonies
+  // Registered Office Jurisdictions strictly typed with OfficeJurisdiction[]
+  const officeJurisdictions = useMemo<OfficeJurisdiction[]>(() => {
+    return masterDataService.getOfficeJurisdictions();
+  }, [divisionColonies]);
+
+  // Available unique Pincodes in Colony Master for Pincode Filter dropdown
+  const availableMasterPincodes = useMemo(() => {
+    type PinSummary = { pincode: string; office: string; count: number };
+    const counts = new Map<string, PinSummary>();
+    divisionColonies.forEach((c) => {
+      const pin = c.pincode.trim();
+      if (!pin) return;
+      const existing = counts.get(pin);
+      if (existing) {
+        existing.count += 1;
+        if (!existing.office.includes(c.postOfficeName)) {
+          existing.office = `${existing.office} / ${c.postOfficeName}`;
+        }
+      } else {
+        counts.set(pin, { pincode: pin, office: c.postOfficeName, count: 1 });
+      }
+    });
+    const result: PinSummary[] = [];
+    counts.forEach((v) => result.push(v));
+    return result.sort((a, b) => a.pincode.localeCompare(b.pincode));
+  }, [divisionColonies]);
+
+  // Strict Office & Pincode-Scoped Filtering (Zero cross-pincode leakage)
   const filteredDivisionColonies = useMemo(() => {
+    let selectedOfficeName = '';
+    let selectedOfficePin = '';
+    if (officeJurisdictionFilter !== 'ALL') {
+      const [oName, oPin] = officeJurisdictionFilter.split('__');
+      selectedOfficeName = (oName || '').trim().toLowerCase();
+      selectedOfficePin = (oPin || '').trim();
+    }
+
     return divisionColonies.filter((c) => {
       if (divisionFilter === 'KOTA' && c.division !== 'KOTA') return false;
       if (divisionFilter === 'BARAN' && c.division !== 'BARAN') return false;
       if (divisionFilter === 'BUNDI' && c.division !== 'BUNDI') return false;
       if (divisionFilter === 'PENDING' && c.status !== 'PENDING_BEAT_MAPPING') return false;
+
+      if (officeJurisdictionFilter !== 'ALL') {
+        if (c.pincode.trim() !== selectedOfficePin) return false;
+        if (c.postOfficeName.trim().toLowerCase() !== selectedOfficeName) return false;
+      }
+
+      if (pincodeFilter !== 'ALL' && c.pincode.trim() !== pincodeFilter.trim()) {
+        return false;
+      }
 
       if (divisionSearch.trim()) {
         const q = divisionSearch.toLowerCase().trim();
@@ -391,39 +471,109 @@ export default function UnifiedCrmMasterHub() {
         const matchPin = c.pincode.includes(q);
         const matchPo = c.postOfficeName.toLowerCase().includes(q);
         const matchBeat = (c.assignedBeat || '').toLowerCase().includes(q);
-        const matchType = (c.entityType || '').toLowerCase().includes(q);
         const matchSectors = (c.subSectors || []).some((s) => s.toLowerCase().includes(q));
-        if (!matchName && !matchPin && !matchPo && !matchBeat && !matchType && !matchSectors) return false;
+        const matchBlocks = (c.blocks || []).some((b) => b.toLowerCase().includes(q));
+        const matchLandmarks = (c.landmarks || []).some((l) => l.toLowerCase().includes(q));
+        if (
+          !matchName &&
+          !matchPin &&
+          !matchPo &&
+          !matchBeat &&
+          !matchSectors &&
+          !matchBlocks &&
+          !matchLandmarks
+        ) {
+          return false;
+        }
       }
       return true;
     });
-  }, [divisionColonies, divisionFilter, divisionSearch]);
+  }, [divisionColonies, divisionFilter, pincodeFilter, officeJurisdictionFilter, divisionSearch]);
+
+  const scrollToBlock = (block: 'A' | 'B' | 'C' | 'D') => {
+    if (block === 'A') {
+      setIsBlockAOpen(true);
+      setTimeout(() => blockARef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 40);
+    } else if (block === 'B') {
+      setIsBlockBOpen(true);
+      setTimeout(() => blockBRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 40);
+    } else if (block === 'C') {
+      setIsBlockCOpen(true);
+      setTimeout(() => blockCRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 40);
+    } else if (block === 'D') {
+      setIsBlockDOpen(true);
+      setTimeout(() => blockDRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 40);
+    }
+  };
+
+  const showWarningToast = (msg: string) => {
+    setWarningToast(msg);
+    setTimeout(() => {
+      setWarningToast(null);
+    }, 5000);
+  };
+
+  const normalizeColonyNameKey = (val: string) => val.trim().replace(/\s+/g, ' ').toLowerCase();
 
   const handleRegisterHadotiColony = (e: React.FormEvent) => {
     e.preventDefault();
     setHadotiStatusMessage(null);
 
-    if (!hadotiColonyName.trim() || !hadotiPincode.trim() || !hadotiPostOfficeName.trim()) {
-      setHadotiStatusMessage({
-        success: false,
-        text: 'Colony name, Pincode, and Post Office are mandatory fields.',
-      });
+    const trimmedName = hadotiColonyName.trim().replace(/\s+/g, ' ');
+    const trimmedPin = hadotiPincode.trim();
+    const trimmedPo = hadotiPostOfficeName.trim();
+
+    if (!trimmedName || !trimmedPin || !trimmedPo) {
+      const msg = 'Colony Name, Pincode, and Post Office are mandatory fields.';
+      setHadotiStatusMessage({ success: false, text: msg });
+      showWarningToast(msg);
       return;
     }
 
+    if (!/^\d{6}$/.test(trimmedPin)) {
+      const msg = 'Please enter a valid 6-digit Indian Postal Pincode (e.g., 324009).';
+      setHadotiStatusMessage({ success: false, text: msg });
+      showWarningToast(msg);
+      return;
+    }
+
+    // Strict Composite Duplicate Prevention on Colony Name + Postal Pincode
+    const duplicate = divisionColonies.find(
+      (c) =>
+        normalizeColonyNameKey(c.colonyName) === normalizeColonyNameKey(trimmedName) &&
+        c.pincode.trim() === trimmedPin
+    );
+    if (duplicate) {
+      setPreventedCount((prev) => prev + 1);
+      const msg = `Duplicate Entry Blocked: "${duplicate.colonyName}" is already registered under PIN ${duplicate.pincode} (${duplicate.postOfficeName}). Use Edit or "+ Add Landmark" on its card instead.`;
+      setDuplicateWarning(msg);
+      setHadotiStatusMessage({ success: false, text: msg });
+      showWarningToast(msg);
+      return;
+    }
+
+    setDuplicateWarning(null);
     const latNum = parseFloat(hadotiLat) || 25.1432;
     const lngNum = parseFloat(hadotiLng) || 75.8234;
-    const subSectorsList = hadotiSubSectors.trim()
-      ? hadotiSubSectors.split(',').map((s) => s.trim()).filter(Boolean)
-      : undefined;
+    const parseCsv = (val: string) =>
+      val.trim()
+        ? Array.from(new Set(val.split(',').map((s) => s.trim()).filter(Boolean)))
+        : undefined;
+
+    const subSectorsList = parseCsv(hadotiSubSectors);
+    const blocksList = parseCsv(hadotiBlocks);
+    const landmarksList = parseCsv(hadotiLandmarks);
 
     const res = masterDataService.addColonyMasterRecord({
-      colonyName: hadotiColonyName.trim(),
+      colonyName: trimmedName,
       entityType: hadotiEntityType,
-      pincode: hadotiPincode.trim(),
+      pincode: trimmedPin,
       division: hadotiDivision,
-      postOfficeName: hadotiPostOfficeName.trim(),
+      postOfficeName: trimmedPo,
       subSectors: subSectorsList,
+      blocks: blocksList,
+      landmarks: landmarksList,
+      houseNumberRange: hadotiHouseNumberRange.trim() || undefined,
       geoTag: {
         lat: latNum,
         lng: lngNum,
@@ -435,9 +585,12 @@ export default function UnifiedCrmMasterHub() {
     if (res.success) {
       setHadotiStatusMessage({ success: true, text: res.message });
       setHadotiColonyName('');
+      setHadotiLandmarks('');
+      setHadotiHouseNumberRange('');
       showSuccessNotification(res.message);
     } else {
       setHadotiStatusMessage({ success: false, text: res.message });
+      showWarningToast(res.message);
     }
   };
 
@@ -452,6 +605,31 @@ export default function UnifiedCrmMasterHub() {
     }
   };
 
+  // On-the-Fly Inline Landmark Addition & Removal (Zero data reset)
+  const handleQuickAddLandmark = (col: ColonyMasterRecord) => {
+    const candidate = (inlineLandmarkInputMap[col.id] || '').trim();
+    if (!candidate) return;
+    const current = col.landmarks || [];
+    if (current.some((l) => l.trim().toLowerCase() === candidate.toLowerCase())) {
+      showWarningToast(`Landmark "${candidate}" already exists in ${col.colonyName} (PIN ${col.pincode}).`);
+      return;
+    }
+    const updated = [...current, candidate];
+    const ok = masterDataService.updateColonyMasterRecord(col.id, { landmarks: updated });
+    if (ok) {
+      setInlineLandmarkInputMap((prev) => ({ ...prev, [col.id]: '' }));
+      showSuccessNotification(`Added landmark "${candidate}" to ${col.colonyName} (PIN ${col.pincode}).`);
+    }
+  };
+
+  const handleQuickRemoveLandmark = (col: ColonyMasterRecord, landmarkName: string) => {
+    const updated = (col.landmarks || []).filter((l) => l !== landmarkName);
+    const ok = masterDataService.updateColonyMasterRecord(col.id, { landmarks: updated });
+    if (ok) {
+      showSuccessNotification(`Removed landmark "${landmarkName}" from ${col.colonyName}.`);
+    }
+  };
+
   // Granular Sector & Pocket Management Handlers
   const handleAddSubSector = (colonyId: string, colonyName: string) => {
     const rawVal = inlineSectorInputMap[colonyId]?.trim();
@@ -460,7 +638,8 @@ export default function UnifiedCrmMasterHub() {
     if (!target) return;
     const currentSectors = target.subSectors || [];
     if (currentSectors.some((s) => s.toLowerCase() === rawVal.toLowerCase())) {
-      alert(`Sector/Pocket "${rawVal}" already exists in ${colonyName}!`);
+      setDuplicateWarning(`Sector/Pocket "${rawVal}" already exists in ${colonyName}!`);
+      showWarningToast(`Sector/Pocket "${rawVal}" already exists in ${colonyName}!`);
       return;
     }
     const updatedSectors = [...currentSectors, rawVal];
@@ -490,20 +669,68 @@ export default function UnifiedCrmMasterHub() {
     setEditLng(col.geoTag.lng.toString());
     setEditGoogleMapsUrl(col.geoTag.googleMapsUrl || `https://www.google.com/maps?q=${col.geoTag.lat},${col.geoTag.lng}`);
     setEditSubSectors([...(col.subSectors || [])]);
+    setEditBlocks([...(col.blocks || [])]);
+    setEditLandmarks([...(col.landmarks || [])]);
+    setEditHouseNumberRange(col.houseNumberRange || '');
     setNewEditSectorInput('');
+    setNewEditBlockInput('');
+    setNewEditLandmarkInput('');
   };
 
   const handleSaveEditedHadotiColony = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingHadotiColony) return;
+    const trimmedName = editColonyName.trim().replace(/\s+/g, ' ');
+    const trimmedPin = editPincode.trim();
+
+    if (!/^\d{6}$/.test(trimmedPin)) {
+      showWarningToast('Please enter a valid 6-digit Indian Postal Pincode.');
+      return;
+    }
+
+    // Prevent colliding with another existing Colony Name + Pincode record
+    const duplicate = divisionColonies.find(
+      (c) =>
+        c.id !== editingHadotiColony.id &&
+        normalizeColonyNameKey(c.colonyName) === normalizeColonyNameKey(trimmedName) &&
+        c.pincode.trim() === trimmedPin
+    );
+    if (duplicate) {
+      setPreventedCount((prev) => prev + 1);
+      const msg = `Update Blocked: Another colony named "${duplicate.colonyName}" already exists under PIN ${duplicate.pincode}.`;
+      setDuplicateWarning(msg);
+      showWarningToast(msg);
+      return;
+    }
+
+    // Include any un-clicked text typed into the "+ Add" inputs so user never loses an entry on save
+    const finalSectors = Array.from(
+      new Set([
+        ...editSubSectors,
+        ...(newEditSectorInput.trim() ? [newEditSectorInput.trim()] : []),
+      ])
+    );
+    const finalBlocks = Array.from(
+      new Set([
+        ...editBlocks,
+        ...(newEditBlockInput.trim() ? [newEditBlockInput.trim()] : []),
+      ])
+    );
+    const finalLandmarks = Array.from(
+      new Set([
+        ...editLandmarks,
+        ...(newEditLandmarkInput.trim() ? [newEditLandmarkInput.trim()] : []),
+      ])
+    );
+
     const lat = parseFloat(editLat) || 25.1432;
     const lng = parseFloat(editLng) || 75.8234;
     const gUrl = editGoogleMapsUrl.trim() || `https://www.google.com/maps?q=${lat},${lng}`;
 
     masterDataService.updateColonyMasterRecord(editingHadotiColony.id, {
-      colonyName: editColonyName.trim(),
+      colonyName: trimmedName,
       entityType: editEntityType,
-      pincode: editPincode.trim(),
+      pincode: trimmedPin,
       division: editDivision,
       postOfficeName: editPostOfficeName.trim(),
       assignedBeat: editAssignedBeat.trim() ? editAssignedBeat.trim() : 'PENDING_ASSIGNMENT',
@@ -512,20 +739,37 @@ export default function UnifiedCrmMasterHub() {
         lng,
         googleMapsUrl: gUrl,
       },
-      subSectors: editSubSectors,
+      subSectors: finalSectors,
+      blocks: finalBlocks,
+      landmarks: finalLandmarks,
+      houseNumberRange: editHouseNumberRange.trim() || undefined,
     });
 
-    showSuccessNotification(`Colony / Landmark record "${editColonyName.trim()}" updated successfully!`);
+    showSuccessNotification(`Colony "${trimmedName}" (PIN ${trimmedPin}) updated with ${finalLandmarks.length} landmarks & ${finalSectors.length} sectors!`);
     setEditingHadotiColony(null);
   };
 
-  const handleDeleteHadotiColony = (id: string, name: string) => {
-    if (window.confirm(`Are you sure you want to remove "${name}" from Hadoti Master Database?`)) {
-      const deleted = masterDataService.deleteColonyMasterRecord(id);
+  const handleDeleteHadotiColony = (id: string, name: string, pincode?: string) => {
+    setPendingDeleteTarget({ type: 'division', id, name, pincode });
+  };
+
+  const confirmPendingDelete = () => {
+    if (!pendingDeleteTarget) return;
+    if (pendingDeleteTarget.type === 'division') {
+      const deleted = masterDataService.deleteColonyMasterRecord(pendingDeleteTarget.id);
       if (deleted) {
-        showSuccessNotification(`Colony "${name}" deleted.`);
+        showSuccessNotification(
+          `Colony "${pendingDeleteTarget.name}" (PIN ${pendingDeleteTarget.pincode || ''}) removed from Colony Directory Master.`
+        );
       }
+    } else if (pendingDeleteTarget.type === 'legacy-colony') {
+      setColonies((prev) => prev.filter((c) => c.id !== pendingDeleteTarget.id));
+      showSuccessNotification(`Removed '${pendingDeleteTarget.name}' from colony master.`);
+    } else if (pendingDeleteTarget.type === 'customer') {
+      setCustomers((prev) => prev.filter((c) => c.id !== pendingDeleteTarget.id));
+      showSuccessNotification(`Removed customer record '${pendingDeleteTarget.name}'.`);
     }
+    setPendingDeleteTarget(null);
   };
 
   const handleExportHadotiColonies = () => {
@@ -535,6 +779,10 @@ export default function UnifiedCrmMasterHub() {
       'Division': c.division,
       'Postal Pincode': c.pincode,
       'Registered Post Office': c.postOfficeName,
+      'Sectors': (c.subSectors || []).join(', '),
+      'Blocks': (c.blocks || []).join(', '),
+      'Landmarks': (c.landmarks || []).join(', '),
+      'House Number Range': c.houseNumberRange || '',
       'Latitude': c.geoTag.lat,
       'Longitude': c.geoTag.lng,
       'Assigned Beat': c.assignedBeat || 'PENDING_ASSIGNMENT',
@@ -543,10 +791,10 @@ export default function UnifiedCrmMasterHub() {
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Hadoti_Colony_Master');
+    XLSX.utils.book_append_sheet(wb, ws, 'Colony_Directory_Master');
     XLSX.writeFile(
       wb,
-      `Hadoti_Colony_Master_Kota_Baran_Bundi_${new Date().toISOString().split('T')[0]}.xlsx`
+      `Colony_Directory_Master_${new Date().toISOString().split('T')[0]}.xlsx`
     );
   };
 
@@ -666,18 +914,12 @@ export default function UnifiedCrmMasterHub() {
 
   // Delete Colony
   const handleDeleteColony = (id: string, name: string) => {
-    if (window.confirm(`Are you sure you want to remove '${name}' from Beat Registry?`)) {
-      setColonies((prev) => prev.filter((c) => c.id !== id));
-      showSuccessNotification(`Removed '${name}' from colony master.`);
-    }
+    setPendingDeleteTarget({ type: 'legacy-colony', id, name });
   };
 
   // Delete Customer
   const handleDeleteCustomer = (id: string, name: string) => {
-    if (window.confirm(`Delete record for '${name}'?`)) {
-      setCustomers((prev) => prev.filter((c) => c.id !== id));
-      showSuccessNotification(`Removed customer record '${name}'.`);
-    }
+    setPendingDeleteTarget({ type: 'customer', id, name });
   };
 
   // Export to Excel
@@ -820,13 +1062,18 @@ export default function UnifiedCrmMasterHub() {
     reader.readAsArrayBuffer(file);
   };
 
-  // Filtered Colonies
+  // Filtered Colonies (Strict Office-to-Pincode Enforcement with Zero Fallback Leakage)
   const filteredColonies = useMemo(() => {
+    const matchedOfficeMeta =
+      selectedOfficeFilter !== 'ALL'
+        ? SUB_OFFICES.find((o) => o.name.toLowerCase() === selectedOfficeFilter.toLowerCase())
+        : undefined;
+
     return colonies.filter((c) => {
       const matchOffice =
         selectedOfficeFilter === 'ALL' ||
-        (c.subOffice && c.subOffice.toLowerCase().includes(selectedOfficeFilter.toLowerCase())) ||
-        (selectedOfficeFilter === 'Dadabari S.O.' && (!c.subOffice || c.subOffice === 'Dadabari S.O.'));
+        ((c.subOffice || '').trim().toLowerCase() === selectedOfficeFilter.trim().toLowerCase() &&
+          (!matchedOfficeMeta || c.pincode.trim() === matchedOfficeMeta.pincode));
 
       const matchSearch =
         c.colonyName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -894,6 +1141,42 @@ export default function UnifiedCrmMasterHub() {
           </button>
         </div>
       </div>
+
+      {/* Instantaneous Floating Toast Container */}
+      {(warningToast || successToast) && (
+        <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-md w-full px-4 sm:px-0 pointer-events-none">
+          {warningToast && (
+            <div className="pointer-events-auto bg-amber-950 text-amber-50 border border-amber-500/70 px-4 py-3 rounded-2xl shadow-2xl flex items-start justify-between gap-3 animate-in fade-in slide-in-from-bottom duration-200">
+              <div className="flex items-start gap-2.5 text-xs">
+                <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
+                <span className="font-semibold leading-snug">{warningToast}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWarningToast(null)}
+                className="text-amber-300 hover:text-white cursor-pointer shrink-0"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+          {successToast && (
+            <div className="pointer-events-auto bg-emerald-950 text-emerald-50 border border-emerald-500/70 px-4 py-3 rounded-2xl shadow-2xl flex items-start justify-between gap-3 animate-in fade-in slide-in-from-bottom duration-200">
+              <div className="flex items-start gap-2.5 text-xs">
+                <CheckCircle2 size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                <span className="font-semibold leading-snug">{successToast}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSuccessToast(null)}
+                className="text-emerald-300 hover:text-white cursor-pointer shrink-0"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Duplicate Warning Banner */}
       {duplicateWarning && (
@@ -980,6 +1263,17 @@ export default function UnifiedCrmMasterHub() {
       {/* Tabs Navigation */}
       <div className="flex border-b border-slate-200 gap-2 sm:gap-4 overflow-x-auto pb-1">
         <button
+          onClick={() => setActiveTab('division-colonies')}
+          className={`px-4 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition cursor-pointer whitespace-nowrap ${
+            activeTab === 'division-colonies'
+              ? 'bg-blue-900 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <MapIcon size={16} />
+          <span>Colony Directory Master ({divisionColonies.length})</span>
+        </button>
+        <button
           onClick={() => setActiveTab('colonies')}
           className={`px-4 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition cursor-pointer whitespace-nowrap ${
             activeTab === 'colonies'
@@ -988,18 +1282,7 @@ export default function UnifiedCrmMasterHub() {
           }`}
         >
           <MapPin size={16} />
-          <span>Colony & Sector Mapping ({colonies.length})</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('division-colonies')}
-          className={`px-4 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition cursor-pointer whitespace-nowrap ${
-            activeTab === 'division-colonies'
-              ? 'bg-blue-900 text-white shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <Map size={16} />
-          <span>Hadoti Division Colony Master (Kota • Baran • Bundi) ({divisionColonies.length})</span>
+          <span>Beat Sector Directory ({colonies.length})</span>
         </button>
         <button
           onClick={() => setActiveTab('customers')}
@@ -1180,10 +1463,11 @@ export default function UnifiedCrmMasterHub() {
                     className="px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs font-bold bg-white text-slate-700 focus:outline-hidden"
                   >
                     <option value="ALL">All Offices</option>
-                    <option value="Dadabari S.O.">Dadabari S.O. (324009)</option>
-                    <option value="Engineering College S.O.">Engineering College (324010)</option>
-                    <option value="Vigyan Nagar S.O.">Vigyan Nagar (324005)</option>
-                    <option value="Kota H.O.">Kota H.O. (324001)</option>
+                    {SUB_OFFICES.map((so) => (
+                      <option key={so.name} value={so.name}>
+                        {so.name} ({so.pincode})
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -1308,75 +1592,184 @@ export default function UnifiedCrmMasterHub() {
         </div>
       )}
 
-      {/* Hadoti Division Colony Master Tab (Kota, Baran, Bundi) */}
+      {/* Colony Directory Master Tab — Modular Block A/B/C/D Architecture */}
       {activeTab === 'division-colonies' && (
-        <div className="space-y-6">
-          {/* Quick Metrics Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs">
-              <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Hadoti</div>
-              <div className="text-xl font-black text-slate-900 mt-0.5">{divisionColonies.length} Colonies</div>
-              <div className="text-[10px] text-slate-500 font-medium mt-0.5">3 Divisions Master</div>
+        <div className="space-y-5">
+          {/* Sticky Quick-Jump Anchor Navigation Bar */}
+          <div className="sticky top-2 z-20 bg-white/95 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl border border-slate-200/90 shadow-md flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 px-2 hidden sm:inline">
+                Quick Jump:
+              </span>
+              <button
+                type="button"
+                onClick={() => scrollToBlock('A')}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Database size={13} className="text-indigo-600" />
+                <span>Summary Overview</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollToBlock('B')}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-900 hover:bg-blue-800 text-white shadow-xs transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Plus size={13} />
+                <span>Jump to Register Form</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollToBlock('C')}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Filter size={13} className="text-blue-700" />
+                <span>View Filters</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollToBlock('D')}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 transition cursor-pointer flex items-center gap-1.5"
+              >
+                <MapPin size={13} className="text-emerald-700" />
+                <span>Colony Cards Grid ({filteredDivisionColonies.length})</span>
+              </button>
             </div>
-            <div className="bg-white p-4 rounded-2xl border border-blue-200/90 shadow-xs">
-              <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">Kota Division</div>
-              <div className="text-xl font-black text-blue-900 mt-0.5">
-                {divisionColonies.filter((c) => c.division === 'KOTA').length} Colonies
-              </div>
-              <div className="text-[10px] text-blue-600 font-medium mt-0.5">PIN 324xxx Belts</div>
-            </div>
-            <div className="bg-white p-4 rounded-2xl border border-amber-200/90 shadow-xs">
-              <div className="text-[11px] font-bold text-amber-600 uppercase tracking-wider">Baran Division</div>
-              <div className="text-xl font-black text-amber-900 mt-0.5">
-                {divisionColonies.filter((c) => c.division === 'BARAN').length} Colonies
-              </div>
-              <div className="text-[10px] text-amber-600 font-medium mt-0.5">PIN 325xxx Belts</div>
-            </div>
-            <div className="bg-white p-4 rounded-2xl border border-emerald-200/90 shadow-xs">
-              <div className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">Bundi Division</div>
-              <div className="text-xl font-black text-emerald-900 mt-0.5">
-                {divisionColonies.filter((c) => c.division === 'BUNDI').length} Colonies
-              </div>
-              <div className="text-[10px] text-emerald-600 font-medium mt-0.5">PIN 323xxx Belts</div>
-            </div>
-            <div className="bg-white p-4 rounded-2xl border border-rose-200/90 shadow-xs col-span-2 sm:col-span-1">
-              <div className="text-[11px] font-bold text-rose-600 uppercase tracking-wider">Pending Mapping</div>
-              <div className="text-xl font-black text-rose-700 mt-0.5">
-                {divisionColonies.filter((c) => c.status === 'PENDING_BEAT_MAPPING').length} Records
-              </div>
-              <div className="text-[10px] text-rose-600 font-medium mt-0.5">Awaiting Beat Allocation</div>
+
+            <div className="flex items-center gap-2">
+              {(officeJurisdictionFilter !== 'ALL' || pincodeFilter !== 'ALL') && (
+                <span className="text-[11px] font-mono font-bold bg-amber-50 text-amber-900 border border-amber-300 px-2.5 py-1 rounded-lg">
+                  Strict Scope:{' '}
+                  {officeJurisdictionFilter !== 'ALL'
+                    ? `${officeJurisdictionFilter.split('__')[0]} [${officeJurisdictionFilter.split('__')[1]}]`
+                    : `PIN ${pincodeFilter}`}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleExportHadotiColonies}
+                title="Export Colony Directory to Excel"
+                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <Download size={13} />
+                <span>Export</span>
+              </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column: Register Colony to Hadoti Master */}
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200/90 lg:col-span-1 h-fit sticky top-6">
-              <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-4">
-                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-indigo-600" />
-                  <span>Register Colony to Master</span>
-                </h2>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100">
-                  Duplication Guard
+          {/* BLOCK A: Quick Metrics & Summary Overview */}
+          <div ref={blockARef} id="colony-block-a" className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden scroll-mt-20">
+            <button
+              type="button"
+              onClick={() => setIsBlockAOpen((prev) => !prev)}
+              className="w-full px-5 py-3.5 bg-slate-50/80 hover:bg-slate-100/80 border-b border-slate-100 flex items-center justify-between transition cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 font-black text-[10px] uppercase tracking-wider">
+                  Block A
                 </span>
+                <h2 className="text-sm font-black text-slate-900">Quick Metrics & Summary Overview</h2>
+              </div>
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                <span>{divisionColonies.length} Master Records</span>
+                {isBlockAOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </div>
+            </button>
+
+            {isBlockAOpen && (
+              <div className="p-4 grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/90">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Hadoti</div>
+                  <div className="text-xl font-black text-slate-900 mt-0.5">{divisionColonies.length} Colonies</div>
+                  <div className="text-[10px] text-slate-500 font-medium mt-0.5">
+                    {officeJurisdictions.length} Office Jurisdictions
+                  </div>
+                </div>
+                <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-200/90">
+                  <div className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">Kota Division</div>
+                  <div className="text-xl font-black text-blue-900 mt-0.5">
+                    {divisionColonies.filter((c) => c.division === 'KOTA').length} Colonies
+                  </div>
+                  <div className="text-[10px] text-blue-600 font-medium mt-0.5">PIN 324xxx Belts</div>
+                </div>
+                <div className="bg-amber-50/50 p-4 rounded-2xl border border-amber-200/90">
+                  <div className="text-[11px] font-bold text-amber-600 uppercase tracking-wider">Baran Division</div>
+                  <div className="text-xl font-black text-amber-900 mt-0.5">
+                    {divisionColonies.filter((c) => c.division === 'BARAN').length} Colonies
+                  </div>
+                  <div className="text-[10px] text-amber-600 font-medium mt-0.5">PIN 325xxx Belts</div>
+                </div>
+                <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-200/90">
+                  <div className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">Bundi Division</div>
+                  <div className="text-xl font-black text-emerald-900 mt-0.5">
+                    {divisionColonies.filter((c) => c.division === 'BUNDI').length} Colonies
+                  </div>
+                  <div className="text-[10px] text-emerald-600 font-medium mt-0.5">PIN 323xxx Belts</div>
+                </div>
+                <div className="bg-rose-50/50 p-4 rounded-2xl border border-rose-200/90 col-span-2 sm:col-span-1">
+                  <div className="text-[11px] font-bold text-rose-600 uppercase tracking-wider">Pending Mapping</div>
+                  <div className="text-xl font-black text-rose-700 mt-0.5">
+                    {divisionColonies.filter((c) => c.status === 'PENDING_BEAT_MAPPING').length} Records
+                  </div>
+                  <div className="text-[10px] text-rose-600 font-medium mt-0.5">Awaiting Beat Allocation</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* BLOCK B: Collapsible Colony Registration Form */}
+          <div ref={blockBRef} id="colony-block-b" className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden scroll-mt-20">
+            <div className="px-5 py-3.5 bg-gradient-to-r from-blue-50/80 via-white to-indigo-50/70 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-900 font-black text-[10px] uppercase tracking-wider">
+                  Block B
+                </span>
+                <div>
+                  <h2 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-indigo-600" />
+                    <span>Colony Registration Form</span>
+                  </h2>
+                  <p className="text-[11px] text-slate-500">
+                    Composite Colony Name + Pincode duplication guard with geo-tag & landmark capture
+                  </p>
+                </div>
               </div>
 
-              <form onSubmit={handleRegisterHadotiColony} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Colony / Locality Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={hadotiColonyName}
-                    onChange={(e) => setHadotiColonyName(e.target.value)}
-                    placeholder="e.g. Dadabari Extension / Pratap Chowk"
-                    className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100 hidden sm:inline-block">
+                  Unique PIN Guard
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsBlockBOpen((prev) => !prev)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs ${
+                    isBlockBOpen
+                      ? 'bg-slate-200 hover:bg-slate-300 text-slate-800'
+                      : 'bg-blue-900 hover:bg-blue-800 text-white'
+                  }`}
+                >
+                  {isBlockBOpen ? <ChevronUp size={15} /> : <Plus size={15} />}
+                  <span>{isBlockBOpen ? 'Hide Registration Form' : 'Register New Colony'}</span>
+                </button>
+              </div>
+            </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {isBlockBOpen && (
+              <form onSubmit={handleRegisterHadotiColony} className="p-5 sm:p-6 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Colony / Locality Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={hadotiColonyName}
+                      onChange={(e) => setHadotiColonyName(e.target.value)}
+                      placeholder="e.g. Dadabari Extension / Pratap Chowk"
+                      className="w-full text-xs font-semibold px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Entity Classification <span className="text-red-500">*</span>
@@ -1384,7 +1777,7 @@ export default function UnifiedCrmMasterHub() {
                     <select
                       value={hadotiEntityType}
                       onChange={(e) => setHadotiEntityType(e.target.value as ColonyEntityType)}
-                      className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full text-xs font-semibold px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
                       <option value="Residential Colony">🏠 Residential Colony</option>
                       <option value="Commercial Complex">🏢 Commercial Complex</option>
@@ -1418,7 +1811,7 @@ export default function UnifiedCrmMasterHub() {
                           setHadotiLng('75.6420');
                         }
                       }}
-                      className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full text-xs font-semibold px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
                       <option value="KOTA">Kota Division</option>
                       <option value="BARAN">Baran Division</option>
@@ -1427,7 +1820,7 @@ export default function UnifiedCrmMasterHub() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
                       Postal Pincode <span className="text-red-500">*</span>
@@ -1439,7 +1832,7 @@ export default function UnifiedCrmMasterHub() {
                       value={hadotiPincode}
                       onChange={(e) => setHadotiPincode(e.target.value)}
                       placeholder="e.g. 324009"
-                      className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                      className="w-full text-xs font-semibold px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
                     />
                   </div>
 
@@ -1452,13 +1845,11 @@ export default function UnifiedCrmMasterHub() {
                       required
                       value={hadotiPostOfficeName}
                       onChange={(e) => setHadotiPostOfficeName(e.target.value)}
-                      placeholder="e.g. Dadabari S.O., Kota H.O., Baran H.O."
-                      className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="e.g. Dadabari S.O., PIP Office / Talwandi S.O."
+                      className="w-full text-xs font-semibold px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Latitude</label>
                     <input
@@ -1467,9 +1858,10 @@ export default function UnifiedCrmMasterHub() {
                       value={hadotiLat}
                       onChange={(e) => setHadotiLat(e.target.value)}
                       placeholder="e.g. 25.1432"
-                      className="w-full text-xs font-mono px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full text-xs font-mono px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
+
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Longitude</label>
                     <input
@@ -1478,44 +1870,94 @@ export default function UnifiedCrmMasterHub() {
                       value={hadotiLng}
                       onChange={(e) => setHadotiLng(e.target.value)}
                       placeholder="e.g. 75.8234"
-                      className="w-full text-xs font-mono px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full text-xs font-mono px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
                 </div>
 
-                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
-                  <div className="flex items-center gap-1.5 font-bold text-slate-800 text-[11px]">
-                    <ShieldCheck size={13} className="text-indigo-600" />
-                    <span>Streamlined Master Record Rule</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Sectors (Comma-separated)
+                    </label>
+                    <input
+                      type="text"
+                      value={hadotiSubSectors}
+                      onChange={(e) => setHadotiSubSectors(e.target.value)}
+                      placeholder="e.g. Sector 1, Sector 2, Pocket A"
+                      className="w-full text-xs font-medium px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
                   </div>
-                  <p className="text-[10px] text-slate-500 leading-relaxed">
-                    Colony Directory strictly preserves high-level territory records (Name, Type, PIN, Office, Geo-tag). Granular sectors, blocks, and delivery landmarks are delegated to <strong>Beat Mapping</strong> and <strong>Address Registration</strong>.
-                  </p>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Blocks / Series (Comma-separated)
+                    </label>
+                    <input
+                      type="text"
+                      value={hadotiBlocks}
+                      onChange={(e) => setHadotiBlocks(e.target.value)}
+                      placeholder="e.g. Block A, Block B, KH Series"
+                      className="w-full text-xs font-medium px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Prominent Landmarks
+                    </label>
+                    <input
+                      type="text"
+                      value={hadotiLandmarks}
+                      onChange={(e) => setHadotiLandmarks(e.target.value)}
+                      placeholder="e.g. CAD Circle, Shiv Mandir"
+                      className="w-full text-xs font-medium px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      House Number Ranges (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={hadotiHouseNumberRange}
+                      onChange={(e) => setHadotiHouseNumberRange(e.target.value)}
+                      placeholder="e.g. H.No. 1 - 320"
+                      className="w-full text-xs font-medium px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Assigned Postal Beat (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={hadotiAssignedBeat}
-                    onChange={(e) => setHadotiAssignedBeat(e.target.value)}
-                    placeholder="e.g. Beat 2 (Leave empty if unassigned)"
-                    className="w-full text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                  <div className="mt-1.5 p-2 rounded-lg bg-slate-50 border border-slate-200 text-[11px] flex items-center justify-between">
-                    <span className="text-slate-500">Auto Status Preview:</span>
-                    {hadotiAssignedBeat.trim() ? (
-                      <span className="px-2 py-0.5 rounded font-bold bg-emerald-100 text-emerald-800 text-[10px]">
-                        ACTIVE (Beat Assigned)
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 rounded font-bold bg-amber-100 text-amber-800 text-[10px]">
-                        PENDING_BEAT_MAPPING
-                      </span>
-                    )}
+                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pt-2 border-t border-slate-100">
+                  <div className="flex-1 max-w-md">
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Assigned Postal Beat (Optional)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={hadotiAssignedBeat}
+                        onChange={(e) => setHadotiAssignedBeat(e.target.value)}
+                        placeholder="e.g. Beat 2 (Leave empty if unassigned)"
+                        className="flex-1 text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      {hadotiAssignedBeat.trim() ? (
+                        <span className="px-2.5 py-1.5 rounded-lg font-bold bg-emerald-100 text-emerald-800 text-[10px] whitespace-nowrap">
+                          ACTIVE
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-1.5 rounded-lg font-bold bg-amber-100 text-amber-800 text-[10px] whitespace-nowrap">
+                          PENDING_BEAT_MAPPING
+                        </span>
+                      )}
+                    </div>
                   </div>
+
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 bg-blue-900 hover:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                  >
+                    <Plus size={16} />
+                    <span>Register Colony to Master</span>
+                  </button>
                 </div>
 
                 {hadotiStatusMessage && (
@@ -1534,280 +1976,520 @@ export default function UnifiedCrmMasterHub() {
                     <span>{hadotiStatusMessage.text}</span>
                   </div>
                 )}
-
-                <button
-                  type="submit"
-                  className="w-full py-2.5 bg-blue-900 hover:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Plus size={16} />
-                  <span>Register Colony to Master</span>
-                </button>
               </form>
-            </div>
+            )}
+          </div>
 
-            {/* Right Column: Master Records Directory */}
-            <div className="lg:col-span-2 space-y-4">
-              {/* Filter & Search Toolbar */}
-              <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
-                  <button
-                    onClick={() => setDivisionFilter('ALL')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                      divisionFilter === 'ALL'
-                        ? 'bg-blue-900 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    All ({divisionColonies.length})
-                  </button>
-                  <button
-                    onClick={() => setDivisionFilter('KOTA')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                      divisionFilter === 'KOTA'
-                        ? 'bg-blue-700 text-white shadow-xs'
-                        : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-                    }`}
-                  >
-                    Kota ({divisionColonies.filter((c) => c.division === 'KOTA').length})
-                  </button>
-                  <button
-                    onClick={() => setDivisionFilter('BARAN')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                      divisionFilter === 'BARAN'
-                        ? 'bg-amber-600 text-white shadow-xs'
-                        : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
-                    }`}
-                  >
-                    Baran ({divisionColonies.filter((c) => c.division === 'BARAN').length})
-                  </button>
-                  <button
-                    onClick={() => setDivisionFilter('BUNDI')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                      divisionFilter === 'BUNDI'
-                        ? 'bg-emerald-700 text-white shadow-xs'
-                        : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                    }`}
-                  >
-                    Bundi ({divisionColonies.filter((c) => c.division === 'BUNDI').length})
-                  </button>
-                  <button
-                    onClick={() => setDivisionFilter('PENDING')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                      divisionFilter === 'PENDING'
-                        ? 'bg-rose-700 text-white shadow-xs'
-                        : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
-                    }`}
-                  >
-                    Pending Mapping ({divisionColonies.filter((c) => c.status === 'PENDING_BEAT_MAPPING').length})
-                  </button>
+          {/* BLOCK C: Advanced Filters, Office Jurisdiction & Pincode Search Bar */}
+          <div ref={blockCRef} id="colony-block-c" className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden scroll-mt-20">
+            <button
+              type="button"
+              onClick={() => setIsBlockCOpen((prev) => !prev)}
+              className="w-full px-5 py-3.5 bg-slate-50/80 hover:bg-slate-100/80 border-b border-slate-100 flex items-center justify-between transition cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-900 font-black text-[10px] uppercase tracking-wider">
+                  Block C
+                </span>
+                <h2 className="text-sm font-black text-slate-900">Advanced Filters, Office Jurisdiction & Pincode Search</h2>
+              </div>
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                <span>
+                  Showing {filteredDivisionColonies.length} of {divisionColonies.length}
+                </span>
+                {isBlockCOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </div>
+            </button>
+
+            {isBlockCOpen && (
+              <div className="p-4 space-y-3">
+                {/* Division Quick Filter Tabs */}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setDivisionFilter('ALL')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        divisionFilter === 'ALL'
+                          ? 'bg-blue-900 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      All ({divisionColonies.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDivisionFilter('KOTA')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        divisionFilter === 'KOTA'
+                          ? 'bg-blue-700 text-white shadow-xs'
+                          : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                      }`}
+                    >
+                      Kota ({divisionColonies.filter((c) => c.division === 'KOTA').length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDivisionFilter('BARAN')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        divisionFilter === 'BARAN'
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                      }`}
+                    >
+                      Baran ({divisionColonies.filter((c) => c.division === 'BARAN').length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDivisionFilter('BUNDI')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        divisionFilter === 'BUNDI'
+                          ? 'bg-emerald-700 text-white shadow-xs'
+                          : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                      }`}
+                    >
+                      Bundi ({divisionColonies.filter((c) => c.division === 'BUNDI').length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDivisionFilter('PENDING')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        divisionFilter === 'PENDING'
+                          ? 'bg-rose-700 text-white shadow-xs'
+                          : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+                      }`}
+                    >
+                      Pending ({divisionColonies.filter((c) => c.status === 'PENDING_BEAT_MAPPING').length})
+                    </button>
+                  </div>
+
+                  {(officeJurisdictionFilter !== 'ALL' ||
+                    pincodeFilter !== 'ALL' ||
+                    divisionSearch ||
+                    divisionFilter !== 'ALL') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOfficeJurisdictionFilter('ALL');
+                        setPincodeFilter('ALL');
+                        setDivisionSearch('');
+                        setDivisionFilter('ALL');
+                      }}
+                      className="px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50 rounded-xl border border-red-200 transition cursor-pointer"
+                    >
+                      Reset All Filters
+                    </button>
+                  )}
                 </div>
 
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <div className="relative flex-1 sm:w-60">
+                {/* Search + Strict Office Jurisdiction + Strict Pincode Row */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 pt-2 border-t border-slate-100">
+                  <div className="relative lg:col-span-5">
                     <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                     <input
                       type="text"
                       value={divisionSearch}
                       onChange={(e) => setDivisionSearch(e.target.value)}
-                      placeholder="Search colony, PIN, post office..."
-                      className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      placeholder="Instant search by Colony Name, Landmark, Sector, or Pincode..."
+                      className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
                     />
                   </div>
-                  <button
-                    onClick={handleExportHadotiColonies}
-                    title="Export to Excel"
-                    className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl transition cursor-pointer shrink-0"
-                  >
-                    <Download size={16} />
-                  </button>
+
+                  <div className="lg:col-span-4 flex items-center gap-1.5 bg-indigo-50/70 border border-indigo-200 rounded-xl px-2.5 py-1.5">
+                    <Building2 size={13} className="text-indigo-700 shrink-0" />
+                    <label htmlFor="colony-office-filter" className="text-[11px] font-bold text-indigo-950 whitespace-nowrap">
+                      Post Office:
+                    </label>
+                    <select
+                      id="colony-office-filter"
+                      value={officeJurisdictionFilter}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setOfficeJurisdictionFilter(val);
+                        if (val !== 'ALL') {
+                          const [, pin] = val.split('__');
+                          if (pin) setPincodeFilter(pin.trim());
+                        } else {
+                          setPincodeFilter('ALL');
+                        }
+                      }}
+                      className="w-full bg-transparent text-xs font-bold text-indigo-950 focus:outline-none cursor-pointer"
+                    >
+                      <option value="ALL">All Office Jurisdictions ({officeJurisdictions.length})</option>
+                      {officeJurisdictions.map((oj) => (
+                        <option key={oj.officeId} value={`${oj.officeName}__${oj.pincode}`}>
+                          {oj.officeName} [{oj.pincode}]
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="lg:col-span-3 flex items-center gap-1.5 bg-blue-50/70 border border-blue-200 rounded-xl px-2.5 py-1.5">
+                    <Filter size={13} className="text-blue-700 shrink-0" />
+                    <label htmlFor="colony-pincode-filter" className="text-[11px] font-bold text-blue-900 whitespace-nowrap">
+                      PIN:
+                    </label>
+                    <select
+                      id="colony-pincode-filter"
+                      value={pincodeFilter}
+                      onChange={(e) => {
+                        const pin = e.target.value;
+                        setPincodeFilter(pin);
+                        if (pin === 'ALL') {
+                          setOfficeJurisdictionFilter('ALL');
+                        } else if (officeJurisdictionFilter !== 'ALL') {
+                          const [, currentPin] = officeJurisdictionFilter.split('__');
+                          if (currentPin !== pin) {
+                            setOfficeJurisdictionFilter('ALL');
+                          }
+                        }
+                      }}
+                      className="w-full bg-transparent text-xs font-mono font-bold text-blue-950 focus:outline-none cursor-pointer"
+                    >
+                      <option value="ALL">All Pincodes ({divisionColonies.length})</option>
+                      {availableMasterPincodes.map((p) => (
+                        <option key={p.pincode} value={p.pincode}>
+                          {p.pincode} • {p.office} ({p.count})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
+            )}
+          </div>
 
-              {/* Colony Cards Grid */}
-              <div className="space-y-3">
+          {/* BLOCK D: Master Colony Cards Grid */}
+          <div ref={blockDRef} id="colony-block-d" className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden scroll-mt-20">
+            <button
+              type="button"
+              onClick={() => setIsBlockDOpen((prev) => !prev)}
+              className="w-full px-5 py-3.5 bg-slate-50/80 hover:bg-slate-100/80 border-b border-slate-100 flex items-center justify-between transition cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900 font-black text-[10px] uppercase tracking-wider">
+                  Block D
+                </span>
+                <h2 className="text-sm font-black text-slate-900">
+                  Master Colony Cards Grid ({filteredDivisionColonies.length})
+                </h2>
+              </div>
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                <span>Strict Pincode Isolation Active</span>
+                {isBlockDOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </div>
+            </button>
+
+            {isBlockDOpen && (
+              <div className="p-4 sm:p-5 bg-slate-50/40">
                 {filteredDivisionColonies.length === 0 ? (
-                  <div className="p-8 text-center bg-white rounded-2xl border border-slate-200 text-slate-500">
-                    <MapPin className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p className="text-xs font-bold">No colony records found matching your filters.</p>
+                  <div className="p-10 text-center bg-white rounded-2xl border border-slate-200 text-slate-500 space-y-2">
+                    <MapPin className="w-8 h-8 text-slate-300 mx-auto" />
+                    <p className="text-xs font-bold text-slate-700">
+                      No colony records found matching your strict Office Jurisdiction / Pincode filter.
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Cross-pincode colonies are strictly isolated to prevent misrouting.
+                    </p>
                   </div>
                 ) : (
-                  filteredDivisionColonies.map((col) => (
-                    <div
-                      key={col.id}
-                      className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs hover:border-slate-300 transition"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-2 pb-2 border-b border-slate-100">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-sm text-slate-900">{col.colonyName}</span>
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    {filteredDivisionColonies.map((col) => (
+                      <div
+                        key={col.id}
+                        className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs hover:border-blue-300 transition space-y-3 flex flex-col justify-between"
+                      >
+                        <div className="space-y-3">
+                          {/* Card Top Identification Bar (Colony Name + Pincode + CRUD Actions) */}
+                          <div className="flex flex-wrap items-start justify-between gap-2 pb-2.5 border-b border-slate-100">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-black text-sm sm:text-base text-slate-900">{col.colonyName}</span>
 
-                          {/* Dynamic Entity Classification Badge */}
-                          {col.entityType === 'Commercial Complex' ? (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1">
-                              <Building2 size={11} className="text-amber-700" />
-                              <span>Commercial Complex</span>
-                            </span>
-                          ) : col.entityType === 'Specific Landmark' ? (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200 inline-flex items-center gap-1">
-                              <Landmark size={11} className="text-teal-700" />
-                              <span>Specific Landmark</span>
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 inline-flex items-center gap-1">
-                              <Home size={11} className="text-indigo-600" />
-                              <span>Residential Colony</span>
-                            </span>
-                          )}
+                              <span className="text-xs font-mono font-black text-blue-900 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-lg">
+                                PIN {col.pincode}
+                              </span>
 
-                          <span
-                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                              col.division === 'KOTA'
-                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                : col.division === 'BARAN'
-                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            }`}
-                          >
-                            {col.division} DIVISION
-                          </span>
-                          <span className="text-xs font-mono font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
-                            PIN {col.pincode}
-                          </span>
-                        </div>
+                              {/* Dynamic Entity Classification Badge */}
+                              {col.entityType === 'Commercial Complex' ? (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1">
+                                  <Building2 size={11} className="text-amber-700" />
+                                  <span>Commercial Complex</span>
+                                </span>
+                              ) : col.entityType === 'Specific Landmark' ? (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200 inline-flex items-center gap-1">
+                                  <Landmark size={11} className="text-teal-700" />
+                                  <span>Specific Landmark</span>
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 inline-flex items-center gap-1">
+                                  <Home size={11} className="text-indigo-600" />
+                                  <span>Residential Colony</span>
+                                </span>
+                              )}
 
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              col.status === 'ACTIVE'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-amber-50 text-amber-700 border border-amber-200'
-                            }`}
-                          >
-                            {col.status === 'ACTIVE' ? 'ACTIVE BEAT' : 'PENDING BEAT MAPPING'}
-                          </span>
-                          
-                          {/* Live Edit & Delete Actions */}
-                          <button
-                            onClick={() => handleOpenEditHadotiModal(col)}
-                            title="Edit Colony / Landmark Master Record"
-                            className="p-1 hover:bg-blue-50 text-slate-400 hover:text-blue-700 rounded transition cursor-pointer"
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteHadotiColony(col.id, col.colonyName)}
-                            title="Delete Colony Record"
-                            className="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                  col.division === 'KOTA'
+                                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                    : col.division === 'BARAN'
+                                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                    : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                }`}
+                              >
+                                {col.division}
+                              </span>
+                            </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3 text-xs text-slate-600">
-                        <div>
-                          <span className="text-slate-400 block text-[10px] uppercase font-semibold">Post Office</span>
-                          <span className="font-semibold text-slate-800 flex items-center gap-1 mt-0.5">
-                            <Building2 size={13} className="text-slate-400 shrink-0" />
-                            {col.postOfficeName}
-                          </span>
-                        </div>
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  col.status === 'ACTIVE'
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                }`}
+                              >
+                                {col.status === 'ACTIVE' ? 'ACTIVE' : 'PENDING BEAT'}
+                              </span>
 
-                        <div>
-                          <span className="text-slate-400 block text-[10px] uppercase font-semibold">Geo-Tag (Lat/Lng)</span>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="font-mono text-slate-700 text-xs">
-                              {col.geoTag.lat.toFixed(4)}, {col.geoTag.lng.toFixed(4)}
-                            </span>
-                            <a
-                              href={col.geoTag.googleMapsUrl || `https://www.google.com/maps?q=${col.geoTag.lat},${col.geoTag.lng}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded text-[10px] font-bold flex items-center gap-1 transition"
-                              title="Open in Google Maps"
-                            >
-                              <Navigation size={10} className="shrink-0" />
-                              <span>View Map / Pin</span>
-                              <ExternalLink size={9} className="opacity-70" />
-                            </a>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditHadotiModal(col)}
+                                title="Edit Colony, Landmarks, Sectors & Blocks"
+                                className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-lg text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+                              >
+                                <Edit2 size={12} />
+                                <span>Edit</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteHadotiColony(col.id, col.colonyName, col.pincode)}
+                                title="Delete Colony Master Record"
+                                className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+                              >
+                                <Trash2 size={12} />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Office, Geo-Tag & Beat Binding Metadata */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs text-slate-600">
+                            <div>
+                              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Jurisdiction Office</span>
+                              <span className="font-bold text-slate-800 flex items-center gap-1 mt-0.5">
+                                <Building2 size={13} className="text-blue-700 shrink-0" />
+                                <span className="truncate">{col.postOfficeName}</span>
+                              </span>
+                            </div>
+
+                            <div>
+                              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Geo-Tag</span>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="font-mono text-slate-700 text-[11px]">
+                                  {col.geoTag.lat.toFixed(4)}, {col.geoTag.lng.toFixed(4)}
+                                </span>
+                                <a
+                                  href={col.geoTag.googleMapsUrl || `https://www.google.com/maps?q=${col.geoTag.lat},${col.geoTag.lng}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded text-[10px] font-bold flex items-center gap-0.5 transition"
+                                  title="Open in Google Maps"
+                                >
+                                  <Navigation size={9} className="shrink-0" />
+                                  <span>Map</span>
+                                  <ExternalLink size={9} className="opacity-70" />
+                                </a>
+                              </div>
+                            </div>
+
+                            <div>
+                              <span className="text-slate-400 block text-[10px] uppercase font-semibold">Assigned Beat</span>
+                              {inlineBeatEditId === col.id ? (
+                                <div className="flex items-center gap-1 mt-0.5">
+                                  <input
+                                    type="text"
+                                    value={inlineBeatValue}
+                                    onChange={(e) => setInlineBeatValue(e.target.value)}
+                                    placeholder="e.g. Beat 2"
+                                    className="w-20 text-xs font-semibold px-2 py-0.5 border border-indigo-400 rounded focus:outline-none"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUpdateHadotiBeat(col.id, inlineBeatValue)}
+                                    className="px-1.5 py-0.5 bg-emerald-600 text-white rounded text-[10px] font-bold cursor-pointer"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setInlineBeatEditId(null);
+                                      setInlineBeatValue('');
+                                    }}
+                                    className="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded text-[10px] cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span
+                                    className={`font-semibold ${
+                                      col.assignedBeat && col.assignedBeat !== 'PENDING_ASSIGNMENT'
+                                        ? 'text-slate-900'
+                                        : 'text-amber-700 font-medium italic'
+                                    }`}
+                                  >
+                                    {col.assignedBeat && col.assignedBeat !== 'PENDING_ASSIGNMENT'
+                                      ? col.assignedBeat
+                                      : 'Pending Assignment'}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setInlineBeatEditId(col.id);
+                                      setInlineBeatValue(
+                                        col.assignedBeat && col.assignedBeat !== 'PENDING_ASSIGNMENT'
+                                          ? col.assignedBeat
+                                          : ''
+                                      );
+                                    }}
+                                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                                  >
+                                    Assign
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Consolidated Colony Summary Overview + On-the-fly Landmark Adder */}
+                          <div className="bg-slate-50/90 rounded-xl border border-slate-200/80 p-3 space-y-2.5 text-xs">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              <div>
+                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1 mb-1">
+                                  <Layers size={11} className="text-blue-700" />
+                                  <span>Sectors ({col.subSectors?.length || 0})</span>
+                                </span>
+                                {col.subSectors && col.subSectors.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {col.subSectors.map((sec, idx) => (
+                                      <span
+                                        key={`${sec}-${idx}`}
+                                        className="px-2 py-0.5 rounded-md bg-white border border-blue-200/80 text-blue-900 text-[10px] font-semibold"
+                                      >
+                                        {sec}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-[11px] text-slate-400 italic">No sectors specified</span>
+                                )}
+                              </div>
+
+                              <div>
+                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1 mb-1">
+                                  <Building size={11} className="text-indigo-700" />
+                                  <span>Blocks / Pockets ({col.blocks?.length || 0})</span>
+                                </span>
+                                {col.blocks && col.blocks.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {col.blocks.map((blk, idx) => (
+                                      <span
+                                        key={`${blk}-${idx}`}
+                                        className="px-2 py-0.5 rounded-md bg-white border border-indigo-200/80 text-indigo-900 text-[10px] font-semibold"
+                                      >
+                                        {blk}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-[11px] text-slate-400 italic">No blocks specified</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Landmarks with On-the-Fly Quick Add & Remove */}
+                            <div className="pt-2 border-t border-slate-200/70 space-y-1.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                                  <Landmark size={11} className="text-amber-600" />
+                                  <span>Landmarks ({col.landmarks?.length || 0})</span>
+                                </span>
+                                {col.houseNumberRange && (
+                                  <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-900 font-mono text-[10px] font-bold">
+                                    {col.houseNumberRange}
+                                  </span>
+                                )}
+                              </div>
+
+                              {col.landmarks && col.landmarks.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {col.landmarks.map((lm, idx) => (
+                                    <span
+                                      key={`${lm}-${idx}`}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50/90 border border-amber-200 text-amber-950 text-[10px] font-semibold"
+                                    >
+                                      <span>{lm}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleQuickRemoveLandmark(col, lm)}
+                                        title={`Remove landmark "${lm}"`}
+                                        className="text-amber-600 hover:text-rose-700 cursor-pointer"
+                                      >
+                                        <X size={10} />
+                                      </button>
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-slate-400 italic block">No landmarks specified yet</span>
+                              )}
+
+                              {/* Inline On-the-Fly Landmark Adder */}
+                              <div className="flex items-center gap-1.5 pt-1">
+                                <input
+                                  type="text"
+                                  value={inlineLandmarkInputMap[col.id] || ''}
+                                  onChange={(e) =>
+                                    setInlineLandmarkInputMap((prev) => ({
+                                      ...prev,
+                                      [col.id]: e.target.value,
+                                    }))
+                                  }
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      handleQuickAddLandmark(col);
+                                    }
+                                  }}
+                                  placeholder={`+ Add landmark to ${col.colonyName}...`}
+                                  className="flex-1 text-[11px] px-2.5 py-1 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickAddLandmark(col)}
+                                  className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition cursor-pointer shrink-0"
+                                >
+                                  <Plus size={11} />
+                                  <span>Add Landmark</span>
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         </div>
 
-                        <div>
-                          <span className="text-slate-400 block text-[10px] uppercase font-semibold">Assigned Beat</span>
-                          {inlineBeatEditId === col.id ? (
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <input
-                                type="text"
-                                value={inlineBeatValue}
-                                onChange={(e) => setInlineBeatValue(e.target.value)}
-                                placeholder="e.g. Beat 2"
-                                className="w-24 text-xs font-semibold px-2 py-0.5 border border-indigo-400 rounded focus:outline-none"
-                              />
-                              <button
-                                onClick={() => handleUpdateHadotiBeat(col.id, inlineBeatValue)}
-                                className="px-1.5 py-0.5 bg-emerald-600 text-white rounded text-[10px] font-bold"
-                              >
-                                Save
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setInlineBeatEditId(null);
-                                  setInlineBeatValue('');
-                                }}
-                                className="px-1.5 py-0.5 bg-slate-200 text-slate-700 rounded text-[10px]"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span
-                                className={`font-semibold ${
-                                  col.assignedBeat && col.assignedBeat !== 'PENDING_ASSIGNMENT'
-                                    ? 'text-slate-900'
-                                    : 'text-amber-700 font-medium italic'
-                                }`}
-                              >
-                                {col.assignedBeat && col.assignedBeat !== 'PENDING_ASSIGNMENT'
-                                  ? col.assignedBeat
-                                  : 'Pending Assignment'}
-                              </span>
-                              <button
-                                onClick={() => {
-                                  setInlineBeatEditId(col.id);
-                                  setInlineBeatValue(
-                                    col.assignedBeat && col.assignedBeat !== 'PENDING_ASSIGNMENT'
-                                      ? col.assignedBeat
-                                      : ''
-                                  );
-                                }}
-                                className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
-                              >
-                                Edit Beat
-                              </button>
-                            </div>
-                          )}
+                        {/* Card Footer */}
+                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                          <span className="font-mono">ID: {col.id}</span>
+                          <span>Registered: {new Date(col.createdAt).toLocaleDateString()}</span>
                         </div>
                       </div>
-
-                      {/* Streamlined High-Level Footer Bar */}
-                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                        <span className="font-mono text-slate-400">ID: {col.id}</span>
-                        <span className="text-[10px] text-slate-500 font-medium bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
-                          Sectors & Landmarks managed in Beat & Address forms
-                        </span>
-                        <span className="text-slate-400">Reg: {new Date(col.createdAt).toLocaleDateString()}</span>
-                      </div>
-
-                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-                        <span className="font-mono">ID: {col.id}</span>
-                        <span>Registered: {new Date(col.createdAt).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  ))
+                    ))}
+                  </div>
                 )}
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}
@@ -2360,15 +3042,205 @@ export default function UnifiedCrmMasterHub() {
                 />
               </div>
 
-              {/* Streamlined Architecture Note in Edit Modal */}
-              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-600 space-y-1">
-                <div className="flex items-center gap-1.5 font-bold text-slate-800">
-                  <Layers size={14} className="text-indigo-600" />
-                  <span>Colony Master Boundaries</span>
+              {/* On-the-Fly Interactive Landmarks, Sectors, Blocks & House Number Ranges Editor */}
+              <div className="space-y-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+                {/* Landmarks Chip Editor */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Landmark size={13} className="text-amber-600" />
+                    <span>Landmarks ({editLandmarks.length}) — Add or Remove Without Resetting Existing Data</span>
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {editLandmarks.map((lm, idx) => (
+                      <span
+                        key={`${lm}-${idx}`}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-950 text-[11px] font-semibold"
+                      >
+                        <span>{lm}</span>
+                        <button
+                          type="button"
+                          onClick={() => setEditLandmarks((prev) => prev.filter((_, i) => i !== idx))}
+                          className="text-amber-600 hover:text-rose-700 cursor-pointer"
+                        >
+                          <X size={11} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newEditLandmarkInput}
+                      onChange={(e) => setNewEditLandmarkInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const val = newEditLandmarkInput.trim();
+                          if (val && !editLandmarks.some((l) => l.toLowerCase() === val.toLowerCase())) {
+                            setEditLandmarks((prev) => [...prev, val]);
+                            setNewEditLandmarkInput('');
+                          }
+                        }
+                      }}
+                      placeholder="e.g. CAD Circle, Shiv Mandir..."
+                      className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const val = newEditLandmarkInput.trim();
+                        if (!val) return;
+                        if (editLandmarks.some((l) => l.toLowerCase() === val.toLowerCase())) {
+                          showWarningToast(`Landmark "${val}" is already listed.`);
+                          return;
+                        }
+                        setEditLandmarks((prev) => [...prev, val]);
+                        setNewEditLandmarkInput('');
+                      }}
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus size={12} />
+                      <span>Add Landmark</span>
+                    </button>
+                  </div>
                 </div>
-                <p className="text-[11px] text-slate-500 leading-relaxed">
-                  Colony Directory maintains high-level territory records (Name, Classification, PIN, Office, Geo-tag). Granular sectors, pockets, and landmark points are managed dynamically in <strong>Beat Multi-Colony Mapping</strong>.
-                </p>
+
+                {/* Sectors Chip Editor */}
+                <div className="space-y-1.5 pt-2 border-t border-slate-200/80">
+                  <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Layers size={13} className="text-blue-700" />
+                    <span>Sectors ({editSubSectors.length})</span>
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {editSubSectors.map((sec, idx) => (
+                      <span
+                        key={`${sec}-${idx}`}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-950 text-[11px] font-semibold"
+                      >
+                        <span>{sec}</span>
+                        <button
+                          type="button"
+                          onClick={() => setEditSubSectors((prev) => prev.filter((_, i) => i !== idx))}
+                          className="text-blue-600 hover:text-rose-700 cursor-pointer"
+                        >
+                          <X size={11} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newEditSectorInput}
+                      onChange={(e) => setNewEditSectorInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const val = newEditSectorInput.trim();
+                          if (val && !editSubSectors.some((s) => s.toLowerCase() === val.toLowerCase())) {
+                            setEditSubSectors((prev) => [...prev, val]);
+                            setNewEditSectorInput('');
+                          }
+                        }
+                      }}
+                      placeholder="e.g. Sector 1, Pocket A..."
+                      className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const val = newEditSectorInput.trim();
+                        if (!val) return;
+                        if (editSubSectors.some((s) => s.toLowerCase() === val.toLowerCase())) {
+                          showWarningToast(`Sector "${val}" is already listed.`);
+                          return;
+                        }
+                        setEditSubSectors((prev) => [...prev, val]);
+                        setNewEditSectorInput('');
+                      }}
+                      className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus size={12} />
+                      <span>Add Sector</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Blocks Chip Editor */}
+                <div className="space-y-1.5 pt-2 border-t border-slate-200/80">
+                  <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Building size={13} className="text-indigo-700" />
+                    <span>Blocks / Series ({editBlocks.length})</span>
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {editBlocks.map((blk, idx) => (
+                      <span
+                        key={`${blk}-${idx}`}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-950 text-[11px] font-semibold"
+                      >
+                        <span>{blk}</span>
+                        <button
+                          type="button"
+                          onClick={() => setEditBlocks((prev) => prev.filter((_, i) => i !== idx))}
+                          className="text-indigo-600 hover:text-rose-700 cursor-pointer"
+                        >
+                          <X size={11} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newEditBlockInput}
+                      onChange={(e) => setNewEditBlockInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const val = newEditBlockInput.trim();
+                          if (val && !editBlocks.some((b) => b.toLowerCase() === val.toLowerCase())) {
+                            setEditBlocks((prev) => [...prev, val]);
+                            setNewEditBlockInput('');
+                          }
+                        }
+                      }}
+                      placeholder="e.g. Block A, KH Series..."
+                      className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const val = newEditBlockInput.trim();
+                        if (!val) return;
+                        if (editBlocks.some((b) => b.toLowerCase() === val.toLowerCase())) {
+                          showWarningToast(`Block "${val}" is already listed.`);
+                          return;
+                        }
+                        setEditBlocks((prev) => [...prev, val]);
+                        setNewEditBlockInput('');
+                      }}
+                      className="px-3 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus size={12} />
+                      <span>Add Block</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* House Number Ranges */}
+                <div className="pt-2 border-t border-slate-200/80">
+                  <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center gap-1.5">
+                    <Home size={13} className="text-emerald-700" />
+                    <span>House Number Ranges</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={editHouseNumberRange}
+                    onChange={(e) => setEditHouseNumberRange(e.target.value)}
+                    placeholder="e.g. H.No. 1 - 417, Plot 1 - 1010"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
               </div>
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
@@ -2388,6 +3260,50 @@ export default function UnifiedCrmMasterHub() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Clean React Delete Confirmation Modal (No window.confirm) */}
+      {pendingDeleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-5 bg-rose-50 border-b border-rose-200 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0">
+                <Trash2 size={18} />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-rose-950">Confirm Permanent Removal</h3>
+                <p className="text-xs text-rose-700">Master Directory Record Deletion</p>
+              </div>
+            </div>
+            <div className="p-5 space-y-3 text-xs text-slate-700">
+              <p>
+                Are you sure you want to permanently remove{' '}
+                <strong className="text-slate-950">{pendingDeleteTarget.name}</strong>
+                {pendingDeleteTarget.pincode ? ` (PIN ${pendingDeleteTarget.pincode})` : ''} from the master database?
+              </p>
+              <p className="text-[11px] text-slate-500">
+                This action removes the record from the Colony Directory Master. Use Beat Management if you only want to unmap a colony from a delivery beat.
+              </p>
+            </div>
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteTarget(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmPendingDelete}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 size={13} />
+                <span>Delete Record</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

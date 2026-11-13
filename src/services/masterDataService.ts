@@ -21,12 +21,14 @@ import {
   Customer,
   SpecialBillRecord,
   ColonyMasterRecord,
+  OfficeJurisdiction,
   registerColonyToMaster,
   registerOrUpdateUniqueColony,
 } from '../types/models';
 import {
   registerOrUpdateColonyWithGovernance,
   deleteColonyMasterRecord as deleteColonyGovernance,
+  generateUniqueColonyId,
 } from './colonyGovernanceService';
 import {
   FuelDailyRow,
@@ -255,9 +257,32 @@ class MasterDataService {
 
         const rawColonies = localStorage.getItem(STORAGE_KEY_COLONY_MASTER_RECORDS);
         if (rawColonies) {
-          this.colonyMasterRecords = JSON.parse(rawColonies);
+          const parsed: ColonyMasterRecord[] = JSON.parse(rawColonies);
+          const seeds = this.getInitialColonyMasterRecords();
+          const seedMap = new Map(seeds.map((s) => [s.id, s]));
+          // Enrich stored seed records with blocks, landmarks, houseNumberRange & corrected Dadabari 324009 pincode
+          const merged = parsed.map((rec) => {
+            const seed = seedMap.get(rec.id);
+            if (!seed) return rec;
+            return {
+              ...rec,
+              pincode: rec.id === 'COL-KT-002' && rec.pincode === '324005' ? '324009' : rec.pincode,
+              postOfficeName: rec.id === 'COL-KT-002' && rec.postOfficeName === 'Keshavpura S.O.' ? 'Dadabari S.O.' : rec.postOfficeName,
+              blocks: rec.blocks && rec.blocks.length > 0 ? rec.blocks : seed.blocks,
+              landmarks: rec.landmarks && rec.landmarks.length > 0 ? rec.landmarks : seed.landmarks,
+              houseNumberRange: rec.houseNumberRange || seed.houseNumberRange,
+            };
+          });
+          // Add any newly introduced seed colonies (e.g., Jawahar Nagar 324005 under PIP Office) if missing
+          seeds.forEach((seed) => {
+            if (!merged.some((m) => m.id === seed.id || (m.colonyName.toLowerCase() === seed.colonyName.toLowerCase() && m.pincode === seed.pincode))) {
+              merged.push(seed);
+            }
+          });
+          this.colonyMasterRecords = this.normalizeAndDeduplicateColonies(merged);
+          this.saveColonyMaster();
         } else {
-          this.colonyMasterRecords = this.getInitialColonyMasterRecords();
+          this.colonyMasterRecords = this.normalizeAndDeduplicateColonies(this.getInitialColonyMasterRecords());
           this.saveColonyMaster();
         }
       }
@@ -265,12 +290,74 @@ class MasterDataService {
       console.warn('Failed to load master data upload state:', e);
       this.uploadLogs = this.getInitialUploadLogs();
       this.ingestedRecords = this.getInitialIngestedRecords();
-      this.colonyMasterRecords = this.getInitialColonyMasterRecords();
+      this.colonyMasterRecords = this.normalizeAndDeduplicateColonies(this.getInitialColonyMasterRecords());
     }
+  }
+
+  private normalizeAndDeduplicateColonies(records: ColonyMasterRecord[]): ColonyMasterRecord[] {
+    const byNamePin = new Map<string, ColonyMasterRecord>();
+    const ordered: ColonyMasterRecord[] = [];
+
+    for (const raw of records) {
+      if (!raw || !raw.colonyName) continue;
+      const cleanName = raw.colonyName.trim();
+      const cleanPin = (raw.pincode || '').trim();
+      const key = `${cleanName.toLowerCase()}__${cleanPin}`;
+
+      const lat = typeof raw.geoTag?.lat === 'number' && !Number.isNaN(raw.geoTag.lat) ? raw.geoTag.lat : 25.1432;
+      const lng = typeof raw.geoTag?.lng === 'number' && !Number.isNaN(raw.geoTag.lng) ? raw.geoTag.lng : 75.8234;
+      const googleMapsUrl = raw.geoTag?.googleMapsUrl || `https://www.google.com/maps?q=${lat},${lng}`;
+
+      const normalized: ColonyMasterRecord = {
+        ...raw,
+        colonyName: cleanName,
+        pincode: cleanPin,
+        geoTag: { lat, lng, googleMapsUrl },
+      };
+
+      const existing = byNamePin.get(key);
+      if (existing) {
+        const mergedSubSectors = Array.from(new Set([...(existing.subSectors || []), ...(normalized.subSectors || [])]));
+        const mergedBlocks = Array.from(new Set([...(existing.blocks || []), ...(normalized.blocks || [])]));
+        const mergedLandmarks = Array.from(new Set([...(existing.landmarks || []), ...(normalized.landmarks || [])]));
+        const hasNewBeat = Boolean(normalized.assignedBeat && normalized.assignedBeat !== 'PENDING_ASSIGNMENT');
+        const hasExistingBeat = Boolean(existing.assignedBeat && existing.assignedBeat !== 'PENDING_ASSIGNMENT');
+        const chosenBeat = hasExistingBeat
+          ? existing.assignedBeat
+          : hasNewBeat
+          ? normalized.assignedBeat
+          : 'PENDING_ASSIGNMENT';
+
+        existing.subSectors = mergedSubSectors.length > 0 ? mergedSubSectors : existing.subSectors;
+        existing.blocks = mergedBlocks.length > 0 ? mergedBlocks : existing.blocks;
+        existing.landmarks = mergedLandmarks.length > 0 ? mergedLandmarks : existing.landmarks;
+        existing.houseNumberRange = existing.houseNumberRange || normalized.houseNumberRange;
+        existing.assignedBeat = chosenBeat;
+        existing.status = chosenBeat !== 'PENDING_ASSIGNMENT' ? 'ACTIVE' : 'PENDING_BEAT_MAPPING';
+      } else {
+        byNamePin.set(key, normalized);
+        ordered.push(normalized);
+      }
+    }
+
+    const seenIds = new Set<string>();
+    return ordered.map((rec) => {
+      let id = (rec.id || '').trim();
+      if (!id || seenIds.has(id)) {
+        id = generateUniqueColonyId(seenIds);
+      } else {
+        seenIds.add(id);
+      }
+      return {
+        ...rec,
+        id,
+      };
+    });
   }
 
   private saveColonyMaster() {
     try {
+      this.colonyMasterRecords = this.normalizeAndDeduplicateColonies(this.colonyMasterRecords);
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem(STORAGE_KEY_COLONY_MASTER_RECORDS, JSON.stringify(this.colonyMasterRecords));
       }
@@ -281,7 +368,7 @@ class MasterDataService {
 
   private getInitialColonyMasterRecords(): ColonyMasterRecord[] {
     return [
-      // KOTA DIVISION
+      // KOTA DIVISION - DADABARI S.O. (PIN 324009)
       {
         id: 'COL-KT-001',
         colonyName: 'Dadabari Extension',
@@ -289,7 +376,10 @@ class MasterDataService {
         pincode: '324009',
         division: 'KOTA',
         postOfficeName: 'Dadabari S.O.',
-        subSectors: ['Chambal Enclave', 'Shopping Centre', 'Block A-D'],
+        subSectors: ['Chambal Enclave', 'Shopping Centre', 'Main Market'],
+        blocks: ['Block A', 'Block B', 'Block C', 'Block D'],
+        landmarks: ['CAD Circle', 'Dadabari Sub-Post Office', 'SBI Dadabari Branch'],
+        houseNumberRange: 'H.No. 1 - 320, Block A-D',
         geoTag: {
           lat: 25.1432,
           lng: 75.8234,
@@ -303,16 +393,19 @@ class MasterDataService {
         id: 'COL-KT-002',
         colonyName: 'Keshavpura Sector 1-7',
         entityType: 'Residential Colony',
-        pincode: '324005',
+        pincode: '324009',
         division: 'KOTA',
-        postOfficeName: 'Keshavpura S.O.',
+        postOfficeName: 'Dadabari S.O.',
         subSectors: ['Sector 1', 'Sector 2', 'Sector 3', 'Sector 4', 'Sector 5', 'Sector 6', 'Sector 7'],
+        blocks: ['KH Series', 'UIT Series', 'Chhoti Basti', 'Kisan Colony'],
+        landmarks: ['Sheetla Mata Mandir', 'Sector 7 Community Park', 'Ganesh Mandir Chauraha'],
+        houseNumberRange: 'H.No. 1 - 417, KH-1 - KH-252, Plot 1 - 1010',
         geoTag: {
           lat: 25.1388,
           lng: 75.8301,
           googleMapsUrl: 'https://www.google.com/maps?q=25.1388,75.8301',
         },
-        assignedBeat: 'Beat 6',
+        assignedBeat: 'Beat 2',
         status: 'ACTIVE',
         createdAt: '2026-01-02T08:00:00.000Z',
       },
@@ -324,6 +417,9 @@ class MasterDataService {
         division: 'KOTA',
         postOfficeName: 'Mahaveer Nagar S.O.',
         subSectors: ['Sector 1', 'Sector 2', 'Sector 3', 'Central Park Enclave'],
+        blocks: ['Block A-C', 'Vistar Phase 1'],
+        landmarks: ['Samrat Chowk', 'Central Park', 'Jain Temple Road'],
+        houseNumberRange: '1-A-1 to 3-F-95',
         geoTag: {
           lat: 25.148,
           lng: 75.834,
@@ -341,6 +437,9 @@ class MasterDataService {
         division: 'KOTA',
         postOfficeName: 'Dadabari S.O.',
         subSectors: ['Phase 1', 'Phase 2', 'School Road'],
+        blocks: ['Block A', 'Block B', 'Main Colony Block'],
+        landmarks: ['Govt Senior Secondary School', 'Dadabari Water Tank'],
+        houseNumberRange: 'H.No. 1 - 185',
         geoTag: {
           lat: 25.145,
           lng: 75.821,
@@ -358,6 +457,9 @@ class MasterDataService {
         division: 'KOTA',
         postOfficeName: 'Vigyan Nagar S.O.',
         subSectors: ['Road No. 1-4', 'Commercial Belt', 'Worker Quarters'],
+        blocks: ['Plot Zone I-IV', 'Electronic Complex'],
+        landmarks: ['Vigyan Nagar Flyover', 'RIICO Commercial Gate'],
+        houseNumberRange: 'Plot I-1 to I-240',
         geoTag: {
           lat: 25.132,
           lng: 75.845,
@@ -375,14 +477,57 @@ class MasterDataService {
         division: 'KOTA',
         postOfficeName: 'Dadabari S.O.',
         subSectors: ['Sector A', 'Sector B', 'Sector C', 'Scheme No. 3'],
+        blocks: ['Block A', 'Block B', 'Bank Colony Pocket'],
+        landmarks: ['Basant Vihar Central Garden', 'Radha Krishna Mandir', 'Modi College Gate'],
+        houseNumberRange: 'H.No. 1-A to 4-C-120',
         geoTag: {
           lat: 25.1412,
           lng: 75.819,
           googleMapsUrl: 'https://www.google.com/maps?q=25.1412,75.819',
         },
-        assignedBeat: 'Beat 4',
+        assignedBeat: 'Beat 3',
         status: 'ACTIVE',
         createdAt: '2026-01-06T08:00:00.000Z',
+      },
+      {
+        id: 'COL-KT-007',
+        colonyName: 'Jawahar Nagar',
+        entityType: 'Residential Colony',
+        pincode: '324005',
+        division: 'KOTA',
+        postOfficeName: 'PIP Office / Talwandi S.O.',
+        subSectors: ['Sector 1', 'Sector 2', 'Coaching Zone'],
+        blocks: ['Block A', 'Block B', 'Hostel Enclave'],
+        landmarks: ['City Mall Corner', 'Jawahar Nagar Police Station', 'Coaching Hub Circle'],
+        houseNumberRange: 'Plot 1 - 480',
+        geoTag: {
+          lat: 25.1404,
+          lng: 75.8462,
+          googleMapsUrl: 'https://www.google.com/maps?q=25.1404,75.8462',
+        },
+        assignedBeat: 'Beat 14',
+        status: 'ACTIVE',
+        createdAt: '2026-01-06T10:00:00.000Z',
+      },
+      {
+        id: 'COL-KT-008',
+        colonyName: 'Talwandi Sector A-C',
+        entityType: 'Residential Colony',
+        pincode: '324005',
+        division: 'KOTA',
+        postOfficeName: 'PIP Office / Talwandi S.O.',
+        subSectors: ['Sector A', 'Sector B', 'Sector C'],
+        blocks: ['Commerce Block', 'Residential Pocket 1-3'],
+        landmarks: ['Talwandi Circle Fountain', 'Commerce College Gate'],
+        houseNumberRange: 'A-1 to C-320',
+        geoTag: {
+          lat: 25.1346,
+          lng: 75.8421,
+          googleMapsUrl: 'https://www.google.com/maps?q=25.1346,75.8421',
+        },
+        assignedBeat: 'Beat PIP-1',
+        status: 'ACTIVE',
+        createdAt: '2026-01-06T11:00:00.000Z',
       },
 
       // BARAN DIVISION
@@ -394,6 +539,9 @@ class MasterDataService {
         division: 'BARAN',
         postOfficeName: 'Baran H.O.',
         subSectors: ['Main Bazaar', 'Station Road', 'Chowk Market'],
+        blocks: ['Market Block 1', 'Station Road Block'],
+        landmarks: ['Pratap Chowk Clock Tower', 'Baran Railway Crossing'],
+        houseNumberRange: 'Shop 1 - 210',
         geoTag: {
           lat: 25.1011,
           lng: 76.5132,
@@ -603,6 +751,39 @@ class MasterDataService {
     return this.colonyMasterRecords.filter((c) => c.division === division);
   }
 
+  public getColoniesByPincodeAndOffice(pincode?: string, postOfficeName?: string): ColonyMasterRecord[] {
+    const cleanPin = (pincode || '').trim();
+    const cleanOffice = (postOfficeName || '').trim().toLowerCase();
+    return this.colonyMasterRecords.filter((c) => {
+      if (cleanPin && c.pincode.trim() !== cleanPin) return false;
+      if (cleanOffice && c.postOfficeName.trim().toLowerCase() !== cleanOffice) return false;
+      return true;
+    });
+  }
+
+  public getOfficeJurisdictions(): OfficeJurisdiction[] {
+    const map = new Map<string, OfficeJurisdiction>();
+    this.colonyMasterRecords.forEach((c) => {
+      const cleanPin = c.pincode.trim();
+      const cleanOffice = c.postOfficeName.trim();
+      if (!cleanPin || !cleanOffice) return;
+      const key = `${cleanOffice.toLowerCase()}__${cleanPin}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          officeId: `${cleanOffice.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}__${cleanPin}`,
+          officeName: cleanOffice,
+          officeType: cleanOffice.includes('H.O.') ? 'HO' : cleanOffice.includes('B.O.') ? 'BO' : 'SO',
+          pincode: cleanPin,
+          division: `${c.division} Division`,
+          circle: 'Rajasthan Circle',
+        });
+      }
+    });
+    return Array.from(map.values()).sort(
+      (a, b) => a.pincode.localeCompare(b.pincode) || a.officeName.localeCompare(b.officeName)
+    );
+  }
+
   public addColonyMasterRecord(
     newColony: Omit<ColonyMasterRecord, 'id' | 'status' | 'createdAt'>,
     userRole: 'MASTER_ADMIN' | 'SPM' | 'POSTMAN' | 'CUSTOMER' = 'MASTER_ADMIN',
@@ -643,10 +824,19 @@ class MasterDataService {
     const idx = this.colonyMasterRecords.findIndex((c) => c.id === id);
     if (idx === -1) return false;
     const current = this.colonyMasterRecords[idx];
+    const cleanArray = (arr?: string[]) =>
+      arr ? Array.from(new Set(arr.map((s) => s.trim()).filter(Boolean))) : undefined;
+
     const updated: ColonyMasterRecord = {
       ...current,
       ...updates,
       id: current.id,
+      createdAt: current.createdAt,
+      subSectors: updates.subSectors !== undefined ? cleanArray(updates.subSectors) : current.subSectors,
+      blocks: updates.blocks !== undefined ? cleanArray(updates.blocks) : current.blocks,
+      landmarks: updates.landmarks !== undefined ? cleanArray(updates.landmarks) : current.landmarks,
+      houseNumberRange:
+        updates.houseNumberRange !== undefined ? updates.houseNumberRange : current.houseNumberRange,
     };
     if (updates.geoTag) {
       const lat = updates.geoTag.lat !== undefined ? updates.geoTag.lat : current.geoTag.lat;

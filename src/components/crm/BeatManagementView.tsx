@@ -25,7 +25,7 @@ import {
   Phone,
   GitBranch,
 } from 'lucide-react';
-import { Customer, DynamicOfficeRecord, StaffProfile } from '../../types/models';
+import { BeatRecord, Customer, DynamicOfficeRecord, OfficeJurisdiction, StaffProfile } from '../../types/models';
 import { customerService } from '../../services/customerService';
 import {
   staffPermissionService,
@@ -34,48 +34,31 @@ import {
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import DirectMessageModal from './DirectMessageModal';
 import { RAJASTHAN_CIRCLE_OFFICE_MASTER_LIST, RAJASTHAN_DIVISIONS } from '../../data/officesData';
+import { COLONY_HIERARCHY_MAP } from '../../data/colonyHierarchyData';
 import BeatMultiColonySectorModal from './BeatMultiColonySectorModal';
 import { masterDataService } from '../../services/masterDataService';
 
-export interface BeatCardItem {
-  id: string;
-  beatNo: string;
-  name: string;
-  officeId: string;
-  postOfficeName: string;
-  officeType: 'HO' | 'SO' | 'BO';
-  pincode: string;
+export interface BeatCardItem extends BeatRecord {
   parentOffice: string;
   linkedDeliveryOffices: string[];
-  assignedPostman: string;
-  employeeId?: string;
-  contact: string;
-  fixedKm: number;
-  areasCovered: string[];
   totalCustomers: number;
   confirmedCoverage: string;
   coverageValue: number;
-  status: string;
   assignedStaffCount: number;
-  circle?: string;
-  division?: string;
   district?: string;
   subDivision?: string;
 }
 
-export interface OfficeHubOption {
-  officeId: string;
+export interface OfficeHubOption extends Omit<OfficeJurisdiction, 'officeName'> {
   postOfficeName: string;
-  officeType: 'HO' | 'SO' | 'BO';
-  pincode: string;
   parentOfficeName: string;
   linkedDeliveryOffices: string[];
   completeAddress: string;
-  circle?: string;
-  division?: string;
   district?: string;
   subDivision?: string;
 }
+
+const EMPTY_SECTORS_FALLBACK: Record<string, string[]> = {};
 
 export default function BeatManagementView({
   onFilterBeat,
@@ -158,7 +141,9 @@ export default function BeatManagementView({
     try {
       const allMaster = masterDataService.getColonyMasterRecords();
       const matched = allMaster.find(
-        (c) => c.colonyName.trim().toLowerCase() === colonyName.trim().toLowerCase()
+        (c) =>
+          c.colonyName.trim().toLowerCase() === colonyName.trim().toLowerCase() &&
+          c.pincode.trim() === beat.pincode.trim()
       );
       if (matched) {
         masterDataService.updateColonyMasterRecord(matched.id, {
@@ -250,7 +235,7 @@ export default function BeatManagementView({
   const officeHubOptions = useMemo<OfficeHubOption[]>(() => {
     const coreHubs: OfficeHubOption[] = RAJASTHAN_CIRCLE_OFFICE_MASTER_LIST.map((po) => ({
       officeId: po.officeId,
-      postOfficeName: po.name,
+      postOfficeName: po.officeId === 'TALWANDI_SO' ? 'PIP Office / Talwandi S.O.' : po.name,
       officeType: po.type,
       pincode: po.pin,
       parentOfficeName: po.parentOffice,
@@ -306,6 +291,8 @@ export default function BeatManagementView({
         postOfficeName: 'Dadabari S.O.',
         officeType: 'SO',
         pincode: '324009',
+        division: 'Kota Division',
+        circle: 'Rajasthan Circle',
         parentOffice: 'Kota H.O. (324001)',
         linkedDeliveryOffices: ['Engineering College S.O. (324010)'],
         assignedPostman: 'Muskan Sharma',
@@ -340,6 +327,8 @@ export default function BeatManagementView({
         postOfficeName: 'Dadabari S.O.',
         officeType: 'SO',
         pincode: '324009',
+        division: 'Kota Division',
+        circle: 'Rajasthan Circle',
         parentOffice: 'Kota H.O. (324001)',
         linkedDeliveryOffices: ['Engineering College S.O. (324010)'],
         assignedPostman: 'Mahendra Kumar Meena',
@@ -384,6 +373,8 @@ export default function BeatManagementView({
         postOfficeName: 'Dadabari S.O.',
         officeType: 'SO',
         pincode: '324009',
+        division: 'Kota Division',
+        circle: 'Rajasthan Circle',
         parentOffice: 'Kota H.O. (324001)',
         linkedDeliveryOffices: ['Engineering College S.O. (324010)'],
         assignedPostman: 'Manali Ahuja',
@@ -411,6 +402,8 @@ export default function BeatManagementView({
         postOfficeName: 'Dadabari S.O.',
         officeType: 'SO',
         pincode: '324009',
+        division: 'Kota Division',
+        circle: 'Rajasthan Circle',
         parentOffice: 'Kota H.O. (324001)',
         linkedDeliveryOffices: ['Engineering College S.O. (324010)'],
         assignedPostman: 'Govind Prasad',
@@ -438,6 +431,8 @@ export default function BeatManagementView({
         postOfficeName: 'Dadabari S.O.',
         officeType: 'SO',
         pincode: '324009',
+        division: 'Kota Division',
+        circle: 'Rajasthan Circle',
         parentOffice: 'Kota H.O. (324001)',
         linkedDeliveryOffices: ['Engineering College S.O. (324010)'],
         assignedPostman: 'Ramkishan Meghwal',
@@ -465,6 +460,8 @@ export default function BeatManagementView({
         postOfficeName: 'Engineering College S.O.',
         officeType: 'SO',
         pincode: '324010',
+        division: 'Kota Division',
+        circle: 'Rajasthan Circle',
         parentOffice: 'Kota H.O. (324001)',
         linkedDeliveryOffices: ['Dadabari S.O. (324009)'],
         assignedPostman: 'Vikram Singh Hada',
@@ -494,27 +491,72 @@ export default function BeatManagementView({
       {
         id: 'BEAT-EC-2',
         beatNo: 'EC-2',
-        name: 'Beat EC-2 — Talwandi Sector 1-4 & Jawahar Nagar',
+        name: 'Beat EC-2 — Rawatbhata Road & Rathkankra Belt',
         officeId: 'ENG_COLLEGE_SO',
         postOfficeName: 'Engineering College S.O.',
         officeType: 'SO',
         pincode: '324010',
+        division: 'Kota Division',
+        circle: 'Rajasthan Circle',
         parentOffice: 'Kota H.O. (324001)',
         linkedDeliveryOffices: ['Dadabari S.O. (324009)'],
         assignedPostman: 'Suresh Chandra Verma',
         employeeId: 'CSI-10448902',
         contact: '9829077412',
         fixedKm: 18,
-        areasCovered: [
-          'Talwandi Sector 1 to 4',
-          'Jawahar Nagar Main',
-          'Commerce College Road',
-          'Global Hospital Belt',
-        ],
+        areasCovered: [],
         totalCustomers:
           customers?.filter((c) => c.beatNo === 'EC-2' || c.beatNo === 'Beat EC-2').length || 0,
         confirmedCoverage: '96.4%',
         coverageValue: 96.4,
+        status: 'Active Daily Delivery',
+        assignedStaffCount: 1,
+      },
+      {
+        id: 'BEAT-PIP-14',
+        beatNo: '14',
+        name: 'Beat 14 — Jawahar Nagar & Coaching Hub',
+        officeId: 'TALWANDI_SO',
+        postOfficeName: 'PIP Office / Talwandi S.O.',
+        officeType: 'SO',
+        pincode: '324005',
+        division: 'Kota Division',
+        circle: 'Rajasthan Circle',
+        parentOffice: 'Kota H.O. (324001)',
+        linkedDeliveryOffices: ['Vigyan Nagar S.O. (324005)', 'Mahaveer Nagar S.O. (324005)'],
+        assignedPostman: 'Rajesh Kumar Nagar',
+        employeeId: 'CSI-10449214',
+        contact: '9414281400',
+        fixedKm: 20,
+        areasCovered: [],
+        totalCustomers:
+          customers?.filter((c) => c.beatNo === '14' || c.beatNo === 'Beat 14').length || 0,
+        confirmedCoverage: '98.1%',
+        coverageValue: 98.1,
+        status: 'Active Daily Delivery',
+        assignedStaffCount: 1,
+      },
+      {
+        id: 'BEAT-PIP-1',
+        beatNo: 'PIP-1',
+        name: 'Beat PIP-1 — Talwandi Sector A-C & Commerce Zone',
+        officeId: 'TALWANDI_SO',
+        postOfficeName: 'PIP Office / Talwandi S.O.',
+        officeType: 'SO',
+        pincode: '324005',
+        division: 'Kota Division',
+        circle: 'Rajasthan Circle',
+        parentOffice: 'Kota H.O. (324001)',
+        linkedDeliveryOffices: ['Vigyan Nagar S.O. (324005)', 'Mahaveer Nagar S.O. (324005)'],
+        assignedPostman: 'Hemant Singh Chouhan',
+        employeeId: 'CSI-10449215',
+        contact: '9829088501',
+        fixedKm: 19,
+        areasCovered: [],
+        totalCustomers:
+          customers?.filter((c) => c.beatNo === 'PIP-1' || c.beatNo === 'Beat PIP-1').length || 0,
+        confirmedCoverage: '97.6%',
+        coverageValue: 97.6,
         status: 'Active Daily Delivery',
         assignedStaffCount: 1,
       },
@@ -724,25 +766,51 @@ export default function BeatManagementView({
       },
     ];
 
-    // Strict Relational Colony Resolver: Zero-Junk Display Rule
-    const getBoundColoniesForBeat = (beatNoStr: string, officePincode?: string, officeName?: string) => {
+    // Strict Relational & Pincode-Isolated Colony Resolver: Zero-Junk Display Rule
+    const isColonyAllowedForPincode = (colonyName: string, targetPin?: string): boolean => {
+      const cleanPin = (targetPin || '').trim();
+      if (!cleanPin) return true;
+      const normName = colonyName.trim().toLowerCase();
+
+      try {
+        const allMaster = masterDataService.getColonyMasterRecords();
+        const matches = allMaster.filter((r) => r.colonyName.trim().toLowerCase() === normName);
+        if (matches.length > 0) {
+          return matches.some((r) => r.pincode.trim() === cleanPin);
+        }
+      } catch {}
+
+      const hierarchyMatch = Object.entries(COLONY_HIERARCHY_MAP).find(
+        ([k]) => k.trim().toLowerCase() === normName
+      );
+      if (hierarchyMatch) {
+        return hierarchyMatch[1].defaultPincode.trim() === cleanPin;
+      }
+
+      return true;
+    };
+
+    const getBoundColoniesForBeat = (beatNoStr: string, officePincode?: string, _officeName?: string) => {
       const cleanNo = beatNoStr.replace(/^Beat\s+/i, '').trim();
       const rawKey = cleanNo.toLowerCase();
+      const cleanOfficePin = (officePincode || '').trim();
 
       const mappedColonies = new Set<string>();
 
-      // 1. From coloniesWithSectorsMap (configured via Multi-Colony & Sector Mapping modal)
+      // 1. From coloniesWithSectorsMap (configured via Multi-Colony & Sector Mapping modal), strictly scoped by exact Pincode
       const fromSectorsMap =
         coloniesWithSectorsMap[`Beat ${cleanNo}`] ||
         coloniesWithSectorsMap[cleanNo] ||
         coloniesWithSectorsMap[beatNoStr];
       if (fromSectorsMap) {
         Object.keys(fromSectorsMap).forEach((col) => {
-          if (col && col.trim()) mappedColonies.add(col.trim());
+          if (col && col.trim() && isColonyAllowedForPincode(col, cleanOfficePin)) {
+            mappedColonies.add(col.trim());
+          }
         });
       }
 
-      // 2. From masterDataService (ColonyMasterRecord with assignedBeat strictly relationally mapped)
+      // 2. From masterDataService (ColonyMasterRecord with assignedBeat strictly matching exact Pincode)
       try {
         const allColonies = masterDataService.getColonyMasterRecords();
         allColonies.forEach((col) => {
@@ -753,7 +821,7 @@ export default function BeatManagementView({
               assignedClean === beatNoStr.toLowerCase() ||
               col.assignedBeat.toLowerCase() === `beat ${rawKey}`
             ) {
-              if (!officePincode || col.pincode.startsWith(officePincode.slice(0, 3))) {
+              if (!cleanOfficePin || col.pincode.trim() === cleanOfficePin) {
                 mappedColonies.add(col.colonyName.trim());
               }
             }
@@ -763,7 +831,7 @@ export default function BeatManagementView({
         console.warn('Error reading master colonies for beat:', e);
       }
 
-      // 3. From staffPermissionService colony-beat mappings
+      // 3. From staffPermissionService colony-beat mappings, strictly scoped by exact Pincode
       try {
         const beatMappings = staffPermissionService.getColonyBeatMappings();
         beatMappings.forEach((m) => {
@@ -774,7 +842,20 @@ export default function BeatManagementView({
               mappedClean === beatNoStr.toLowerCase() ||
               m.beatNumber.toLowerCase() === `beat ${rawKey}`
             ) {
-              mappedColonies.add(m.colonyName.trim());
+              const mappingPin = (m.pincode || m.areaPincode || '').trim();
+              const cleanOfficeName = (_officeName || '').trim().toLowerCase();
+              const mappingOffice = (m.subOrHoOffice || '').trim().toLowerCase();
+              const pinMatch =
+                !cleanOfficePin ||
+                (mappingPin
+                  ? mappingPin === cleanOfficePin
+                  : !mappingOffice ||
+                    !cleanOfficeName ||
+                    mappingOffice.includes(cleanOfficeName) ||
+                    cleanOfficeName.includes(mappingOffice));
+              if (pinMatch && isColonyAllowedForPincode(m.colonyName, cleanOfficePin)) {
+                mappedColonies.add(m.colonyName.trim());
+              }
             }
           }
         });
@@ -821,6 +902,8 @@ export default function BeatManagementView({
           postOfficeName: meta.postOfficeName,
           officeType: meta.officeType,
           pincode: db.pincode || meta.pincode,
+          division: meta.division || 'Kota Division',
+          circle: meta.circle || 'Rajasthan Circle',
           parentOffice: meta.parentOfficeName,
           linkedDeliveryOffices: meta.linkedDeliveryOffices,
           assignedPostman: db.assignedStaff[0]?.name || 'Assigned Postman',
@@ -987,6 +1070,9 @@ export default function BeatManagementView({
     });
   }, [
     allBeats,
+    selectedCircleFilter,
+    selectedDivisionFilter,
+    selectedBeatFilter,
     effectiveOfficeFilter,
     isSuperAdmin,
     userProfile,
@@ -1318,7 +1404,11 @@ export default function BeatManagementView({
                   try {
                     const allColonies = masterDataService.getColonyMasterRecords();
                     beat.areasCovered.forEach((cName) => {
-                      const matched = allColonies.find((c) => c.colonyName.toLowerCase() === cName.toLowerCase());
+                      const matched = allColonies.find(
+                        (c) =>
+                          c.colonyName.toLowerCase() === cName.toLowerCase() &&
+                          c.pincode.trim() === beat.pincode.trim()
+                      );
                       if (matched && matched.subSectors) {
                         matched.subSectors.slice(0, 2).forEach((s) => microList.push(`${matched.colonyName} ${s}`));
                       }
@@ -1495,7 +1585,9 @@ export default function BeatManagementView({
                   title="Test how Non-Admin Staff / Postmasters see their restricted Post Office view"
                 >
                   <option value="ADMIN_MODE">Role View: Super Admin (Full Access)</option>
-                  <option value="Dadabari S.O.">Simulate Staff: Dadabari S.O. (Kota Div)</option>
+                  <option value="Dadabari S.O.">Simulate Staff: Dadabari S.O. (PIN 324009)</option>
+                  <option value="Talwandi S.O.">Simulate Staff: PIP Office / Talwandi S.O. (PIN 324005)</option>
+                  <option value="Engineering College S.O.">Simulate Staff: Engineering College S.O. (PIN 324010)</option>
                   <option value="Baran H.O.">Simulate Staff: Baran H.O. (Baran Div)</option>
                   <option value="Jhalawar H.O.">Simulate Staff: Jhalawar H.O. (Jhalawar Div)</option>
                   <option value="Bundi H.O.">Simulate Staff: Bundi H.O. (Bundi Div)</option>
@@ -1682,19 +1774,23 @@ export default function BeatManagementView({
                 >
                   All Offices
                 </button>
-                {officeHubOptions.slice(0, 4).map((hub) => (
-                  <button
-                    key={hub.officeId}
-                    onClick={() => setSelectedOfficeFilter(hub.officeId)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
-                      selectedOfficeFilter === hub.officeId
-                        ? 'bg-red-700 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    }`}
-                  >
-                    {hub.postOfficeName} ({hub.pincode})
-                  </button>
-                ))}
+                {officeHubOptions
+                  .filter((h) =>
+                    ['DADABARI_SO', 'TALWANDI_SO', 'ENG_COLLEGE_SO', 'KOTA_HO'].includes(h.officeId)
+                  )
+                  .map((hub) => (
+                    <button
+                      key={hub.officeId}
+                      onClick={() => setSelectedOfficeFilter(hub.officeId)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                        selectedOfficeFilter === hub.officeId
+                          ? 'bg-red-700 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      {hub.postOfficeName} ({hub.pincode})
+                    </button>
+                  ))}
               </div>
             )}
 
@@ -2337,7 +2433,7 @@ export default function BeatManagementView({
           pincode={sectorModalBeat.pincode}
           division={sectorModalBeat.division}
           initialSelectedColonies={sectorModalBeat.areasCovered}
-          initialColoniesWithSectors={coloniesWithSectorsMap[sectorModalBeat.beatNo.startsWith('Beat') ? sectorModalBeat.beatNo : `Beat ${sectorModalBeat.beatNo}`] || {}}
+          initialColoniesWithSectors={coloniesWithSectorsMap[sectorModalBeat.beatNo.startsWith('Beat') ? sectorModalBeat.beatNo : `Beat ${sectorModalBeat.beatNo}`] || EMPTY_SECTORS_FALLBACK}
           initialBeatNotes={beatNotesMap[sectorModalBeat.beatNo.startsWith('Beat') ? sectorModalBeat.beatNo : `Beat ${sectorModalBeat.beatNo}`] || ''}
           onSave={(data) => {
             const beatKey = sectorModalBeat.beatNo.startsWith('Beat')
@@ -2394,7 +2490,9 @@ export default function BeatManagementView({
 
             unmappedColonies.forEach((colonyName) => {
               const matched = allMaster.find(
-                (c) => c.colonyName.trim().toLowerCase() === colonyName.trim().toLowerCase()
+                (c) =>
+                  c.colonyName.trim().toLowerCase() === colonyName.trim().toLowerCase() &&
+                  c.pincode.trim() === sectorModalBeat.pincode.trim()
               );
               if (matched) {
                 masterDataService.updateColonyMasterRecord(matched.id, {
@@ -2406,7 +2504,9 @@ export default function BeatManagementView({
 
             data.selectedColonies.forEach((colonyName) => {
               const matched = allMaster.find(
-                (c) => c.colonyName.trim().toLowerCase() === colonyName.trim().toLowerCase()
+                (c) =>
+                  c.colonyName.trim().toLowerCase() === colonyName.trim().toLowerCase() &&
+                  c.pincode.trim() === sectorModalBeat.pincode.trim()
               );
               const customSectors = data.coloniesWithSectors[colonyName] || [];
               if (matched) {

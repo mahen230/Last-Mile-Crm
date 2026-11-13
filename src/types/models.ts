@@ -692,6 +692,35 @@ export interface ColonyBeatMapping {
 
 export type ColonyEntityType = 'Residential Colony' | 'Commercial Complex' | 'Specific Landmark';
 
+export interface OfficeJurisdiction {
+  officeId: string;
+  officeName: string;
+  officeType: 'HO' | 'SO' | 'BO';
+  pincode: string;
+  division: string;
+  circle: string;
+  parentOffice?: string;
+  assignedBeats?: string[];
+}
+
+export interface BeatRecord {
+  id: string;
+  beatNo: string;
+  name: string;
+  officeId: string;
+  postOfficeName: string;
+  officeType: 'HO' | 'SO' | 'BO';
+  pincode: string;
+  division: string;
+  circle?: string;
+  assignedPostman: string;
+  employeeId?: string;
+  contact: string;
+  fixedKm: number;
+  areasCovered: string[];
+  status: string;
+}
+
 export interface ColonyMasterRecord {
   id: string;
   colonyName: string;       // यूनीक मुख्य कॉलोनी नाम (जैसे: Keshavpura, Basant Vihar)
@@ -700,6 +729,9 @@ export interface ColonyMasterRecord {
   division: 'KOTA' | 'BARAN' | 'BUNDI';
   postOfficeName: string;   // जैसे Dadabari S.O.
   subSectors?: string[];    // इसके अंतर्गत आने वाले सेक्टर/पॉकेट्स (जैसे: ['Sector 1', 'Sector 2', 'Sector 6'])
+  blocks?: string[];        // Associated Blocks / Series (जैसे: ['Block A', 'KH Series', 'UIT Series'])
+  landmarks?: string[];     // Prominent Landmarks (जैसे: ['CAD Circle', 'Shiv Mandir'])
+  houseNumberRange?: string; // House / Plot Number Range (जैसे: 'H.No. 1 - 417, Plot 1 - 1010')
   geoTag: {
     lat: number;
     lng: number;
@@ -789,7 +821,17 @@ export function registerOrUpdateUniqueColony(
   }
 
   // 2. नई यूनीक कॉलोनी जोड़ना
-  const newId = `COL-${Date.now().toString(36).toUpperCase()}`;
+  const existingIds = new Set(existingColonies.map((c) => c.id));
+  let newId = '';
+  let seq = 0;
+  do {
+    seq += 1;
+    const ts = Date.now().toString(36).toUpperCase();
+    const seqStr = seq.toString(36).toUpperCase().padStart(2, '0');
+    const randStr = Math.floor(Math.random() * 1296).toString(36).toUpperCase().padStart(2, '0');
+    newId = `COL-${ts}-${seqStr}${randStr}`;
+  } while (existingIds.has(newId));
+
   const colonyRecord: ColonyMasterRecord = {
     id: newId,
     ...newColony,

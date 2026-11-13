@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   MapPin,
   Layers,
@@ -21,10 +21,8 @@ import {
   Compass,
   MapPinCheck,
 } from 'lucide-react';
-import {
-  COLONY_HIERARCHY_MAP,
-  OFFICIAL_MAJOR_COLONIES,
-} from '../../data/colonyHierarchyData';
+import { COLONY_HIERARCHY_MAP } from '../../data/colonyHierarchyData';
+import { RAJASTHAN_CIRCLE_OFFICE_MASTER_LIST } from '../../data/officesData';
 import { masterDataService } from '../../services/masterDataService';
 import { customerService } from '../../services/customerService';
 import { SectorLandmarkCategory } from '../../types/models';
@@ -120,6 +118,10 @@ const getCategoryIcon = (category?: SectorLandmarkCategory) => {
   }
 };
 
+const EMPTY_COLONIES: string[] = [];
+const EMPTY_SECTORS_MAP: Record<string, string[]> = {};
+const EMPTY_LANDMARKS_MAP: Record<string, Record<string, SectorLandmarkEntry[]>> = {};
+
 export default function BeatMultiColonySectorModal({
   isOpen,
   onClose,
@@ -128,12 +130,13 @@ export default function BeatMultiColonySectorModal({
   officeName = 'Dadabari S.O.',
   pincode = '324009',
   division = 'KOTA',
-  initialSelectedColonies = [],
-  initialColoniesWithSectors = {},
-  initialSectorLandmarks = {},
+  initialSelectedColonies = EMPTY_COLONIES,
+  initialColoniesWithSectors = EMPTY_SECTORS_MAP,
+  initialSectorLandmarks = EMPTY_LANDMARKS_MAP,
   initialBeatNotes = '',
   onSave,
 }: BeatMultiColonySectorModalProps) {
+  const initializedSessionRef = useRef<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedColonies, setSelectedColonies] = useState<string[]>([]);
   const [coloniesWithSectors, setColoniesWithSectors] = useState<Record<string, string[]>>({});
@@ -157,6 +160,7 @@ export default function BeatMultiColonySectorModal({
   const [landmarkCategoryMap, setLandmarkCategoryMap] = useState<Record<string, SectorLandmarkCategory>>({});
 
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const [modalAlert, setModalAlert] = useState<string | null>(null);
 
   // Helper to retrieve standard sectors, blocks & house series for a colony
   const getAvailableSectorsForColony = (colonyName: string): string[] => {
@@ -198,93 +202,140 @@ export default function BeatMultiColonySectorModal({
     return Array.from(set);
   };
 
-  // Initialize state when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      const colonies = [...initialSelectedColonies];
-      setSelectedColonies(colonies);
+  // Helper: check if a colony name explicitly belongs to a different pincode
+  const isColonyBoundToDifferentPincode = (colonyName: string, targetPin: string): boolean => {
+    const cleanTargetPin = targetPin.trim();
+    if (!cleanTargetPin) return false;
+    const normName = colonyName.trim().toLowerCase();
 
-      // Prepopulate sector map with auto-inherited sectors for all colonies
-      const initialSectorsMap: Record<string, string[]> = { ...initialColoniesWithSectors };
-      colonies.forEach((col) => {
-        if (!initialSectorsMap[col] || initialSectorsMap[col].length === 0) {
-          const inherited = getAvailableSectorsForColony(col);
-          initialSectorsMap[col] = inherited;
-        }
-      });
-      setColoniesWithSectors(initialSectorsMap);
-
-      // Merge initialSectorLandmarks with local storage / defaults
-      if (initialSectorLandmarks && Object.keys(initialSectorLandmarks).length > 0) {
-        setSectorLandmarks((prev) => ({
-          ...prev,
-          ...initialSectorLandmarks,
-        }));
+    try {
+      const masterRecords = masterDataService.getColonyMasterRecords();
+      const matchingRecords = masterRecords.filter(
+        (r) => r.colonyName.trim().toLowerCase() === normName
+      );
+      if (matchingRecords.length > 0) {
+        return !matchingRecords.some((r) => r.pincode.trim() === cleanTargetPin);
       }
+    } catch {}
 
-      setBeatNotes(initialBeatNotes || '');
-
-      // Expand all selected colonies by default
-      const initialExpanded: Record<string, boolean> = {};
-      colonies.forEach((c) => {
-        initialExpanded[c] = true;
-      });
-      setExpandedColonies(initialExpanded);
-
-      // Auto expand first sector landmark view for convenience
-      const initialExpandedLandmarks: Record<string, boolean> = {};
-      colonies.forEach((c) => {
-        const firstSec = (initialSectorsMap[c] || [])[0];
-        if (firstSec) {
-          initialExpandedLandmarks[`${c}__${firstSec}`] = true;
-        }
-      });
-      setExpandedSectorLandmarks(initialExpandedLandmarks);
-
-      setSearchQuery('');
-      setSaveNotice(null);
+    const hierarchyEntry = Object.entries(COLONY_HIERARCHY_MAP).find(
+      ([key]) => key.trim().toLowerCase() === normName
+    );
+    if (hierarchyEntry && hierarchyEntry[1].defaultPincode.trim() !== cleanTargetPin) {
+      return true;
     }
-  }, [isOpen, beatNo, initialSelectedColonies, initialColoniesWithSectors, initialSectorLandmarks, initialBeatNotes]);
 
-  // Strict Pincode Contextual Isolation: Restrict available colonies strictly to the active Post Office jurisdiction and Pincode
+    return false;
+  };
+
+  // Initialize state once per modal open session (prevents infinite re-render loops)
+  useEffect(() => {
+    if (!isOpen) {
+      initializedSessionRef.current = null;
+      return;
+    }
+
+    const sessionKey = `${beatNo}__${pincode}`;
+    if (initializedSessionRef.current === sessionKey) {
+      return;
+    }
+    initializedSessionRef.current = sessionKey;
+
+    const cleanPin = (pincode || '').trim();
+    const colonies = initialSelectedColonies.filter(
+      (c) => !isColonyBoundToDifferentPincode(c, cleanPin)
+    );
+    setSelectedColonies(colonies);
+
+    // Prepopulate sector map with auto-inherited sectors for all colonies
+    const initialSectorsMap: Record<string, string[]> = { ...initialColoniesWithSectors };
+    colonies.forEach((col) => {
+      if (!initialSectorsMap[col] || initialSectorsMap[col].length === 0) {
+        const inherited = getAvailableSectorsForColony(col);
+        initialSectorsMap[col] = inherited;
+      }
+    });
+    setColoniesWithSectors(initialSectorsMap);
+
+    // Merge initialSectorLandmarks with local storage / defaults
+    if (initialSectorLandmarks && Object.keys(initialSectorLandmarks).length > 0) {
+      setSectorLandmarks((prev) => ({
+        ...prev,
+        ...initialSectorLandmarks,
+      }));
+    }
+
+    setBeatNotes(initialBeatNotes || '');
+
+    // Expand all selected colonies by default
+    const initialExpanded: Record<string, boolean> = {};
+    colonies.forEach((c) => {
+      initialExpanded[c] = true;
+    });
+    setExpandedColonies(initialExpanded);
+
+    // Auto expand first sector landmark view for convenience
+    const initialExpandedLandmarks: Record<string, boolean> = {};
+    colonies.forEach((c) => {
+      const firstSec = (initialSectorsMap[c] || [])[0];
+      if (firstSec) {
+        initialExpandedLandmarks[`${c}__${firstSec}`] = true;
+      }
+    });
+    setExpandedSectorLandmarks(initialExpandedLandmarks);
+
+    setSearchQuery('');
+    setSaveNotice(null);
+    setModalAlert(null);
+  }, [isOpen, beatNo, pincode]);
+
+  // Strict Pincode Contextual Isolation:
+  // Restrict available colonies strictly to the active Post Office's exact Pincode jurisdiction.
   const allAvailableColonies = useMemo(() => {
+    const cleanPin = (pincode || '').trim();
     const coloniesSet = new Set<string>();
+
+    // 1. Primary Source: Master Colony Directory records strictly matching exact Pincode
     try {
       const records = masterDataService.getColonyMasterRecords();
       records.forEach((r) => {
-        const matchesPin = pincode ? r.pincode.trim() === pincode.trim() : true;
-        const matchesOffice = officeName
-          ? r.postOfficeName.toLowerCase().includes(officeName.toLowerCase()) ||
-            officeName.toLowerCase().includes(r.postOfficeName.toLowerCase())
-          : true;
-
-        if (matchesPin || matchesOffice) {
-          coloniesSet.add(r.colonyName);
+        if (!cleanPin || r.pincode.trim() === cleanPin) {
+          coloniesSet.add(r.colonyName.trim());
         }
       });
     } catch (e) {
       console.warn('Error reading master colonies:', e);
     }
 
-    // Always preserve any colonies currently assigned to this beat so they remain manageable
-    initialSelectedColonies.forEach((c) => coloniesSet.add(c));
+    // 2. Hierarchy map entries strictly matching exact Pincode
+    if (cleanPin) {
+      Object.entries(COLONY_HIERARCHY_MAP).forEach(([colName, h]) => {
+        if (h.defaultPincode.trim() === cleanPin) {
+          coloniesSet.add(colName.trim());
+        }
+      });
 
-    // Fallback if no records found for this specific PIN
-    if (coloniesSet.size === 0 && pincode) {
-      Object.keys(COLONY_HIERARCHY_MAP).forEach((c) => {
-        const h = COLONY_HIERARCHY_MAP[c];
-        if (h.defaultPincode === pincode) {
-          coloniesSet.add(c);
+      // 3. Official Post Office master default colonies strictly matching exact Pincode
+      RAJASTHAN_CIRCLE_OFFICE_MASTER_LIST.forEach((po) => {
+        if (po.pin.trim() === cleanPin && Array.isArray(po.defaultColonies)) {
+          po.defaultColonies.forEach((c) => {
+            if (c && c.trim() && !isColonyBoundToDifferentPincode(c, cleanPin)) {
+              coloniesSet.add(c.trim());
+            }
+          });
         }
       });
     }
 
-    if (coloniesSet.size === 0) {
-      OFFICIAL_MAJOR_COLONIES.forEach((c) => coloniesSet.add(c));
-    }
+    // 4. Preserve already-selected colonies only if they belong to this exact Pincode (no cross-pincode leakage)
+    initialSelectedColonies.forEach((c) => {
+      if (c && c.trim() && !isColonyBoundToDifferentPincode(c, cleanPin)) {
+        coloniesSet.add(c.trim());
+      }
+    });
 
     return Array.from(coloniesSet).sort();
-  }, [pincode, officeName, initialSelectedColonies]);
+  }, [pincode, initialSelectedColonies]);
 
   // Filtered available colonies based on search
   const filteredColonies = useMemo(() => {
@@ -454,7 +505,8 @@ export default function BeatMultiColonySectorModal({
     const currentList = getLandmarksForSector(colonyName, sectorName);
     const exactMatch = currentList.some((lm) => lm.name.toLowerCase() === name.toLowerCase());
     if (exactMatch) {
-      alert(`⚠️ Landmark "${name}" is already registered in ${sectorName}!`);
+      setModalAlert(`Landmark "${name}" is already registered in ${sectorName}!`);
+      setTimeout(() => setModalAlert(null), 4000);
       return;
     }
 
@@ -562,13 +614,31 @@ export default function BeatMultiColonySectorModal({
             </div>
           )}
 
+          {modalAlert && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-950 text-xs font-bold flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={16} className="text-rose-700 shrink-0" />
+                <span>{modalAlert}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalAlert(null)}
+                className="text-rose-700 hover:text-rose-950 cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
           {/* Protected Master Register Guardrail Banner */}
           <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-300 text-amber-950 text-xs flex items-start gap-2.5">
             <ShieldCheck size={16} className="text-amber-700 shrink-0 mt-0.5" />
             <div className="space-y-0.5">
-              <p className="font-black text-amber-900">Protected Master Colony Register & Beat-Level Unmapping</p>
+              <p className="font-black text-amber-900">
+                Strict Pincode Jurisdiction ({officeName} • PIN {pincode}) & Protected Master Register
+              </p>
               <p className="text-[11px] text-amber-800 leading-relaxed">
-                Selecting, unchecking, or modifying colonies, sectors, and landmarks in this window strictly updates delivery routing for <strong>{beatNo}</strong>. All master colony records in the official register are safely preserved and never deleted.
+                Only colonies registered under <strong>PIN {pincode}</strong> are selectable for <strong>{beatNo}</strong>. Cross-pincode colonies (e.g., PIN 324005 vs 324009) are automatically isolated. Unmapping here strictly updates this beat without deleting master colony records.
               </p>
             </div>
           </div>
@@ -578,7 +648,9 @@ export default function BeatMultiColonySectorModal({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <label className="text-xs font-black uppercase text-slate-800 flex items-center gap-1.5">
                 <MapPin size={15} className="text-red-700" />
-                <span>1. Multi-Select Target Colonies ({selectedColonies.length} selected for PIN {pincode})</span>
+                <span>
+                  1. Multi-Select Target Colonies ({selectedColonies.length} selected • PIN {pincode} Scope)
+                </span>
               </label>
               <div className="relative w-full sm:w-64">
                 <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -586,7 +658,7 @@ export default function BeatMultiColonySectorModal({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Filter colonies..."
+                  placeholder={`Filter PIN ${pincode} colonies...`}
                   className="w-full pl-8 pr-3 py-1 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-700"
                 />
               </div>
@@ -594,24 +666,30 @@ export default function BeatMultiColonySectorModal({
 
             {/* Scrollable Colony Chips */}
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl max-h-36 overflow-y-auto flex flex-wrap gap-1.5">
-              {filteredColonies.map((colony) => {
-                const isSelected = selectedColonies.includes(colony);
-                return (
-                  <button
-                    key={colony}
-                    type="button"
-                    onClick={() => handleToggleColony(colony)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                      isSelected
-                        ? 'bg-red-800 text-white shadow-xs'
-                        : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    {isSelected ? <Check size={12} className="text-amber-400" /> : <Plus size={12} />}
-                    <span>{colony}</span>
-                  </button>
-                );
-              })}
+              {filteredColonies.length === 0 ? (
+                <div className="w-full py-3 text-center text-xs text-slate-500">
+                  No colonies registered under <strong>PIN {pincode}</strong> matching your search. Add colonies for PIN {pincode} in <strong>Colony Directory</strong>.
+                </div>
+              ) : (
+                filteredColonies.map((colony) => {
+                  const isSelected = selectedColonies.includes(colony);
+                  return (
+                    <button
+                      key={colony}
+                      type="button"
+                      onClick={() => handleToggleColony(colony)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                        isSelected
+                          ? 'bg-red-800 text-white shadow-xs'
+                          : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {isSelected ? <Check size={12} className="text-amber-400" /> : <Plus size={12} />}
+                      <span>{colony}</span>
+                    </button>
+                  );
+                })
+              )}
             </div>
           </div>
 

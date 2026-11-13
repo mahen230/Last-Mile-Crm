@@ -1,6 +1,28 @@
 // src/services/colonyGovernanceService.ts
 import { ColonyMasterRecord } from '../types/models';
 
+let colonyIdSeq = 0;
+
+/**
+ * Generates a collision-proof unique Colony ID even under tight synchronous batch loops.
+ */
+export function generateUniqueColonyId(existingIds?: Set<string> | string[]): string {
+  const used = existingIds instanceof Set ? existingIds : new Set(existingIds || []);
+  let candidate = '';
+  do {
+    colonyIdSeq = (colonyIdSeq + 1) % 1679616;
+    const ts = Date.now().toString(36).toUpperCase();
+    const seq = colonyIdSeq.toString(36).toUpperCase().padStart(2, '0');
+    const rand = Math.floor(Math.random() * 1296)
+      .toString(36)
+      .toUpperCase()
+      .padStart(2, '0');
+    candidate = `COL-${ts}-${seq}${rand}`;
+  } while (used.has(candidate));
+  used.add(candidate);
+  return candidate;
+}
+
 /**
  * यूनीक कॉलोनी रजिस्ट्रेशन और डुप्लीकेट प्रिवेंशन इंजन (Strict Pincode Binding)
  * केवल MASTER_ADMIN या संबंधित पिनकोड का SPM ही कॉलोनी जोड़ या अपडेट कर सकता है।
@@ -20,7 +42,8 @@ export function registerOrUpdateColonyWithGovernance(
     };
   }
 
-  const normalizedName = newColonyData.colonyName.trim().toLowerCase();
+  const normalizeColonyKey = (val: string) => val.trim().replace(/\s+/g, ' ').toLowerCase();
+  const normalizedName = normalizeColonyKey(newColonyData.colonyName);
   const normalizedPin = newColonyData.pincode.trim();
 
   // यदि SPM है, तो सुनिश्चित करें कि वह केवल अपने अधिकृत पिनकोड की कॉलोनी जोड़/संशोधित कर रहा है
@@ -35,7 +58,7 @@ export function registerOrUpdateColonyWithGovernance(
   // 2. डुप्लीकेट प्रिवेंशन चेक (Colony Name + Pincode संयोजन)
   const existingIndex = existingColonies.findIndex(
     (c) =>
-      c.colonyName.trim().toLowerCase() === normalizedName &&
+      normalizeColonyKey(c.colonyName) === normalizedName &&
       c.pincode.trim() === normalizedPin
   );
 
@@ -65,12 +88,21 @@ export function registerOrUpdateColonyWithGovernance(
     const mergedSubSectors = Array.from(
       new Set([...(prev.subSectors || []), ...(newColonyData.subSectors || [])])
     );
+    const mergedBlocks = Array.from(
+      new Set([...(prev.blocks || []), ...(newColonyData.blocks || [])])
+    );
+    const mergedLandmarks = Array.from(
+      new Set([...(prev.landmarks || []), ...(newColonyData.landmarks || [])])
+    );
 
     updatedColonies[existingIndex] = {
       ...prev,
       ...newColonyData,
       entityType: newColonyData.entityType || prev.entityType || 'Residential Colony',
       subSectors: mergedSubSectors.length > 0 ? mergedSubSectors : prev.subSectors,
+      blocks: mergedBlocks.length > 0 ? mergedBlocks : prev.blocks,
+      landmarks: mergedLandmarks.length > 0 ? mergedLandmarks : prev.landmarks,
+      houseNumberRange: newColonyData.houseNumberRange || prev.houseNumberRange,
       geoTag: geoTagWithMap,
       status: newColonyData.assignedBeat !== undefined ? status : prev.status,
       assignedBeat:
@@ -89,8 +121,9 @@ export function registerOrUpdateColonyWithGovernance(
   }
 
   // 3. नई यूनीक कॉलोनी मास्टर डेटा में जोड़ना
+  const existingIdSet = new Set(existingColonies.map((c) => c.id));
   const newRecord: ColonyMasterRecord = {
-    id: `COL-${Date.now().toString(36).toUpperCase()}`,
+    id: generateUniqueColonyId(existingIdSet),
     ...newColonyData,
     entityType: newColonyData.entityType || 'Residential Colony',
     colonyName: newColonyData.colonyName.trim(),

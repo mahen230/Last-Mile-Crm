@@ -139,85 +139,96 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
   const menuSections: { group: string; items: MenuItem[] }[] = isAdmin
     ? [
         {
-          group: 'PUBLIC CITIZEN PORTAL',
-          items: [
-            {
-              name: 'Home (Postal Schemes)',
-              icon: Home,
-              path: '/',
-              badge: 'Public',
-              badgeColor: 'bg-emerald-400 text-slate-950',
-            },
-          ],
-        },
-        {
-          group: 'ADMINISTRATIVE HUBS',
+          group: 'MAIN WORKFLOW',
           items: [
             { name: '1. Dashboard', icon: LayoutDashboard, path: '/dashboard' },
             {
-              name: '2. Employee Management',
-              icon: Users,
-              path: '/staff-master',
-              badge: `${allProfiles.length}`,
-              badgeColor: 'bg-amber-400 text-slate-950',
-            },
-            {
-              name: '3. Staff Registration Requests',
-              icon: UserCheck,
-              path: '/staff-registrations',
-              badge: pendingRegCount > 0 ? `${pendingRegCount} New` : undefined,
-              badgeColor: 'bg-red-600 text-white font-bold',
-            },
-            { name: '4. Beat Management', icon: Map, path: '/beats' },
-            {
-              name: '5. Colony & Property Directory',
-              icon: Building2,
-              path: '/unified-properties',
-              badge: 'Master',
-              badgeColor: 'bg-indigo-600 text-white',
-            },
-            {
-              name: '6. Member Directory',
+              name: '2. Member Management',
               icon: Users,
               path: '/customers',
               badge: customerCount ? `${customerCount}` : undefined,
             },
             {
-              name: '7. Verification Management',
+              name: '3. Colony Directory',
+              icon: Building2,
+              path: '/colony-master',
+              badge: 'Master',
+              badgeColor: 'bg-indigo-600 text-white',
+            },
+            { name: '4. Beat Management', icon: Map, path: '/beats' },
+            {
+              name: '5. Documents & Records',
+              icon: FileCheck2,
+              path: '/official-documents',
+              badge: 'Statutory',
+              badgeColor: 'bg-emerald-600 text-white font-bold',
+            },
+            {
+              name: '6. Department (Staff-wise assignment)',
+              icon: Briefcase,
+              path: '/staff-master',
+              badge: `${allProfiles.length}`,
+              badgeColor: 'bg-amber-400 text-slate-950',
+            },
+            {
+              name: '7. Products',
+              icon: Sparkles,
+              path: '/services',
+              requiredModule: 'productSchemeLeadSection',
+            },
+            {
+              name: '8. Leads & Pipeline',
+              icon: Target,
+              path: '/leads',
+              badge: leadCount ? `${leadCount}` : undefined,
+              requiredModule: 'productSchemeLeadSection',
+            },
+          ],
+        },
+        {
+          group: 'ADMINISTRATION & FIELD OPERATIONS',
+          items: [
+            {
+              name: 'Staff Registration Requests',
+              icon: UserCheck,
+              path: '/staff-registrations',
+              badge: pendingRegCount > 0 ? `${pendingRegCount} New` : undefined,
+              badgeColor: 'bg-red-600 text-white font-bold',
+            },
+            {
+              name: 'Verification Management',
               icon: ShieldCheck,
               path: '/verifications',
               badge: 'Daily 10',
               badgeColor: 'bg-emerald-600 text-white',
             },
             {
-              name: '8. Profile Approval Requests',
+              name: 'Profile Approval Requests',
               icon: UserCog,
               path: '/profile-approvals',
               badge: pendingProfileCount > 0 ? `${pendingProfileCount}` : undefined,
               badgeColor: 'bg-amber-500 text-slate-950 font-bold',
             },
             {
-              name: '9. Delivery Operations',
+              name: 'Property & Family Hub',
+              icon: Home,
+              path: '/unified-properties',
+            },
+            {
+              name: 'Delivery Operations (ACG-61)',
               icon: ArrowLeftRight,
               path: '/charge-report',
               badge: 'ACG-61',
               badgeColor: 'bg-red-700 text-white',
             },
-            { name: '10. Reports & Analytics', icon: BarChart2, path: '/reports' },
             {
-              name: '11. Master Data & Fuel Upload',
+              name: 'Master Data & Fuel Upload',
               icon: Database,
               path: '/master-data-upload',
               badge: 'DSS Sync',
               badgeColor: 'bg-red-700 text-white font-bold',
             },
-            { name: '12. Activity & Security Logs', icon: History, path: '/audit-log' },
-            { name: '13. Settings', icon: Settings, path: '/settings' },
-          ],
-        },
-        {
-          group: 'ADDITIONAL CAPABILITIES',
-          items: [
+            { name: 'Reports & Analytics', icon: BarChart2, path: '/reports' },
             { name: 'Auto Office Master', icon: Building, path: '/office-master' },
             {
               name: 'AI Address Exceptions & Verify',
@@ -226,20 +237,12 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
               badge: addressExceptionsCount ? `${addressExceptionsCount}` : undefined,
               badgeColor: 'bg-amber-500 text-slate-950 font-bold',
             },
-            { name: 'Scheme Leads (PLI/SSA)', icon: Target, path: '/leads', badge: leadCount ? `${leadCount}` : undefined },
-            {
-              name: 'Official Staff Documents Hub',
-              icon: FileCheck2,
-              path: '/official-documents',
-              badge: 'Statutory',
-              badgeColor: 'bg-emerald-600 text-white font-bold',
-            },
             { name: 'Postal Exam LMS Hub', icon: GraduationCap, path: '/postal-lms' },
             { name: 'Special Forms & Bills', icon: FileText, path: '/special-forms' },
+            { name: 'Activity & Security Logs', icon: History, path: '/audit-log' },
+            { name: 'Settings', icon: Settings, path: '/settings' },
           ],
         },
-      ]
-    : [
         {
           group: 'PUBLIC CITIZEN PORTAL',
           items: [
@@ -252,49 +255,85 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
             },
           ],
         },
+      ]
+    : [
         {
-          group: 'POSTMAN FIELD WORKBENCH',
+          group: 'MAIN WORKFLOW',
           items: [
             { name: '1. Dashboard', icon: LayoutDashboard, path: '/dashboard' },
             {
-              name: '★ All-Day Articles & Fuel Hub',
-              icon: FileText,
-              path: '/postman-articles',
-              badge: 'Oct 2026',
-              badgeColor: 'bg-amber-400 text-slate-950 font-black',
+              name: '2. Member Management',
+              icon: Users,
+              path: '/customers',
+              badge: customerCount ? `${customerCount}` : undefined,
             },
             {
-              name: '★ Official Staff Documents Hub',
+              name: '3. Colony Directory',
+              icon: Building2,
+              path: '/colony-master',
+              badge: 'Master',
+              badgeColor: 'bg-indigo-600 text-white',
+            },
+            {
+              name: '4. Beat Management',
+              icon: Map,
+              path: '/beats',
+              badge: userProfile?.beat || 'Beat 2',
+              badgeColor: 'bg-red-700 text-white',
+            },
+            {
+              name: '5. Documents & Records',
               icon: FileCheck2,
               path: '/official-documents',
               badge: 'Statutory',
               badgeColor: 'bg-emerald-600 text-white font-black',
             },
             {
-              name: '2. My Beat / Area Directory',
-              icon: Map,
-              path: '/my-beat',
-              badge: userProfile?.beat || 'Beat 2',
-              badgeColor: 'bg-red-700 text-white',
+              name: '6. Department (Staff-wise assignment)',
+              icon: Briefcase,
+              path: '/staff',
             },
-            { name: '3. Property Directory', icon: Building2, path: '/properties' },
-            { name: '4. Linked Members', icon: Users, path: '/households' },
-            { name: '5. Add Property / Member', icon: Home, path: '/unified-properties' },
             {
-              name: '6. Daily Verification',
+              name: '7. Products',
+              icon: Sparkles,
+              path: '/services',
+              requiredModule: 'productSchemeLeadSection',
+            },
+            {
+              name: '8. Leads & Pipeline',
+              icon: Target,
+              path: '/leads',
+              badge: leadCount ? `${leadCount}` : undefined,
+              requiredModule: 'productSchemeLeadSection',
+            },
+          ],
+        },
+        {
+          group: 'POSTMAN FIELD WORKBENCH',
+          items: [
+            {
+              name: 'All-Day Articles & Fuel Hub',
+              icon: FileText,
+              path: '/postman-articles',
+              badge: 'Oct 2026',
+              badgeColor: 'bg-amber-400 text-slate-950 font-black',
+            },
+            {
+              name: 'My Beat / Area Directory',
+              icon: MapPin,
+              path: '/my-beat',
+            },
+            { name: 'Property Directory', icon: Building, path: '/properties' },
+            { name: 'Linked Members', icon: Users, path: '/households' },
+            { name: 'Add Property / Member', icon: Home, path: '/unified-properties' },
+            {
+              name: 'Daily Verification',
               icon: CheckCircle2,
               path: '/daily-verification',
               badge: '10 Target',
               badgeColor: 'bg-emerald-600 text-white font-bold',
             },
-            { name: '7. Delivery Map / Route', icon: Navigation, path: '/beats-map' },
-            { name: '8. My Submissions', icon: FileCheck2, path: '/my-submissions' },
-            { name: '9. My Profile', icon: User, path: '/my-profile' },
-          ],
-        },
-        {
-          group: 'FIELD SUPPORT TOOLS',
-          items: [
+            { name: 'Delivery Map / Route', icon: Navigation, path: '/beats-map' },
             {
               name: 'ACG-61 Charge Report',
               icon: ArrowLeftRight,
@@ -303,18 +342,25 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
               badgeColor: 'bg-red-700 text-white',
             },
             {
-              name: 'Monthly Fuel Bill & Master Upload',
-              icon: Database,
-              path: '/master-data-upload',
-              badge: 'Fuel PDF',
-              badgeColor: 'bg-amber-500 text-slate-950 font-bold',
-            },
-            {
               name: 'Postal Exam LMS Hub',
               icon: GraduationCap,
               path: '/postal-lms',
               badge: 'LDCE',
               badgeColor: 'bg-amber-500 text-slate-950',
+            },
+            { name: 'My Submissions', icon: FileCheck2, path: '/my-submissions' },
+            { name: 'My Profile', icon: User, path: '/my-profile' },
+          ],
+        },
+        {
+          group: 'PUBLIC CITIZEN PORTAL',
+          items: [
+            {
+              name: 'Home (Postal Schemes)',
+              icon: Home,
+              path: '/',
+              badge: 'Public',
+              badgeColor: 'bg-emerald-400 text-slate-950',
             },
           ],
         },
@@ -380,7 +426,11 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
                   {section.items.map((item) => {
                     const isActive =
                       location.pathname === item.path ||
-                      (item.path === '/beats' && location.pathname === '/beat-management');
+                      (item.path === '/beats' && location.pathname === '/beat-management') ||
+                      (item.path === '/colony-master' &&
+                        (location.pathname === '/master-data-hub' ||
+                          location.pathname === '/unified-master-hub')) ||
+                      (item.path === '/official-documents' && location.pathname === '/statutory-reports');
                     const Icon = item.icon;
                     const isModuleAllowed = item.requiredModule
                       ? staffPermissionService.canAccessServiceModule(userProfile, item.requiredModule)

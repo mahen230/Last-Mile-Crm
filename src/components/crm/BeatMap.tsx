@@ -188,23 +188,27 @@ export default function BeatMap() {
 
           <div className="relative w-full h-[540px] bg-gradient-to-br from-slate-900 via-slate-850 to-slate-950 rounded-xl overflow-hidden border border-slate-800">
             {hasValidGoogleMapsKey ? (
-              <APIProvider apiKey={rawApiKey}>
+              <APIProvider apiKey={rawApiKey} region="IN" language="en">
                 <GoogleMap
                   defaultCenter={{ lat: baseLat, lng: baseLng }}
                   defaultZoom={14}
                   mapId="DELIVERY_BEAT_MAP"
+                  internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
                   className="w-full h-full"
                 >
                   {plottedStops.map((stop) => (
                     <AdvancedMarker
                       key={stop.customer.id}
-                      position={{ lat: stop.lat, lng: stop.lng }}
+                      position={{
+                        lat: Number((stop.customer as any).latitude || stop.lat),
+                        lng: Number((stop.customer as any).longitude || stop.lng),
+                      }}
                       onClick={() => setSelectedStop(stop.customer)}
                     >
                       <Pin
-                        background="#dc2626"
+                        background={stop.customer.type === 'Commercial' ? '#059669' : '#dc2626'}
                         glyphColor="#ffffff"
-                        borderColor="#991b1b"
+                        borderColor={stop.customer.type === 'Commercial' ? '#065f46' : '#991b1b'}
                         scale={1.1}
                       />
                     </AdvancedMarker>

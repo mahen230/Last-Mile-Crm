@@ -34,6 +34,7 @@ import {
   UserCog,
   FileCheck2,
   Navigation,
+  Store,
 } from 'lucide-react';
 import { staffRegistrationService } from '../services/staffRegistrationService';
 import { motion, AnimatePresence } from 'motion/react';
@@ -234,6 +235,13 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
               path: '/unified-properties',
             },
             {
+              name: 'Commercial Store Directory',
+              icon: Store,
+              path: '/commercial-directory',
+              badge: 'GIS Maps',
+              badgeColor: 'bg-red-600 text-white font-bold',
+            },
+            {
               name: 'Delivery Operations (ACG-61)',
               icon: ArrowLeftRight,
               path: '/charge-report',
@@ -338,6 +346,13 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
               path: '/my-beat',
             },
             { name: 'Property Directory', icon: Building, path: '/properties' },
+            {
+              name: 'Commercial Store Directory',
+              icon: Store,
+              path: '/commercial-directory',
+              badge: 'GIS',
+              badgeColor: 'bg-red-600 text-white font-bold',
+            },
             { name: 'Linked Members', icon: Users, path: '/households' },
             { name: 'Add Property / Member', icon: Home, path: '/unified-properties' },
             {

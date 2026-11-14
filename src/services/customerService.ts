@@ -2,7 +2,7 @@ import { UPDATED_STAFF_LIST } from '../data/updatedStaffData';
 import { 
   Customer, Lead, FollowUp, Inquiry, SupportTicket, 
   DataConflict, Household, Property, AuditLog, CustomerProductRelation, Staff, CommunicationLog,
-  Address, RelocationRecord, FieldTask, StaffProfile
+  Address, RelocationRecord, FieldTask, StaffProfile, CommercialStoreRecord
 } from '../types/models';
 import { INITIAL_CUSTOMERS, normalizeMobile } from '../data/initialMasterData';
 import { POSTAL_PRODUCTS } from '../data/productsData';
@@ -1909,24 +1909,41 @@ class CustomerService {
         // 1. Where house number is missing, remove members from entry (residentNames = [])
         // 2. Put property into 'Vacant' status
         // 3. Keep customer member intact in customer database (member ko nahi remove krna)
-        const initialStatus: Property['status'] = !hasValidHouseNo ? 'Vacant' : (isShifted ? 'Address Left' : 'Occupied');
+        const isCommercial = c.type === 'Commercial' || (c.occupation || '').toLowerCase().includes('commercial') || (c.occupation || '').toLowerCase().includes('proprietor');
+        const initialStatus: Property['status'] = !hasValidHouseNo
+          ? 'Vacant'
+          : isCommercial
+          ? 'Commercial'
+          : isShifted
+          ? 'Address Left'
+          : 'Occupied';
 
         propMap.set(pCode, {
           id: pCode,
           propertyCode: pCode,
           housePlotNumber: hasValidHouseNo ? rawHouseNo : '',
           houseNo: hasValidHouseNo ? rawHouseNo : '',
-          address: c.address?.fullAddress || `${hasValidHouseNo ? rawHouseNo + ', ' : ''}Sector ${c.sector || '7'}, Keshavpura, Kota`,
+          propertyType: isCommercial ? 'Commercial' : 'House',
+          address: c.address?.fullAddress || `${hasValidHouseNo ? rawHouseNo + ', ' : ''}Sector ${c.sector || '7'}, ${c.colony || c.area || 'Keshavpura'}, Kota`,
           sector: c.sector || '7',
-          area: c.area || 'Keshavpura',
-          pincode: '324009',
+          colony: c.colony || c.area || 'Keshavpura',
+          area: c.area || c.colony || 'Keshavpura',
+          pincode: c.pincode || '324009',
           beatNo: c.beatNo || '2',
           officeId: c.officeId || 'DADABARI_SO',
           status: initialStatus,
           residentNames: hasValidHouseNo ? [c.name] : [],
-          residents: hasValidHouseNo ? [{ name: c.name, relationshipWithHead: 'Head of Family' }] : [],
-          verificationStatus: hasValidHouseNo,
-          notes: hasValidHouseNo ? c.remarks : 'Vacant Property (No House Number recorded. Members removed from entry).'
+          residents: hasValidHouseNo ? [{ name: c.name, relationshipWithHead: isCommercial ? 'Proprietor / Owner' : 'Head of Family' }] : [],
+          verificationStatus: c.verificationStatus === 'Verified' || hasValidHouseNo,
+          notes: hasValidHouseNo ? c.remarks : 'Vacant Property (No House Number recorded. Members removed from entry).',
+          latitude: (c as any).latitude,
+          longitude: (c as any).longitude,
+          commercialCategory: (c as any).commercialCategory,
+          operationYears: (c as any).operationYears,
+          photoUrl: (c as any).photoUrl,
+          googleMapsUri: (c as any).googleMapsUri,
+          placeId: (c as any).placeId,
+          ownerName: isCommercial ? c.name : undefined,
         });
       } else {
         const prop = propMap.get(pCode)!;
@@ -2091,6 +2108,160 @@ class CustomerService {
     this.savePropertyPreferences();
     this.saveCustomersLocal();
     this.notify();
+  }
+
+  /**
+   * Idempotently syncs verified commercial store records into Customer & Property registries
+   * so newly extracted or bulk-imported commercial storefronts appear immediately in
+   * Property Directory, Beat Map, and Postman Daily Verification workflows.
+   */
+  public syncCommercialStoresToRegistry(stores: CommercialStoreRecord[]): {
+    inserted: number;
+    updated: number;
+    skipped: number;
+  } {
+    let inserted = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    for (const store of stores) {
+      if (!store.storeName) {
+        skipped += 1;
+        continue;
+      }
+
+      const normName = store.storeName.trim().toLowerCase();
+      const normColony = (store.colony || 'Dadabari').trim().toLowerCase();
+      const cleanPhone = (store.primaryPhone || '').replace(/\D/g, '').slice(-10);
+      const cleanBeat = (store.cleanBeatNo || store.beatNo || '1').replace(/^Beat\s*/i, '').trim() || '1';
+      const beatLabel = `Beat ${cleanBeat}`;
+      const propCode = store.placeId
+        ? `COMM-${store.placeId.slice(-10).toUpperCase()}`
+        : `COMM-B${cleanBeat}-${store.id.slice(-8).toUpperCase()}`;
+
+      // De-duplicate against existing customers by placeId, propertyId, storeName+colony, or mobile
+      const existing = this.customers.find((c) => {
+        if (store.placeId && (c as any).placeId === store.placeId) return true;
+        if (c.propertyId && c.propertyId === propCode) return true;
+        const cColony = (c.colony || c.area || '').trim().toLowerCase();
+        if (c.name.trim().toLowerCase() === normName && cColony === normColony) return true;
+        if (cleanPhone.length === 10 && normalizeMobile(c.mobile) === cleanPhone) return true;
+        return false;
+      });
+
+      const housePlot = store.blockSector && store.blockSector.length <= 28
+        ? store.blockSector
+        : `Shop ${cleanBeat}-${propCode.slice(-4)}`;
+
+      const isVerified = store.verificationStatus === 'Verified' || store.longevityVerified;
+
+      if (existing) {
+        existing.beatNo = beatLabel;
+        existing.colony = store.colony || existing.colony;
+        existing.area = store.colony || existing.area;
+        existing.sector = store.blockSector || existing.sector;
+        existing.pincode = store.pincode || existing.pincode || '324009';
+        existing.type = 'Commercial';
+        existing.propertyId = existing.propertyId || propCode;
+        existing.verificationStatus = isVerified ? 'Verified' : existing.verificationStatus;
+        existing.remarks = `Commercial (${store.category}) • ${store.longevityBadge} • Owner: ${store.ownerName}`;
+        (existing as any).latitude = store.latitude;
+        (existing as any).longitude = store.longitude;
+        (existing as any).commercialCategory = store.category;
+        (existing as any).operationYears = store.operationYears;
+        (existing as any).photoUrl = store.photoUrl;
+        (existing as any).googleMapsUri = store.googleMapsUri;
+        (existing as any).placeId = store.placeId;
+        existing.updatedAt = new Date().toISOString();
+
+        this.propertyOverrides.set(existing.propertyId, {
+          status: 'Commercial',
+          propertyType: 'Commercial',
+          latitude: store.latitude,
+          longitude: store.longitude,
+          commercialCategory: store.category,
+          operationYears: store.operationYears,
+          photoUrl: store.photoUrl,
+          googleMapsUri: store.googleMapsUri,
+          placeId: store.placeId,
+          ownerName: store.ownerName,
+          verificationStatus: isVerified,
+        });
+        updated += 1;
+      } else {
+        const custId = `UM-COMM-${propCode}`;
+        const newCommercialCustomer: Customer = {
+          id: custId,
+          masterId: propCode,
+          name: store.storeName,
+          mobile: cleanPhone || '0000000000',
+          whatsapp: store.whatsappNumber || cleanPhone || '',
+          occupation: `Proprietor: ${store.ownerName} (${store.category})`,
+          type: 'Commercial',
+          houseNo: housePlot,
+          colony: store.colony || 'Dadabari',
+          area: store.colony || 'Dadabari',
+          sector: store.blockSector || 'Commercial Market',
+          pincode: store.pincode || '324009',
+          beatNo: beatLabel,
+          officeId: 'DADABARI_SO',
+          propertyId: propCode,
+          propertyMappingStatus: 'Mapped',
+          address: {
+            houseNo: housePlot,
+            colony: store.colony || 'Dadabari',
+            area: store.colony || 'Dadabari',
+            sector: store.blockSector || 'Commercial Market',
+            pincode: store.pincode || '324009',
+            fullAddress: store.fullAddress,
+          },
+          verificationStatus: isVerified ? 'Verified' : 'Pending Verification',
+          approvalStatus: 'Approved',
+          source: `Commercial Sync (${store.source})`,
+          remarks: `Commercial • ${store.category} • ${store.longevityBadge} • Owner: ${store.ownerName}`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        (newCommercialCustomer as any).latitude = store.latitude;
+        (newCommercialCustomer as any).longitude = store.longitude;
+        (newCommercialCustomer as any).commercialCategory = store.category;
+        (newCommercialCustomer as any).operationYears = store.operationYears;
+        (newCommercialCustomer as any).photoUrl = store.photoUrl;
+        (newCommercialCustomer as any).googleMapsUri = store.googleMapsUri;
+        (newCommercialCustomer as any).placeId = store.placeId;
+
+        this.customers.unshift(newCommercialCustomer);
+        this.propertyOverrides.set(propCode, {
+          status: 'Commercial',
+          propertyType: 'Commercial',
+          latitude: store.latitude,
+          longitude: store.longitude,
+          commercialCategory: store.category,
+          operationYears: store.operationYears,
+          photoUrl: store.photoUrl,
+          googleMapsUri: store.googleMapsUri,
+          placeId: store.placeId,
+          ownerName: store.ownerName,
+          verificationStatus: isVerified,
+        });
+        inserted += 1;
+      }
+    }
+
+    if (inserted > 0 || updated > 0) {
+      this.saveCustomersLocal();
+      this.savePropertyPreferences();
+      this.logAudit(
+        'COMMERCIAL_REGISTRY_SYNC',
+        'Property',
+        'COMM-SYNC',
+        'Commercial Store Directory',
+        `Synced ${inserted} new and ${updated} updated commercial properties into Master Registry.`
+      );
+      this.notify();
+    }
+
+    return { inserted, updated, skipped };
   }
 
   public resetToInitialData() {

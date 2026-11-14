@@ -350,7 +350,15 @@ export default function BusinessesView() {
         </div>
 
         {/* Global Action Bar */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => navigate('/commercial-directory')}
+            className="px-4 py-2.5 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md cursor-pointer"
+          >
+            <MapPin size={14} className="text-amber-300" />
+            <span>Google Maps Commercial Hub</span>
+          </button>
           <button
             type="button"
             onClick={handleBulkSync324009All}

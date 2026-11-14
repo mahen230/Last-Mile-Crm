@@ -536,6 +536,12 @@ export interface Property {
   latitude?: number;
   longitude?: number;
   addressRemarks?: string;
+  commercialCategory?: string;
+  operationYears?: number;
+  photoUrl?: string;
+  googleMapsUri?: string;
+  placeId?: string;
+  ownerName?: string;
 }
 
 export interface AuditLog {
@@ -1111,5 +1117,47 @@ export interface FieldTask {
 // Re-export Staff Privacy & RBAC Masking models
 export type { StaffMember, StaffPersonalInfo } from '../utils/securityUtils';
 export { getMaskedStaffProfile } from '../utils/securityUtils';
+
+export type CommercialStoreCategory = 'Retail' | 'Wholesale' | 'Services' | 'eMitra/CSC';
+
+export interface CommercialPhotoAttribution {
+  displayName: string;
+  uri?: string;
+}
+
+export interface CommercialStoreRecord {
+  id: string;
+  placeId?: string;
+  storeName: string;
+  ownerName: string;
+  primaryPhone: string;
+  whatsappNumber: string;
+  latitude: number;
+  longitude: number;
+  photoUrl?: string;
+  photoAttribution?: CommercialPhotoAttribution;
+  googleMapsUri?: string;
+  fullAddress: string;
+  colony: string;
+  blockSector: string;
+  pincode: string;
+  beatNo: string; // e.g. 'Beat 1' .. 'Beat 34'
+  cleanBeatNo: string; // '1' .. '34'
+  category: CommercialStoreCategory;
+  rawTypes?: string[];
+  operationYears: number;
+  earliestVerifiedYear?: number;
+  longevityBadge: '5+ Years Verified' | '3–5 Years Verified' | 'Operational' | 'Manual / Baseline';
+  operationalStatus: 'OPERATIONAL' | 'CLOSED_TEMPORARILY' | 'UNKNOWN';
+  userRatingCount?: number;
+  rating?: number;
+  longevityVerified: boolean;
+  source: 'google_places' | 'csv_import' | 'json_import' | 'crm_registry';
+  verificationStatus: 'Pending' | 'Verified' | 'Needs Review';
+  syncedToPropertyMaster: boolean;
+  syncedToVerificationQueue: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
 

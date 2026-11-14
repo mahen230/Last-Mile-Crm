@@ -1,4 +1,4 @@
-import React, { useState, Suspense, lazy } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, Link } from 'react-router-dom';
 import { Lock, ShieldAlert, ArrowRight } from 'lucide-react';
 import Layout from './components/Layout';
@@ -24,6 +24,7 @@ const FollowUpsView = lazy(() => import('./components/crm/FollowUpsView'));
 const TasksView = lazy(() => import('./components/crm/TasksView'));
 const AddressResolutionView = lazy(() => import('./components/crm/AddressResolutionView'));
 const BusinessesView = lazy(() => import('./components/crm/BusinessesView'));
+const CommercialPropertyHub = lazy(() => import('./components/crm/CommercialPropertyHub'));
 const BeatsView = lazy(() => import('./components/crm/BeatsView'));
 const BeatManagementView = lazy(() => import('./components/crm/BeatManagementView'));
 const StaffView = lazy(() => import('./components/crm/StaffView'));
@@ -413,6 +414,16 @@ function AuthenticatedApp() {
           }
         />
         <Route
+          path="/commercial-directory"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Commercial Property & Store Directory)">
+                <CommercialPropertyHub />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/tasks"
           element={
             <ProtectedRoute requiredTier="STAFF">
@@ -680,11 +691,37 @@ function AuthenticatedApp() {
 }
 
 export default function App() {
+  const [mapsQuotaExceeded, setMapsQuotaExceeded] = useState(false);
+
+  useEffect(() => {
+    const onQuotaExceeded = () => setMapsQuotaExceeded(true);
+    window.addEventListener('gmp-quota-exceeded', onQuotaExceeded);
+    return () => window.removeEventListener('gmp-quota-exceeded', onQuotaExceeded);
+  }, []);
+
   return (
-    <BrowserRouter>
-      <FirebaseAuthProvider>
-        <AuthenticatedApp />
-      </FirebaseAuthProvider>
-    </BrowserRouter>
+    <>
+      {mapsQuotaExceeded && (
+        <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2.5 text-xs md:text-sm text-center sticky top-0 z-50 shadow-sm">
+          <span>
+            Google Maps Platform quota reached. If you are the app owner, visit{' '}
+            <a
+              href="https://developers.google.com/maps/ai/ai-studio?utm_campaign=gmp_mcp_codeassist_v1_aistudio#quota_exceeded_errors"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline font-semibold text-amber-950 hover:text-amber-800"
+            >
+              maps developer site
+            </a>{' '}
+            for instructions to update your account.
+          </span>
+        </div>
+      )}
+      <BrowserRouter>
+        <FirebaseAuthProvider>
+          <AuthenticatedApp />
+        </FirebaseAuthProvider>
+      </BrowserRouter>
+    </>
   );
 }

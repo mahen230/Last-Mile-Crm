@@ -1,6 +1,6 @@
 import { customerService } from './customerService';
 import { staffPermissionService } from './staffPermissionService';
-import { Property } from '../types/models';
+import { Property, CommercialStoreRecord } from '../types/models';
 
 export interface DailyVerificationTask {
   id: string;
@@ -374,6 +374,73 @@ class VerificationService {
   }
 
   /**
+   * Inject synced commercial stores directly into the beat postman's active Daily Verification queue
+   * without duplicating existing property tasks.
+   */
+  public queueCommercialVerificationTargets(
+    stores: CommercialStoreRecord[],
+    targetDate?: string
+  ): { queued: number; alreadyQueued: number } {
+    const today = targetDate || new Date().toISOString().split('T')[0];
+    const allStaff = staffPermissionService.getAllStaffProfiles();
+    let queued = 0;
+    let alreadyQueued = 0;
+
+    for (const store of stores) {
+      const cleanBeat = (store.cleanBeatNo || store.beatNo || '1').replace(/^Beat\s*/i, '').trim() || '1';
+      const beatLabel = `Beat ${cleanBeat}`;
+      const propCode = store.placeId
+        ? `COMM-${store.placeId.slice(-10).toUpperCase()}`
+        : `COMM-B${cleanBeat}-${store.id.slice(-8).toUpperCase()}`;
+
+      const existsToday = this.tasks.some(
+        (t) =>
+          t.date === today &&
+          (t.propertyId === propCode || t.propertyCode === propCode || t.propertyId === store.id)
+      );
+      if (existsToday) {
+        alreadyQueued += 1;
+        continue;
+      }
+
+      const assignedStaff =
+        allStaff.find((s) => (s.beat || '').replace(/\D/g, '') === cleanBeat) ||
+        allStaff.find((s) => s.beat === beatLabel);
+
+      const newTask: DailyVerificationTask = {
+        id: `VERIF-COMM-${today}-B${cleanBeat}-${propCode.slice(-6)}`,
+        date: today,
+        employeeId: (assignedStaff?.employeeId || assignedStaff?.id || '50457421').toUpperCase(),
+        employeeName: assignedStaff?.name || `Beat ${cleanBeat} Postman`,
+        beatNo: beatLabel,
+        propertyId: propCode,
+        propertyCode: propCode,
+        colony: store.colony || 'Dadabari',
+        sector: store.blockSector || 'Commercial Market',
+        block: store.blockSector || '',
+        houseNo: store.storeName,
+        address: store.fullAddress || `${store.storeName}, ${store.colony}, Kota ${store.pincode}`,
+        propertyType: 'Commercial',
+        occupancyStatus: 'Commercial',
+        status: store.verificationStatus === 'Verified' ? 'Verified' : 'Pending',
+        latitude: store.latitude,
+        longitude: store.longitude,
+        gpsCaptured: Boolean(store.latitude && store.longitude),
+        remarks: `[${store.category}] ${store.longevityBadge} • Owner: ${store.ownerName} • Ph: ${store.primaryPhone || 'N/A'}`,
+      };
+
+      this.tasks.unshift(newTask);
+      queued += 1;
+    }
+
+    if (queued > 0) {
+      this.saveToStorage();
+    }
+
+    return { queued, alreadyQueued };
+  }
+
+  /**
    * System-wide verification stats for admin dashboard
    */
   public getStats() {
@@ -391,3 +458,4 @@ class VerificationService {
 }
 
 export const verificationService = new VerificationService();
+

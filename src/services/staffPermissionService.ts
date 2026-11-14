@@ -774,11 +774,45 @@ class StaffPermissionService {
   }
 
   private loadAll() {
-    // 1. Load Directory Staff (seeded from UPDATED_STAFF_LIST + any dynamic staff)
+    // 1. Load Directory Staff & reconcile UPDATED_STAFF_LIST so new/updated seed employees always get login access
     try {
       const storedDir = localStorage.getItem(DIRECTORY_STORAGE_KEY);
       if (storedDir) {
-        this.directoryStaff = JSON.parse(storedDir);
+        const parsedDir = JSON.parse(storedDir) as Staff[];
+        this.directoryStaff = Array.isArray(parsedDir) ? parsedDir : [];
+        let dirChanged = false;
+
+        for (const seedStaff of UPDATED_STAFF_LIST) {
+          const enrichedSeed = this.enrichDirectoryStaff(seedStaff);
+          const seedEmpId = (enrichedSeed.employeeId || seedStaff.id.replace(/^STAFF-/, '')).toUpperCase();
+          const idx = this.directoryStaff.findIndex(
+            s =>
+              s.id.toUpperCase() === seedStaff.id.toUpperCase() ||
+              (s.employeeId && s.employeeId.toUpperCase() === seedEmpId)
+          );
+          if (idx === -1) {
+            this.directoryStaff.push(enrichedSeed);
+            dirChanged = true;
+          } else {
+            const cur = this.directoryStaff[idx];
+            const needsEmailSync = !cur.email || cur.email === 'N/A' || (seedEmpId === '50457421' && cur.email !== 'mahen.comtech@gmail.com');
+            const needsEmpIdSync = !cur.employeeId;
+            if (needsEmailSync || needsEmpIdSync) {
+              this.directoryStaff[idx] = {
+                ...cur,
+                employeeId: cur.employeeId || enrichedSeed.employeeId,
+                email: needsEmailSync ? enrichedSeed.email : cur.email,
+                contact: cur.contact || enrichedSeed.contact,
+                beat: cur.beat || enrichedSeed.beat,
+              };
+              dirChanged = true;
+            }
+          }
+        }
+
+        if (dirChanged) {
+          this.saveDirectoryStaff(false);
+        }
       } else {
         this.directoryStaff = UPDATED_STAFF_LIST.map(s => this.enrichDirectoryStaff(s));
         this.saveDirectoryStaff(false);
@@ -822,6 +856,7 @@ class StaffPermissionService {
     const circle = s.circle?.includes('Circle') ? s.circle : `${s.circle || 'Rajasthan'} Circle`;
     const division = s.division?.includes('Division') ? s.division : `${s.division || 'Kota'} Division`;
     const subOffice = s.subOffice || s.subOrBranchOffice || 'Dadabari S.O.';
+    const isMahendra = empId === '50457421' || s.contact === '8769706002';
     return {
       ...s,
       employeeId: empId,
@@ -839,10 +874,11 @@ class StaffPermissionService {
       assignedBeats: s.assignedBeats?.length ? s.assignedBeats : [s.beat],
       deliveryOfficeMapping: s.deliveryOfficeMapping || `${subOffice} (324009) / ${s.headOffice || 'Kota H.O.'}`,
       assignedColonies: colonies,
-      email:
-        s.email && s.email !== 'N/A'
-          ? s.email
-          : `${s.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@indiapost.gov.in`,
+      email: isMahendra
+        ? 'mahen.comtech@gmail.com'
+        : s.email && s.email !== 'N/A'
+        ? s.email
+        : `${s.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@indiapost.gov.in`,
     };
   }
 
@@ -1433,27 +1469,33 @@ class StaffPermissionService {
           ? 'POSTMAN'
           : 'STAFF');
 
+    const rawInputPass = (input.password || '').trim();
+    const isDefaultInputPass = rawInputPass === DEFAULT_STAFF_FALLBACK_PASSWORD;
+    const computedPassword = isMaster
+      ? existingProf?.hasCustomPassword && !rawInputPass
+        ? existingProf.password
+        : hashPasswordSync(rawInputPass && !isDefaultInputPass ? rawInputPass : 'Admin')
+      : rawInputPass
+      ? rawInputPass.startsWith('$sha256')
+        ? rawInputPass
+        : hashPasswordSync(rawInputPass)
+      : existingProf?.password || hashPasswordSync(DEFAULT_STAFF_FALLBACK_PASSWORD);
+
+    const computedHasCustomPassword = isMaster
+      ? true
+      : rawInputPass
+      ? !isDefaultInputPass &&
+        rawInputPass !== hashPasswordSync(DEFAULT_STAFF_FALLBACK_PASSWORD) &&
+        rawInputPass.toLowerCase() !== cleanEmpId.toLowerCase()
+      : Boolean(existingProf?.hasCustomPassword);
+
     const profile: StaffProfile = this.normalizeProfile({
       id: existingProf?.id || staffRecord.id,
       employeeId: cleanEmpId,
       name: cleanName,
       email: generatedEmail,
-      password: isMaster
-        ? hashPasswordSync('Admin')
-        : input.password?.trim()
-        ? input.password.startsWith('$sha256')
-          ? input.password
-          : hashPasswordSync(input.password.trim())
-        : existingProf?.password || hashPasswordSync(DEFAULT_STAFF_FALLBACK_PASSWORD),
-      hasCustomPassword: isMaster
-        ? true
-        : Boolean(
-            (input.password?.trim() &&
-              input.password.trim() !== DEFAULT_STAFF_FALLBACK_PASSWORD &&
-              input.password.trim() !== hashPasswordSync(DEFAULT_STAFF_FALLBACK_PASSWORD) &&
-              input.password.trim().toLowerCase() !== cleanEmpId.toLowerCase()) ||
-              existingProf?.hasCustomPassword
-          ),
+      password: computedPassword,
+      hasCustomPassword: computedHasCustomPassword,
       mustChangePassword: false,
       role: mappedRole,
       designationType: input.designationType,
@@ -2278,9 +2320,28 @@ class StaffPermissionService {
     return null;
   }
 
+  public isAiStudioOrLocalPreview(): boolean {
+    if (typeof window === 'undefined') return false;
+    const host = window.location.hostname.toLowerCase();
+    const inIframe = (() => {
+      try {
+        return window.self !== window.top;
+      } catch {
+        return true;
+      }
+    })();
+    return (
+      host.includes('.run.app') ||
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      inIframe
+    );
+  }
+
   public authenticateWithPassword(
     identifier: string,
-    password: string
+    password: string,
+    options?: { allowAdminPasswordless?: boolean; skipPasswordCheck?: boolean }
   ): {
     success: boolean;
     profile?: StaffProfile;
@@ -2288,6 +2349,7 @@ class StaffPermissionService {
     error?: string;
   } {
     const rawId = (identifier || '').trim();
+    const cleanPass = (password || '').trim();
     if (!rawId) {
       return {
         success: false,
@@ -2304,39 +2366,52 @@ class StaffPermissionService {
     }
 
     let foundProfile = this.findStaffProfileByIdentifier(rawId);
-    if (!foundProfile) {
-      if (rawId.toLowerCase().includes('ekta') || rawId.toLowerCase().includes('admin') || rawId.toLowerCase() === 'ektamahenmeena@gmail.com') {
-        foundProfile = this.normalizeProfile(INITIAL_PROFILES[0]);
-      } else {
-        foundProfile = this.normalizeProfile({
-          id: `STAFF-${rawId.replace(/[^A-Z0-9]/gi, '') || '50457421'}`,
-          employeeId: rawId,
-          name: rawId.includes('@') ? rawId.split('@')[0] : `Staff ${rawId}`,
-          email: rawId.includes('@') ? rawId.toLowerCase() : `${rawId}@indiapost.gov.in`,
-          password: hashPasswordSync('Post@1234'),
-          role: 'POSTMAN',
-          designationType: 'Postman',
-          beat: 'Beat 2',
-          assignedBeats: ['Beat 2'],
-          assignedOffice: 'Dadabari S.O. (324009)',
-          circle: 'Rajasthan Circle',
-          division: 'Kota Division',
-          headOffice: 'Kota H.O.',
-          subOffice: 'Dadabari S.O.',
-          officePincode: '324009',
-          officeAddress: 'Dadabari S.O., Kota - 324009',
-          deliveryOfficeMapping: 'Dadabari S.O. (324009)',
-          assignedColonies: getDefaultColoniesForBeat('Beat 2'),
-          fixedKm: 18,
-          permissions: { ...DEFAULT_STAFF_PERMISSION },
-          entriesCreatedToday: 0,
-          lastEntryDate: new Date().toISOString().split('T')[0],
-          totalEntriesCount: 0,
-          status: 'Active',
-        });
-      }
-      this.profiles.push(foundProfile);
+    const isAdminIdentifier =
+      rawId.toLowerCase() === 'ektamahenmeena@gmail.com' ||
+      rawId.toUpperCase() === 'MASTER-ADMIN-01' ||
+      rawId.toUpperCase() === 'STAFF-MASTER-EKTA';
+
+    if (!foundProfile && isAdminIdentifier) {
+      foundProfile = this.normalizeProfile(INITIAL_PROFILES[0]);
+      this.profiles.unshift(foundProfile);
       this.saveProfiles(false);
+    }
+
+    if (!foundProfile) {
+      return {
+        success: false,
+        error: 'Employee ID / Mobile / Email not found in Staff Directory. Please select your name from the directory or contact Master Admin.',
+      };
+    }
+
+    if (foundProfile.permissions?.approvalStatus === 'Revoked' || foundProfile.status === 'Inactive') {
+      return {
+        success: false,
+        error: 'Account access has been revoked by Administrator. Contact Master Admin (ektamahenmeena@gmail.com).',
+      };
+    }
+
+    const isMaster = this.isSuperAdmin(foundProfile) || isAdminIdentifier;
+    if (isMaster) {
+      // Master Admin authenticates seamlessly with or without a password
+      foundProfile.role = 'MASTER_ADMIN';
+      foundProfile.beat = 'All Beats';
+      foundProfile.assignedBeats = ['All Beats'];
+      foundProfile.division = 'All Divisions';
+    } else if (!options?.skipPasswordCheck) {
+      const contact10 = (foundProfile.contact || '').replace(/\D/g, '').slice(-10);
+      const pass10 = cleanPass.replace(/\D/g, '').slice(-10);
+      const ok =
+        cleanPass === DEFAULT_STAFF_FALLBACK_PASSWORD ||
+        (Boolean(cleanPass) && cleanPass.toLowerCase() === (foundProfile.employeeId || '').toLowerCase()) ||
+        (Boolean(contact10) && Boolean(pass10) && pass10 === contact10) ||
+        (Boolean(cleanPass) && Boolean(foundProfile.password) && verifyPasswordSync(cleanPass, foundProfile.password));
+      if (!ok) {
+        return {
+          success: false,
+          error: `Invalid password. Use default password ${DEFAULT_STAFF_FALLBACK_PASSWORD}, your Employee ID (${foundProfile.employeeId}), or your custom password.`,
+        };
+      }
     }
 
     foundProfile.mustChangePassword = false;
@@ -2353,7 +2428,7 @@ class StaffPermissionService {
     if (!prof) return null;
     const cleanPass = newPassword.trim();
     prof.password = hashPasswordSync(cleanPass);
-    prof.hasCustomPassword = true;
+    prof.hasCustomPassword = cleanPass !== DEFAULT_STAFF_FALLBACK_PASSWORD;
     prof.mustChangePassword = false;
     this.addOrUpdateStaff(prof);
     const active = this.getActiveSession();
@@ -2361,6 +2436,114 @@ class StaffPermissionService {
       this.setActiveSession(prof);
     }
     return prof;
+  }
+
+  public adminUpdateStaffPassword(
+    identifier: string,
+    newPassword: string
+  ): { success: boolean; profile?: StaffProfile; error?: string } {
+    const cleanPass = (newPassword || '').trim();
+    if (cleanPass.length < 4) {
+      return { success: false, error: 'Password must be at least 4 characters long.' };
+    }
+    const prof = this.findStaffProfileByIdentifier(identifier);
+    if (!prof) {
+      return { success: false, error: 'Staff member not found in directory.' };
+    }
+    prof.password = hashPasswordSync(cleanPass);
+    prof.hasCustomPassword = cleanPass !== DEFAULT_STAFF_FALLBACK_PASSWORD;
+    prof.mustChangePassword = false;
+    this.addOrUpdateStaff(prof);
+    const active = this.getActiveSession();
+    if (active && (active.email.toLowerCase() === prof.email.toLowerCase() || active.id === prof.id)) {
+      this.setActiveSession(prof);
+    }
+    return { success: true, profile: prof };
+  }
+
+  public adminResetStaffPasswordToDefault(
+    identifier: string
+  ): { success: boolean; profile?: StaffProfile; error?: string } {
+    const prof = this.findStaffProfileByIdentifier(identifier);
+    if (!prof) {
+      return { success: false, error: 'Staff member not found in directory.' };
+    }
+    prof.password = hashPasswordSync(DEFAULT_STAFF_FALLBACK_PASSWORD);
+    prof.hasCustomPassword = false;
+    prof.mustChangePassword = false;
+    this.addOrUpdateStaff(prof);
+    const active = this.getActiveSession();
+    if (active && (active.email.toLowerCase() === prof.email.toLowerCase() || active.id === prof.id)) {
+      this.setActiveSession(prof);
+    }
+    return { success: true, profile: prof };
+  }
+
+  public syncAllDirectoryLoginAccess(
+    resetExistingToDefault: boolean = false
+  ): { totalDirectory: number; activatedCount: number; resetCount: number } {
+    let activatedCount = 0;
+    let resetCount = 0;
+
+    // 1. Reconcile seed list into directoryStaff
+    for (const seedStaff of UPDATED_STAFF_LIST) {
+      const enriched = this.enrichDirectoryStaff(seedStaff);
+      const idx = this.directoryStaff.findIndex(
+        s =>
+          s.id.toUpperCase() === enriched.id.toUpperCase() ||
+          (s.employeeId && enriched.employeeId && s.employeeId.toUpperCase() === enriched.employeeId.toUpperCase())
+      );
+      if (idx === -1) {
+        this.directoryStaff.push(enriched);
+      } else {
+        this.directoryStaff[idx] = {
+          ...this.directoryStaff[idx],
+          employeeId: this.directoryStaff[idx].employeeId || enriched.employeeId,
+          email:
+            !this.directoryStaff[idx].email || this.directoryStaff[idx].email === 'N/A'
+              ? enriched.email
+              : this.directoryStaff[idx].email,
+        };
+      }
+    }
+
+    // 2. Ensure every directory staff member has an active login profile with default Post@1234
+    for (const dirStaff of this.directoryStaff) {
+      const generated = this.createProfileFromDirectoryStaff(dirStaff);
+      const existingIdx = this.profiles.findIndex(
+        p =>
+          p.email.toLowerCase() === generated.email.toLowerCase() ||
+          (p.employeeId && generated.employeeId && p.employeeId.toUpperCase() === generated.employeeId.toUpperCase()) ||
+          p.id.toUpperCase() === generated.id.toUpperCase()
+      );
+      if (existingIdx === -1) {
+        this.profiles.push(generated);
+        activatedCount += 1;
+      } else {
+        const existing = this.profiles[existingIdx];
+        if (resetExistingToDefault && !this.isSuperAdmin(existing)) {
+          existing.password = hashPasswordSync(DEFAULT_STAFF_FALLBACK_PASSWORD);
+          existing.hasCustomPassword = false;
+          resetCount += 1;
+        } else if (!existing.password) {
+          existing.password = hashPasswordSync(DEFAULT_STAFF_FALLBACK_PASSWORD);
+          existing.hasCustomPassword = false;
+          activatedCount += 1;
+        }
+        if (existing.permissions?.approvalStatus === 'Pending Approval') {
+          existing.permissions.approvalStatus = 'Approved';
+          existing.status = 'Active';
+        }
+      }
+    }
+
+    this.saveDirectoryStaff(false);
+    this.saveProfiles(true);
+    return {
+      totalDirectory: this.directoryStaff.length,
+      activatedCount,
+      resetCount,
+    };
   }
 
   public dismissPasswordChangePrompt(identifier: string): void {
@@ -2795,7 +2978,10 @@ class StaffPermissionService {
         this.cachedActiveSession = null;
         return null;
       }
-      const stored = localStorage.getItem(ACTIVE_SESSION_KEY);
+      const stored =
+        localStorage.getItem(ACTIVE_SESSION_KEY) ||
+        localStorage.getItem('xpeedo_auth_user') ||
+        localStorage.getItem('current_user');
       if (stored) {
         const session = JSON.parse(stored);
         if (session?.email || session?.employeeId) {
@@ -2804,6 +2990,9 @@ class StaffPermissionService {
             this.cachedActiveSession = found;
             return found;
           }
+          const normalized = this.normalizeProfile(session);
+          this.cachedActiveSession = normalized;
+          return normalized;
         }
       }
     } catch (e) {
@@ -2820,12 +3009,19 @@ class StaffPermissionService {
         if (typeof sessionStorage !== 'undefined') {
           sessionStorage.removeItem('postman_explicit_signout');
         }
-        localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(profile));
+        const serialized = JSON.stringify(profile);
+        localStorage.setItem(ACTIVE_SESSION_KEY, serialized);
+        localStorage.setItem('xpeedo_auth_user', serialized);
+        localStorage.setItem('current_user', serialized);
+        localStorage.setItem('postman_auth', 'true');
       } else {
         if (typeof sessionStorage !== 'undefined') {
           sessionStorage.setItem('postman_explicit_signout', 'true');
         }
         localStorage.removeItem(ACTIVE_SESSION_KEY);
+        localStorage.removeItem('xpeedo_auth_user');
+        localStorage.removeItem('current_user');
+        localStorage.removeItem('postman_auth');
       }
       this.notifyListeners();
     } catch (e) {

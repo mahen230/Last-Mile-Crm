@@ -61,13 +61,31 @@ export async function getDeviceFingerprint(): Promise<string> {
   return cachedFingerprint;
 }
 
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs = 2000
+): Promise<globalThis.Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function fetchServerCsrfToken(): Promise<string | null> {
   if (typeof fetch === 'undefined') return null;
   try {
-    const res = await fetch('/api/v1/auth/csrf', {
-      method: 'GET',
-      credentials: 'same-origin',
-    });
+    const res = await fetchWithTimeout(
+      '/api/v1/auth/csrf',
+      {
+        method: 'GET',
+        credentials: 'include',
+      },
+      1500
+    );
     if (!res.ok) return null;
     const data = await res.json();
     return data?.csrfToken || null;
@@ -169,30 +187,34 @@ export async function createNewSecureSession(
     localStorage.setItem('active_session_userId', userId);
   }
 
-  // Bind session on Express backend to enforce server-authoritative single-browser policy
+  // Non-blocking best-effort server session bind with short timeout
   if (typeof fetch !== 'undefined') {
     try {
       const csrfToken = await fetchServerCsrfToken();
-      await fetch('/api/v1/auth/session/bind', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-csrf-token': csrfToken || '',
-          'x-device-fingerprint': fp,
-          'x-browser-profile-id': browserProfileId,
+      await fetchWithTimeout(
+        '/api/v1/auth/session/bind',
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-csrf-token': csrfToken || '',
+            'x-device-fingerprint': fp,
+            'x-browser-profile-id': browserProfileId,
+          },
+          body: JSON.stringify({
+            userId,
+            email: meta?.email || userId,
+            name: meta?.name,
+            beat: meta?.beat,
+            deviceFingerprint: fp,
+            browserProfileId,
+          }),
         },
-        body: JSON.stringify({
-          userId,
-          email: meta?.email || userId,
-          name: meta?.name,
-          beat: meta?.beat,
-          deviceFingerprint: fp,
-          browserProfileId,
-        }),
-      });
+        2000
+      );
     } catch {
-      // Offline resilient
+      // Offline / iframe resilient
     }
   }
 
@@ -242,82 +264,15 @@ export function subscribeToSessionInvalidation(
   if (typeof window === 'undefined') return () => {};
 
   const handleStorage = (e: StorageEvent) => {
-    const activeUid = getActiveSessionUserId();
     const activeToken = getActiveSessionToken();
-    if (!activeUid) return;
-
-    if (e.key === `secure_session_${activeUid}` && e.newValue) {
-      try {
-        const parsed: UserSession = JSON.parse(e.newValue);
-        if (activeToken && parsed.activeSessionToken !== activeToken) {
-          onInvalidated('New login detected for this account in another browser/tab.');
-        }
-      } catch {
-        // ignore
-      }
-    }
     if (e.key === 'active_user_token' && e.newValue === null && activeToken) {
-      onInvalidated('Session terminated.');
+      onInvalidated('Session signed out.');
     }
   };
 
   window.addEventListener('storage', handleStorage);
 
-  let channel: BroadcastChannel | null = null;
-  if (typeof BroadcastChannel !== 'undefined') {
-    try {
-      channel = new BroadcastChannel(SESSION_CHANNEL_NAME);
-      channel.onmessage = (ev) => {
-        const msg = ev.data;
-        const activeUid = getActiveSessionUserId();
-        const activeToken = getActiveSessionToken();
-        if (
-          msg?.type === 'SESSION_BOUND' &&
-          activeUid &&
-          msg.userId === activeUid &&
-          activeToken &&
-          msg.token !== activeToken
-        ) {
-          onInvalidated('Your session was superseded by a new login.');
-        }
-      };
-    } catch {
-      channel = null;
-    }
-  }
-
-  // Periodic server-side session verification to detect cross-browser logins
-  const interval = window.setInterval(async () => {
-    const uid = getActiveSessionUserId();
-    const token = getActiveSessionToken();
-    if (!uid || !token) return;
-    const fp = await getDeviceFingerprint();
-    try {
-      const res = await fetch('/api/v1/auth/session', {
-        method: 'GET',
-        credentials: 'same-origin',
-        headers: { 'x-device-fingerprint': fp },
-      });
-      if (res.status === 401) {
-        const body = await res.json().catch(() => ({}));
-        if (
-          body?.error === 'SESSION_INVALIDATED_NEW_DEVICE' ||
-          body?.error === 'DEVICE_FINGERPRINT_MISMATCH'
-        ) {
-          clearUserSession(uid);
-          onInvalidated(
-            body?.message || 'Session invalidated because this user logged in from another device/browser.'
-          );
-        }
-      }
-    } catch {
-      // ignore transient network glitches
-    }
-  }, 15000);
-
   return () => {
     window.removeEventListener('storage', handleStorage);
-    if (channel) channel.close();
-    window.clearInterval(interval);
   };
 }

@@ -1,5 +1,5 @@
 /**
- * Security & Password Hashing Utilities for Postman Book CRM
+ * Security & Password Hashing Utilities for Xpeedo Last Mile
  * Uses Web Crypto API (SHA-256 with cryptographic salt)
  * Ensures passwords are never stored in plaintext or exposed in API/listings.
  */
@@ -177,7 +177,7 @@ export function buildSecureWhatsAppShareUrl(options: SecureWhatsAppShareOptions)
     `📌 Sub-Office: Dadabari S.O. (PIN 324009)`,
     safeRef ? `🔗 Ref ID: ${safeRef}` : '',
     `🌐 Verified by: ${portalName}`,
-    'Doorstep Service Booking Available via Postman Book CRM.',
+    'Doorstep Service Booking Available via Xpeedo Last Mile.',
   ]
     .filter(Boolean)
     .join('\n');

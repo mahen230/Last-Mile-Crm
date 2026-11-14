@@ -122,6 +122,10 @@ export interface PostmanMonthlyFuelSummary {
   dssSheetCount: number;
   isFullyReconciled: boolean;
   isDepartmentLocked?: boolean;
+  isUserUnlocked?: boolean;
+  isFinalLocked?: boolean;
+  finalLockedAt?: string;
+  finalLockedBy?: string;
   lockedAt?: string;
   lockedBy?: string;
   departmentLockSource?: string;
@@ -136,6 +140,15 @@ export interface PostmanMonthlyFuelSummary {
   staffApprovedById?: string;
   staffApprovedAt?: string;
   approvalNotes?: string;
+}
+
+export interface FuelHubLockState {
+  status: 'DEFAULT_LOCK' | 'UNLOCKED' | 'LOCKED_FINAL';
+  updatedAt: string;
+  updatedBy: string;
+  lockedAt?: string;
+  lockedBy?: string;
+  frozenSummary?: PostmanMonthlyFuelSummary;
 }
 
 export type IngestionVerificationStage =
@@ -241,6 +254,7 @@ const STORAGE_KEY_INGESTED_RECORDS = 'postman_ingested_master_records_v3';
 const STORAGE_KEY_FUEL_APPROVALS = 'postman_fuel_approvals_v1';
 const STORAGE_KEY_CUSTOM_DAILY_SCHEDULE = 'postman_custom_daily_schedule_v1';
 const STORAGE_KEY_COLONY_MASTER_RECORDS = 'postman_colony_master_records_v1';
+const STORAGE_KEY_FUEL_HUB_LOCKS = 'fuel_hub_final_locks_v1';
 
 class MasterDataService {
   private uploadLogs: MasterUploadLog[] = [];
@@ -249,6 +263,7 @@ class MasterDataService {
   private fuelApprovals: Record<string, FuelBillApprovalRecord> = {};
   private customDayRowsOverrides: Record<string, FuelDailyRow[]> = {};
   private colonyMasterRecords: ColonyMasterRecord[] = [];
+  private fuelHubLocks: Record<string, FuelHubLockState> = {};
   private listeners: (() => void)[] = [];
 
   constructor() {
@@ -287,6 +302,11 @@ class MasterDataService {
         const rawSchedules = localStorage.getItem(STORAGE_KEY_CUSTOM_DAILY_SCHEDULE);
         if (rawSchedules) {
           this.customDayRowsOverrides = JSON.parse(rawSchedules);
+        }
+
+        const rawFuelLocks = localStorage.getItem(STORAGE_KEY_FUEL_HUB_LOCKS);
+        if (rawFuelLocks) {
+          this.fuelHubLocks = JSON.parse(rawFuelLocks);
         }
 
         const rawColonies = localStorage.getItem(STORAGE_KEY_COLONY_MASTER_RECORDS);
@@ -2822,6 +2842,79 @@ class MasterDataService {
     this.saveOverrides();
   }
 
+  private saveFuelHubLocks() {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY_FUEL_HUB_LOCKS, JSON.stringify(this.fuelHubLocks));
+      }
+    } catch (e) {
+      console.warn('Failed saving fuel hub locks:', e);
+    }
+  }
+
+  public getFuelHubLockState(beatNo: string, month: string): FuelHubLockState | null {
+    const cleanBeat = normalizeBeatHeader(beatNo);
+    const key = `${cleanBeat}::${month}`;
+    return this.fuelHubLocks[key] || null;
+  }
+
+  public setFuelHubUnlocked(beatNo: string, month: string, staffName: string): FuelHubLockState {
+    const cleanBeat = normalizeBeatHeader(beatNo);
+    const key = `${cleanBeat}::${month}`;
+    const state: FuelHubLockState = {
+      status: 'UNLOCKED',
+      updatedAt: new Date().toISOString(),
+      updatedBy: staffName || 'Authorized Staff',
+    };
+    this.fuelHubLocks[key] = state;
+    this.saveFuelHubLocks();
+    this.notify();
+    return state;
+  }
+
+  public lockFinalFuelBill(
+    beatNo: string,
+    month: string,
+    staffName: string,
+    overrides?: {
+      customDailyKm?: number;
+      customRatePerKm?: number;
+      customWorkingDays?: number;
+      vehicleNo?: string;
+      postmanName?: string;
+      employeeId?: string;
+    }
+  ): PostmanMonthlyFuelSummary {
+    const cleanBeat = normalizeBeatHeader(beatNo);
+    const key = `${cleanBeat}::${month}`;
+    const now = new Date().toISOString();
+    const computedSummary = this.generatePostmanMonthlyFuelBill(cleanBeat, month, {
+      ...overrides,
+      ignoreFrozenSnapshot: true,
+    });
+    const frozenSummary: PostmanMonthlyFuelSummary = {
+      ...computedSummary,
+      isDepartmentLocked: true,
+      isUserUnlocked: false,
+      isFinalLocked: true,
+      finalLockedAt: now,
+      finalLockedBy: staffName || computedSummary.postmanName,
+      lockedAt: now,
+      lockedBy: `${staffName || computedSummary.postmanName} (Verified Lock Final)`,
+    };
+    this.fuelHubLocks[key] = {
+      status: 'LOCKED_FINAL',
+      updatedAt: now,
+      updatedBy: staffName || computedSummary.postmanName,
+      lockedAt: now,
+      lockedBy: staffName || computedSummary.postmanName,
+      frozenSummary,
+    };
+    this.saveFuelHubLocks();
+    this.notify();
+    return frozenSummary;
+  }
+
   /**
    * Core Logic: Auto-generate ready-to-download Monthly Fuel Bill for a Postman
    * Based on their Beat's DSS records for any selected month (e.g. 2026-10).
@@ -2837,10 +2930,25 @@ class MasterDataService {
       vehicleNo?: string;
       postmanName?: string;
       employeeId?: string;
+      ignoreFrozenSnapshot?: boolean;
     }
   ): PostmanMonthlyFuelSummary {
     const cleanBeat = normalizeBeatHeader(beatNo);
     const fuelMapping = getBeatFuelMapping(cleanBeat);
+    const lockState = this.getFuelHubLockState(cleanBeat, targetMonthYear);
+
+    if (lockState?.status === 'LOCKED_FINAL' && lockState.frozenSummary && !overrides?.ignoreFrozenSnapshot) {
+      return {
+        ...lockState.frozenSummary,
+        isDepartmentLocked: true,
+        isUserUnlocked: false,
+        isFinalLocked: true,
+        finalLockedAt: lockState.lockedAt || lockState.frozenSummary.finalLockedAt,
+        finalLockedBy: lockState.lockedBy || lockState.frozenSummary.finalLockedBy,
+      };
+    }
+
+    const isUserUnlocked = lockState?.status === 'UNLOCKED';
 
     const [yearStr, monthStr] = targetMonthYear.split('-');
     const year = parseInt(yearStr, 10);
@@ -2853,6 +2961,14 @@ class MasterDataService {
     ];
     const monthName = `${monthNames[month - 1]} ${year}`;
 
+    // Get all daily entries for this beat and month so Unlock edits reflect immediately
+    const allEntries = operationsService.getDailyEntries();
+    const beatMonthEntries = allEntries.filter(
+      (e) =>
+        e.beatNo.toLowerCase() === cleanBeat.toLowerCase() &&
+        e.date.startsWith(targetMonthYear)
+    );
+
     // Check Official Department-Locked October 2026 Sheet (All 33 Beats from DSS_REPORT_OCT_8ca7e4a8.26)
     const octMeta = targetMonthYear === '2026-10' ? getOctober2026BeatMeta(cleanBeat) : undefined;
     const octSchedule = targetMonthYear === '2026-10' ? getOctober2026OfficialBeatSchedule(cleanBeat) : undefined;
@@ -2863,18 +2979,53 @@ class MasterDataService {
       let totalPar = 0;
       let totalArticles = 0;
 
-      octSchedule.forEach((r) => {
-        if (r.status === 'WORKING') {
-          totalSp += typeof r.sp === 'number' ? r.sp : 0;
-          totalReg += typeof r.reg === 'number' ? r.reg : 0;
-          totalPar += typeof r.others === 'number' ? r.others : 0;
-          totalArticles += typeof r.total === 'number' ? r.total : 0;
+      const mergedDailyRows: FuelDailyRow[] = octSchedule.map((baseRow) => {
+        const dssMatch = beatMonthEntries.find((e) => e.date === baseRow.isoDate);
+        // Apply live user overrides saved during Unlock mode
+        if (dssMatch && !dssMatch.isDepartmentLocked && baseRow.status === 'WORKING') {
+          const spVal = Number(dssMatch.speedPostDelivered ?? 0);
+          const regVal = Number(dssMatch.registryDelivered ?? 0);
+          const parVal = Number(dssMatch.parcelDelivered ?? 0);
+          const totVal = spVal + regVal + parVal;
+          totalSp += spVal;
+          totalReg += regVal;
+          totalPar += parVal;
+          totalArticles += totVal;
+          return {
+            ...baseRow,
+            sp: spVal,
+            reg: regVal,
+            others: parVal,
+            total: totVal,
+            pmaHandled: totVal,
+            pdmsInvoicedCount: dssMatch.pdmsInvoicedCount ?? totVal,
+            dssInvoicedCount: dssMatch.dssInvoicedCount ?? totVal,
+            remarks: dssMatch.remarks || baseRow.remarks,
+          };
         }
+        if (baseRow.status === 'WORKING') {
+          totalSp += typeof baseRow.sp === 'number' ? baseRow.sp : 0;
+          totalReg += typeof baseRow.reg === 'number' ? baseRow.reg : 0;
+          totalPar += typeof baseRow.others === 'number' ? baseRow.others : 0;
+          totalArticles += typeof baseRow.total === 'number' ? baseRow.total : 0;
+        }
+        return { ...baseRow };
       });
 
-      const sanctionedKm = fuelMapping.sanctionedDailyKm;
-      const fuelRate = DEPARTMENTAL_FUEL_RATE_PER_KM;
-      const workingDays = octMeta.workingDays;
+      const sanctionedKm =
+        isUserUnlocked && overrides?.customDailyKm !== undefined && overrides.customDailyKm > 0
+          ? overrides.customDailyKm
+          : isUserUnlocked && this.customBeatKmOverrides[cleanBeat]
+          ? this.customBeatKmOverrides[cleanBeat]
+          : fuelMapping.sanctionedDailyKm;
+      const fuelRate =
+        isUserUnlocked && overrides?.customRatePerKm !== undefined && overrides.customRatePerKm > 0
+          ? overrides.customRatePerKm
+          : DEPARTMENTAL_FUEL_RATE_PER_KM;
+      const workingDays =
+        isUserUnlocked && overrides?.customWorkingDays !== undefined && overrides.customWorkingDays > 0
+          ? overrides.customWorkingDays
+          : octMeta.workingDays;
       const totalMonthlyKm = Number((workingDays * sanctionedKm).toFixed(2));
       const totalClaimAmount = Number((totalMonthlyKm * fuelRate).toFixed(2));
       const approval = this.getFuelBillApproval(cleanBeat, targetMonthYear);
@@ -2904,25 +3055,27 @@ class MasterDataService {
         mobileUsageAvgPercent: octMeta.mobileUsageAvg,
         pmaDeliveryRate: octMeta.mobileUsageAvg,
         averageDeliveryPercentage: octMeta.mobileUsageAvg,
-        dssSheetCount: octSchedule.length,
+        dssSheetCount: mergedDailyRows.length,
         isFullyReconciled: true,
-        isDepartmentLocked: octMeta.isDepartmentLocked,
-        lockedAt: '2026-11-01T09:00:00Z',
-        lockedBy: `Department DSS Audit (Office ${octMeta.officeId} / ${octMeta.batchName})`,
+        isDepartmentLocked: !isUserUnlocked && octMeta.isDepartmentLocked,
+        isUserUnlocked,
+        isFinalLocked: false,
+        lockedAt: isUserUnlocked ? undefined : '2026-11-01T09:00:00Z',
+        lockedBy: isUserUnlocked ? undefined : `Department DSS Audit (Office ${octMeta.officeId} / ${octMeta.batchName})`,
         departmentLockSource: octMeta.lockSource,
         territorialCoverage: fuelMapping.territorialCoverage,
         terrainClassification: fuelMapping.terrainClassification,
         routeDescription: fuelMapping.routeDescription,
         pincode: fuelMapping.pincode,
         linkedPincodes: fuelMapping.linkedPincodes,
-        dailyRows: octSchedule,
+        dailyRows: mergedDailyRows,
         isStaffApproved: approval ? approval.isApproved : true,
         staffApprovedBy: approval?.staffName || 'Department DSS Audit',
         staffApprovedById: approval?.staffId || octMeta.officeId,
         staffApprovedAt: approval?.timestamp || '2026-11-01T09:00:00Z',
         approvalNotes:
           approval?.notes ||
-          `Department Locked Official Oct 2026 Dataset · ${workingDays} Working Days × ${sanctionedKm} KM = ${totalMonthlyKm} KM @ ₹${fuelRate.toFixed(2)} = ₹${totalClaimAmount.toFixed(2)}`,
+          `Department Official Oct 2026 Dataset · ${workingDays} Working Days × ${sanctionedKm} KM = ${totalMonthlyKm} KM @ ₹${fuelRate.toFixed(2)} = ₹${totalClaimAmount.toFixed(2)}`,
       };
     }
 
@@ -2935,14 +3088,6 @@ class MasterDataService {
       overrides?.customRatePerKm !== undefined && overrides.customRatePerKm > 0
         ? overrides.customRatePerKm
         : DEPARTMENTAL_FUEL_RATE_PER_KM;
-
-    // Get all daily entries for this beat and month
-    const allEntries = operationsService.getDailyEntries();
-    const beatMonthEntries = allEntries.filter(
-      (e) =>
-        e.beatNo.toLowerCase() === cleanBeat.toLowerCase() &&
-        e.date.startsWith(targetMonthYear)
-    );
 
     // If custom day-by-day edited rows exist for this beat and month, load them
     const savedCustomRows = this.customDayRowsOverrides[`${cleanBeat}_${targetMonthYear}`];
@@ -3145,6 +3290,11 @@ class MasterDataService {
       pincode: fuelMapping.pincode,
       linkedPincodes: fuelMapping.linkedPincodes,
       dailyRows,
+      isUserUnlocked,
+      isDepartmentLocked: lockState?.status === 'LOCKED_FINAL',
+      isFinalLocked: lockState?.status === 'LOCKED_FINAL',
+      finalLockedAt: lockState?.lockedAt,
+      finalLockedBy: lockState?.lockedBy,
       isStaffApproved: this.getFuelBillApproval(cleanBeat, targetMonthYear)?.isApproved || false,
       staffApprovedBy: this.getFuelBillApproval(cleanBeat, targetMonthYear)?.staffName,
       staffApprovedById: this.getFuelBillApproval(cleanBeat, targetMonthYear)?.staffId,
@@ -3366,13 +3516,21 @@ class MasterDataService {
       totalDays: summary.workingDays,
       fixedKm: summary.sanctionedDailyKm,
       totalAmount: summary.totalClaimAmount,
-      status: summary.isDepartmentLocked ? 'Sanctioned' : summary.isStaffApproved ? 'Verified by SPM' : 'Submitted',
+      status: summary.isFinalLocked || summary.isDepartmentLocked ? 'Sanctioned' : summary.isStaffApproved ? 'Verified by SPM' : 'Submitted',
       isDepartmentLocked: summary.isDepartmentLocked,
+      isFinalLocked: summary.isFinalLocked,
+      finalLockedAt: summary.finalLockedAt,
+      finalLockedBy: summary.finalLockedBy,
       lockedAt: summary.lockedAt,
       lockedBy: summary.lockedBy,
       departmentLockSource: summary.departmentLockSource,
       details: {
-        dssReconciliationStatus: summary.isDepartmentLocked
+        isFinalLocked: summary.isFinalLocked,
+        finalLockedAt: summary.finalLockedAt,
+        finalLockedBy: summary.finalLockedBy,
+        dssReconciliationStatus: summary.isFinalLocked
+          ? 'Locked Final (Verified Statement)'
+          : summary.isDepartmentLocked
           ? 'Department Locked (Immutable DSS Audit)'
           : summary.isStaffApproved
           ? 'Staff Approved & Reconciled with DSS'
@@ -3487,7 +3645,7 @@ class MasterDataService {
     const backup = {
       backupTimestamp: new Date().toISOString(),
       postalOffice: 'Dadabari S.O. (PIN 324009, Kota Division, Rajasthan Circle)',
-      systemVersion: 'POSTMAN BOOK CRM v3.2 Enterprise',
+      systemVersion: 'Xpeedo Last Mile v3.2 Enterprise (XPEEDO Private Limited)',
       superAdmin: 'Ekta Meena (Ektamahenmeena@gmail.com)',
       customers: customerService.getCustomers(),
       dailyArticles: operationsService.getDailyEntries(),
@@ -3500,7 +3658,7 @@ class MasterDataService {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `POSTMAN_BOOK_CRM_Master_Backup_Dadabari_324009_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `XPEEDO_Last_Mile_Master_Backup_Dadabari_324009_${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

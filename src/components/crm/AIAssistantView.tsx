@@ -184,7 +184,7 @@ export default function AIAssistantView() {
     {
       id: 'm1',
       sender: 'ai',
-      text: 'Namaskar, Boss! I am the Official Senior AI Field Operations & Intelligence Assistant for "POSTMAN BOOK CRM" (Dadabari S.O. Ecosystem, Pincode 324009).\n\n⚡ Lightning-Fast Master Capabilities:\n• Direct 10-digit Mobile lookup (e.g. 8769706002, 9414589201)\n• Instant Resident & Family search across Beats 1 to 33\n• Colony / Landmark / House No. matching\n• Daily pending field tasks with status toggles\n• 100% Reality-Checked Pincode 324009 commercial registry (Zero dead data)',
+      text: 'Namaskar, Boss! I am the Official Senior AI Field Operations & Intelligence Assistant for "Xpeedo Last Mile" (Dadabari S.O. • PIN 324009, XPEEDO Private Limited).\n\n⚡ Lightning-Fast Master Capabilities:\n• Direct 10-digit Mobile lookup (e.g. 8769706002, 9414589201)\n• Instant Resident & Family search across Beats 1 to 33\n• Colony / Landmark / House No. matching\n• Daily pending field tasks with status toggles\n• 100% Reality-Checked Pincode 324009 commercial registry (Zero dead data)',
       options: [
         'Search Resident: 8769706002',
         'Beat 2 Resident Directory & Route',
@@ -414,7 +414,7 @@ export default function AIAssistantView() {
             propertyType: cust.type || 'Residential',
             verificationStatus: cust.verificationStatus || 'Verified',
             activeSchemeLeads: relLeads,
-            lastMileNote: cust.remarks || cust.notes || 'Field verification record active in Postman Book CRM.',
+            lastMileNote: cust.remarks || cust.notes || 'Field verification record active in Xpeedo Last Mile.',
             rawCustomer: cust
           });
         }

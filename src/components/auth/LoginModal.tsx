@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { 
   Lock, User, ShieldCheck, KeyRound, UserPlus, 
-  ArrowRight, CheckCircle2, AlertCircle, Phone, Mail, Building 
+  ArrowRight, CheckCircle2, AlertCircle, Phone, Mail, Building, Flame 
 } from 'lucide-react';
-import { staffPermissionService } from '../../services/staffPermissionService';
+import { DEFAULT_STAFF_FALLBACK_PASSWORD, staffPermissionService } from '../../services/staffPermissionService';
 import { staffRegistrationService } from '../../services/staffRegistrationService';
 import { useAuth } from './FirebaseAuthProvider';
 
@@ -11,9 +11,19 @@ interface LoginModalProps {
   onLoginSuccess: () => void;
 }
 
+const isMasterAdminInput = (val: string): boolean => {
+  const clean = (val || '').trim().toLowerCase();
+  return (
+    clean === 'ektamahenmeena@gmail.com' ||
+    clean === 'master-admin-01' ||
+    clean === 'staff-master-ekta'
+  );
+};
+
 export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
-  const { signInWithPassword } = useAuth();
+  const { signInWithPassword, signInAsMasterAdminNoPassword, signInStaffDirect } = useAuth();
   const [viewMode, setViewMode] = useState<'LOGIN' | 'FIRST_LOGIN_CHANGE' | 'REGISTER' | 'FORGOT_PASSWORD'>('LOGIN');
+  const directoryStaffList = useMemo(() => staffPermissionService.getDirectoryStaff(), []);
 
   // Login Form State
   const [username, setUsername] = useState('');
@@ -43,15 +53,67 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
   const [resetNewPass, setResetNewPass] = useState('');
   const [otpStep, setOtpStep] = useState<'ID' | 'VERIFY'>('ID');
 
+  const handleInstantAdminLogin = async () => {
+    setError('');
+    setStatusMessage('');
+    setLoading(true);
+    try {
+      const ok = await signInAsMasterAdminNoPassword();
+      setLoading(false);
+      if (ok) {
+        onLoginSuccess();
+        return;
+      }
+    } catch {
+      // Fallback handled cleanly below
+    }
+    const fallback = staffPermissionService.authenticateWithPassword('ektamahenmeena@gmail.com', '', {
+      allowAdminPasswordless: true,
+      skipPasswordCheck: true,
+    });
+    setLoading(false);
+    if (fallback.success) {
+      onLoginSuccess();
+    }
+  };
+
+  const handleQuickSelectDirectoryStaff = async (empId: string) => {
+    if (!empId) return;
+    setError('');
+    setStatusMessage('');
+    setLoading(true);
+    try {
+      const ok = await signInStaffDirect(empId);
+      setLoading(false);
+      if (ok) {
+        onLoginSuccess();
+        return;
+      }
+    } catch {
+      // Fallback handled cleanly below
+    }
+    const directRes = staffPermissionService.authenticateWithPassword(empId, '', {
+      allowAdminPasswordless: true,
+      skipPasswordCheck: true,
+    });
+    setLoading(false);
+    if (directRes.success) {
+      onLoginSuccess();
+    } else {
+      setError(directRes.error || 'Unable to sign in selected staff member.');
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setStatusMessage('');
     const rawUser = username.trim();
     const rawPass = password.trim();
+    const isAdmin = isMasterAdminInput(rawUser);
 
-    if (!rawUser || !rawPass) {
-      setError('Please enter Employee ID / Email and Password.');
+    if (!rawUser || (!rawPass && !isAdmin)) {
+      setError('Please enter Employee ID / Mobile / Email and Password.');
       return;
     }
 
@@ -60,15 +122,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
     setLoading(false);
 
     if (ok) {
-      const active = staffPermissionService.getActiveSession();
-      if (active?.mustChangePassword) {
-        setPendingEmployeeId(active.employeeId || rawUser);
-        setViewMode('FIRST_LOGIN_CHANGE');
-        return;
-      }
       onLoginSuccess();
     } else {
-      setError('Invalid credentials or session locked. Please verify your Employee ID and password.');
+      setError(`Invalid credentials. Verify Employee ID / Email and use custom password or ${DEFAULT_STAFF_FALLBACK_PASSWORD}.`);
     }
   };
 
@@ -164,8 +220,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
           <div className="w-14 h-14 bg-red-600/20 border border-red-500/30 rounded-2xl flex items-center justify-center text-red-400 mb-3 shadow-inner">
             <ShieldCheck className="w-8 h-8" />
           </div>
-          <h2 className="text-xl sm:text-2xl font-black tracking-tight">Postman Book CRM</h2>
-          <p className="text-xs text-slate-400 mt-0.5">Dadabari S.O. 324009 • Rajasthan Circle</p>
+          <h2 className="text-xl sm:text-2xl font-black tracking-tight">Xpeedo Last Mile</h2>
+          <p className="text-xs text-slate-400 mt-0.5">Xpeedo Last Mile • Dadabari S.O. • PIN 324009 • XPEEDO Private Limited</p>
         </div>
 
         {error && (
@@ -183,8 +239,46 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
         {/* MODE 1: STANDARD LOGIN */}
         {viewMode === 'LOGIN' && (
           <form onSubmit={handleLogin} className="space-y-4">
+            {/* Instant AI Studio Master Admin Login */}
+            <button
+              type="button"
+              onClick={handleInstantAdminLogin}
+              disabled={loading}
+              className="w-full py-2.5 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg cursor-pointer disabled:opacity-50"
+            >
+              <Flame className="w-4 h-4 shrink-0" />
+              <span>Instant Admin Login (AI Studio · No Password)</span>
+            </button>
+
+            {/* Quick Select Employee from Directory */}
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">Employee ID / Username</label>
+              <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                Quick Select Employee from Directory ({directoryStaffList.length} Staff · Instant Sign-In)
+              </label>
+              <select
+                value=""
+                disabled={loading}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    void handleQuickSelectDirectoryStaff(e.target.value);
+                  }
+                }}
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-red-500 transition cursor-pointer"
+              >
+                <option value="">-- Choose Employee ({directoryStaffList.length} Dadabari S.O. Staff) --</option>
+                {directoryStaffList.map((emp) => {
+                  const empId = emp.employeeId || emp.id.replace(/^STAFF-/, '');
+                  return (
+                    <option key={emp.id} value={empId}>
+                      {emp.beat} • {emp.name} (ID: {empId} | Mob: {emp.contact})
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Employee ID / Mobile / Email</label>
               <div className="relative">
                 <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
                   <User className="w-4 h-4" />
@@ -193,7 +287,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="e.g. 50510312, CSI-10023401, or employee"
+                  placeholder="e.g. 50457421, 8769706002, ektamahenmeena@gmail.com"
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-red-500 transition text-white"
                   required
                 />
@@ -202,7 +296,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-medium text-slate-300">Password</label>
+                <label className="block text-xs font-medium text-slate-300">
+                  {isMasterAdminInput(username)
+                    ? 'Password (Optional for Master Admin)'
+                    : `Password (Default: ${DEFAULT_STAFF_FALLBACK_PASSWORD})`}
+                </label>
                 <button
                   type="button"
                   onClick={() => { setViewMode('FORGOT_PASSWORD'); setError(''); }}
@@ -219,9 +317,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Initial password is your Employee ID"
+                  placeholder={
+                    isMasterAdminInput(username)
+                      ? 'Optional (leave blank for Admin bypass)'
+                      : `Default: ${DEFAULT_STAFF_FALLBACK_PASSWORD} or custom password`
+                  }
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-red-500 transition text-white"
-                  required
+                  required={!isMasterAdminInput(username)}
                 />
               </div>
             </div>
@@ -231,7 +333,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
               disabled={loading}
               className="w-full py-3 bg-red-700 hover:bg-red-600 text-white font-bold rounded-xl text-xs sm:text-sm transition shadow-lg shadow-red-700/30 cursor-pointer disabled:opacity-50"
             >
-              {loading ? 'Authenticating...' : 'Authenticate & Enter Postman OS'}
+              {loading ? 'Authenticating...' : 'Authenticate & Enter Xpeedo Last Mile'}
             </button>
 
             {/* Registration Request Link */}
@@ -246,9 +348,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
               </button>
 
               <div className="text-[11px] text-slate-500">
-                Sign in with your assigned <span className="text-slate-300 font-mono">Employee ID</span> or departmental email.
+                Sign in with your <span className="text-slate-300 font-mono">Employee ID</span>, Mobile, or Email (default <span className="text-slate-300 font-mono">Post@1234</span>).
                 <br />
-                Master Admin: <span className="text-slate-300 font-mono">Ektamahenmeena@gmail.com</span>
+                Master Admin: <span className="text-slate-300 font-mono">ektamahenmeena@gmail.com</span>
               </div>
             </div>
           </form>

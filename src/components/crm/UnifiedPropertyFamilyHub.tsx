@@ -1251,6 +1251,83 @@ export function buildMasterConsolidatedProperties(): UnifiedPropertyRecord[] {
   });
 }
 
+function runPropertyDeduplicationAudit(records: UnifiedPropertyRecord[]): {
+  cleaned: UnifiedPropertyRecord[];
+  removedCount: number;
+  mergedMembersCount: number;
+} {
+  const norm = (val?: string) =>
+    String(val || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/[-_./]/g, '');
+
+  const exactSignatureMap = new Map<string, UnifiedPropertyRecord>();
+  const primaryNameSignatureMap = new Map<string, UnifiedPropertyRecord>();
+  const cleaned: UnifiedPropertyRecord[] = [];
+  let removedCount = 0;
+  let mergedMembersCount = 0;
+
+  const mergeIntoCanonical = (target: UnifiedPropertyRecord, dup: UnifiedPropertyRecord) => {
+    const existingMemberKeys = new Set(
+      target.linkedMembers.map((m) => `${norm(m.name)}::${String(m.mobile || '').replace(/\D/g, '').slice(-10)}`)
+    );
+    dup.linkedMembers.forEach((m) => {
+      const mKey = `${norm(m.name)}::${String(m.mobile || '').replace(/\D/g, '').slice(-10)}`;
+      if (!existingMemberKeys.has(mKey)) {
+        target.linkedMembers.push(m);
+        existingMemberKeys.add(mKey);
+        mergedMembersCount++;
+      }
+    });
+    const existingRemIds = new Set(target.chronologicalRemarks.map((r) => r.remarkText));
+    dup.chronologicalRemarks.forEach((r) => {
+      if (!existingRemIds.has(r.remarkText)) {
+        target.chronologicalRemarks.push(r);
+        existingRemIds.add(r.remarkText);
+      }
+    });
+    if (!target.landmark && dup.landmark) target.landmark = dup.landmark;
+    if (!target.lastMileNote && dup.lastMileNote) target.lastMileNote = dup.lastMileNote;
+  };
+
+  records.forEach((rec) => {
+    const colKey = norm(rec.colony);
+    const houseKey = norm(rec.housePlotNumber || rec.houseNo);
+    const secKey = norm(rec.blockSector || rec.sector || rec.block);
+    const primaryNameKey = norm(rec.linkedMembers[0]?.name);
+
+    const exactKey = `${colKey}::${secKey}::${houseKey}`;
+    const nameHouseKey = primaryNameKey ? `${colKey}::${houseKey}::${primaryNameKey}` : '';
+
+    const match =
+      (houseKey ? exactSignatureMap.get(exactKey) : undefined) ||
+      (nameHouseKey ? primaryNameSignatureMap.get(nameHouseKey) : undefined);
+
+    if (match) {
+      removedCount++;
+      mergeIntoCanonical(match, rec);
+      return;
+    }
+
+    const cloned: UnifiedPropertyRecord = {
+      ...rec,
+      linkedMembers: [...(rec.linkedMembers || [])],
+      chronologicalRemarks: [...(rec.chronologicalRemarks || [])],
+    };
+    if (houseKey) {
+      exactSignatureMap.set(exactKey, cloned);
+    }
+    if (nameHouseKey) {
+      primaryNameSignatureMap.set(nameHouseKey, cloned);
+    }
+    cleaned.push(cloned);
+  });
+
+  return { cleaned, removedCount, mergedMembersCount };
+}
+
 export default function UnifiedPropertyFamilyHub() {
   const navigate = useNavigate();
   const { userProfile } = useAuth();
@@ -1258,18 +1335,26 @@ export default function UnifiedPropertyFamilyHub() {
   const isRestrictedStaff = staffPermissionService.isPostmanOrGds(userProfile);
   const HUB_PAGE_SIZE = 5;
 
-  // Master Property List with deep consolidation
+  // Master Property List with deep consolidation & automatic duplicate clean-up audit
   const [properties, setProperties] = useState<UnifiedPropertyRecord[]>(() => {
     try {
       const stored = localStorage.getItem('unified_property_family_hub_records_v4');
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length >= 2500) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const audit = runPropertyDeduplicationAudit(parsed);
+          if (audit.removedCount > 0) {
+            try {
+              localStorage.setItem('unified_property_family_hub_records_v4', JSON.stringify(audit.cleaned));
+            } catch {}
+          }
+          return audit.cleaned;
+        }
       }
     } catch {
       // fallback
     }
-    const consolidated = buildMasterConsolidatedProperties();
+    const consolidated = runPropertyDeduplicationAudit(buildMasterConsolidatedProperties()).cleaned;
     try {
       localStorage.setItem('unified_property_family_hub_records_v4', JSON.stringify(consolidated));
     } catch {}
@@ -1387,12 +1472,136 @@ export default function UnifiedPropertyFamilyHub() {
     setStatusModalProperty(null);
   };
 
+  // Edit Property & Delete Property Confirmation States
+  const [editingProperty, setEditingProperty] = useState<UnifiedPropertyRecord | null>(null);
+  const [editHouseNo, setEditHouseNo] = useState<string>('');
+  const [editColony, setEditColony] = useState<string>('');
+  const [editBlockSector, setEditBlockSector] = useState<string>('');
+  const [editBeatNo, setEditBeatNo] = useState<string>('Beat 2');
+  const [editPincode, setEditPincode] = useState<string>('324009');
+  const [editCategory, setEditCategory] = useState<PropertyCategory>('Residential');
+  const [editOccupancy, setEditOccupancy] = useState<'Occupied' | 'Vacant' | 'Rented'>('Occupied');
+  const [editLandmark, setEditLandmark] = useState<string>('');
+  const [editLastMileNote, setEditLastMileNote] = useState<string>('');
+  const [editAssignedStaffName, setEditAssignedStaffName] = useState<string>('');
+
+  const [propertyToDelete, setPropertyToDelete] = useState<UnifiedPropertyRecord | null>(null);
+  const [dedupeAuditSummary, setDedupeAuditSummary] = useState<{
+    beforeCount: number;
+    afterCount: number;
+    removedCount: number;
+    mergedMembersCount: number;
+    timestamp: string;
+  } | null>(null);
+
+  const handleOpenEditPropertyModal = (p: UnifiedPropertyRecord) => {
+    setEditingProperty(p);
+    setEditHouseNo(p.housePlotNumber || p.houseNo || '');
+    setEditColony(p.colony || '');
+    setEditBlockSector(p.blockSector || p.sector || '');
+    setEditBeatNo(p.beatNo || 'Beat 2');
+    setEditPincode(p.pincode || '324009');
+    setEditCategory(p.category || 'Residential');
+    setEditOccupancy(p.occupancyStatus || 'Occupied');
+    setEditLandmark(p.landmark || '');
+    setEditLastMileNote(p.lastMileNote || '');
+    setEditAssignedStaffName(p.assignedStaffName || '');
+  };
+
+  const handleSaveEditProperty = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProperty || !editHouseNo.trim() || !editColony.trim()) return;
+
+    const staffInfo = BEAT_STAFF_MAP[editBeatNo];
+    const nowStr = new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+    const editRemark: DeliveryRemarkEntry = {
+      id: `rem-edit-${Date.now()}`,
+      timestamp: nowStr,
+      authorName: userProfile?.name || staffInfo?.name || editingProperty.assignedStaffName,
+      authorRole: userProfile?.role || 'Authorized Staff',
+      remarkText: `Property details updated: ${editHouseNo.trim()}, ${editColony.trim()} (${editBlockSector.trim() || 'General'}) · ${editBeatNo}`,
+      statusTag: 'Verification Done',
+    };
+
+    const updatedProp: UnifiedPropertyRecord = {
+      ...editingProperty,
+      housePlotNumber: editHouseNo.trim(),
+      houseNo: editHouseNo.trim(),
+      colony: normalizeColonyName(editColony.trim()),
+      blockSector: editBlockSector.trim() || 'Sector 1',
+      sector: editBlockSector.trim() || 'Sector 1',
+      beatNo: editBeatNo,
+      pincode: editPincode.trim() || getAuditedPincodeForColony(editColony.trim(), editBlockSector.trim()) || '324009',
+      category: editCategory,
+      occupancyStatus: editOccupancy,
+      landmark: editLandmark.trim(),
+      lastMileNote: editLastMileNote.trim(),
+      assignedStaffName: editAssignedStaffName.trim() || staffInfo?.name || editingProperty.assignedStaffName,
+      assignedStaffId: staffInfo?.id || editingProperty.assignedStaffId,
+      updatedAt: new Date().toISOString(),
+      chronologicalRemarks: [editRemark, ...(editingProperty.chronologicalRemarks || [])],
+    };
+
+    const nextList = properties.map((item) => (item.id === editingProperty.id ? updatedProp : item));
+    setProperties(nextList);
+    try {
+      localStorage.setItem('unified_property_family_hub_records_v4', JSON.stringify(nextList));
+    } catch {}
+    if (activeProperty?.id === editingProperty.id) {
+      setActiveProperty(updatedProp);
+    }
+    setEditingProperty(null);
+    showNotification(`✅ Updated property '${updatedProp.housePlotNumber}' (${updatedProp.colony} · ${updatedProp.beatNo}).`);
+  };
+
+  const handleConfirmDeleteProperty = () => {
+    if (!propertyToDelete) return;
+    const remainingProps = properties.filter((p) => p.id !== propertyToDelete.id);
+    const unmapStats = customerService.handlePropertyDeletionUnmapping(propertyToDelete, remainingProps);
+
+    setProperties(remainingProps);
+    try {
+      localStorage.setItem('unified_property_family_hub_records_v4', JSON.stringify(remainingProps));
+    } catch {}
+
+    if (activeProperty?.id === propertyToDelete.id) {
+      setActiveProperty(null);
+    }
+
+    const deletedLabel = `${propertyToDelete.housePlotNumber} (${propertyToDelete.colony})`;
+    setPropertyToDelete(null);
+    showNotification(
+      `🗑️ Deleted property '${deletedLabel}'. Residents preserved safely: ${unmapStats.unmappedCount} marked 'Unmapped / Pending Re-assignment', ${unmapStats.preservedOtherLinksCount} active multi-property links retained.`
+    );
+  };
+
+  const handleRunDeduplicationAudit = () => {
+    const beforeCount = properties.length;
+    const audit = runPropertyDeduplicationAudit(properties);
+    setProperties(audit.cleaned);
+    try {
+      localStorage.setItem('unified_property_family_hub_records_v4', JSON.stringify(audit.cleaned));
+    } catch {}
+    setDedupeAuditSummary({
+      beforeCount,
+      afterCount: audit.cleaned.length,
+      removedCount: audit.removedCount,
+      mergedMembersCount: audit.mergedMembersCount,
+      timestamp: new Date().toLocaleTimeString('en-IN'),
+    });
+    showNotification(
+      audit.removedCount > 0
+        ? `🧹 Duplicate Audit Complete: Removed ${audit.removedCount} exact duplicate properties & merged ${audit.mergedMembersCount} resident links (${audit.cleaned.length} clean properties remaining).`
+        : `✅ Duplicate Audit Complete: Zero exact duplicates found across ${audit.cleaned.length} properties.`
+    );
+  };
+
   // Notification Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showNotification = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4500);
+    setTimeout(() => setToastMessage(null), 5500);
   };
 
   // Persist properties to localStorage
@@ -1404,14 +1613,17 @@ export default function UnifiedPropertyFamilyHub() {
     }
   }, [properties]);
 
-  // 1-Click Re-sync & Consolidate All Master Databases
+  // 1-Click Re-sync & Consolidate All Master Databases (includes de-duplication audit)
   const handleForceConsolidateAll = () => {
-    const freshlyConsolidated = buildMasterConsolidatedProperties();
-    setProperties(freshlyConsolidated);
+    const consolidatedRaw = buildMasterConsolidatedProperties();
+    const audit = runPropertyDeduplicationAudit(consolidatedRaw);
+    setProperties(audit.cleaned);
     try {
-      localStorage.setItem('unified_property_family_hub_records_v4', JSON.stringify(freshlyConsolidated));
+      localStorage.setItem('unified_property_family_hub_records_v4', JSON.stringify(audit.cleaned));
     } catch {}
-    showNotification(`⚡ Consolidated ${freshlyConsolidated.length} Properties & Family Records across all Beats 1–33!`);
+    showNotification(
+      `⚡ Consolidated ${audit.cleaned.length} clean Properties & Family Records across Beats 1–33 (removed ${audit.removedCount} duplicates)!`
+    );
   };
 
   // Strictly scoped properties dataset for Postman/GDS vs Admin
@@ -1935,13 +2147,13 @@ export default function UnifiedPropertyFamilyHub() {
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-bold tracking-wider uppercase border border-blue-400/30">
               <ShieldCheck size={14} className="text-cyan-400" />
-              <span>POSTMAN BOOK CRM · DADABARI S.O. 324009</span>
+              <span>Xpeedo Last Mile • Dadabari S.O. • PIN 324009</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
               Unified Property & Family Master Hub
             </h1>
             <p className="text-blue-200 text-xs sm:text-sm max-w-2xl leading-relaxed">
-              Consolidated, relational architecture merging <b>Physical Property Addresses</b> and <b>Household Family Trees</b> into a single master index with multi-customer linking and scheme intelligence.
+              Consolidated, relational architecture merging <b>Physical Property Addresses</b> and <b>Household Family Trees</b> into a single de-duplicated master index with safe resident unmapping and scheme intelligence.
             </p>
           </div>
 
@@ -1952,6 +2164,14 @@ export default function UnifiedPropertyFamilyHub() {
             >
               <Plus size={16} />
               <span>Register Property</span>
+            </button>
+            <button
+              onClick={handleRunDeduplicationAudit}
+              className="px-3.5 py-2.5 rounded-2xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 text-xs font-bold border border-emerald-400/30 transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+              title="Run automated de-duplication audit across all mapped properties (same name, colony & house number)"
+            >
+              <ShieldCheck size={15} className="text-emerald-300" />
+              <span>Duplicate Audit</span>
             </button>
             <button
               onClick={handleExportUnifiedExcel}
@@ -1972,6 +2192,29 @@ export default function UnifiedPropertyFamilyHub() {
           </div>
         </div>
       </div>
+
+      {/* Duplicate Audit Banner */}
+      {dedupeAuditSummary && (
+        <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-2xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-indigo-950">
+          <div className="flex items-center gap-2.5">
+            <ShieldCheck size={18} className="text-indigo-700 shrink-0" />
+            <div>
+              <span className="font-black">Property De-duplication Audit Report ({dedupeAuditSummary.timestamp}): </span>
+              <span>
+                Scanned <b>{dedupeAuditSummary.beforeCount}</b> records → Cleaned Index: <b>{dedupeAuditSummary.afterCount}</b> properties
+                (<b>{dedupeAuditSummary.removedCount}</b> exact duplicates removed, <b>{dedupeAuditSummary.mergedMembersCount}</b> resident links merged).
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDedupeAuditSummary(null)}
+            className="text-xs font-bold text-indigo-700 hover:underline self-end sm:self-center cursor-pointer"
+          >
+            Close
+          </button>
+        </div>
+      )}
 
       {/* Notification Toast */}
       {toastMessage && (
@@ -2511,7 +2754,29 @@ export default function UnifiedPropertyFamilyHub() {
                   </a>
                 </div>
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 flex-wrap justify-end">
+                  {/* Edit Property */}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditPropertyModal(prop)}
+                    className="px-2 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-800 text-[11px] font-bold border border-blue-200 transition flex items-center gap-1 cursor-pointer"
+                    title="Edit Property Details"
+                  >
+                    <Edit2 size={12} className="text-blue-700" />
+                    <span>Edit</span>
+                  </button>
+
+                  {/* Delete Property (Safe Unmapping) */}
+                  <button
+                    type="button"
+                    onClick={() => setPropertyToDelete(prop)}
+                    className="px-2 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-bold border border-rose-200 transition flex items-center gap-1 cursor-pointer"
+                    title="Delete Property (Residents safely preserved / unmapped)"
+                  >
+                    <Trash2 size={12} className="text-rose-600" />
+                    <span>Delete</span>
+                  </button>
+
                   {/* Update Status Hook */}
                   <button
                     type="button"
@@ -2519,19 +2784,8 @@ export default function UnifiedPropertyFamilyHub() {
                     className="px-2 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 text-[11px] font-bold border border-amber-200 transition flex items-center gap-1 cursor-pointer"
                     title="[Update Status] Doorstep delivery / occupancy status"
                   >
-                    <Edit2 size={12} className="text-amber-700" />
-                    <span>Update Status</span>
-                  </button>
-
-                  {/* Map to Beat Hook */}
-                  <button
-                    type="button"
-                    onClick={() => navigate('/sequence-properties', { state: { searchKeyword: prop.colony } })}
-                    className="px-2 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
-                    title="[Map to Beat] Door-to-door sequence"
-                  >
-                    <Layers size={12} className="text-indigo-600" />
-                    <span className="hidden sm:inline">Map Beat</span>
+                    <CheckCircle2 size={12} className="text-amber-700" />
+                    <span>Status</span>
                   </button>
 
                   {/* Profile & Hub Hook */}
@@ -2669,7 +2923,7 @@ export default function UnifiedPropertyFamilyHub() {
 
                     {/* Actions */}
                     <td className="py-3 px-3.5 text-center whitespace-nowrap">
-                      <div className="flex items-center justify-center gap-1.5">
+                      <div className="flex items-center justify-center gap-1">
                         <button
                           type="button"
                           onClick={() => setActiveProperty(prop)}
@@ -2677,7 +2931,25 @@ export default function UnifiedPropertyFamilyHub() {
                           title="[Profile & Hub]"
                         >
                           <Eye size={11} />
-                          <span>Profile & Hub</span>
+                          <span>Profile</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditPropertyModal(prop)}
+                          className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 font-bold rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer"
+                          title="Edit Property Details"
+                        >
+                          <Edit2 size={11} className="text-blue-700" />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPropertyToDelete(prop)}
+                          className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer"
+                          title="Delete Property (Residents safely preserved / unmapped)"
+                        >
+                          <Trash2 size={11} className="text-rose-600" />
+                          <span>Delete</span>
                         </button>
                         <button
                           type="button"
@@ -2685,8 +2957,8 @@ export default function UnifiedPropertyFamilyHub() {
                           className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer"
                           title="[Update Status]"
                         >
-                          <Edit2 size={11} className="text-amber-700" />
-                          <span>Update Status</span>
+                          <CheckCircle2 size={11} className="text-amber-700" />
+                          <span>Status</span>
                         </button>
                         <a
                           href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
@@ -2699,14 +2971,6 @@ export default function UnifiedPropertyFamilyHub() {
                         >
                           <Navigation size={12} />
                         </a>
-                        <button
-                          type="button"
-                          onClick={() => navigate('/sequence-properties', { state: { searchKeyword: prop.colony } })}
-                          className="p-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] transition flex items-center cursor-pointer"
-                          title="[Map to Beat]"
-                        >
-                          <Layers size={12} className="text-indigo-600" />
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -3521,6 +3785,219 @@ export default function UnifiedPropertyFamilyHub() {
               >
                 <Check size={14} />
                 <span>Save & Update Status</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Edit Property Modal */}
+      {editingProperty && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div>
+                <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 text-[10px] font-black uppercase">
+                  Property Master Edit
+                </span>
+                <h4 className="font-extrabold text-base text-slate-900 mt-0.5">
+                  Edit Property ({editingProperty.propertyCode})
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingProperty(null)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditProperty} className="space-y-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">House / Plot Number *</label>
+                  <input
+                    type="text"
+                    value={editHouseNo}
+                    onChange={(e) => setEditHouseNo(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold bg-white"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Colony Area *</label>
+                  <input
+                    type="text"
+                    value={editColony}
+                    onChange={(e) => setEditColony(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold bg-white"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Block / Sector</label>
+                  <input
+                    type="text"
+                    value={editBlockSector}
+                    onChange={(e) => setEditBlockSector(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-semibold bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Postal Beat</label>
+                  <select
+                    value={editBeatNo}
+                    onChange={(e) => setEditBeatNo(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold bg-white"
+                  >
+                    {uniqueBeats.filter((b) => b !== 'All').map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">PIN Code</label>
+                  <input
+                    type="text"
+                    value={editPincode}
+                    onChange={(e) => setEditPincode(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono font-bold bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Category</label>
+                  <select
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value as PropertyCategory)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-semibold bg-white"
+                  >
+                    <option value="Residential">Residential</option>
+                    <option value="Commercial">Commercial</option>
+                    <option value="Mixed">Mixed</option>
+                    <option value="Plot">Plot</option>
+                    <option value="Under Construction">Under Construction</option>
+                    <option value="Damaged">Damaged</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Occupancy Status</label>
+                  <select
+                    value={editOccupancy}
+                    onChange={(e) => setEditOccupancy(e.target.value as 'Occupied' | 'Vacant' | 'Rented')}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-semibold bg-white"
+                  >
+                    <option value="Occupied">Occupied</option>
+                    <option value="Vacant">Vacant</option>
+                    <option value="Rented">Rented</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Landmark</label>
+                <input
+                  type="text"
+                  value={editLandmark}
+                  onChange={(e) => setEditLandmark(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Last-Mile Delivery Note</label>
+                <textarea
+                  rows={2}
+                  value={editLastMileNote}
+                  onChange={(e) => setEditLastMileNote(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-white"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingProperty(null)}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow-md flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check size={14} />
+                  <span>Save Property Changes</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Safe Delete Property Confirmation Modal */}
+      {propertyToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-rose-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-rose-100 text-rose-700">
+                  <Trash2 size={18} />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-base text-slate-900">
+                    Delete Property Record?
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    {propertyToDelete.housePlotNumber} · {propertyToDelete.colony} ({propertyToDelete.beatNo})
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPropertyToDelete(null)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-950 space-y-1.5">
+              <div className="font-black flex items-center gap-1.5">
+                <ShieldCheck size={15} className="text-amber-700" />
+                <span>Safe Resident Unmapping Guarantee</span>
+              </div>
+              <p className="leading-relaxed">
+                Associated family members / customers (<b>{propertyToDelete.linkedMembers.length}</b> linked) will <b>NOT be deleted</b> from the customer database:
+              </p>
+              <ul className="list-disc pl-4 space-y-0.5 text-[11px]">
+                <li>Residents also linked to other active properties keep their existing active links intact.</li>
+                <li>Residents with no other active property link are automatically moved to <b>&quot;Unmapped / Pending Re-assignment&quot;</b>.</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setPropertyToDelete(null)}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteProperty}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 size={14} />
+                <span>Delete Property & Safe Unmap</span>
               </button>
             </div>
           </div>

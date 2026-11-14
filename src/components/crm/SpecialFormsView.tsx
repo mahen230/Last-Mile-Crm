@@ -51,6 +51,8 @@ export default function SpecialFormsView() {
   const [selectedBillForPrint, setSelectedBillForPrint] = useState<SpecialBillRecord | null>(null);
   const [showDailyScheduleEditor, setShowDailyScheduleEditor] = useState<boolean>(false);
   const [showAddFuelLedgerModal, setShowAddFuelLedgerModal] = useState<boolean>(false);
+  const [byodTrackerMonth, setByodTrackerMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
+  const [byodTrackerPage, setByodTrackerPage] = useState<number>(1);
 
   // Operational Fuel & Expense Ledger Form State (DSS Reconciliation Format)
   const [fledDate, setFledDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -1408,6 +1410,222 @@ export default function SpecialFormsView() {
                 </span>
               </div>
             </div>
+
+            {/* Automated Monthly BYOD Eligibility & Claim Generator */}
+            {(() => {
+              const activeSession = staffPermissionService.getActiveSession() || userProfile;
+              const isFieldStaff = staffPermissionService.isPostmanOrGds(activeSession);
+              const allDirectoryStaff = staffPermissionService.getDirectoryStaff();
+              const eligibleStaff = allDirectoryStaff.filter((s) => {
+                const isDeliveryDesig =
+                  /postman|gds|abpm|bpm|delivery/i.test(s.designationType || s.role || '') ||
+                  Boolean(s.beat && s.beat.toLowerCase().includes('beat'));
+                if (!isDeliveryDesig) return false;
+                if (isFieldStaff) {
+                  return staffPermissionService.matchesUserBeatScope(activeSession, {
+                    beatNo: s.beat,
+                    assignedStaffName: s.name,
+                    assignedStaffId: s.employeeId || s.id,
+                  });
+                }
+                return true;
+              });
+
+              const [yearStr, monthStr] = byodTrackerMonth.split('-');
+              const monthStart = `${byodTrackerMonth}-01`;
+              const lastDay = new Date(Number(yearStr), Number(monthStr), 0).getDate() || 30;
+              const monthEnd = `${byodTrackerMonth}-${String(lastDay).padStart(2, '0')}`;
+
+              const isClaimed = (empId: string) =>
+                bills.some(
+                  (b) =>
+                    b.type === 'BYOD_BILL' &&
+                    b.employeeId === empId &&
+                    b.fromDate.startsWith(byodTrackerMonth)
+                );
+
+              const pendingStaff = eligibleStaff.filter((s) => !isClaimed(s.employeeId || s.id));
+              const pageSize = 5;
+              const totalPages = Math.max(1, Math.ceil(eligibleStaff.length / pageSize));
+              const safePage = Math.min(byodTrackerPage, totalPages);
+              const pageRows = eligibleStaff.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+              const createByodForStaff = (s: typeof eligibleStaff[number]) =>
+                operationsService.createSpecialBill({
+                  type: 'BYOD_BILL',
+                  title: `Monthly BYOD Allowance (${byodTrackerMonth} · ₹450)`,
+                  employeeId: s.employeeId || s.id,
+                  employeeName: s.name,
+                  employeeEmail: s.email || autoEmpEmail,
+                  beatNo: s.beat || 'Beat 2',
+                  officeName: s.subOffice || 'Dadabari S.O. (324009)',
+                  fromDate: monthStart,
+                  toDate: monthEnd,
+                  totalDays: lastDay,
+                  fixedKm: 30,
+                  totalAmount: 450,
+                  details: {
+                    imeiNumber: 'BYOD-PMA-REGISTERED',
+                    deviceModel: 'Official PMA / IPPB Android Smartphone',
+                    appInstalled: 'PMA + Darpan + IPPB MicroATM',
+                    dataPlanAmount: 250,
+                    deviceAllowanceAmount: 200,
+                    telecomOperator: 'Departmental BYOD Allowance',
+                  },
+                });
+
+              return (
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-wide">
+                        Automated Monthly BYOD Eligibility &amp; Allowance Tracker (₹250 Data + ₹200 Device = ₹450/mo)
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        Tracks monthly smartphone &amp; internet allowance for {eligibleStaff.length} eligible delivery staff ({pendingStaff.length} pending for {byodTrackerMonth}).
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="month"
+                        value={byodTrackerMonth}
+                        onChange={(e) => {
+                          setByodTrackerMonth(e.target.value);
+                          setByodTrackerPage(1);
+                        }}
+                        className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-900"
+                      />
+                      {!isFieldStaff && pendingStaff.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            pendingStaff.forEach((s) => createByodForStaff(s));
+                            setStatusMessage(
+                              `Batch-generated ${pendingStaff.length} BYOD monthly bills for ${byodTrackerMonth} (Total ₹${(pendingStaff.length * 450).toLocaleString('en-IN')}).`
+                            );
+                          }}
+                          className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                        >
+                          Generate All Pending ({pendingStaff.length})
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const csv = [
+                            'Employee ID,Staff Name,Designation,Beat,Office,Month,Data Allowance,Device Allowance,Total,Status',
+                            ...eligibleStaff.map((s) => {
+                              const empId = s.employeeId || s.id;
+                              const claimed = isClaimed(empId);
+                              return `"${empId}","${s.name}","${s.designationType || s.role || ''}","${s.beat || ''}","${s.subOffice || ''}","${byodTrackerMonth}",250,200,450,"${claimed ? 'Claimed' : 'Pending'}"`;
+                            }),
+                          ].join('\n');
+                          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `Dadabari_BYOD_Register_${byodTrackerMonth}.csv`;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          URL.revokeObjectURL(url);
+                        }}
+                        className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                      >
+                        Export CSV
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto bg-white border border-slate-200 rounded-xl">
+                    <table className="w-full text-left text-[11px] border-collapse">
+                      <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                        <tr>
+                          <th className="p-2.5">Staff &amp; CSI ID</th>
+                          <th className="p-2.5">Beat &amp; Office</th>
+                          <th className="p-2.5 text-right">Monthly Entitlement</th>
+                          <th className="p-2.5">Status ({byodTrackerMonth})</th>
+                          <th className="p-2.5 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {pageRows.map((s) => {
+                          const empId = s.employeeId || s.id;
+                          const claimed = isClaimed(empId);
+                          return (
+                            <tr key={empId} className="hover:bg-slate-50">
+                              <td className="p-2.5">
+                                <div className="font-bold text-slate-900">{s.name}</div>
+                                <div className="font-mono text-[10px] text-slate-500">
+                                  ID: {empId} · {s.designationType || s.role}
+                                </div>
+                              </td>
+                              <td className="p-2.5">
+                                <span className="font-semibold text-slate-800">{s.beat || 'General Duty'}</span>
+                                <div className="text-[10px] text-slate-500">{s.subOffice}</div>
+                              </td>
+                              <td className="p-2.5 text-right font-mono font-bold text-slate-900">
+                                ₹450 <span className="text-[10px] font-normal text-slate-500">(₹250+₹200)</span>
+                              </td>
+                              <td className="p-2.5">
+                                <span
+                                  className={`px-2 py-0.5 rounded font-bold ${
+                                    claimed ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'
+                                  }`}
+                                >
+                                  {claimed ? 'Claim Generated' : 'Pending Claim'}
+                                </span>
+                              </td>
+                              <td className="p-2.5 text-right">
+                                <button
+                                  type="button"
+                                  disabled={claimed}
+                                  onClick={() => {
+                                    const created = createByodForStaff(s);
+                                    setStatusMessage(
+                                      `Generated BYOD Bill ${created.billNumber} for ${s.name} (${byodTrackerMonth} · ₹450).`
+                                    );
+                                  }}
+                                  className="px-2.5 py-1 bg-blue-700 hover:bg-blue-800 disabled:bg-slate-200 disabled:text-slate-500 text-white rounded-lg font-bold cursor-pointer"
+                                >
+                                  {claimed ? 'Claimed' : 'Generate Bill'}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between text-[11px] text-slate-600">
+                      <span>
+                        Page {safePage} of {totalPages} ({eligibleStaff.length} staff)
+                      </span>
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          disabled={safePage <= 1}
+                          onClick={() => setByodTrackerPage((p) => Math.max(1, p - 1))}
+                          className="px-2.5 py-1 bg-white border border-slate-200 rounded font-bold disabled:opacity-40 cursor-pointer"
+                        >
+                          Prev
+                        </button>
+                        <button
+                          type="button"
+                          disabled={safePage >= totalPages}
+                          onClick={() => setByodTrackerPage((p) => Math.min(totalPages, p + 1))}
+                          className="px-2.5 py-1 bg-white border border-slate-200 rounded font-bold disabled:opacity-40 cursor-pointer"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 

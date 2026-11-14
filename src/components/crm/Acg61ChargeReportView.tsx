@@ -12,9 +12,13 @@ import {
   Check,
   ShieldCheck,
   ArrowLeftRight,
+  Search,
+  Trash2,
 } from 'lucide-react';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import { operationsService } from '../../services/operationsService';
+import { staffPermissionService } from '../../services/staffPermissionService';
+import { SpecialBillRecord } from '../../types/models';
 import {
   Acg61ChargeReportData,
   downloadOfficialAcg61Pdf,
@@ -23,6 +27,14 @@ import {
 
 export default function Acg61ChargeReportView() {
   const { userProfile } = useAuth();
+  const currentStaff = staffPermissionService.getActiveSession() || userProfile;
+  const isSuperAdmin = staffPermissionService.isSuperAdmin(currentStaff);
+  const isSuperior =
+    isSuperAdmin ||
+    currentStaff?.role === 'ADMIN' ||
+    currentStaff?.role === 'MASTER_ADMIN' ||
+    currentStaff?.role === 'SUPER_ADMIN' ||
+    /inspector|spm|postmaster|supervisor/i.test(currentStaff?.designation || '');
 
   // --- Office & Staff Detail Fields with Date & Noon Session ---
   const [relievedOfficerName, setRelievedOfficerName] = useState('MAHENDRA KUMAR MEENA');
@@ -47,7 +59,32 @@ export default function Acg61ChargeReportView() {
   // Submission & Preview State
   const [copySuccess, setCopySuccess] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [chargeReports, setChargeReports] = useState<SpecialBillRecord[]>([]);
+  const [ledgerSearch, setLedgerSearch] = useState('');
+  const [ledgerPage, setLedgerPage] = useState(1);
   const previewRef = useRef<HTMLDivElement>(null);
+
+  const loadChargeReports = () => {
+    const active = staffPermissionService.getActiveSession() || userProfile;
+    const list = operationsService
+      .getSpecialBills()
+      .filter(
+        (b) =>
+          b.type === 'CHARGE_REPORT' &&
+          staffPermissionService.matchesUserBeatScope(active, {
+            beatNo: b.beatNo,
+            assignedStaffName: b.employeeName,
+            assignedStaffEmail: b.employeeEmail,
+          })
+      );
+    setChargeReports(list);
+  };
+
+  useEffect(() => {
+    loadChargeReports();
+    const unsub = operationsService.subscribe(loadChargeReports);
+    return () => unsub();
+  }, [userProfile]);
 
   // Sync with current user profile if available
   useEffect(() => {
@@ -554,6 +591,187 @@ export default function Acg61ChargeReportView() {
           </div>
         </div>
       </div>
+
+      {/* Systematic Stored & Tracked Charge Handover Reports Ledger */}
+      {(() => {
+        const q = ledgerSearch.trim().toLowerCase();
+        const filtered = q
+          ? chargeReports.filter(
+              (r) =>
+                r.billNumber.toLowerCase().includes(q) ||
+                r.title.toLowerCase().includes(q) ||
+                r.employeeName.toLowerCase().includes(q) ||
+                r.beatNo.toLowerCase().includes(q) ||
+                r.officeName.toLowerCase().includes(q)
+            )
+          : chargeReports;
+        const pageSize = 5;
+        const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+        const safePage = Math.min(ledgerPage, totalPages);
+        const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+        return (
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div>
+                <h2 className="text-base font-black text-slate-900">
+                  Tracked &amp; Stored Charge Handover Register ({filtered.length})
+                </h2>
+                <p className="text-xs text-slate-500">
+                  All saved ACG-61 handover vouchers scoped by beat/office. Super Admins &amp; SPMs can verify or archive records.
+                </p>
+              </div>
+              <div className="relative w-full sm:w-64">
+                <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={ledgerSearch}
+                  onChange={(e) => {
+                    setLedgerSearch(e.target.value);
+                    setLedgerPage(1);
+                  }}
+                  placeholder="Search ID, officer, beat..."
+                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-red-600"
+                />
+              </div>
+            </div>
+
+            {pageRows.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-500 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                No stored charge handover reports found. Submit the ACG-61 form above to archive a new handover certificate.
+              </div>
+            ) : (
+              <div className="overflow-x-auto border border-slate-200 rounded-2xl">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                    <tr>
+                      <th className="p-3">Voucher No.</th>
+                      <th className="p-3">Handover Details</th>
+                      <th className="p-3">Beat &amp; Office</th>
+                      <th className="p-3">Transfer Date</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {pageRows.map((rec) => (
+                      <tr key={rec.id} className="hover:bg-slate-50">
+                        <td className="p-3 font-mono font-bold text-red-800 whitespace-nowrap">{rec.billNumber}</td>
+                        <td className="p-3">
+                          <div className="font-bold text-slate-900">{rec.title}</div>
+                          <div className="text-[11px] text-slate-500">
+                            Relieved: {rec.details?.relievedOfficerName || rec.employeeName} → Relieving:{' '}
+                            {rec.details?.relievingOfficerName || 'Vacant'}
+                          </div>
+                        </td>
+                        <td className="p-3 whitespace-nowrap">
+                          <span className="font-semibold text-slate-800">{rec.beatNo}</span>
+                          <div className="text-[11px] text-slate-500">{rec.officeName}</div>
+                        </td>
+                        <td className="p-3 font-mono text-slate-700 whitespace-nowrap">{rec.fromDate}</td>
+                        <td className="p-3 whitespace-nowrap">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                              rec.status.toLowerCase().includes('verified') ||
+                              rec.status.toLowerCase().includes('approved')
+                                ? 'bg-emerald-100 text-emerald-900'
+                                : 'bg-amber-100 text-amber-900'
+                            }`}
+                          >
+                            {rec.status}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                downloadOfficialAcg61Pdf({
+                                  relievedOfficerName: rec.details?.relievedOfficerName || rec.employeeName,
+                                  relievingOfficerName: rec.details?.relievingOfficerName || 'VACANT',
+                                  postName: rec.details?.postName || 'O/S POSTMAN',
+                                  placeName: rec.details?.placeName || rec.officeName,
+                                  date: rec.fromDate,
+                                  noonSection: rec.details?.noonSection || 'PM',
+                                  authorityOrderNo: rec.details?.authorityOrderNo || '',
+                                  divisionName: rec.details?.divisionName || 'KOTA DIVISION',
+                                  headOfficeName: rec.details?.headOfficeName || 'NGM H.O.',
+                                  subDivisionName: rec.details?.subDivisionName || "ASPO's KOTA EAST",
+                                  copyToList: rec.details?.copyToList || [
+                                    "The SSPO's KOTA DIVISION",
+                                    'A/C BRANCH NGM H.O.',
+                                    "ASPO's KOTA EAST",
+                                    'PF of the official',
+                                  ],
+                                })
+                              }
+                              className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[11px] font-bold cursor-pointer inline-flex items-center gap-1"
+                            >
+                              <Download size={12} />
+                              <span>PDF</span>
+                            </button>
+                            {isSuperior && !rec.status.toLowerCase().includes('verified') && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  operationsService.updateSpecialBillStatus(rec.id, 'Verified by SPM');
+                                  setStatusMessage(`Charge Report ${rec.billNumber} marked Verified by SPM.`);
+                                }}
+                                className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                              >
+                                Verify
+                              </button>
+                            )}
+                            {isSuperAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  operationsService.deleteSpecialBill(rec.id);
+                                  setStatusMessage(`Deleted Charge Report ${rec.billNumber}.`);
+                                }}
+                                className="p-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg border border-red-200 cursor-pointer"
+                                title="Delete Charge Report (Super Admin only)"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between text-xs pt-2">
+                <span className="text-slate-500">
+                  Page {safePage} of {totalPages} ({filtered.length} records)
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={safePage <= 1}
+                    onClick={() => setLedgerPage((p) => Math.max(1, p - 1))}
+                    className="px-3 py-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 rounded-lg font-bold text-slate-700 cursor-pointer"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    disabled={safePage >= totalPages}
+                    onClick={() => setLedgerPage((p) => Math.min(totalPages, p + 1))}
+                    className="px-3 py-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 rounded-lg font-bold text-slate-700 cursor-pointer"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

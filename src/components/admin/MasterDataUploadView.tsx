@@ -1578,36 +1578,126 @@ export default function MasterDataUploadView() {
                   </div>
                 )}
 
-                {/* Parsed Preview Table (First 5 Rows) */}
+                {/* Parsed Preview Table (First 5 Rows) + Beat-Wise DSS Column Sync Breakdown */}
                 {parsedRows.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                      <span>Live Preview (Showing top 5 rows)</span>
-                      <span className="text-[11px] text-slate-500 font-mono font-normal">
-                        Total {parsedRows.length} records detected
-                      </span>
-                    </div>
-                    <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                      <table className="w-full text-left text-[11px] border-collapse">
-                        <thead>
-                          <tr className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
-                            {Object.keys(parsedRows[0]).slice(0, 5).map((col) => (
-                              <th key={col} className="p-2 whitespace-nowrap">{col}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 bg-white">
-                          {parsedRows.slice(0, 5).map((row, idx) => (
-                            <tr key={idx} className="hover:bg-slate-50">
+                  <div className="space-y-4">
+                    {selectedCategory === 'MONTHLY_DSS_REPORT' && (() => {
+                      const beatMap = new Map<
+                        string,
+                        { beat: string; staff: string; sp: number; reg: number; par: number; total: number; days: number }
+                      >();
+                      for (const row of parsedRows) {
+                        const rawBeat = String(
+                          row['Beat Name'] ||
+                            row['beatName'] ||
+                            row['beatNo'] ||
+                            row['BeatNo'] ||
+                            row['Beat'] ||
+                            row['beat'] ||
+                            'Unassigned Beat'
+                        ).trim();
+                        const staff = String(
+                          row['staffName'] || row['Staff Name'] || row['Postman'] || row['Name'] || 'Field Staff'
+                        ).trim();
+                        const sp = Number(row['speedPost'] ?? row['Speed Post'] ?? row['sp'] ?? 0) || 0;
+                        const reg =
+                          Number(row['registry'] ?? row['Letters'] ?? row['letters'] ?? row['reg'] ?? 0) || 0;
+                        const par =
+                          Number(row['parcel'] ?? row['parcels'] ?? row['Parcels'] ?? row['others'] ?? 0) || 0;
+                        const rowTotal = Number(row['total'] ?? row['Total'] ?? sp + reg + par) || sp + reg + par;
+                        const existing = beatMap.get(rawBeat) || {
+                          beat: rawBeat,
+                          staff,
+                          sp: 0,
+                          reg: 0,
+                          par: 0,
+                          total: 0,
+                          days: 0,
+                        };
+                        existing.sp += sp;
+                        existing.reg += reg;
+                        existing.par += par;
+                        existing.total += rowTotal;
+                        existing.days += 1;
+                        if (staff && staff !== 'Field Staff') existing.staff = staff;
+                        beatMap.set(rawBeat, existing);
+                      }
+                      const beatSummary = Array.from(beatMap.values()).sort((a, b) =>
+                        a.beat.localeCompare(b.beat, undefined, { numeric: true })
+                      );
+
+                      return (
+                        <div className="p-4 rounded-xl bg-slate-950 text-white border border-slate-800 space-y-2.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <div className="font-black text-amber-300 flex items-center gap-1.5">
+                              <Layers size={14} />
+                              <span>Parsed Beat-Wise DSS Column Sync Preview ({beatSummary.length} Beats Detected)</span>
+                            </div>
+                            <span className="text-[11px] text-emerald-300 font-mono">
+                              Each beat syncs strictly to its isolated Speed Post / Letters / Parcels sheet
+                            </span>
+                          </div>
+                          <div className="max-h-56 overflow-y-auto rounded-lg border border-slate-800">
+                            <table className="w-full text-left text-[11px] border-collapse">
+                              <thead className="bg-slate-900 text-slate-300 sticky top-0">
+                                <tr>
+                                  <th className="p-2">Beat</th>
+                                  <th className="p-2">Delivery Staff</th>
+                                  <th className="p-2 text-right">Rows</th>
+                                  <th className="p-2 text-right">Speed Post</th>
+                                  <th className="p-2 text-right">Letters / Reg</th>
+                                  <th className="p-2 text-right">Parcels</th>
+                                  <th className="p-2 text-right">Total Articles</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-800">
+                                {beatSummary.map((b) => (
+                                  <tr key={b.beat} className="hover:bg-slate-900/70">
+                                    <td className="p-2 font-bold text-amber-300">{b.beat}</td>
+                                    <td className="p-2 text-slate-200">{b.staff}</td>
+                                    <td className="p-2 text-right font-mono text-slate-400">{b.days}</td>
+                                    <td className="p-2 text-right font-mono text-sky-300">{b.sp.toLocaleString('en-IN')}</td>
+                                    <td className="p-2 text-right font-mono text-emerald-300">{b.reg.toLocaleString('en-IN')}</td>
+                                    <td className="p-2 text-right font-mono text-purple-300">{b.par.toLocaleString('en-IN')}</td>
+                                    <td className="p-2 text-right font-mono font-black text-white">{b.total.toLocaleString('en-IN')}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                        <span>Live Preview (Showing top 5 rows)</span>
+                        <span className="text-[11px] text-slate-500 font-mono font-normal">
+                          Total {parsedRows.length} records detected
+                        </span>
+                      </div>
+                      <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                        <table className="w-full text-left text-[11px] border-collapse">
+                          <thead>
+                            <tr className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                               {Object.keys(parsedRows[0]).slice(0, 5).map((col) => (
-                                <td key={col} className="p-2 font-mono text-slate-800 whitespace-nowrap">
-                                  {String(row[col] || '-')}
-                                </td>
+                                <th key={col} className="p-2 whitespace-nowrap">{col}</th>
                               ))}
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 bg-white">
+                            {parsedRows.slice(0, 5).map((row, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50">
+                                {Object.keys(parsedRows[0]).slice(0, 5).map((col) => (
+                                  <td key={col} className="p-2 font-mono text-slate-800 whitespace-nowrap">
+                                    {String(row[col] || '-')}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   </div>
                 )}

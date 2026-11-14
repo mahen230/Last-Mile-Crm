@@ -54,6 +54,8 @@ const MyProfileView = lazy(() => import('./components/postman/MyProfileView'));
 const MasterDataUploadView = lazy(() => import('./components/admin/MasterDataUploadView'));
 const PostmanAllDayArticlesOverview = lazy(() => import('./components/postman/PostmanAllDayArticlesOverview'));
 const OfficialStaffDocumentsHub = lazy(() => import('./components/crm/OfficialStaffDocumentsHub'));
+const ColleagueStaffDirectory = lazy(() => import('./components/crm/ColleagueStaffDirectory'));
+const OfficialApplicationsView = lazy(() => import('./components/crm/OfficialApplicationsView'));
 
 function ServiceModuleGuard({
   moduleKey,
@@ -461,6 +463,22 @@ function AuthenticatedApp() {
           element={
             <ProtectedRoute requiredTier="STAFF">
               <OfficialStaffDocumentsHub />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/staff-directory"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <ColleagueStaffDirectory />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/official-applications"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <OfficialApplicationsView />
             </ProtectedRoute>
           }
         />

@@ -505,5 +505,80 @@ export const POSTAL_PRODUCTS: ProductDefinition[] = [
     faqs: [
       { question: 'Can Postman collect loan documents from home?', answer: 'Yes, your designated Beat Postman can pick up preliminary documents and initiate digital KYC verification.' }
     ]
+  },
+  {
+    id: 'prod-comm-mystamp',
+    code: 'MY_STAMP',
+    name: 'My Stamp Personalized Postage Sheet',
+    category: 'Commercial & Merchandise',
+    tagline: 'Custom photo postage stamps printed officially for families, weddings & corporates',
+    description: 'Personalized miniature sheets of India Post ₹5 postage stamps printed alongside your portrait, institutional logo, wedding photograph, or milestone design.',
+    interestRateOrBonus: '₹300 per Sheet (12 Official ₹5 Stamps + Custom Frames)',
+    minInvestment: '₹300 per sheet (bulk corporate discounts from 100+ sheets)',
+    tenure: 'Same-day / 48-hour printing at Philatelic Bureau',
+    taxBenefits: 'Valid legal postage for domestic mail & Speed Post',
+    isPopular: true,
+    targetAudience: 'Families, weddings, schools, corporates, and gift collectors',
+    eligibility: ['Valid ID proof and high-resolution digital photograph/logo'],
+    keyBenefits: [
+      'Legally valid postage stamps usable across India',
+      'Custom corporate branding discount up to 20% for bulk orders',
+      'Delivered right to your home via Dadabari S.O. Beat Postman'
+    ],
+    requiredDocuments: ['Aadhaar Card / ID proof', 'Digital Photo / Organization Logo'],
+    howToApply: ['Submit photo & quantity request via your Beat Postman or Kota H.O. Philatelic Counter'],
+    faqs: [
+      { question: 'Can My Stamp actually be pasted on Speed Post letters?', answer: 'Yes, each ₹5 stamp on the My Stamp sheet is valid India Post postage.' }
+    ]
+  },
+  {
+    id: 'prod-comm-gangajal',
+    code: 'GANGAJAL',
+    name: 'Sovereign Gangajal (250 ml Bottle · Gangotri)',
+    category: 'Commercial & Merchandise',
+    tagline: 'Pure Gangajal sourced from Gangotri & available at every Post Office counter',
+    description: 'Sealed 250 ml Gangajal bottles sourced directly from Gangotri / Rishikesh, available at post office retail counters and via doorstep Postman delivery.',
+    interestRateOrBonus: '₹30 Official Retail Price (250 ml Tamper-Evident Bottle)',
+    minInvestment: '₹30 per bottle',
+    tenure: 'Instant counter pickup or next-beat delivery',
+    taxBenefits: 'Authorized India Post public retail initiative',
+    isPopular: true,
+    targetAudience: 'Households, temples, festivals, and religious ceremonies',
+    eligibility: ['Available to all citizens across India'],
+    keyBenefits: [
+      'Authentic source-verified Gangajal sealed at origin',
+      'Lowest official price of ₹30 per 250 ml bottle',
+      'Doorstep request fulfillment through Beat Postman'
+    ],
+    requiredDocuments: ['No documentation required'],
+    howToApply: ['Request delivery directly from your Beat Postman or Dadabari S.O. Retail Counter'],
+    faqs: [
+      { question: 'Is Gangajal available for doorstep request?', answer: 'Yes, citizens in Dadabari and Kota can request Gangajal bottles through their Beat Postman.' }
+    ]
+  },
+  {
+    id: 'prod-comm-dnk-packaging',
+    code: 'DNK_PARCEL',
+    name: 'Dak Ghar Niryat Kendra (DNK) & Speed Post Packaging',
+    category: 'Commercial & Merchandise',
+    tagline: 'International MSME export dispatch & corrugated parcel packaging cartons',
+    description: 'End-to-end international export documentation (PBE), barcode customs clearance, BNPL corporate Speed Post pickup, and standard corrugated parcel packaging boxes.',
+    interestRateOrBonus: 'Custom Box ₹25–₹85 · International Tracked Packet to 190+ Countries',
+    minInvestment: 'Standard packaging starts at ₹25; BNPL monthly billing for businesses',
+    tenure: 'Priority Air Dispatch via NSH Kota',
+    taxBenefits: 'GST invoice & Electronic Postal Bill of Export (PBE) for exporters',
+    isPopular: true,
+    targetAudience: 'Kota coaching book publishers, MSME artisans, e-commerce sellers, and exporters',
+    eligibility: ['IEC / GSTIN for commercial exports; Aadhaar/PAN for personal international parcels'],
+    keyBenefits: [
+      'Paperless online booking on dnk.indiapost.gov.in with Beat pickup',
+      'Tamper-resistant India Post corrugated boxes (Mini, Medium, Large)',
+      'Volume discounts up to 15–30% for Speed Post / Business Parcel BNPL accounts'
+    ],
+    requiredDocuments: ['KYC & IEC/GST (for commercial DNK exports)'],
+    howToApply: ['Request DNK registration or BNPL corporate pickup consultation'],
+    faqs: [
+      { question: 'Does the Postman pick up corporate parcels from our shop?', answer: 'Yes, registered BNPL & DNK accounts get scheduled daily beat pickup.' }
+    ]
   }
 ];

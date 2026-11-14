@@ -30,6 +30,7 @@ import {
   AlertTriangle,
   Sparkles,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import { staffPermissionService } from '../../services/staffPermissionService';
 import { operationsService } from '../../services/operationsService';
@@ -75,9 +76,18 @@ export default function OfficialStaffDocumentsHub() {
   const [newDocKm, setNewDocKm] = useState<number>(28);
   const [newDocRemarks, setNewDocRemarks] = useState<string>('Dadabari S.O. official monthly operational statement.');
 
-  // Refresh document list
+  // Refresh document list (beat-isolated for non-admin field staff)
   const refreshDocuments = () => {
-    const all = operationsService.getSpecialBills();
+    const active = staffPermissionService.getActiveSession() || userProfile;
+    const all = operationsService
+      .getSpecialBills()
+      .filter((d) =>
+        staffPermissionService.matchesUserBeatScope(active, {
+          beatNo: d.beatNo,
+          assignedStaffName: d.employeeName,
+          assignedStaffEmail: d.employeeEmail,
+        })
+      );
     setDocuments(all);
   };
 
@@ -85,7 +95,7 @@ export default function OfficialStaffDocumentsHub() {
     refreshDocuments();
     const unsub = operationsService.subscribe(refreshDocuments);
     return () => unsub();
-  }, []);
+  }, [userProfile]);
 
   // Filtered Documents
   const filteredDocuments = useMemo(() => {
@@ -178,7 +188,7 @@ export default function OfficialStaffDocumentsHub() {
           headOfficeName: 'NGM H.O.',
           subDivisionName: "ASPO's KOTA EAST",
           authorityOrderNo: doc.details?.orderReferenceNo || doc.billNumber,
-          remarks: doc.details?.remarks || 'Official ACG-61 certificate generated from Postman Book CRM.',
+          remarks: doc.details?.remarks || 'Official ACG-61 certificate generated from Xpeedo Last Mile.',
         });
       } else {
         // Fuel Bill or generic ACG-61 Bill
@@ -318,6 +328,13 @@ export default function OfficialStaffDocumentsHub() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <Link
+              to="/official-applications"
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black flex items-center gap-1.5 transition shadow-md"
+            >
+              <FileText size={16} />
+              <span>Official Applications ↗</span>
+            </Link>
             <button
               type="button"
               onClick={() => setShowCreateModal(true)}

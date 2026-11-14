@@ -26,6 +26,8 @@ import {
   Eye,
   X,
   FileCheck2,
+  Search,
+  Briefcase,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { customerService } from '../services/customerService';
@@ -97,6 +99,8 @@ export default function Dashboard({
   const [leadPriority, setLeadPriority] = useState<'High' | 'Urgent' | 'Medium'>('High');
   const [leadRequirement, setLeadRequirement] = useState('Doorstep KYC & Account Opening');
   const [heroBannerNotice, setHeroBannerNotice] = useState<string | null>(null);
+  const [prioritySearchQuery, setPrioritySearchQuery] = useState('');
+  const [prioritySearchTab, setPrioritySearchTab] = useState<'MEMBERS' | 'COLLEAGUES'>('MEMBERS');
 
   // Daily Article Entry Quick Widget State
   const todayStr = new Date().toISOString().split('T')[0];
@@ -544,10 +548,10 @@ export default function Dashboard({
                   <span>Administrative Control Room · Ekta Meena (Ektamahenmeena@gmail.com)</span>
                 </div>
                 <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
-                  <span>POSTMAN BOOK CRM — Dadabari S.O. Executive Hub</span>
+                  <span>Xpeedo Last Mile — Dadabari S.O. • PIN 324009</span>
                 </h1>
                 <p className="text-xs text-slate-300 max-w-2xl">
-                  Centralized jurisdictional command for Dadabari S.O. 324009. Review staff registrations, authorize profile edits, monitor daily 10-property verifications, and audit field delivery beats.
+                  Xpeedo Last Mile • Dadabari S.O. • PIN 324009 (XPEEDO Private Limited). Centralized jurisdictional command: review staff registrations, authorize profile edits, monitor daily verifications, and audit field delivery beats.
                 </p>
                 <div className="text-xs text-red-200 flex flex-wrap items-center gap-2 pt-1 font-mono">
                   <span>Colonies: 25 Master</span>
@@ -1272,6 +1276,333 @@ export default function Dashboard({
           </div>
         </div>
       </div>
+
+      {/* =====================================================================
+          PRIORITY-BASED 5-CARD DASHBOARD ARCHITECTURE
+         ===================================================================== */}
+      {(() => {
+        const uniqueColonies = new Set(
+          customers
+            .map((c) => (c.area || c.sectorLocality || c.address?.area || '').trim())
+            .filter(Boolean)
+        ).size;
+        const verifiedCount = customers.filter(
+          (c) => c.verificationStatus === 'Verified'
+        ).length;
+        const colleagues = staffPermissionService.getDirectoryStaff();
+        const q = prioritySearchQuery.trim().toLowerCase();
+        const matchingMembers = (
+          q
+            ? customers.filter(
+                (c) =>
+                  c.name.toLowerCase().includes(q) ||
+                  (c.mobile || '').includes(q) ||
+                  (c.area || c.sectorLocality || '').toLowerCase().includes(q)
+              )
+            : customers
+        ).slice(0, 5);
+        const matchingColleagues = (
+          q
+            ? colleagues.filter(
+                (s) =>
+                  s.name.toLowerCase().includes(q) ||
+                  (s.contact || '').includes(q) ||
+                  (s.beat || '').toLowerCase().includes(q) ||
+                  (s.designationType || s.role || '').toLowerCase().includes(q)
+              )
+            : colleagues
+        ).slice(0, 5);
+
+        return (
+          <section className="space-y-3" id="priority-architecture-grid">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <div className="text-[11px] font-black uppercase tracking-wider text-red-800">
+                  Operational Priority Architecture · {isAdmin ? 'All 33 Beats Overview' : `${activeBeat} Scoped Workspace`}
+                </div>
+                <h2 className="text-lg font-black text-slate-900">
+                  5-Module Field Command &amp; Citizen Services
+                </h2>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <Link
+                  to="/official-applications"
+                  className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-lg font-bold flex items-center gap-1.5 transition"
+                >
+                  <FileText size={13} />
+                  <span>Official Applications</span>
+                </Link>
+                <Link
+                  to="/staff-directory"
+                  className="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 rounded-lg font-bold flex items-center gap-1.5 transition"
+                >
+                  <Users size={13} />
+                  <span>Colleague Contacts ({colleagues.length})</span>
+                </Link>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+              {/* Priority 1: Colony & Household Data */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between gap-3 hover:border-indigo-300 transition">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 text-[10px] font-black uppercase">
+                      Priority 1
+                    </span>
+                    <Building2 size={16} className="text-indigo-700" />
+                  </div>
+                  <h3 className="font-black text-sm text-slate-900">Colony &amp; Household Data</h3>
+                  <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    <div>
+                      <div className="text-[10px] text-slate-500 font-bold">Properties</div>
+                      <div className="text-base font-black text-slate-900">{customers.length}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-500 font-bold">Colonies</div>
+                      <div className="text-base font-black text-indigo-700">{uniqueColonies}</div>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    <span className="font-bold text-emerald-700">{verifiedCount}</span> verified doorsteps in{' '}
+                    <span className="font-semibold">{isAdmin ? 'Dadabari S.O.' : activeBeat}</span>.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100">
+                  <Link
+                    to="/households"
+                    className="flex-1 text-center px-2.5 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-[11px] font-bold transition"
+                  >
+                    Households
+                  </Link>
+                  <Link
+                    to={isAdmin ? '/colony-master' : '/my-beat'}
+                    className="flex-1 text-center px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[11px] font-bold transition"
+                  >
+                    {isAdmin ? 'Colonies' : 'My Beat'}
+                  </Link>
+                </div>
+              </div>
+
+              {/* Priority 2: Member Directory & Search (Citizens + Colleagues) */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between gap-3 hover:border-sky-300 transition">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2 py-0.5 rounded bg-sky-50 text-sky-800 text-[10px] font-black uppercase">
+                      Priority 2
+                    </span>
+                    <Users size={16} className="text-sky-700" />
+                  </div>
+                  <h3 className="font-black text-sm text-slate-900">Member &amp; Staff Directory</h3>
+                  <div className="flex gap-1 bg-slate-100 p-0.5 rounded-lg text-[10px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setPrioritySearchTab('MEMBERS')}
+                      className={`flex-1 py-1 rounded-md transition cursor-pointer ${
+                        prioritySearchTab === 'MEMBERS'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      Members ({customers.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPrioritySearchTab('COLLEAGUES')}
+                      className={`flex-1 py-1 rounded-md transition cursor-pointer ${
+                        prioritySearchTab === 'COLLEAGUES'
+                          ? 'bg-white text-slate-900 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      Staff ({colleagues.length})
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Search size={12} className="absolute left-2.5 top-2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={prioritySearchQuery}
+                      onChange={(e) => setPrioritySearchQuery(e.target.value)}
+                      placeholder="Name or mobile..."
+                      className="w-full pl-7 pr-2 py-1.5 text-[11px] bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+                  <div className="space-y-1 max-h-24 overflow-y-auto pr-0.5">
+                    {prioritySearchTab === 'MEMBERS' ? (
+                      matchingMembers.length > 0 ? (
+                        matchingMembers.map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => setSelectedCustomer(m)}
+                            className="w-full text-left px-2 py-1 rounded bg-slate-50 hover:bg-sky-50 text-[11px] flex items-center justify-between gap-2 cursor-pointer"
+                          >
+                            <span className="font-bold text-slate-800 truncate">{m.name}</span>
+                            <span className="font-mono text-[10px] text-sky-700 shrink-0">
+                              {m.mobile || 'No Mob'}
+                            </span>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="text-[11px] text-slate-400 text-center py-2">No matching member</div>
+                      )
+                    ) : matchingColleagues.length > 0 ? (
+                      matchingColleagues.map((s) => (
+                        <div
+                          key={s.id || s.employeeId}
+                          className="px-2 py-1 rounded bg-slate-50 text-[11px] flex items-center justify-between gap-2"
+                        >
+                          <span className="font-bold text-slate-800 truncate">{s.name}</span>
+                          <span className="font-mono text-[10px] text-emerald-700 shrink-0">
+                            {s.contact}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-[11px] text-slate-400 text-center py-2">No matching colleague</div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100">
+                  <Link
+                    to="/customers"
+                    className="flex-1 text-center px-2.5 py-1.5 bg-sky-700 hover:bg-sky-800 text-white rounded-lg text-[11px] font-bold transition"
+                  >
+                    Member Dir
+                  </Link>
+                  <Link
+                    to="/staff-directory"
+                    className="flex-1 text-center px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[11px] font-bold transition"
+                  >
+                    Staff Contacts
+                  </Link>
+                </div>
+              </div>
+
+              {/* Priority 3: Daily Tasks & Delivery Work */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between gap-3 hover:border-amber-300 transition">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 text-[10px] font-black uppercase">
+                      Priority 3
+                    </span>
+                    <Clock size={16} className="text-amber-700" />
+                  </div>
+                  <h3 className="font-black text-sm text-slate-900">Daily Tasks &amp; Delivery</h3>
+                  <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    <div>
+                      <div className="text-[10px] text-slate-500 font-bold">Open Tasks</div>
+                      <div className="text-base font-black text-amber-700">{pendingTasks.length}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-500 font-bold">Delivered</div>
+                      <div className="text-base font-black text-emerald-700">{totalDelivAll}</div>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    Daily Verify: <span className="font-bold text-slate-900">{dailyVerifProgress.completedToday}/10</span> · Fuel Est:{' '}
+                    <span className="font-bold text-emerald-700">₹{eligibleFuelAllowance.toLocaleString('en-IN')}</span>
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100">
+                  <Link
+                    to="/tasks"
+                    className="flex-1 text-center px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-bold transition"
+                  >
+                    Tasks
+                  </Link>
+                  <Link
+                    to="/postman-articles"
+                    className="flex-1 text-center px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[11px] font-bold transition"
+                  >
+                    Articles &amp; Fuel
+                  </Link>
+                </div>
+              </div>
+
+              {/* Priority 4: Leads & Follow-ups */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between gap-3 hover:border-emerald-300 transition">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 text-[10px] font-black uppercase">
+                      Priority 4
+                    </span>
+                    <Target size={16} className="text-emerald-700" />
+                  </div>
+                  <h3 className="font-black text-sm text-slate-900">Leads &amp; Follow-ups</h3>
+                  <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    <div>
+                      <div className="text-[10px] text-slate-500 font-bold">Active Leads</div>
+                      <div className="text-base font-black text-emerald-700">{activeLeads.length}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-slate-500 font-bold">Follow-ups</div>
+                      <div className="text-base font-black text-red-700">{pendingFollowUps.length}</div>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    PLI, RPLI, SSA, PPF &amp; IPPB doorstep conversion pipeline.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100">
+                  <Link
+                    to="/leads"
+                    className="flex-1 text-center px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-[11px] font-bold transition"
+                  >
+                    Pipeline
+                  </Link>
+                  <Link
+                    to="/follow-ups"
+                    className="flex-1 text-center px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[11px] font-bold transition"
+                  >
+                    Follow-ups
+                  </Link>
+                </div>
+              </div>
+
+              {/* Priority 5: Products & Catalog */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between gap-3 hover:border-red-300 transition">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2 py-0.5 rounded bg-red-50 text-red-800 text-[10px] font-black uppercase">
+                      Priority 5
+                    </span>
+                    <Briefcase size={16} className="text-red-700" />
+                  </div>
+                  <h3 className="font-black text-sm text-slate-900">Products &amp; Catalog</h3>
+                  <div className="space-y-1 text-[11px]">
+                    <div className="p-1.5 rounded-lg bg-red-50/70 border border-red-100 text-red-900 font-semibold">
+                      Sovereign: SSA 8.2% · SCSS 8.2% · PLI
+                    </div>
+                    <div className="p-1.5 rounded-lg bg-amber-50/70 border border-amber-100 text-amber-900 font-semibold">
+                      Commercial: MyStamp · Gangajal · DNK
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-600">
+                    Returns calculator, WhatsApp brochures &amp; instant lead capture.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100">
+                  <Link
+                    to="/services"
+                    className="flex-1 text-center px-2.5 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-lg text-[11px] font-bold transition"
+                  >
+                    Open Catalog
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickLeadForm(true)}
+                    className="flex-1 text-center px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[11px] font-bold transition cursor-pointer"
+                  >
+                    + Capture
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+        );
+      })()}
 
       {/* =====================================================================
           HOMEPAGE ALL SERVICES HUB (CATEGORIZED POST OFFICE & IPPB DIRECTORY)

@@ -105,7 +105,7 @@ export async function processChat(prompt: string, context: string): Promise<AICh
     try {
       const response = await aiClient.models.generateContent({
         model: 'gemini-3.8-flash',
-        contents: `You are the India Post CRM & Operations AI Assistant for Postman Book.
+        contents: `You are the India Post CRM & Operations AI Assistant for Xpeedo Last Mile.
 Current System Context:
 ${context}
 

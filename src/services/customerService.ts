@@ -2416,6 +2416,121 @@ class CustomerService {
     return cust;
   }
 
+  /**
+   * Safe Property Deletion Unmapping:
+   * Preserves all resident family members / customers in the CRM database when a property is deleted.
+   * - If a resident is linked to another remaining active property, preserves their active link intact.
+   * - If a resident is NOT linked to any remaining active property, marks them as 'Unmapped / Pending Re-assignment'.
+   */
+  public handlePropertyDeletionUnmapping(
+    deletedProperty: {
+      id: string;
+      propertyCode?: string;
+      housePlotNumber?: string;
+      colony?: string;
+      linkedMembers?: Array<{ id?: string; name?: string; mobile?: string }>;
+    },
+    remainingProperties: Array<{
+      id: string;
+      propertyCode?: string;
+      linkedMembers?: Array<{ id?: string; name?: string; mobile?: string }>;
+    }>
+  ): { unmappedCount: number; preservedOtherLinksCount: number } {
+    const normalizePhone10 = (raw?: string) => {
+      const digits = String(raw || '').replace(/\D/g, '');
+      return digits.length >= 10 ? digits.slice(-10) : digits;
+    };
+    const normalizeName = (raw?: string) => String(raw || '').trim().toLowerCase();
+
+    // Index all residents still active in other remaining properties
+    const activeById = new Set<string>();
+    const activePropByPhone = new Map<string, string>();
+    const activePropByName = new Map<string, string>();
+
+    remainingProperties.forEach((prop) => {
+      const codeOrId = prop.propertyCode || prop.id;
+      (prop.linkedMembers || []).forEach((m) => {
+        if (m.id) activeById.add(m.id);
+        const ph = normalizePhone10(m.mobile);
+        if (ph && !activePropByPhone.has(ph)) activePropByPhone.set(ph, codeOrId);
+        const nm = normalizeName(m.name);
+        if (nm && !activePropByName.has(nm)) activePropByName.set(nm, codeOrId);
+      });
+    });
+
+    const deletedMembers = deletedProperty.linkedMembers || [];
+    const deletedIds = new Set(deletedMembers.map((m) => m.id).filter(Boolean) as string[]);
+    const deletedPhones = new Set(deletedMembers.map((m) => normalizePhone10(m.mobile)).filter(Boolean));
+    const deletedNames = new Set(deletedMembers.map((m) => normalizeName(m.name)).filter(Boolean));
+
+    let unmappedCount = 0;
+    let preservedOtherLinksCount = 0;
+    let touched = false;
+
+    this.customers = this.customers.map((cust) => {
+      const custPhone = normalizePhone10(cust.mobile || cust.whatsapp);
+      const custName = normalizeName(cust.name);
+
+      const pointsToDeletedProp =
+        (cust.propertyId &&
+          (cust.propertyId === deletedProperty.propertyCode || cust.propertyId === deletedProperty.id)) ||
+        deletedIds.has(cust.id) ||
+        (cust.masterId ? deletedIds.has(cust.masterId) : false) ||
+        (custPhone && deletedPhones.has(custPhone) && (!custName || deletedNames.has(custName)));
+
+      if (!pointsToDeletedProp) {
+        return cust;
+      }
+
+      const otherPropCode =
+        (activeById.has(cust.id) ? remainingProperties.find((p) => (p.linkedMembers || []).some((m) => m.id === cust.id))?.propertyCode : undefined) ||
+        (custPhone ? activePropByPhone.get(custPhone) : undefined) ||
+        (custName && custPhone && activePropByPhone.has(custPhone) ? activePropByPhone.get(custPhone) : undefined) ||
+        (custName && !custPhone ? activePropByName.get(custName) : undefined);
+
+      if (otherPropCode) {
+        preservedOtherLinksCount++;
+        touched = true;
+        return {
+          ...cust,
+          propertyId: otherPropCode,
+          propertyMappingStatus: 'Mapped',
+          updatedAt: new Date().toISOString(),
+        };
+      }
+
+      unmappedCount++;
+      touched = true;
+      const existingRemarks = cust.remarks || '';
+      const unmappedNote = `[Unmapped / Pending Re-assignment: Property ${deletedProperty.housePlotNumber || deletedProperty.propertyCode || deletedProperty.id} deleted]`;
+      return {
+        ...cust,
+        propertyId: undefined,
+        propertyMappingStatus: 'Unmapped / Pending Re-assignment',
+        remarks: existingRemarks.includes('Unmapped / Pending Re-assignment')
+          ? existingRemarks
+          : existingRemarks
+          ? `${existingRemarks} | ${unmappedNote}`
+          : unmappedNote,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+
+    if (touched) {
+      this.saveCustomersLocal();
+      this.logAudit(
+        'PROPERTY_DELETED_SAFE_UNMAPPING',
+        'Property',
+        deletedProperty.id,
+        deletedProperty.housePlotNumber || deletedProperty.propertyCode || deletedProperty.id,
+        `Property deleted safely: ${unmappedCount} residents marked Unmapped / Pending Re-assignment, ${preservedOtherLinksCount} kept active links.`
+      );
+      this.notify();
+    }
+
+    return { unmappedCount, preservedOtherLinksCount };
+  }
+
   public dispatchBulkBroadcast(params: {
     beatFilter: string;
     categoryFilter: string;

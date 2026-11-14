@@ -286,6 +286,7 @@ export interface Customer {
   officeId?: string; // e.g. DADABARI_SO
   subOfficeMapping?: string;
   propertyId?: string; // e.g. KP-S7-H0445
+  propertyMappingStatus?: 'Mapped' | 'Unmapped / Pending Re-assignment' | string;
   householdId?: string; // e.g. HH-KP-S7-P0825
   isHeadOfFamily?: boolean;
   linkConfidenceScore?: number;
@@ -1028,6 +1029,9 @@ export interface SpecialBillRecord {
     notes?: string;
   }[];
   isDepartmentLocked?: boolean;
+  isFinalLocked?: boolean;
+  finalLockedAt?: string;
+  finalLockedBy?: string;
   lockedAt?: string;
   lockedBy?: string;
   departmentLockSource?: string;

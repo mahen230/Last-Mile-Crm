@@ -558,7 +558,7 @@ class OperationsService {
   public patchArticleQuantities(
     selector: { id?: string; date?: string; beatNo?: string },
     patch: ArticleQuantityPatch,
-    auditMeta: { updatedBy: string; remarks?: string }
+    auditMeta: { updatedBy: string; remarks?: string; allowOverrideLock?: boolean }
   ): { success: boolean; entry?: DailyArticleEntry; message: string; isLocked?: boolean } {
     let index = -1;
 
@@ -581,13 +581,16 @@ class OperationsService {
     }
 
     const target = this.dailyEntries[index];
-    if (target.isDepartmentLocked) {
+    if (target.isDepartmentLocked && !auditMeta.allowOverrideLock) {
       return {
         success: false,
         entry: { ...target },
         isLocked: true,
         message: `Department Locked (Immutable): ${target.beatNo} on ${target.date} (${target.staffName}) is locked by ${target.lockedBy || 'Department DSS Audit'} and cannot be modified.`,
       };
+    }
+    if (target.isDepartmentLocked && auditMeta.allowOverrideLock) {
+      target.isDepartmentLocked = false;
     }
     const previousCounts: Record<string, number> = {};
     const newCounts: Record<string, number> = {};
@@ -658,7 +661,14 @@ class OperationsService {
         ? target.pdmsInvoicedCount
         : null;
 
-    if (masterDssBenchmark !== null) {
+    if (auditMeta.allowOverrideLock) {
+      const correctedTotal =
+        (target.speedPostDelivered || 0) +
+        (target.registryDelivered || 0) +
+        (target.parcelDelivered || 0);
+      target.dssInvoicedCount = correctedTotal;
+      target.pdmsInvoicedCount = correctedTotal;
+    } else if (masterDssBenchmark !== null) {
       const regDeliv = target.registryDelivered || 0;
       const parDeliv = target.parcelDelivered || 0;
       const currentSpDeliv = target.speedPostDelivered || 0;
@@ -722,7 +732,7 @@ class OperationsService {
    */
   public patchOrUpsertDailyArticleQuantities(
     entryData: Omit<DailyArticleEntry, 'id' | 'createdAt'> & { id?: string },
-    auditMeta: { updatedBy: string; remarks?: string }
+    auditMeta: { updatedBy: string; remarks?: string; allowOverrideLock?: boolean }
   ): { success: boolean; entry: DailyArticleEntry; isUpdate: boolean; isLocked?: boolean; message?: string } {
     const normalizedBeat = normalizeBeatLabel(entryData.beatNo);
     const existing = this.dailyEntries.find(
@@ -732,7 +742,7 @@ class OperationsService {
     );
 
     if (existing) {
-      if (existing.isDepartmentLocked) {
+      if (existing.isDepartmentLocked && !auditMeta.allowOverrideLock) {
         return {
           success: false,
           entry: existing,
@@ -1300,6 +1310,19 @@ class OperationsService {
     this.incrementPendingSync();
     this.notify();
     return found;
+  }
+
+  public deleteSpecialBill(id: string): boolean {
+    const idx = this.specialBills.findIndex((b) => b.id === id);
+    if (idx === -1) return false;
+    this.specialBills = [
+      ...this.specialBills.slice(0, idx),
+      ...this.specialBills.slice(idx + 1),
+    ];
+    this.saveSpecialBills();
+    this.incrementPendingSync();
+    this.notify();
+    return true;
   }
 
   // ================= OPERATIONAL FUEL & EXPENSE LEDGER (DSS RECONCILIATION) =================

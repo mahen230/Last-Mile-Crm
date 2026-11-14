@@ -258,6 +258,20 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
             },
             { name: 'Postal Exam LMS Hub', icon: GraduationCap, path: '/postal-lms' },
             { name: 'Special Forms & Bills', icon: FileText, path: '/special-forms' },
+            {
+              name: 'Official Applications',
+              icon: FileText,
+              path: '/official-applications',
+              badge: 'PDF',
+              badgeColor: 'bg-indigo-600 text-white',
+            },
+            {
+              name: 'Staff Contact Directory',
+              icon: Users,
+              path: '/staff-directory',
+              badge: 'Colleagues',
+              badgeColor: 'bg-sky-600 text-white',
+            },
             { name: 'Activity & Security Logs', icon: History, path: '/audit-log' },
             { name: 'Settings', icon: Settings, path: '/settings' },
           ],
@@ -348,6 +362,20 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
               badge: 'LDCE',
               badgeColor: 'bg-amber-500 text-slate-950',
             },
+            {
+              name: 'Official Applications',
+              icon: FileText,
+              path: '/official-applications',
+              badge: 'Templates',
+              badgeColor: 'bg-indigo-600 text-white',
+            },
+            {
+              name: 'Staff Contact Directory',
+              icon: Users,
+              path: '/staff-directory',
+              badge: 'Directory',
+              badgeColor: 'bg-sky-600 text-white',
+            },
             { name: 'My Submissions', icon: FileCheck2, path: '/my-submissions' },
             { name: 'My Profile', icon: User, path: '/my-profile' },
           ],
@@ -398,10 +426,10 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
                 </div>
                 <div>
                   <h1 className="text-sm font-black text-white tracking-tight leading-tight">
-                    POSTMAN BOOK CRM
+                    Xpeedo Last Mile
                   </h1>
                   <p className="text-[10px] text-amber-300 font-bold">
-                    {userProfile?.subOffice || 'Dadabari SO'} • PIN {userProfile?.officePincode || '324009'}
+                    {userProfile?.subOffice || 'Dadabari S.O.'} • PIN {userProfile?.officePincode || '324009'}
                   </p>
                 </div>
               </Link>
@@ -509,6 +537,10 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
                 <LogOut size={16} />
               </button>
             </div>
+            <div className="px-3 py-1.5 bg-slate-950/90 border-t border-slate-900 text-[9px] text-slate-400 flex items-center justify-between">
+              <span className="font-bold text-slate-300">Xpeedo Last Mile</span>
+              <span>XPEEDO Private Limited</span>
+            </div>
           </div>
         </aside>
       )}
@@ -527,14 +559,14 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs sm:text-sm font-black text-slate-900 tracking-tight">
-                      POSTMAN BOOK CRM
+                      Xpeedo Last Mile
                     </span>
                     <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 font-mono text-[10px] font-bold">
                       PIN 324009
                     </span>
                   </div>
                   <p className="text-[10px] text-slate-500 hidden sm:block">
-                    Dadabari Sub Post Office • Kota Division, Rajasthan Circle
+                    Xpeedo Last Mile • Dadabari S.O. • PIN 324009 • XPEEDO Private Limited
                   </p>
                 </div>
               </div>
@@ -594,14 +626,14 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs font-black text-slate-900 tracking-tight truncate">
-                        POSTMAN BOOK CRM
+                        Xpeedo Last Mile
                       </span>
                       <span className="hidden sm:inline-block px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 font-mono text-[10px] font-bold">
                         PIN {userProfile?.officePincode || '324009'}
                       </span>
                     </div>
                     <p className="text-[10px] text-slate-500 truncate hidden xs:block">
-                      {userProfile?.subOffice || 'Dadabari S.O.'} • {isSuperAdmin ? 'Master Admin' : userProfile?.beat || 'Beat 2'}
+                      Xpeedo Last Mile • {userProfile?.subOffice || 'Dadabari S.O.'} • PIN {userProfile?.officePincode || '324009'} • {isSuperAdmin ? 'Master Admin' : userProfile?.beat || 'Beat 2'}
                     </p>
                   </div>
                 </div>

@@ -656,7 +656,13 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
 
                     <td className="px-4 py-3">
                       <div className="font-semibold text-slate-900">
-                        {cust.houseNo || cust.address?.houseNumber || 'Plot/House'}
+                        {cust.propertyMappingStatus === 'Unmapped / Pending Re-assignment' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black">
+                            Unmapped / Pending Re-assignment
+                          </span>
+                        ) : (
+                          cust.houseNo || cust.address?.houseNumber || 'Plot/House'
+                        )}
                       </div>
                       <div className="text-[11px] text-slate-500">
                         {cust.sector ? `Sector ${cust.sector}` : cust.area || 'Keshavpura'}

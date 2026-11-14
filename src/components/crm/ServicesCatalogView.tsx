@@ -5,11 +5,36 @@ import { ProductDefinition } from '../../types/models';
 import ProductShareModal from './ProductShareModal';
 
 export default function ServicesCatalogView({ onSelectProductForLead }: { onSelectProductForLead?: (prod: ProductDefinition) => void }) {
+  const [activeCategory, setActiveCategory] = useState<'ALL' | 'SAVINGS' | 'INSURANCE' | 'IPPB_AADHAAR' | 'COMMERCIAL'>('ALL');
   const [selectedProduct, setSelectedProduct] = useState<ProductDefinition>(POSTAL_PRODUCTS[0]);
   const [sharingProduct, setSharingProduct] = useState<ProductDefinition | null>(null);
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
   const [calcAmount, setCalcAmount] = useState<number>(50000);
   const [calcYears, setCalcYears] = useState<number>(5);
+
+  const filteredProducts = POSTAL_PRODUCTS.filter((prod) => {
+    if (activeCategory === 'ALL') return true;
+    const cat = prod.category.toLowerCase();
+    if (activeCategory === 'COMMERCIAL') return cat.includes('commercial') || cat.includes('merchandise');
+    if (activeCategory === 'INSURANCE') return cat.includes('insurance') && !cat.includes('ippb');
+    if (activeCategory === 'IPPB_AADHAAR') return cat.includes('ippb') || cat.includes('aadhaar');
+    return cat.includes('savings') || cat.includes('pension') || cat.includes('child');
+  });
+
+  const handleCategoryChange = (cat: typeof activeCategory) => {
+    setActiveCategory(cat);
+    const nextList = POSTAL_PRODUCTS.filter((prod) => {
+      if (cat === 'ALL') return true;
+      const c = prod.category.toLowerCase();
+      if (cat === 'COMMERCIAL') return c.includes('commercial') || c.includes('merchandise');
+      if (cat === 'INSURANCE') return c.includes('insurance') && !c.includes('ippb');
+      if (cat === 'IPPB_AADHAAR') return c.includes('ippb') || c.includes('aadhaar');
+      return c.includes('savings') || c.includes('pension') || c.includes('child');
+    });
+    if (nextList.length > 0 && !nextList.some((p) => p.id === selectedProduct.id)) {
+      setSelectedProduct(nextList[0]);
+    }
+  };
 
   const calculateReturn = () => {
     if (selectedProduct.code === 'SSA') {
@@ -73,11 +98,33 @@ export default function ServicesCatalogView({ onSelectProductForLead }: { onSele
         <div>
           <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <Briefcase size={22} className="text-red-700" />
-            <span>Postal Services & Financial Products Catalog</span>
+            <span>Postal Services, Financial Schemes &amp; Commercial Catalog</span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Complete Small Savings, Postal Life Insurance, IPPB Banking & Aadhaar Doorstep Services
+            Small Savings, PLI/RPLI, IPPB Banking, Aadhaar &amp; Commercial Merchandise (MyStamp, Gangajal, DNK Parcel)
           </p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {[
+            { id: 'ALL' as const, label: `All (${POSTAL_PRODUCTS.length})` },
+            { id: 'SAVINGS' as const, label: 'Savings & Pension' },
+            { id: 'INSURANCE' as const, label: 'PLI / RPLI' },
+            { id: 'IPPB_AADHAAR' as const, label: 'IPPB & Aadhaar' },
+            { id: 'COMMERCIAL' as const, label: 'Commercial & Retail' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => handleCategoryChange(tab.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                activeCategory === tab.id
+                  ? 'bg-red-700 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -86,7 +133,7 @@ export default function ServicesCatalogView({ onSelectProductForLead }: { onSele
         
         {/* Left Side: Product Selector List */}
         <div className="lg:col-span-5 space-y-3">
-          {POSTAL_PRODUCTS.map((prod) => (
+          {filteredProducts.map((prod) => (
             <div
               key={prod.id}
               onClick={() => setSelectedProduct(prod)}

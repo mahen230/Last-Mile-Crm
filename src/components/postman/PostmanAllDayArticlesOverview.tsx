@@ -26,6 +26,7 @@ import {
   ChevronDown,
   ChevronUp,
   AlertTriangle,
+  Unlock,
 } from 'lucide-react';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import { staffPermissionService } from '../../services/staffPermissionService';
@@ -57,8 +58,24 @@ export default function PostmanAllDayArticlesOverview({
   const { userProfile } = useAuth();
   const currentStaff = staffPermissionService.getActiveSession() || userProfile;
 
+  // RBAC Beat Scope Check: Field staff (Postman/GDS) can ONLY preview/edit their own assigned beat
+  const isFieldDeliveryStaff = staffPermissionService.isPostmanOrGds(currentStaff);
+  const allowedBeatsSet = staffPermissionService.getScopedBeatsSet(currentStaff);
+  const availableBeatsList = useMemo(() => {
+    if (!isFieldDeliveryStaff || !allowedBeatsSet) {
+      return ALL_33_BEATS_FUEL_DATA;
+    }
+    const filtered = ALL_33_BEATS_FUEL_DATA.filter((b) =>
+      allowedBeatsSet.has(b.beatNumber.toLowerCase().replace(/^beat\s*/i, '').trim())
+    );
+    return filtered.length > 0 ? filtered : ALL_33_BEATS_FUEL_DATA.slice(0, 1);
+  }, [isFieldDeliveryStaff, allowedBeatsSet]);
+
   // Active Beat & Month
-  const activeStaffBeat = initialBeat || currentStaff?.beat || 'Beat 2';
+  const activeStaffBeat =
+    isFieldDeliveryStaff && availableBeatsList.length > 0
+      ? currentStaff?.beat || availableBeatsList[0].beatNumber
+      : initialBeat || currentStaff?.beat || 'Beat 2';
   const [selectedBeat, setSelectedBeat] = useState<string>(activeStaffBeat);
   const [selectedMonth, setSelectedMonth] = useState<string>(initialMonth);
 
@@ -118,29 +135,40 @@ export default function PostmanAllDayArticlesOverview({
   const [endDateFilter, setEndDateFilter] = useState<string>('');
   const [searchDayQuery, setSearchDayQuery] = useState('');
 
-  // Effective displayed KM / Rate / Working Days (strictly locked when official Oct 2026 dataset is active)
-  const isLocked = Boolean(fuelSummary.isDepartmentLocked);
+  // Effective displayed KM / Rate / Working Days
+  const isFinalLocked = Boolean(fuelSummary.isFinalLocked);
+  const isLocked = Boolean(fuelSummary.isDepartmentLocked || isFinalLocked);
+  const isUnlockedEditMode = !isLocked;
   const effectiveDailyKm = isLocked ? fuelSummary.sanctionedDailyKm : customDailyKm;
   const effectiveFuelRate = isLocked ? fuelSummary.fuelRatePerKm : customFuelRate;
   const effectiveWorkingDays = isLocked ? fuelSummary.workingDays : customWorkingDays;
 
-  // Keep beat in sync if user changes
+  // Inline Date-Wise Article Entry drafts per date key `${beat}::${isoDate}`
+  const [inlineDrafts, setInlineDrafts] = useState<
+    Record<string, { sp: string; reg: string; others: string }>
+  >({});
+
+  // Keep beat strictly locked to staff member's assigned beat if field staff
   useEffect(() => {
-    if (initialBeat) {
+    if (isFieldDeliveryStaff) {
+      const assigned = currentStaff?.beat || availableBeatsList[0]?.beatNumber || 'Beat 2';
+      setSelectedBeat(assigned);
+      setCustomDailyKm(masterDataService.getBeatCustomKm(assigned));
+    } else if (initialBeat) {
       setSelectedBeat(initialBeat);
     } else if (currentStaff?.beat) {
       setSelectedBeat(currentStaff.beat);
       const km = masterDataService.getBeatCustomKm(currentStaff.beat);
       setCustomDailyKm(km);
     }
-  }, [initialBeat, currentStaff?.beat]);
+  }, [initialBeat, currentStaff?.beat, isFieldDeliveryStaff]);
 
   // Recalculate summary when beat, month, custom KM, rate or working days change
   const refreshSummary = () => {
     const summary = masterDataService.generatePostmanMonthlyFuelBill(selectedBeat, selectedMonth, {
-      customDailyKm: selectedMonth === '2026-10' ? undefined : customDailyKm,
-      customRatePerKm: selectedMonth === '2026-10' ? undefined : customFuelRate,
-      customWorkingDays: selectedMonth === '2026-10' ? undefined : customWorkingDays,
+      customDailyKm,
+      customRatePerKm: customFuelRate,
+      customWorkingDays,
       vehicleNo: customVehicleNo,
       postmanName: selectedMonth === '2026-10' ? undefined : currentStaff?.name,
       employeeId: selectedMonth === '2026-10' ? undefined : currentStaff?.employeeId,
@@ -166,8 +194,15 @@ export default function PostmanAllDayArticlesOverview({
     };
   }, [selectedBeat, selectedMonth]);
 
-  // Handle Beat Selection change
+  // Handle Beat Selection change (guarded for field delivery staff)
   const handleBeatChange = (newBeat: string) => {
+    if (
+      isFieldDeliveryStaff &&
+      allowedBeatsSet &&
+      !allowedBeatsSet.has(newBeat.toLowerCase().replace(/^beat\s*/i, '').trim())
+    ) {
+      return;
+    }
     setSelectedBeat(newBeat);
     const nextSummary = masterDataService.generatePostmanMonthlyFuelBill(newBeat, selectedMonth);
     setCustomDailyKm(nextSummary.sanctionedDailyKm);
@@ -187,8 +222,113 @@ export default function PostmanAllDayArticlesOverview({
     });
   };
 
-  // Open Edit Modal for a specific Day Row
+  // Master Unlock Mode & Lock Final Fuel Bill Handlers
+  const handleUnlockFuelHubForEditing = () => {
+    const actor = currentStaff?.name || fuelSummary.postmanName || 'Authorized Staff';
+    masterDataService.setFuelHubUnlocked(selectedBeat, selectedMonth, actor);
+    setCustomDailyKm(fuelSummary.sanctionedDailyKm);
+    setCustomFuelRate(fuelSummary.fuelRatePerKm);
+    setCustomWorkingDays(fuelSummary.workingDays);
+    refreshSummary();
+    setKmSavedNotice(`Unlocked! ${selectedBeat} (${fuelSummary.monthName}) is now in Editable Mode.`);
+    setTimeout(() => setKmSavedNotice(null), 4000);
+  };
+
+  const handleLockFinalFuelBill = () => {
+    const actor = currentStaff?.name || fuelSummary.postmanName || 'Authorized Staff';
+    const frozen = masterDataService.lockFinalFuelBill(selectedBeat, selectedMonth, actor, {
+      customDailyKm,
+      customRatePerKm: customFuelRate,
+      customWorkingDays,
+      vehicleNo: customVehicleNo,
+      postmanName: selectedMonth === '2026-10' ? undefined : currentStaff?.name,
+      employeeId: selectedMonth === '2026-10' ? undefined : currentStaff?.employeeId,
+    });
+    setInlineDrafts({});
+    refreshSummary();
+    setSyncConfirmNotice({
+      title: `Locked Final: ${frozen.beatNo} (${frozen.monthName}) Fuel Statement Frozen & Ready`,
+      details: `Verified by ${actor}. All daily article totals (${frozen.totalArticlesDelivered} articles) & monthly claim (₹${frozen.totalClaimAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) are now frozen and can be re-downloaded anytime.`,
+      beat6Line: `Calculation Frozen: ${frozen.workingDays} Working Days × ${frozen.sanctionedDailyKm} KM = ${frozen.totalMonthlyKm} KM @ ₹${frozen.fuelRatePerKm.toFixed(2)}/KM = ₹${frozen.totalClaimAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    });
+  };
+
+  // Inline Quick Save for Date-Wise Article Entry Column
+  const handleSaveInlineDateEntry = (row: any) => {
+    if (isLocked) return;
+    if (!staffPermissionService.matchesUserBeatScope(currentStaff, { beatNo: selectedBeat })) {
+      setKmSavedNotice(`Access Denied: Restricted to ${currentStaff?.beat || 'assigned beat'}.`);
+      setTimeout(() => setKmSavedNotice(null), 3500);
+      return;
+    }
+    const draftKey = `${selectedBeat}::${row.isoDate}`;
+    const draft = inlineDrafts[draftKey];
+    const spVal = Math.max(0, parseInt(draft?.sp ?? String(typeof row.sp === 'number' ? row.sp : 0), 10) || 0);
+    const regVal = Math.max(0, parseInt(draft?.reg ?? String(typeof row.reg === 'number' ? row.reg : 0), 10) || 0);
+    const parVal = Math.max(0, parseInt(draft?.others ?? String(typeof row.others === 'number' ? row.others : 0), 10) || 0);
+    const totalVal = spVal + regVal + parVal;
+
+    const staffName = currentStaff?.name || fuelSummary.postmanName || 'Mahendra Kumar Meena';
+    const staffEmpId = currentStaff?.employeeId || fuelSummary.employeeId || '50457421';
+
+    const res = operationsService.patchOrUpsertDailyArticleQuantities(
+      {
+        date: row.isoDate,
+        beatNo: selectedBeat,
+        staffName,
+        employeeId: staffEmpId,
+        staffEmail: currentStaff?.email || 'Ektamahenmeena@gmail.com',
+        officeName: fuelSummary.officeName || 'Dadabari S.O. (324009)',
+        attendanceStatus: 'Present - Field Duty',
+        fixedKm: effectiveDailyKm,
+        sanctionedBeatKm: fuelSummary.sanctionedDailyKm,
+        fuelRatePerKm: effectiveFuelRate,
+        dailyFuelAllowance: Number((effectiveDailyKm * effectiveFuelRate).toFixed(2)),
+        monthlyFuelAllowance: Number((effectiveDailyKm * effectiveFuelRate * effectiveWorkingDays).toFixed(2)),
+        pdmsInvoicedCount: totalVal,
+        dssInvoicedCount: totalVal,
+        mobileUsagePercent: row.mobileUsagePercent ?? 100,
+        dssStatus: 'Reconciled with DSS',
+        speedPostReceived: spVal,
+        speedPostDelivered: spVal,
+        speedPostReturned: 0,
+        speedPostDeposit: 0,
+        registryReceived: regVal,
+        registryDelivered: regVal,
+        registryReturned: 0,
+        registryDeposit: 0,
+        parcelReceived: parVal,
+        parcelDelivered: parVal,
+        parcelReturned: 0,
+        parcelDeposit: 0,
+        codAmountCollected: 0,
+        doorstepInquiriesLogged: 0,
+        remarks: `Date-wise entry saved for ${row.date} (SP:${spVal}, Reg:${regVal}, Par:${parVal})`,
+      },
+      {
+        updatedBy: `${staffName} (${staffEmpId}) [Date-Wise Entry]`,
+        remarks: `Date-wise inline article entry corrected in Unlock Mode`,
+        allowOverrideLock: true,
+      }
+    );
+
+    if (res.success) {
+      setInlineDrafts((prev) => {
+        const next = { ...prev };
+        delete next[draftKey];
+        return next;
+      });
+      refreshSummary();
+      setKmSavedNotice(`Saved ${row.date}: SP ${spVal}, Letters ${regVal}, Parcels ${parVal} (Total: ${totalVal}).`);
+      setTimeout(() => setKmSavedNotice(null), 3500);
+    }
+  };
+
+  // Open Edit Modal for a specific Day Row (enforcing beat scope)
   const handleOpenEditDay = (row: any) => {
+    if (!staffPermissionService.matchesUserBeatScope(currentStaff, { beatNo: selectedBeat })) {
+      return;
+    }
     const dssMatch = allEntries.find((e) => e.date === row.isoDate && e.beatNo.toLowerCase() === selectedBeat.toLowerCase());
 
     const spDeliv = typeof row.sp === 'number' ? row.sp : dssMatch ? dssMatch.speedPostDelivered : 0;
@@ -224,6 +364,11 @@ export default function PostmanAllDayArticlesOverview({
   const handleSaveDayArticleEntry = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDayEntry) return;
+    if (!staffPermissionService.matchesUserBeatScope(currentStaff, { beatNo: selectedBeat })) {
+      setModalNoticeError(true);
+      setModalNotice(`Access Denied: You are only authorized to edit entries for ${currentStaff?.beat || 'your assigned beat'}.`);
+      return;
+    }
 
     const staffName = currentStaff?.name || fuelSummary.postmanName || 'Mahendra Kumar Meena';
     const staffEmpId = currentStaff?.employeeId || fuelSummary.employeeId || '50457421';
@@ -239,10 +384,15 @@ export default function PostmanAllDayArticlesOverview({
 
     const regDeliv = Number(selectedDayEntry.regDeliv) || 0;
     const parDeliv = Number(selectedDayEntry.parDeliv) || 0;
-    const finalSpDeliv = dssBenchmark > 0 ? Math.max(0, dssBenchmark - (regDeliv + parDeliv)) : (Number(selectedDayEntry.spDeliv) || 0);
+    const rawSpDeliv = Number(selectedDayEntry.spDeliv) || 0;
+    const finalSpDeliv = isUnlockedEditMode
+      ? rawSpDeliv
+      : dssBenchmark > 0
+      ? Math.max(0, dssBenchmark - (regDeliv + parDeliv))
+      : rawSpDeliv;
     const finalSpRecd = Math.max(Number(selectedDayEntry.spRecd) || 0, finalSpDeliv);
 
-    const wasAutoAdjusted = dssBenchmark > 0 && finalSpDeliv !== Number(selectedDayEntry.spDeliv);
+    const wasAutoAdjusted = !isUnlockedEditMode && dssBenchmark > 0 && finalSpDeliv !== rawSpDeliv;
 
     const patchResult = operationsService.patchOrUpsertDailyArticleQuantities(
       {
@@ -264,8 +414,14 @@ export default function PostmanAllDayArticlesOverview({
         fuelRatePerKm: effectiveFuelRate,
         dailyFuelAllowance: Number((effectiveDailyKm * effectiveFuelRate).toFixed(2)),
         monthlyFuelAllowance: Number((effectiveDailyKm * effectiveFuelRate * effectiveWorkingDays).toFixed(2)),
-        pdmsInvoicedCount: curRow?.pdmsInvoicedCount ?? (dssBenchmark > 0 ? dssBenchmark : undefined),
-        dssInvoicedCount: dssBenchmark > 0 ? dssBenchmark : undefined,
+        pdmsInvoicedCount: isUnlockedEditMode
+          ? finalSpDeliv + regDeliv + parDeliv
+          : curRow?.pdmsInvoicedCount ?? (dssBenchmark > 0 ? dssBenchmark : undefined),
+        dssInvoicedCount: isUnlockedEditMode
+          ? finalSpDeliv + regDeliv + parDeliv
+          : dssBenchmark > 0
+          ? dssBenchmark
+          : undefined,
         mobileUsagePercent: curRow?.mobileUsagePercent ?? 100,
         dssStatus: 'Reconciled with DSS',
         speedPostReceived: finalSpRecd,
@@ -288,7 +444,8 @@ export default function PostmanAllDayArticlesOverview({
         updatedBy: `${staffName} (${staffEmpId}) [All-Day Overview Hub]`,
         remarks: wasAutoAdjusted
           ? `DSS Priority Enforced: Speed Post auto-balanced to ${finalSpDeliv} to preserve official DSS total of ${dssBenchmark}.`
-          : `Safe article quantity update for ${selectedDayEntry.date}. Strict Total Lock Rule maintained.`,
+          : `Safe article quantity update for ${selectedDayEntry.date}.`,
+        allowOverrideLock: isUnlockedEditMode,
       }
     );
 
@@ -463,13 +620,16 @@ export default function PostmanAllDayArticlesOverview({
           {/* Quick Month & Beat Switcher Strip */}
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             <div>
-              <label className="block text-[10px] text-amber-300/80 uppercase font-bold mb-1">Beat Assignment</label>
+              <label className="block text-[10px] text-amber-300/80 uppercase font-bold mb-1">
+                {isFieldDeliveryStaff ? 'Assigned Beat (Isolated)' : 'Beat Assignment'}
+              </label>
               <select
                 value={selectedBeat}
                 onChange={(e) => handleBeatChange(e.target.value)}
-                className="px-3.5 py-2 bg-slate-900/90 border border-slate-700 text-white rounded-xl text-xs font-bold focus:outline-none focus:border-amber-400"
+                disabled={isFieldDeliveryStaff && availableBeatsList.length <= 1}
+                className="px-3.5 py-2 bg-slate-900/90 border border-slate-700 text-white rounded-xl text-xs font-bold focus:outline-none focus:border-amber-400 disabled:opacity-90"
               >
-                {ALL_33_BEATS_FUEL_DATA.map((b) => (
+                {availableBeatsList.map((b) => (
                   <option key={b.beatNumber} value={b.beatNumber}>
                     {b.beatNumber} - {b.assignedPostmanName}
                   </option>
@@ -487,24 +647,47 @@ export default function PostmanAllDayArticlesOverview({
               />
             </div>
 
-            <div className="flex items-end gap-2 pt-5">
-              <button
-                type="button"
-                onClick={handleVerifyAndLockOfficialSheet}
-                className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-lg transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-                title="Verify & Lock Official October 2026 DSS Sheet across all 33 beats (including Beat 6 Ramkishan Meghwal)"
-              >
-                <Lock size={14} />
-                <span>Verify & Lock Oct 2026 Sheet</span>
-              </button>
+            <div className="flex flex-wrap items-end gap-2 pt-5">
+              {isLocked ? (
+                <button
+                  type="button"
+                  onClick={handleUnlockFuelHubForEditing}
+                  className="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs rounded-xl shadow-lg transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  title="Unlock Mode: Edit & correct daily article counts or fuel KM/Rate before generating Lock Final bill"
+                >
+                  <Unlock size={14} />
+                  <span>Unlock for Edits</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleLockFinalFuelBill}
+                  className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl shadow-lg transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  title="Freeze verified entries as Locked Final monthly fuel statement"
+                >
+                  <Lock size={14} />
+                  <span>Lock Final Bill</span>
+                </button>
+              )}
+              {!isFieldDeliveryStaff && selectedMonth === '2026-10' && (
+                <button
+                  type="button"
+                  onClick={handleVerifyAndLockOfficialSheet}
+                  className="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/40 font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  title="Verify & Lock Official October 2026 DSS Sheet across all 33 beats"
+                >
+                  <ShieldCheck size={14} />
+                  <span>Sync 33 Beats DSS</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => masterDataService.downloadPostmanFuelBillPDF(fuelSummary, { vehicleNo: customVehicleNo })}
                 className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-                title="Download Official Fuel Bill matching MAHEN FUEL.pdf format"
+                title={isFinalLocked ? 'Re-download Frozen Final Locked Fuel Bill PDF anytime' : 'Download Official Fuel Bill PDF'}
               >
                 <Printer size={15} />
-                <span>Download Fuel Bill (PDF)</span>
+                <span>{isFinalLocked ? 'Re-download Final PDF' : 'Download Fuel Bill (PDF)'}</span>
               </button>
             </div>
           </div>
@@ -656,11 +839,26 @@ export default function PostmanAllDayArticlesOverview({
                 </span>
               )}
               {isLocked ? (
-                <span className="px-3 py-1 bg-slate-900 border border-amber-500/40 text-amber-300 rounded-lg text-[11px] font-bold flex items-center gap-1.5">
-                  <Lock size={11} /> Locked by Department Audit ({fuelSummary.lockedBy || 'Official DSS'})
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-3 py-1 bg-slate-900 border border-amber-500/40 text-amber-300 rounded-lg text-[11px] font-bold flex items-center gap-1.5">
+                    <Lock size={11} />
+                    {isFinalLocked
+                      ? `Locked Final (${fuelSummary.finalLockedBy || 'Verified'})`
+                      : `Locked (${fuelSummary.lockedBy || 'Official DSS'})`}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleUnlockFuelHubForEditing}
+                    className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
+                  >
+                    <Unlock size={11} /> Unlock Table
+                  </button>
+                </div>
               ) : (
                 <>
+                  <span className="px-2.5 py-1 bg-blue-950/90 border border-blue-500/40 text-blue-300 rounded-lg text-[11px] font-bold flex items-center gap-1">
+                    <Unlock size={11} /> Unlocked · Edit Mode
+                  </span>
                   <button
                     type="button"
                     onClick={() => {
@@ -686,6 +884,13 @@ export default function PostmanAllDayArticlesOverview({
                     className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer shadow-xs"
                   >
                     <Check size={12} /> Save KM
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLockFinalFuelBill}
+                    className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer shadow-xs"
+                  >
+                    <Lock size={11} /> Lock Final
                   </button>
                 </>
               )}
@@ -950,9 +1155,9 @@ export default function PostmanAllDayArticlesOverview({
               </div>
             </div>
 
-            {/* Row Counter Strip */}
-            <div className="px-5 py-2 bg-slate-100/70 border-b border-slate-200 flex items-center justify-between text-xs text-slate-600">
-              <div className="flex items-center gap-2">
+            {/* Row Counter Strip + Master Lock / Unlock Controls */}
+            <div className="px-5 py-2.5 bg-slate-100/70 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+              <div className="flex flex-wrap items-center gap-2">
                 <span>Showing <strong>{filteredDailyRows.length}</strong> of <strong>{fuelSummary.dailyRows.length}</strong> calendar days</span>
                 {(quickFilterChip !== 'ALL' || startDateFilter || endDateFilter || searchDayQuery) && (
                   <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 font-bold text-[10px]">
@@ -960,8 +1165,26 @@ export default function PostmanAllDayArticlesOverview({
                   </span>
                 )}
               </div>
-              <div className="text-[11px] text-slate-500 font-mono">
-                Speed Post + Reg (0) + Parcels = Reconciled with DSS Statement
+              <div className="flex flex-wrap items-center gap-2">
+                {isLocked ? (
+                  <button
+                    type="button"
+                    onClick={handleUnlockFuelHubForEditing}
+                    className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Unlock size={12} />
+                    <span>Unlock Table for Date-Wise Edits</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleLockFinalFuelBill}
+                    className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Lock size={12} />
+                    <span>Lock Final & Freeze Bill</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1006,7 +1229,7 @@ export default function PostmanAllDayArticlesOverview({
           </div>
         )}
 
-        {/* 31-Day Interactive Table */}
+        {/* 31-Day Interactive Table with Date-Wise Article Entry Column */}
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
@@ -1014,19 +1237,22 @@ export default function PostmanAllDayArticlesOverview({
                 <th className="py-3 px-3 font-bold w-12 text-center">S.N.</th>
                 <th className="py-3 px-3 font-bold">Date (DD-MM-YYYY)</th>
                 <th className="py-3 px-3 font-bold">Duty Status</th>
+                <th className="py-3 px-3 font-bold text-left bg-indigo-50/70 text-indigo-950 min-w-[235px]">
+                  Date-Wise Article Entry (SP / Letters / Parcels)
+                </th>
                 <th className="py-3 px-3 font-bold text-center">Speed Post</th>
                 <th className="py-3 px-3 font-bold text-center">
-                  Registered (0)
+                  Registered Letters
                 </th>
                 <th className="py-3 px-3 font-bold text-center">Parcels/Others</th>
                 <th className="py-3 px-3 font-bold text-center text-red-900 bg-red-50/50">
-                  Total (Locked)
+                  Total ({isLocked ? 'Locked' : 'Live'})
                 </th>
                 <th className="py-3 px-3 font-bold text-center text-blue-900 bg-blue-50/50">
-                  PDMS Invoiced Count
+                  PDMS Invoiced
                 </th>
                 <th className="py-3 px-3 font-bold text-center text-indigo-900 bg-indigo-50/50">
-                  DSS Invoiced Count
+                  DSS Invoiced
                 </th>
                 <th className="py-3 px-3 font-bold text-center text-emerald-900 bg-emerald-50/50">
                   Mobile Usage %
@@ -1040,6 +1266,12 @@ export default function PostmanAllDayArticlesOverview({
                 const isSunday = r.status === 'SUNDAY';
                 const isHoliday = r.status === 'HOLIDAY';
                 const isLeave = r.status === 'LEAVE';
+                const draftKey = `${selectedBeat}::${r.isoDate}`;
+                const draft = inlineDrafts[draftKey];
+                const curSpStr = draft?.sp ?? String(typeof r.sp === 'number' ? r.sp : 0);
+                const curRegStr = draft?.reg ?? String(typeof r.reg === 'number' ? r.reg : 0);
+                const curParStr = draft?.others ?? String(typeof r.others === 'number' ? r.others : 0);
+                const isDraftDirty = Boolean(draft);
 
                 return (
                   <tr
@@ -1058,11 +1290,11 @@ export default function PostmanAllDayArticlesOverview({
                       {r.sn}
                     </td>
 
-                    <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
+                    <td className="py-2.5 px-3 font-mono font-bold text-slate-900 whitespace-nowrap">
                       {r.date}
                     </td>
 
-                    <td className="py-2.5 px-3">
+                    <td className="py-2.5 px-3 whitespace-nowrap">
                       {isSunday ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 font-bold text-[10px]">
                           Sunday
@@ -1083,6 +1315,90 @@ export default function PostmanAllDayArticlesOverview({
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-bold text-[10px]">
                           Field Duty
                         </span>
+                      )}
+                    </td>
+
+                    {/* Dedicated Date-Wise Article Entry Column */}
+                    <td className="py-2 px-3 bg-indigo-50/30">
+                      {!isWorking ? (
+                        <span className="text-[11px] text-slate-400 italic">No field delivery ({r.status})</span>
+                      ) : isLocked ? (
+                        <div className="flex items-center gap-1.5 text-[11px] font-mono">
+                          <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-900 font-bold">SP:{r.sp}</span>
+                          <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-900 font-bold">Ltr:{Number(r.reg) || 0}</span>
+                          <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold">Par:{r.others !== '' ? r.others : 0}</span>
+                          <Lock size={11} className="text-slate-400 shrink-0" />
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            aria-label={`Speed Post ${r.date}`}
+                            title="Speed Post count"
+                            value={curSpStr}
+                            onChange={(e) =>
+                              setInlineDrafts((prev) => ({
+                                ...prev,
+                                [draftKey]: {
+                                  sp: e.target.value,
+                                  reg: prev[draftKey]?.reg ?? curRegStr,
+                                  others: prev[draftKey]?.others ?? curParStr,
+                                },
+                              }))
+                            }
+                            className="w-12 px-1.5 py-1 border border-blue-300 rounded-md bg-white text-[11px] font-mono font-bold text-blue-900 text-center"
+                          />
+                          <input
+                            type="number"
+                            min={0}
+                            aria-label={`Letters ${r.date}`}
+                            title="Registered Letters count"
+                            value={curRegStr}
+                            onChange={(e) =>
+                              setInlineDrafts((prev) => ({
+                                ...prev,
+                                [draftKey]: {
+                                  sp: prev[draftKey]?.sp ?? curSpStr,
+                                  reg: e.target.value,
+                                  others: prev[draftKey]?.others ?? curParStr,
+                                },
+                              }))
+                            }
+                            className="w-11 px-1.5 py-1 border border-purple-300 rounded-md bg-white text-[11px] font-mono font-bold text-purple-900 text-center"
+                          />
+                          <input
+                            type="number"
+                            min={0}
+                            aria-label={`Parcels ${r.date}`}
+                            title="Parcels count"
+                            value={curParStr}
+                            onChange={(e) =>
+                              setInlineDrafts((prev) => ({
+                                ...prev,
+                                [draftKey]: {
+                                  sp: prev[draftKey]?.sp ?? curSpStr,
+                                  reg: prev[draftKey]?.reg ?? curRegStr,
+                                  others: e.target.value,
+                                },
+                              }))
+                            }
+                            className="w-11 px-1.5 py-1 border border-amber-300 rounded-md bg-white text-[11px] font-mono font-bold text-amber-900 text-center"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveInlineDateEntry(r)}
+                            className={`px-2 py-1 rounded-md text-[10px] font-bold transition flex items-center gap-0.5 cursor-pointer ${
+                              isDraftDirty
+                                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                                : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                            }`}
+                            title={`Save Date-Wise Entry for ${r.date}`}
+                          >
+                            <Check size={11} />
+                            <span>Save</span>
+                          </button>
+                        </div>
                       )}
                     </td>
 
@@ -1161,21 +1477,21 @@ export default function PostmanAllDayArticlesOverview({
                       )}
                     </td>
 
-                    <td className="py-2.5 px-3 text-right">
+                    <td className="py-2.5 px-3 text-right whitespace-nowrap">
                       {isLocked ? (
                         <span
                           className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-bold text-slate-500 ml-auto cursor-not-allowed"
-                          title="Department Locked (Immutable official DSS record)"
+                          title="Locked — Click Unlock Table to edit entries"
                         >
                           <Lock size={11} className="text-amber-600" />
-                          <span>Locked</span>
+                          <span>{isFinalLocked ? 'Frozen' : 'Locked'}</span>
                         </span>
                       ) : (
                         <button
                           type="button"
                           onClick={() => handleOpenEditDay(r)}
                           className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-300 hover:border-slate-400 rounded-lg text-[11px] font-bold text-slate-700 transition flex items-center gap-1 ml-auto cursor-pointer shadow-2xs"
-                          title={`Edit article counts for Day ${r.sn} (${r.date})`}
+                          title={`Open full modal to edit Day ${r.sn} (${r.date})`}
                         >
                           <Edit3 size={12} className="text-red-700" />
                           <span>Edit Day</span>
@@ -1189,7 +1505,7 @@ export default function PostmanAllDayArticlesOverview({
             {/* Totals Row */}
             <tfoot>
               <tr className="bg-slate-900 text-white font-bold border-t-2 border-slate-800">
-                <td className="py-3 px-3 text-center" colSpan={3}>
+                <td className="py-3 px-3 text-center" colSpan={4}>
                   <div className="flex items-center justify-between text-xs font-black uppercase tracking-wider px-2">
                     <span>Month Totals ({fuelSummary.workingDays} Working Days)</span>
                     <span className="text-amber-400 font-mono text-[11px]">
@@ -1224,7 +1540,7 @@ export default function PostmanAllDayArticlesOverview({
                     onClick={() => masterDataService.downloadPostmanFuelBillPDF(fuelSummary, { vehicleNo: customVehicleNo })}
                     className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-[10px] font-black transition cursor-pointer"
                   >
-                    PDF
+                    {isFinalLocked ? 'Final PDF' : 'PDF'}
                   </button>
                 </td>
               </tr>
@@ -1403,7 +1719,7 @@ export default function PostmanAllDayArticlesOverview({
                         const newReg = parseInt(e.target.value) || 0;
                         const curRow = fuelSummary.dailyRows.find((r) => r.sn === selectedDayEntry.sn);
                         const dssTarget = curRow ? (typeof curRow.dssInvoicedCount === 'number' ? curRow.dssInvoicedCount : (typeof curRow.total === 'number' ? curRow.total : 0)) : 0;
-                        const balancedSp = dssTarget > 0 ? Math.max(0, dssTarget - (newReg + selectedDayEntry.parDeliv)) : selectedDayEntry.spDeliv;
+                        const balancedSp = !isUnlockedEditMode && dssTarget > 0 ? Math.max(0, dssTarget - (newReg + selectedDayEntry.parDeliv)) : selectedDayEntry.spDeliv;
 
                         setSelectedDayEntry({
                           ...selectedDayEntry,
@@ -1446,7 +1762,7 @@ export default function PostmanAllDayArticlesOverview({
                         const newPar = parseInt(e.target.value) || 0;
                         const curRow = fuelSummary.dailyRows.find((r) => r.sn === selectedDayEntry.sn);
                         const dssTarget = curRow ? (typeof curRow.dssInvoicedCount === 'number' ? curRow.dssInvoicedCount : (typeof curRow.total === 'number' ? curRow.total : 0)) : 0;
-                        const balancedSp = dssTarget > 0 ? Math.max(0, dssTarget - (selectedDayEntry.regDeliv + newPar)) : selectedDayEntry.spDeliv;
+                        const balancedSp = !isUnlockedEditMode && dssTarget > 0 ? Math.max(0, dssTarget - (selectedDayEntry.regDeliv + newPar)) : selectedDayEntry.spDeliv;
 
                         setSelectedDayEntry({
                           ...selectedDayEntry,

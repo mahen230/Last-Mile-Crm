@@ -941,6 +941,17 @@ export function downloadOfficialFuelBillPDF(bill: SpecialBillRecord): void {
   doc.setFont('helvetica', 'bold');
   doc.text(`• Statutory Formula: ${workingDays} Working Days × ${fixedKm} KM/d = ${totalDistanceKm} KM @ ₹${ratePerKm.toFixed(2)}/KM = Admissible Total: ₹${totalAmount.toFixed(2)}`, x0 + 2.5, y2 + 17.0);
 
+  if (details.isFinalLocked) {
+    y2 += 22;
+    doc.rect(x0, y2, totalW, 9.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    const lockStamp = `LOCKED FINAL · VERIFIED STATEMENT | Frozen By: ${details.finalLockedBy || staffName} | Timestamp: ${
+      details.finalLockedAt ? new Date(details.finalLockedAt).toLocaleString('en-IN') : new Date().toLocaleString('en-IN')
+    }`;
+    doc.text(lockStamp, x0 + 2.5, y2 + 6.0);
+  }
+
   const safeStaff = staffName.replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '');
   const filename = `${safeStaff}_FUEL_CLAIM_${claimMonth}_${claimYear}.pdf`;
   doc.save(filename);

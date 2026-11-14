@@ -411,7 +411,7 @@ export default function DailyOperationsHub({
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-2.5">
               <Package size={28} className="text-amber-400" />
-              <span>Postman Book CRM & Daily Operations Hub</span>
+              <span>Xpeedo Last Mile & Daily Operations Hub</span>
             </h1>
             <p className="text-xs sm:text-sm text-red-100/90 leading-relaxed">
               Systematic field operations command center: Live ACG-61 article delivery counters, lightning-fast resident search, financial scheme pipelines (PLI / SSA / IPPB), beat intelligence, and verified monthly fuel allowance reconciliation (₹3.60/KM).

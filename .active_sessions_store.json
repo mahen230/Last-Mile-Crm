@@ -1,0 +1,130 @@
+{
+  "sessions": {
+    "STAFF-MASTER-EKTA": {
+      "sessionId": "SESS-1794625301700-0e548a736b79",
+      "userId": "STAFF-MASTER-EKTA",
+      "tokenHash": "6f334420d10b8f3842621764f8dda9507f4f00b06c7be36e6d4ba334e8afcb87",
+      "deviceFingerprintHash": "95101951815c902dcf5c45651f6c7af950ec3e785254a6bd60de16ae0d17a277",
+      "browserProfileId": "default",
+      "userAgent": "node",
+      "ipAddress": "127.0.0.1",
+      "tier": "ADMIN",
+      "role": "MASTER_ADMIN",
+      "email": "ektamahenmeena@gmail.com",
+      "name": "Ekta Meena",
+      "assignedBeat": "All Beats",
+      "allowedBeats": [
+        "All Beats"
+      ],
+      "assignedOffice": "All Divisions / Kota Division (324009)",
+      "issuedAt": "2026-11-14T03:01:41.701Z",
+      "expiresAt": 1794654101701,
+      "isRevoked": false
+    },
+    "STAFF-50457421": {
+      "sessionId": "SESS-1794625301713-b62845c5ae88",
+      "userId": "STAFF-50457421",
+      "tokenHash": "84d17489ed5b6b868beefcfc5296dc3b459bc650d2b4d50307a6c8ef8d203230",
+      "deviceFingerprintHash": "95101951815c902dcf5c45651f6c7af950ec3e785254a6bd60de16ae0d17a277",
+      "browserProfileId": "default",
+      "userAgent": "node",
+      "ipAddress": "127.0.0.1",
+      "tier": "STAFF",
+      "role": "POSTMAN",
+      "email": "mahen.comtech@gmail.com",
+      "name": "Mahendra Kumar Meena",
+      "assignedBeat": "Beat 2",
+      "allowedBeats": [
+        "Beat 2"
+      ],
+      "assignedOffice": "Dadabari S.O. (324009)",
+      "issuedAt": "2026-11-14T03:01:41.713Z",
+      "expiresAt": 1794654101713,
+      "isRevoked": false
+    },
+    "STAFF-50510312": {
+      "sessionId": "SESS-1794625301719-86f6def2b5bc",
+      "userId": "STAFF-50510312",
+      "tokenHash": "4310b503a42a6ab3371260c6f1a3a9ddabd1b679c0cb1b4384537efb739f61f6",
+      "deviceFingerprintHash": "95101951815c902dcf5c45651f6c7af950ec3e785254a6bd60de16ae0d17a277",
+      "browserProfileId": "default",
+      "userAgent": "node",
+      "ipAddress": "127.0.0.1",
+      "tier": "STAFF",
+      "role": "GDS",
+      "email": "muskan.sharma@indiapost.gov.in",
+      "name": "Muskan Sharma",
+      "assignedBeat": "Beat 1",
+      "allowedBeats": [
+        "Beat 1"
+      ],
+      "assignedOffice": "Dadabari S.O. (324009)",
+      "issuedAt": "2026-11-14T03:01:41.719Z",
+      "expiresAt": 1794654101719,
+      "isRevoked": false
+    },
+    "STAFF-10310736": {
+      "sessionId": "SESS-1794625074407-ade03439c953",
+      "userId": "STAFF-10310736",
+      "tokenHash": "b3019c1d69f8639b447c44839fa9f2711c7c9b7edcfeca4c9543b272b1e73589",
+      "deviceFingerprintHash": "1fa1db123bfc82410b65ad75e56dd77c069123d8b2444793d9d00bc7d0b134ec",
+      "browserProfileId": "default",
+      "userAgent": "node",
+      "ipAddress": "127.0.0.1",
+      "tier": "STAFF",
+      "role": "POSTMAN",
+      "email": "mohit.arvind@indiapost.gov.in",
+      "name": "Mohit Arvind",
+      "assignedBeat": "Beat 5",
+      "allowedBeats": [
+        "Beat 5"
+      ],
+      "assignedOffice": "Dadabari S.O. (324009)",
+      "issuedAt": "2026-11-14T02:57:54.408Z",
+      "expiresAt": 1794653874408,
+      "isRevoked": false
+    },
+    "STAFF-10317473": {
+      "sessionId": "SESS-1794625074413-fbcc98598338",
+      "userId": "STAFF-10317473",
+      "tokenHash": "091cc1049392e5e31d5ae4b102cc2cebf29c181631d7c3074542edba8bce7c7f",
+      "deviceFingerprintHash": "1fa1db123bfc82410b65ad75e56dd77c069123d8b2444793d9d00bc7d0b134ec",
+      "browserProfileId": "default",
+      "userAgent": "node",
+      "ipAddress": "127.0.0.1",
+      "tier": "STAFF",
+      "role": "POSTMAN",
+      "email": "ramkishan.meghwal@indiapost.gov.in",
+      "name": "Ramkishan Meghwal",
+      "assignedBeat": "Beat 6",
+      "allowedBeats": [
+        "Beat 6"
+      ],
+      "assignedOffice": "Dadabari S.O. (324009)",
+      "issuedAt": "2026-11-14T02:57:54.413Z",
+      "expiresAt": 1794653874413,
+      "isRevoked": false
+    },
+    "STAFF-50507003": {
+      "sessionId": "SESS-1794625074418-d4f895a42a34",
+      "userId": "STAFF-50507003",
+      "tokenHash": "b6cc3ec295a3005fea77190c98ad612f211a09b226b00a116dd318567e0c0447",
+      "deviceFingerprintHash": "1fa1db123bfc82410b65ad75e56dd77c069123d8b2444793d9d00bc7d0b134ec",
+      "browserProfileId": "default",
+      "userAgent": "node",
+      "ipAddress": "127.0.0.1",
+      "tier": "STAFF",
+      "role": "GDS",
+      "email": "priyanshu.trivedi@indiapost.gov.in",
+      "name": "Priyanshu Trivedi",
+      "assignedBeat": "Beat 17",
+      "allowedBeats": [
+        "Beat 17"
+      ],
+      "assignedOffice": "Dadabari S.O. (324009)",
+      "issuedAt": "2026-11-14T02:57:54.418Z",
+      "expiresAt": 1794653874418,
+      "isRevoked": false
+    }
+  }
+}

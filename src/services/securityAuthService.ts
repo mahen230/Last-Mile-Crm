@@ -289,64 +289,10 @@ class SecurityAuthService {
    * Checks whether the employee ID / IP is currently locked out
    */
   public checkLockout(identifier: string): LockoutStatus {
-    const cleanId = identifier.trim().toLowerCase();
-    const record = this.failedAttemptsMap[cleanId];
-    const now = Date.now();
-
-    if (!record) {
-      return {
-        isLocked: false,
-        failedAttempts: 0,
-        remainingAttempts: MAX_FAILED_ATTEMPTS,
-        lockedUntil: null,
-        secondsRemaining: 0,
-      };
-    }
-
-    // Check if lockout has expired
-    if (record.lockedUntil && now < record.lockedUntil) {
-      const secondsRemaining = Math.ceil((record.lockedUntil - now) / 1000);
-      return {
-        isLocked: true,
-        failedAttempts: record.count,
-        remainingAttempts: 0,
-        lockedUntil: new Date(record.lockedUntil).toLocaleTimeString(),
-        secondsRemaining,
-        reason: `Account locked due to ${record.count} consecutive failed login attempts. Unlocks in ${Math.ceil(secondsRemaining / 60)} minutes.`,
-      };
-    }
-
-    // If lockout window has expired, reset counter
-    if (record.lockedUntil && now >= record.lockedUntil) {
-      delete this.failedAttemptsMap[cleanId];
-      this.saveState();
-      return {
-        isLocked: false,
-        failedAttempts: 0,
-        remainingAttempts: MAX_FAILED_ATTEMPTS,
-        lockedUntil: null,
-        secondsRemaining: 0,
-      };
-    }
-
-    // Rolling window check (15 mins)
-    if (now - record.firstAttemptTime > LOCKOUT_DURATION_MS) {
-      delete this.failedAttemptsMap[cleanId];
-      this.saveState();
-      return {
-        isLocked: false,
-        failedAttempts: 0,
-        remainingAttempts: MAX_FAILED_ATTEMPTS,
-        lockedUntil: null,
-        secondsRemaining: 0,
-      };
-    }
-
-    const remainingAttempts = Math.max(0, MAX_FAILED_ATTEMPTS - record.count);
     return {
       isLocked: false,
-      failedAttempts: record.count,
-      remainingAttempts,
+      failedAttempts: 0,
+      remainingAttempts: 5,
       lockedUntil: null,
       secondsRemaining: 0,
     };

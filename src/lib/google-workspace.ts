@@ -245,3 +245,18 @@ export const sendGmailMessage = async (
   return response.json();
 };
 
+export const listGoogleContacts = async (token: string) => {
+  const response = await fetch(
+    'https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses,phoneNumbers,addresses',
+    {
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Google Contacts API error (${response.status}): ${errText}`);
+  }
+  return response.json();
+};
+
+

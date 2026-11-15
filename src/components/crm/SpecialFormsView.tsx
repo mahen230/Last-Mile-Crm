@@ -557,22 +557,22 @@ export default function SpecialFormsView() {
       )}
 
       {/* Segmented Form Type Selector */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         <button
           type="button"
           onClick={() => setActiveTab('FUEL_BILL')}
-          className={`p-4 rounded-xl border text-left transition cursor-pointer ${
+          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer shadow-2xs ${
             activeTab === 'FUEL_BILL'
-              ? 'bg-red-800 text-white border-red-900 shadow-sm'
-              : 'bg-white text-slate-800 border-slate-200 hover:border-red-300'
+              ? 'bg-gradient-to-br from-emerald-600 to-teal-700 text-white border-emerald-700 shadow-md scale-[1.01]'
+              : 'bg-emerald-50/50 text-slate-800 border-emerald-200 hover:border-emerald-400'
           }`}
         >
           <div className="flex items-center justify-between mb-1.5">
-            <Fuel size={18} className={activeTab === 'FUEL_BILL' ? 'text-amber-300' : 'text-red-700'} />
-            <span className="text-[11px] font-mono tabular-nums opacity-80">Annexure-III</span>
+            <Fuel size={18} className={activeTab === 'FUEL_BILL' ? 'text-amber-300' : 'text-emerald-700'} />
+            <span className="text-[11px] font-mono font-bold tabular-nums opacity-90">Annexure-III · ₹3.60/KM</span>
           </div>
-          <div className="font-bold text-sm">Fuel Reimbursement Form</div>
-          <div className={`text-[11px] mt-0.5 ${activeTab === 'FUEL_BILL' ? 'text-red-100' : 'text-slate-500'}`}>
+          <div className="font-black text-sm">Fuel Reimbursement Form</div>
+          <div className={`text-[11px] mt-0.5 ${activeTab === 'FUEL_BILL' ? 'text-emerald-100' : 'text-slate-600'}`}>
             Official 2-Page India Post PDF Voucher
           </div>
         </button>
@@ -580,18 +580,18 @@ export default function SpecialFormsView() {
         <button
           type="button"
           onClick={() => setActiveTab('CHARGE_REPORT')}
-          className={`p-4 rounded-xl border text-left transition cursor-pointer ${
+          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer shadow-2xs ${
             activeTab === 'CHARGE_REPORT'
-              ? 'bg-red-800 text-white border-red-900 shadow-sm'
-              : 'bg-white text-slate-800 border-slate-200 hover:border-red-300'
+              ? 'bg-gradient-to-br from-indigo-600 to-violet-700 text-white border-indigo-700 shadow-md scale-[1.01]'
+              : 'bg-indigo-50/50 text-slate-800 border-indigo-200 hover:border-indigo-400'
           }`}
         >
           <div className="flex items-center justify-between mb-1.5">
-            <ArrowLeftRight size={18} className={activeTab === 'CHARGE_REPORT' ? 'text-amber-300' : 'text-red-700'} />
-            <span className="text-[11px] font-mono tabular-nums opacity-80">02. ACG-61</span>
+            <ArrowLeftRight size={18} className={activeTab === 'CHARGE_REPORT' ? 'text-amber-300' : 'text-indigo-700'} />
+            <span className="text-[11px] font-mono font-bold tabular-nums opacity-90">02. ACG-61</span>
           </div>
-          <div className="font-bold text-sm">Charge Report Form</div>
-          <div className={`text-[11px] mt-0.5 ${activeTab === 'CHARGE_REPORT' ? 'text-red-100' : 'text-slate-500'}`}>
+          <div className="font-black text-sm">Charge Report Form</div>
+          <div className={`text-[11px] mt-0.5 ${activeTab === 'CHARGE_REPORT' ? 'text-indigo-100' : 'text-slate-600'}`}>
             Relieving/Relieved Dual-Signature PDF
           </div>
         </button>
@@ -599,38 +599,38 @@ export default function SpecialFormsView() {
         <button
           type="button"
           onClick={() => setActiveTab('OUTSIDER_BILL')}
-          className={`p-4 rounded-xl border text-left transition cursor-pointer ${
+          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer shadow-2xs ${
             activeTab === 'OUTSIDER_BILL'
-              ? 'bg-red-800 text-white border-red-900 shadow-sm'
-              : 'bg-white text-slate-800 border-slate-200 hover:border-red-300'
+              ? 'bg-gradient-to-br from-amber-500 to-orange-600 text-white border-amber-600 shadow-md scale-[1.01]'
+              : 'bg-amber-50/50 text-slate-800 border-amber-200 hover:border-amber-400'
           }`}
         >
           <div className="flex items-center justify-between mb-1.5">
-            <UserCheck size={18} className={activeTab === 'OUTSIDER_BILL' ? 'text-amber-300' : 'text-red-700'} />
-            <span className="text-[11px] font-mono tabular-nums opacity-80">03. Substitute</span>
+            <UserCheck size={18} className={activeTab === 'OUTSIDER_BILL' ? 'text-white' : 'text-amber-700'} />
+            <span className="text-[11px] font-mono font-bold tabular-nums opacity-90">03. Substitute</span>
           </div>
-          <div className="font-bold text-sm">Outsider Bill Form</div>
-          <div className={`text-[11px] mt-0.5 ${activeTab === 'OUTSIDER_BILL' ? 'text-red-100' : 'text-slate-500'}`}>
-            External duty TA/DA & order upload
+          <div className="font-black text-sm">Outsider Bill Form</div>
+          <div className={`text-[11px] mt-0.5 ${activeTab === 'OUTSIDER_BILL' ? 'text-amber-100' : 'text-slate-600'}`}>
+            External duty TA/DA &amp; order upload
           </div>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('BYOD_BILL')}
-          className={`p-4 rounded-xl border text-left transition cursor-pointer ${
+          className={`p-4 rounded-2xl border text-left transition-all cursor-pointer shadow-2xs ${
             activeTab === 'BYOD_BILL'
-              ? 'bg-red-800 text-white border-red-900 shadow-sm'
-              : 'bg-white text-slate-800 border-slate-200 hover:border-red-300'
+              ? 'bg-gradient-to-br from-sky-600 to-blue-700 text-white border-sky-700 shadow-md scale-[1.01]'
+              : 'bg-sky-50/50 text-slate-800 border-sky-200 hover:border-sky-400'
           }`}
         >
           <div className="flex items-center justify-between mb-1.5">
-            <Smartphone size={18} className={activeTab === 'BYOD_BILL' ? 'text-amber-300' : 'text-red-700'} />
-            <span className="text-[11px] font-mono tabular-nums opacity-80">04. PMA / Data</span>
+            <Smartphone size={18} className={activeTab === 'BYOD_BILL' ? 'text-amber-300' : 'text-sky-700'} />
+            <span className="text-[11px] font-mono font-bold tabular-nums opacity-90">04. PMA / Data</span>
           </div>
-          <div className="font-bold text-sm">BYOD Bill Form</div>
-          <div className={`text-[11px] mt-0.5 ${activeTab === 'BYOD_BILL' ? 'text-red-100' : 'text-slate-500'}`}>
-            IMEI, mobile internet & device claim
+          <div className="font-black text-sm">BYOD Bill Form</div>
+          <div className={`text-[11px] mt-0.5 ${activeTab === 'BYOD_BILL' ? 'text-sky-100' : 'text-slate-600'}`}>
+            IMEI, mobile internet &amp; device claim
           </div>
         </button>
       </div>
@@ -723,7 +723,7 @@ export default function SpecialFormsView() {
                 }}
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900"
               >
-                {Array.from({ length: 33 }, (_, i) => `Beat ${i + 1}`).map((b) => (
+                {Array.from({ length: 34 }, (_, i) => `Beat ${i + 1}`).map((b) => (
                   <option key={b} value={b}>
                     {b}
                   </option>
@@ -1687,35 +1687,35 @@ export default function SpecialFormsView() {
 
         {/* Summary KPI Strip for DSS Reconciliation */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-            <span className="text-slate-500 font-semibold block">Total Odometer KM Logged</span>
-            <span className="text-xl font-black text-slate-900 font-mono tabular-nums mt-0.5 block">
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 shadow-2xs">
+            <span className="text-emerald-800 font-bold uppercase text-[10px] block">Total Odometer KM Logged</span>
+            <span className="text-xl font-black text-emerald-950 font-mono tabular-nums mt-1 block">
               {fuelLedger.reduce((s, e) => s + e.netKmRun, 0)} KM
             </span>
             <span className="text-[11px] text-emerald-700 font-semibold">
-              Matched against {fixedKm} KM/day Beat Scale
+              Matched against {fixedKm} KM/day · ₹3.60/KM
             </span>
           </div>
-          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-            <span className="text-slate-500 font-semibold block">Total Fuel Volume Dispensed</span>
-            <span className="text-xl font-black text-slate-900 font-mono tabular-nums mt-0.5 block">
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-200 shadow-2xs">
+            <span className="text-sky-800 font-bold uppercase text-[10px] block">Total Fuel Volume Dispensed</span>
+            <span className="text-xl font-black text-sky-950 font-mono tabular-nums mt-1 block">
               {fuelLedger.reduce((s, e) => s + e.fuelVolumeLitres, 0).toFixed(2)} Litres
             </span>
-            <span className="text-[11px] text-slate-500">Verified Petrol Bunk Vouchers</span>
+            <span className="text-[11px] text-sky-700 font-semibold">Verified Petrol Bunk Vouchers</span>
           </div>
-          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-            <span className="text-slate-500 font-semibold block">Total Fuel Receipt Cost</span>
-            <span className="text-xl font-black text-red-800 font-mono tabular-nums mt-0.5 block">
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 shadow-2xs">
+            <span className="text-amber-900 font-bold uppercase text-[10px] block">Total Fuel Receipt Cost</span>
+            <span className="text-xl font-black text-amber-950 font-mono tabular-nums mt-1 block">
               ₹{fuelLedger.reduce((s, e) => s + e.totalFuelCost, 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
-            <span className="text-[11px] text-slate-500">Actual Bunk Receipts Logged</span>
+            <span className="text-[11px] text-amber-800 font-semibold">Actual Bunk Receipts Logged</span>
           </div>
-          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-            <span className="text-slate-500 font-semibold block">DSS Reconciliation Status</span>
-            <span className="text-xl font-black text-emerald-700 font-mono tabular-nums mt-0.5 block">
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-50 to-violet-50 border border-indigo-200 shadow-2xs">
+            <span className="text-indigo-900 font-bold uppercase text-[10px] block">DSS Reconciliation Status</span>
+            <span className="text-xl font-black text-indigo-950 font-mono tabular-nums mt-1 block">
               {fuelLedger.filter((e) => e.dssReconciliationStatus === 'Reconciled with DSS').length} / {fuelLedger.length}
             </span>
-            <span className="text-[11px] text-emerald-700 font-semibold">Reconciled with Sub-Office DSS</span>
+            <span className="text-[11px] text-indigo-700 font-semibold">Reconciled with Sub-Office DSS</span>
           </div>
         </div>
 

@@ -43,6 +43,7 @@ import {
 } from '../../services/commercialPropertyService';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import { staffPermissionService } from '../../services/staffPermissionService';
+import { Link } from 'react-router-dom';
 
 const CATEGORY_PIN_STYLE: Record<
   CommercialStoreCategory,
@@ -414,6 +415,13 @@ export default function CommercialPropertyHub() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to="/commercial-intelligence"
+              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition"
+            >
+              <Sparkles size={15} className="text-amber-400" />
+              <span>AI 4-Factor &amp; Matching Engine</span>
+            </Link>
             <button
               type="button"
               onClick={() => setShowExtractDrawer((v) => !v)}

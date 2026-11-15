@@ -474,24 +474,24 @@ export default function DailyOperationsHub({
           {/* ===================================================================== */}
           {/* CARD 1: Daily Delivery & Article Log                                  */}
           {/* ===================================================================== */}
-          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm hover:shadow-md transition space-y-4 flex flex-col justify-between">
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border-2 border-rose-200 shadow-sm hover:shadow-lg transition space-y-4 flex flex-col justify-between">
             <div className="space-y-3">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center justify-between pb-3 border-b border-rose-100 bg-gradient-to-r from-rose-50 to-orange-50 -mx-5 -mt-5 px-5 py-4 rounded-t-3xl">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-2xl bg-red-100 text-red-800 flex items-center justify-center font-bold">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-rose-600 to-red-700 text-white flex items-center justify-center font-bold shadow-xs">
                     <Package size={20} />
                   </div>
                   <div>
-                    <h2 className="text-base font-black text-slate-900 tracking-tight">
-                      Card 1: Daily Delivery & Article Log
+                    <h2 className="text-base font-black text-rose-950 tracking-tight">
+                      Card 1: Daily Delivery &amp; Article Log
                     </h2>
-                    <p className="text-[11px] text-slate-500">
-                      Form ACG-61 Daily Dispatch & Delivery Performance
+                    <p className="text-[11px] text-rose-800">
+                      Form ACG-61 Daily Dispatch &amp; Delivery Performance
                     </p>
                   </div>
                 </div>
                 <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  Today's Field Duty Active
+                  Today&apos;s Duty Active
                 </span>
               </div>
 
@@ -603,23 +603,23 @@ export default function DailyOperationsHub({
           {/* ===================================================================== */}
           {/* CARD 2: Customer & Property Search                                    */}
           {/* ===================================================================== */}
-          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm hover:shadow-md transition space-y-4 flex flex-col justify-between">
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border-2 border-indigo-200 shadow-sm hover:shadow-lg transition space-y-4 flex flex-col justify-between">
             <div className="space-y-3">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center justify-between pb-3 border-b border-indigo-100 bg-gradient-to-r from-indigo-50 to-sky-50 -mx-5 -mt-5 px-5 py-4 rounded-t-3xl">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-2xl bg-blue-100 text-blue-800 flex items-center justify-center font-bold">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 text-white flex items-center justify-center font-bold shadow-xs">
                     <Search size={20} />
                   </div>
                   <div>
-                    <h2 className="text-base font-black text-slate-900 tracking-tight">
-                      Card 2: Customer & Property Search
+                    <h2 className="text-base font-black text-indigo-950 tracking-tight">
+                      Card 2: Customer &amp; Property Search
                     </h2>
-                    <p className="text-[11px] text-slate-500">
+                    <p className="text-[11px] text-indigo-800">
                       Lightning-Fast Local Database Resident Lookup
                     </p>
                   </div>
                 </div>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-100 text-slate-700">
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-white text-indigo-900 border border-indigo-200">
                   {customers.length} Records
                 </span>
               </div>
@@ -743,23 +743,23 @@ export default function DailyOperationsHub({
           {/* ===================================================================== */}
           {/* CARD 3: Lead & Task Pipeline Tracker                                 */}
           {/* ===================================================================== */}
-          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm hover:shadow-md transition space-y-4 flex flex-col justify-between">
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border-2 border-amber-200 shadow-sm hover:shadow-lg transition space-y-4 flex flex-col justify-between">
             <div className="space-y-3">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center justify-between pb-3 border-b border-amber-100 bg-gradient-to-r from-amber-50 to-orange-50 -mx-5 -mt-5 px-5 py-4 rounded-t-3xl">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center font-bold">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center font-bold shadow-xs">
                     <Target size={20} />
                   </div>
                   <div>
-                    <h2 className="text-base font-black text-slate-900 tracking-tight">
-                      Card 3: Lead & Task Pipeline
+                    <h2 className="text-base font-black text-amber-950 tracking-tight">
+                      Card 3: Lead &amp; Task Pipeline
                     </h2>
-                    <p className="text-[11px] text-slate-500">
-                      PLI / RPLI, Sukanya Samriddhi (SSA) & IPPB Follow-ups
+                    <p className="text-[11px] text-amber-800">
+                      PLI / RPLI, Sukanya Samriddhi (SSA) &amp; IPPB Follow-ups
                     </p>
                   </div>
                 </div>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-white text-amber-900 border border-amber-200">
                   {leads.length} Leads Active
                 </span>
               </div>
@@ -864,24 +864,24 @@ export default function DailyOperationsHub({
           {/* ===================================================================== */}
           {/* CARD 4: Colony & Beat Intelligence                                   */}
           {/* ===================================================================== */}
-          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm hover:shadow-md transition space-y-4 flex flex-col justify-between">
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border-2 border-emerald-200 shadow-sm hover:shadow-lg transition space-y-4 flex flex-col justify-between">
             <div className="space-y-3">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center justify-between pb-3 border-b border-emerald-100 bg-gradient-to-r from-emerald-50 to-teal-50 -mx-5 -mt-5 px-5 py-4 rounded-t-3xl">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white flex items-center justify-center font-bold shadow-xs">
                     <MapPin size={20} />
                   </div>
                   <div>
-                    <h2 className="text-base font-black text-slate-900 tracking-tight">
-                      Card 4: Colony & Beat Intelligence
+                    <h2 className="text-base font-black text-emerald-950 tracking-tight">
+                      Card 4: Colony &amp; Beat Intelligence
                     </h2>
-                    <p className="text-[11px] text-slate-500">
-                      Area-Wise Postman Directory & Assigned Beats
+                    <p className="text-[11px] text-emerald-800">
+                      Area-Wise Postman Directory &amp; Assigned Beats (34 Beats)
                     </p>
                   </div>
                 </div>
-                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                  Dadabari S.O. Beats
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-white text-emerald-900 border border-emerald-200">
+                  Dadabari S.O.
                 </span>
               </div>
 
@@ -919,22 +919,33 @@ export default function DailyOperationsHub({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <a
                         href="tel:8769706002"
                         className="p-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-lg transition"
-                        title="Call Postman"
+                        title="Call Beat 2 Postman (8769706002)"
                       >
                         <Phone size={12} />
                       </a>
                       <a
                         href="https://wa.me/918769706002"
                         target="_blank"
-                        rel="noreferrer"
-                        className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition"
-                        title="WhatsApp Dispatch"
+                        rel="noopener noreferrer"
+                        className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition flex items-center gap-1"
+                        title="WhatsApp Beat 2 (8769706002)"
                       >
-                        <MessageSquare size={12} />
+                        <MessageSquare size={11} />
+                        <span>B2</span>
+                      </a>
+                      <a
+                        href="https://wa.me/919460020640"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold transition flex items-center gap-1"
+                        title="WhatsApp Dadabari Desk (9460020640)"
+                      >
+                        <MessageSquare size={11} />
+                        <span>SO</span>
                       </a>
                     </div>
                   </div>

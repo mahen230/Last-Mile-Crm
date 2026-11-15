@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { 
   User, ShieldCheck, KeyRound, Edit3, Clock, 
-  CheckCircle2, XCircle, Phone, Mail, MapPin, Building, Lock 
+  CheckCircle2, XCircle, Phone, Mail, MapPin, Building, Lock, Store
 } from 'lucide-react';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import { staffPermissionService } from '../../services/staffPermissionService';
 import { staffRegistrationService, ProfileApprovalRequest } from '../../services/staffRegistrationService';
 import { fetchServerCsrfToken, getDeviceFingerprint } from '../../services/authSecurityService';
+import StaffProductStudioView from '../crm/StaffProductStudioView';
 
 export default function MyProfileView() {
   const { userProfile, switchStaffProfile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'request_edit'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'storefront' | 'password' | 'request_edit'>('profile');
 
   // Password Change state
   const [newPassword, setNewPassword] = useState('');
@@ -145,24 +146,35 @@ export default function MyProfileView() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {(['profile', 'password', 'request_edit'] as const).map(tab => (
+        <div className="flex flex-wrap items-center gap-2">
+          {(['profile', 'storefront', 'password', 'request_edit'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
                 activeTab === tab
-                  ? 'bg-slate-900 text-white shadow-xs'
+                  ? 'bg-red-700 text-white shadow-xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
               {tab === 'profile' && 'My Details'}
+              {tab === 'storefront' && (
+                <>
+                  <Store size={13} />
+                  <span>My Storefront Products</span>
+                </>
+              )}
               {tab === 'password' && 'Change Password'}
               {tab === 'request_edit' && 'Request Changes'}
             </button>
           ))}
         </div>
       </div>
+
+      {/* Tab: My Storefront Products */}
+      {activeTab === 'storefront' && (
+        <StaffProductStudioView embeddedInProfile={true} />
+      )}
 
       {/* Tab 1: Profile Details */}
       {activeTab === 'profile' && (

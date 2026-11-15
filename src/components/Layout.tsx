@@ -35,6 +35,9 @@ import {
   FileCheck2,
   Navigation,
   Store,
+  ChevronDown,
+  ChevronUp,
+  Smartphone,
 } from 'lucide-react';
 import { staffRegistrationService } from '../services/staffRegistrationService';
 import { motion, AnimatePresence } from 'motion/react';
@@ -47,6 +50,7 @@ import FloatingAIChatBot from './FloatingAIChatBot';
 import MobileFAB from './MobileFAB';
 import LoginPage from '../pages/LoginPage';
 import StaffProfileModal from './auth/StaffProfileModal';
+import { NotificationBellDropdown } from './common/AdminNotificationHub';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -77,6 +81,7 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
   const [allProfiles, setAllProfiles] = useState<StaffProfile[]>([]);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [formsDocsOpen, setFormsDocsOpen] = useState(true);
 
   useEffect(() => {
     const updateCounts = () => {
@@ -242,18 +247,18 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
               badgeColor: 'bg-red-600 text-white font-bold',
             },
             {
-              name: 'Delivery Operations (ACG-61)',
-              icon: ArrowLeftRight,
-              path: '/charge-report',
-              badge: 'ACG-61',
-              badgeColor: 'bg-red-700 text-white',
+              name: 'AI Commercial & 4-Factor Engine',
+              icon: Sparkles,
+              path: '/commercial-intelligence',
+              badge: '4-Factor',
+              badgeColor: 'bg-red-700 text-white font-bold',
             },
             {
-              name: 'Master Data & Fuel Upload',
-              icon: Database,
-              path: '/master-data-upload',
-              badge: 'DSS Sync',
-              badgeColor: 'bg-red-700 text-white font-bold',
+              name: 'Partner Storefront Studio',
+              icon: Store,
+              path: '/staff-storefront',
+              badge: 'E-Store',
+              badgeColor: 'bg-amber-400 text-slate-950 font-black',
             },
             { name: 'Reports & Analytics', icon: BarChart2, path: '/reports' },
             { name: 'Auto Office Master', icon: Building, path: '/office-master' },
@@ -265,14 +270,6 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
               badgeColor: 'bg-amber-500 text-slate-950 font-bold',
             },
             { name: 'Postal Exam LMS Hub', icon: GraduationCap, path: '/postal-lms' },
-            { name: 'Special Forms & Bills', icon: FileText, path: '/special-forms' },
-            {
-              name: 'Official Applications',
-              icon: FileText,
-              path: '/official-applications',
-              badge: 'PDF',
-              badgeColor: 'bg-indigo-600 text-white',
-            },
             {
               name: 'Staff Contact Directory',
               icon: Users,
@@ -333,18 +330,7 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
         {
           group: 'POSTMAN FIELD WORKBENCH',
           items: [
-            {
-              name: 'All-Day Articles & Fuel Hub',
-              icon: FileText,
-              path: '/postman-articles',
-              badge: 'Oct 2026',
-              badgeColor: 'bg-amber-400 text-slate-950 font-black',
-            },
-            {
-              name: 'My Beat / Area Directory',
-              icon: MapPin,
-              path: '/my-beat',
-            },
+            { name: 'My Beat / Area Directory', icon: MapPin, path: '/my-beat' },
             { name: 'Property Directory', icon: Building, path: '/properties' },
             {
               name: 'Commercial Store Directory',
@@ -352,6 +338,13 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
               path: '/commercial-directory',
               badge: 'GIS',
               badgeColor: 'bg-red-600 text-white font-bold',
+            },
+            {
+              name: 'Commercial Freshness & Matching',
+              icon: Sparkles,
+              path: '/commercial-intelligence',
+              badge: 'AI Fresh',
+              badgeColor: 'bg-emerald-600 text-white font-bold',
             },
             { name: 'Linked Members', icon: Users, path: '/households' },
             { name: 'Add Property / Member', icon: Home, path: '/unified-properties' },
@@ -364,25 +357,11 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
             },
             { name: 'Delivery Map / Route', icon: Navigation, path: '/beats-map' },
             {
-              name: 'ACG-61 Charge Report',
-              icon: ArrowLeftRight,
-              path: '/charge-report',
-              badge: 'ACG-61',
-              badgeColor: 'bg-red-700 text-white',
-            },
-            {
               name: 'Postal Exam LMS Hub',
               icon: GraduationCap,
               path: '/postal-lms',
               badge: 'LDCE',
               badgeColor: 'bg-amber-500 text-slate-950',
-            },
-            {
-              name: 'Official Applications',
-              icon: FileText,
-              path: '/official-applications',
-              badge: 'Templates',
-              badgeColor: 'bg-indigo-600 text-white',
             },
             {
               name: 'Staff Contact Directory',
@@ -391,6 +370,7 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
               badge: 'Directory',
               badgeColor: 'bg-sky-600 text-white',
             },
+            { name: 'My Storefront Products', icon: Store, path: '/staff-storefront', badge: 'E-Store', badgeColor: 'bg-amber-400 text-slate-950 font-bold' },
             { name: 'My Submissions', icon: FileCheck2, path: '/my-submissions' },
             { name: 'My Profile', icon: User, path: '/my-profile' },
           ],
@@ -408,6 +388,14 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
           ],
         },
       ];
+
+  const formsDocsSubItems = [
+    { name: 'a. ACG-61 Charge Report', path: '/charge-report', icon: ArrowLeftRight, badge: 'ACG-61' },
+    { name: 'b. Official Applications', path: '/official-applications', icon: FileText, badge: 'PDF' },
+    { name: 'c. Monthly Fuel & Articles', path: '/postman-articles', icon: FileText, badge: '31-Day' },
+    { name: 'd. BYOD & Allowance Bills', path: '/special-forms', icon: Smartphone, badge: 'Bills' },
+    { name: 'e. NPR & Office Expenses', path: '/special-forms', icon: Database, badge: 'Ledger' },
+  ];
 
   return (
     <div className="min-h-screen flex bg-slate-50 font-sans text-slate-900" id="app-container">
@@ -449,14 +437,17 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
                 </div>
               </Link>
 
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="md:hidden p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800"
-                id="close-sidebar-btn"
-              >
-                <X size={20} />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <NotificationBellDropdown />
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(false)}
+                  className="md:hidden p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800"
+                  id="close-sidebar-btn"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
             {/* Navigation Menu Links */}
@@ -518,6 +509,50 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
                   })}
                 </div>
               ))}
+
+              {/* CONSOLIDATED "FORMS & DOCUMENTS" COLLAPSIBLE PARENT MENU */}
+              <div className="space-y-1 pt-1 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setFormsDocsOpen((v) => !v)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-slate-800/90 text-amber-300 hover:bg-slate-800 transition font-black text-xs cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <FileText size={16} className="text-amber-400" />
+                    <span>Forms &amp; Documents Hub</span>
+                  </div>
+                  {formsDocsOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                </button>
+
+                {formsDocsOpen && (
+                  <div className="pl-4 space-y-1 pt-1 border-l-2 border-red-700 ml-2">
+                    {formsDocsSubItems.map((sub) => {
+                      const isSubActive = location.pathname === sub.path;
+                      const SubIcon = sub.icon;
+                      return (
+                        <Link
+                          key={sub.name}
+                          to={sub.path}
+                          onClick={() => setIsOpen(false)}
+                          className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg transition text-[11px] font-medium ${
+                            isSubActive
+                              ? 'bg-red-700 text-white font-bold'
+                              : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <SubIcon size={14} className={isSubActive ? 'text-amber-300' : 'text-slate-500'} />
+                            <span className="truncate">{sub.name}</span>
+                          </div>
+                          <span className="px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 text-[9px] font-bold">
+                            {sub.badge}
+                          </span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </nav>
 
             {/* Sidebar Footer User Info */}
@@ -542,204 +577,74 @@ export default function Layout({ children, onOpenCustomerPortal }: LayoutProps) 
                 </div>
               </button>
 
-              <button
-                type="button"
-                onClick={() => signOut()}
-                title="Sign Out"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 transition shrink-0"
-                id="sidebar-signout-btn"
-              >
-                <LogOut size={16} />
-              </button>
-            </div>
-            <div className="px-3 py-1.5 bg-slate-950/90 border-t border-slate-900 text-[9px] text-slate-400 flex items-center justify-between">
-              <span className="font-bold text-slate-300">Xpeedo Last Mile</span>
-              <span>XPEEDO Private Limited</span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => signOut()}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800 transition cursor-pointer"
+                  title="Sign Out"
+                >
+                  <LogOut size={16} />
+                </button>
+              </div>
             </div>
           </div>
         </aside>
       )}
 
-      {/* Main Content Area: Responsive w-full for Public Views, md:ml-72 for Staff CRM */}
-      <div className={`flex-1 flex flex-col ${!isPublicHomeRoute ? 'md:ml-72' : 'w-full'} min-w-0`} id="main-content">
-        {/* Top Header Bar */}
-        <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-3 sm:px-6 py-2.5 flex items-center justify-between shadow-2xs gap-2 sm:gap-4">
-          {/* Public Citizen Header Layout */}
-          {isPublicHomeRoute ? (
-            <div className="flex items-center justify-between w-full">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-red-800 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
-                  📮
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs sm:text-sm font-black text-slate-900 tracking-tight">
-                      Xpeedo Last Mile
-                    </span>
-                    <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 font-mono text-[10px] font-bold">
-                      PIN 324009
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 hidden sm:block">
-                    Xpeedo Last Mile • Dadabari S.O. • PIN 324009 • XPEEDO Private Limited
-                  </p>
-                </div>
-              </div>
-
-              {/* Public Citizen Navigation Links */}
-              <div className="flex items-center gap-2 sm:gap-3">
-                <a
-                  href="#postal-schemes-section"
-                  className="hidden md:inline-block text-xs font-semibold text-slate-700 hover:text-red-700 transition"
-                >
-                  Postal Schemes
-                </a>
-                <Link
-                  to="/xpo-kart"
-                  className="hidden sm:inline-block text-xs font-semibold text-slate-700 hover:text-red-700 transition"
-                >
-                  Xpo Kart Store
-                </Link>
-                <Link
-                  to="/postal-lms"
-                  className="hidden lg:inline-block text-xs font-semibold text-slate-700 hover:text-red-700 transition"
-                >
-                  Postal Exam LMS
-                </Link>
-
-                {/* Secure, Low-Profile Staff Gateway */}
-                <Link
-                  to="/login"
-                  className="px-3 py-1.5 rounded-xl border border-slate-300 hover:border-slate-400 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition flex items-center gap-1.5 shadow-2xs"
-                  id="citizen-header-staff-login-btn"
-                  title="Authorized Departmental Personnel Login Gate"
-                >
-                  <Lock size={12} className="text-red-700" />
-                  <span>Official Staff Gateway</span>
-                </Link>
+      {/* Main Content Area */}
+      <div className={`flex-1 flex flex-col min-w-0 ${!isPublicHomeRoute ? 'md:pl-72' : ''}`}>
+        {/* Top Header Bar for Mobile Menu & Notifications */}
+        {!isPublicHomeRoute && (
+          <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setIsOpen(true)}
+                className="md:hidden p-2 rounded-xl text-slate-700 hover:bg-slate-100"
+              >
+                <Menu size={20} />
+              </button>
+              <div className="text-xs font-black text-slate-800">
+                {userProfile?.subOffice || 'Dadabari S.O.'} · PIN {userProfile?.officePincode || '324009'}
               </div>
             </div>
-          ) : (
-            /* Staff CRM Header Layout */
-            <>
-              {/* Left: Hamburger, Brand Identity & Route Context */}
-              <div className="flex items-center gap-2 sm:gap-3 min-w-0" id="top-staff-crm-access-section">
-                <button
-                  type="button"
-                  onClick={() => setIsOpen(true)}
-                  className="p-2 rounded-xl border border-slate-200 md:hidden hover:bg-slate-100 text-slate-700 shrink-0"
-                  id="mobile-hamburger-btn"
-                  title="Open Navigation Menu"
-                >
-                  <Menu size={19} />
-                </button>
 
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-red-800 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
-                    📮
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-black text-slate-900 tracking-tight truncate">
-                        Xpeedo Last Mile
-                      </span>
-                      <span className="hidden sm:inline-block px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 font-mono text-[10px] font-bold">
-                        PIN {userProfile?.officePincode || '324009'}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-slate-500 truncate hidden xs:block">
-                      Xpeedo Last Mile • {userProfile?.subOffice || 'Dadabari S.O.'} • PIN {userProfile?.officePincode || '324009'} • {isSuperAdmin ? 'Master Admin' : userProfile?.beat || 'Beat 2'}
-                    </p>
-                  </div>
-                </div>
+            <div className="flex items-center gap-2">
+              <NotificationBellDropdown />
+            </div>
+          </header>
+        )}
 
-                {/* Portal Switcher Tabs */}
-                <div className="hidden sm:flex items-center p-0.5 bg-slate-100 rounded-lg border border-slate-200 ml-2 shrink-0">
-                  <Link
-                    to="/dashboard"
-                    className="px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1 whitespace-nowrap bg-red-800 text-white shadow-2xs"
-                    title="Enter Internal Staff Operations"
-                  >
-                    <LayoutDashboard size={12} />
-                    <span>Staff CRM</span>
-                  </Link>
-                  <Link
-                    to="/"
-                    className="px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center gap-1 whitespace-nowrap text-slate-600 hover:text-slate-900"
-                    title="View Public Pan-India Portal"
-                  >
-                    <Home size={12} />
-                    <span>Public Portal</span>
-                  </Link>
-                </div>
-              </div>
-
-              {/* Right: Staff Controls & Master Admin Profile Switcher */}
-              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                {/* Quick Staff Role & Profile Switcher (Strictly Master Admin Only) */}
-                {isSuperAdmin && (
-                  <div className="hidden md:flex items-center gap-1 bg-slate-50 border border-slate-200 px-2 py-1.5 rounded-xl text-xs">
-                    <Shield size={12} className="text-red-700 shrink-0" />
-                    <select
-                      value={userProfile?.email || 'Ektamahenmeena@gmail.com'}
-                      onChange={(e) => switchStaffProfile(e.target.value)}
-                      className="bg-transparent font-bold text-slate-800 text-xs focus:outline-none cursor-pointer max-w-[150px] lg:max-w-[180px] truncate"
-                      id="top-profile-quick-switch"
-                      title="Master Admin: Switch active operational profile"
-                    >
-                      {allProfiles.slice(0, 25).map((sp) => (
-                        <option key={sp.id} value={sp.email}>
-                          {sp.name} (
-                          {sp.role === 'MASTER_ADMIN' || sp.role === 'SUPER_ADMIN'
-                            ? 'Master Admin'
-                            : `${sp.designation || sp.role} • ${sp.beat}`}
-                          )
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* My Profile Button */}
-                <button
-                  type="button"
-                  onClick={() => setShowProfileModal(true)}
-                  className="p-1.5 sm:px-2.5 sm:py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                  id="top-my-profile-btn"
-                  title="My Profile & Settings"
-                >
-                  <User size={14} className="text-red-700 shrink-0" />
-                  <span className="hidden sm:inline">Profile</span>
-                </button>
-
-                {/* Sign Out */}
-                <button
-                  type="button"
-                  onClick={() => signOut()}
-                  className="p-1.5 sm:px-2.5 sm:py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                  id="top-signout-btn"
-                  title="Sign Out"
-                >
-                  <LogOut size={14} />
-                  <span className="hidden sm:inline">Logout</span>
-                </button>
-              </div>
-            </>
-          )}
-        </header>
-
-        {/* Page Content View */}
-        <main className="p-4 sm:p-6 lg:p-8 flex-1 max-w-7xl w-full mx-auto">{children}</main>
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+          {children}
+        </main>
       </div>
-      {showAuthModal && <LoginPage isModal={true} onClose={() => setShowAuthModal(false)} />}
-      <StaffProfileModal
-        isOpen={showProfileModal}
-        onClose={() => setShowProfileModal(false)}
-        forcePasswordChangeMode={false}
-      />
-      {/* Persistent Floating AI Operations Assistant Chatbot Widget across all views */}
+
+      {/* Staff Profile Settings Modal */}
+      {showProfileModal && (
+        <StaffProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
+      )}
+
+      {/* Global Staff Login Modal if triggered */}
+      {showAuthModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
+            <button
+              type="button"
+              onClick={() => setShowAuthModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-full text-slate-500 hover:bg-slate-100"
+            >
+              <X size={18} />
+            </button>
+            <LoginPage initialTier="STAFF" isStaffDirect={true} />
+          </div>
+        </div>
+      )}
+
+      {/* Floating AI Assistant & Mobile FAB */}
       <FloatingAIChatBot />
-      {!isPublicHomeRoute && <MobileFAB />}
+      <MobileFAB />
     </div>
   );
 }

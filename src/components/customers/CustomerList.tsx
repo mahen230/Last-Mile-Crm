@@ -5,9 +5,9 @@ import { customerService } from '../../services/customerService';
 import { staffPermissionService } from '../../services/staffPermissionService';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import { 
-  Search, Filter, Plus, Download, Eye, Edit3, Target, Calendar, 
+  Search, Filter, Plus, Download, Upload, Eye, Edit3, Target, Calendar, 
   AlertTriangle, CheckCircle2, Shield, Users, ArrowUpDown, MessageSquare,
-  UserCheck, Trash2, Lock, Sparkles, X, User, MapPin, Layers
+  UserCheck, Trash2, Lock, Sparkles, X, User, MapPin, Layers, LayoutGrid, List, Phone
 } from 'lucide-react';
 import CustomerProfileModal from './CustomerProfileModal';
 import AddCustomerModal from './AddCustomerModal';
@@ -34,11 +34,15 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
   const [selectedVerification, setSelectedVerification] = useState<string>('All');
   const [selectedBeat, setSelectedBeat] = useState<string>('All');
   const [selectedStaffFilter, setSelectedStaffFilter] = useState<string>('All');
+  const [selectedResidency, setSelectedResidency] = useState<string>('All');
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importCsvText, setImportCsvText] = useState('');
   const [showConflictsOnly, setShowConflictsOnly] = useState(false);
   const [sortField, setSortField] = useState<'colony' | 'latest' | 'name' | 'masterId' | 'sector' | 'leadScore'>('colony');
   const [sortAsc, setSortAsc] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(5);
+  const [pageSize, setPageSize] = useState<number>(6);
 
   // Modals
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -90,7 +94,73 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
     setStatusBanner({ type, message });
     setTimeout(() => {
       setStatusBanner(prev => (prev?.message === message ? null : prev));
-    }, 3500);
+    }, 4000);
+  };
+
+  const handleBulkCsvTextImport = (rawCsv: string) => {
+    const lines = rawCsv
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (lines.length < 2) {
+      showNotification('CSV must include a header row and at least 1 customer data row.', 'warning');
+      return;
+    }
+    const headers = lines[0].split(',').map((h) => h.replace(/^"|"$/g, '').trim().toLowerCase());
+    const idxOf = (keys: string[]) => headers.findIndex((h) => keys.some((k) => h.includes(k)));
+
+    const nameIdx = idxOf(['name', 'customer']);
+    const mobileIdx = idxOf(['mobile', 'phone', 'contact']);
+    const colonyIdx = idxOf(['colony', 'area', 'locality']);
+    const sectorIdx = idxOf(['sector', 'block']);
+    const houseIdx = idxOf(['house', 'plot']);
+    const beatIdx = idxOf(['beat']);
+    const livingIdx = idxOf(['living', 'residency', 'status', 'type']);
+
+    if (nameIdx === -1) {
+      showNotification('CSV header must contain a "Name" column.', 'warning');
+      return;
+    }
+
+    let importedCount = 0;
+    lines.slice(1).forEach((line) => {
+      const cols = line.split(',').map((c) => c.replace(/^"|"$/g, '').trim());
+      const name = cols[nameIdx];
+      if (!name || name.length < 2) return;
+      const mobile = mobileIdx !== -1 ? (cols[mobileIdx] || '').replace(/\D/g, '').slice(-10) : '';
+      const area = colonyIdx !== -1 ? cols[colonyIdx] || 'Dadabari' : 'Dadabari';
+      const sector = sectorIdx !== -1 ? cols[sectorIdx] || 'Sector 1' : 'Sector 1';
+      const houseNo = houseIdx !== -1 ? cols[houseIdx] || '' : '';
+      const rawBeat = beatIdx !== -1 ? (cols[beatIdx] || '').replace(/\D/g, '') : '';
+      const beatNo = rawBeat || (userProfile?.beat || 'Beat 2').replace(/\D/g, '') || '2';
+      const livingRaw = livingIdx !== -1 ? cols[livingIdx] || 'Owner' : 'Owner';
+
+      customerService.addOrUpdateCustomer(
+        {
+          name,
+          mobile,
+          area,
+          colony: area,
+          sector,
+          houseNo,
+          beatNo,
+          pincode: '324009',
+          livingStatus: livingRaw as any,
+          verificationStatus: 'Pending Verification',
+          enteredBy: userProfile?.email || 'ektamahenmeena@gmail.com',
+          enteredByName: userProfile?.name || 'Postal Staff',
+        },
+        'CSV Bulk Import'
+      );
+      importedCount += 1;
+    });
+
+    setShowImportModal(false);
+    setImportCsvText('');
+    showNotification(
+      `Successfully imported / updated ${importedCount} customer record(s) from CSV into Master Directory.`,
+      importedCount > 0 ? 'success' : 'warning'
+    );
   };
 
   const handleDeleteCustomer = (c: Customer) => {
@@ -185,11 +255,24 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
     // 4. Hierarchical Colony & Sub-Sector filter
     const matchesColonyAndSector = matchCustomerToColonyAndSector(c, selectedColony, selectedSubSector);
 
-    const matchesBeat = selectedBeat === 'All' || c.beatNo === selectedBeat;
+    const matchesBeat = selectedBeat === 'All' || String(c.beatNo || '').replace(/\D/g, '') === selectedBeat.replace(/\D/g, '');
     const matchesVerification = selectedVerification === 'All' || c.verificationStatus === selectedVerification;
     const matchesConflict = !showConflictsOnly || c.hasConflict;
 
-    return matchesSearch && matchesColonyAndSector && matchesBeat && matchesVerification && matchesConflict;
+    let matchesResidency = true;
+    if (selectedResidency !== 'All') {
+      const liv = (c.livingStatus || '').toLowerCase();
+      const cat = (c.category || '').toLowerCase();
+      const typ = (c.type || '').toLowerCase();
+      const occ = (c.occupation || '').toLowerCase();
+      if (selectedResidency === 'Owner') matchesResidency = liv === 'owner';
+      else if (selectedResidency === 'Tenant') matchesResidency = liv === 'tenant';
+      else if (selectedResidency === 'Commercial') matchesResidency = typ.includes('comm') || occ.includes('shop') || occ.includes('business');
+      else if (selectedResidency === 'Senior Citizen') matchesResidency = (c.age || 0) >= 60 || cat.includes('senior') || occ.includes('retir') || occ.includes('pension');
+      else if (selectedResidency === 'Unmapped') matchesResidency = c.propertyMappingStatus === 'Unmapped / Pending Re-assignment' || !c.houseNo;
+    }
+
+    return matchesSearch && matchesColonyAndSector && matchesBeat && matchesVerification && matchesConflict && matchesResidency;
   });
 
   // Sort (Default 'colony' sorts Colony Name ascending A to Z, then House/Plot Number ascending)
@@ -311,23 +394,56 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <div className="bg-slate-100 p-1 rounded-xl flex items-center text-xs font-bold border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setViewMode('cards')}
+              className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition cursor-pointer ${
+                viewMode === 'cards' ? 'bg-indigo-700 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <LayoutGrid size={14} />
+              <span>Cards</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition cursor-pointer ${
+                viewMode === 'table' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <List size={14} />
+              <span>Table</span>
+            </button>
+          </div>
+
           <button
             onClick={() => {
               setMessageCustomer(null);
               setShowMessageModal(true);
             }}
-            className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border border-emerald-200"
+            className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border border-emerald-200 cursor-pointer"
             id="open-direct-message-hub-btn"
             title="Compose WhatsApp / SMS message to customer"
           >
             <MessageSquare size={15} className="text-emerald-700" />
-            <span>Send Message / Chat</span>
+            <span>Message</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowImportModal(true)}
+            className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border border-indigo-200 cursor-pointer"
+            id="import-customers-csv-btn"
+          >
+            <Upload size={15} />
+            <span>Import CSV</span>
           </button>
 
           {(!userProfile || userProfile.permissions.canExportData) && (
             <button
               onClick={handleExportCSV}
-              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border border-slate-300"
+              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border border-slate-300 cursor-pointer"
               id="export-customers-csv-btn"
             >
               <Download size={15} />
@@ -345,7 +461,7 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
               setShowAddModal(true);
             }}
             disabled={quotaCheck.limit > 0 && quotaCheck.todayCount >= quotaCheck.limit}
-            className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-xs ${
+            className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-xs cursor-pointer ${
               quotaCheck.limit > 0 && quotaCheck.todayCount >= quotaCheck.limit
                 ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
                 : 'bg-red-700 hover:bg-red-800 text-white'
@@ -353,32 +469,32 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
             id="add-customer-main-btn"
           >
             <Plus size={16} />
-            <span>Add Verified Customer</span>
+            <span>Add Customer</span>
           </button>
         </div>
       </div>
 
-      {/* KPI Highlights Bar */}
+      {/* KPI Highlights Bar — Color-Coded High-Contrast Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-xs text-slate-500 font-medium">Visible Master Customers</div>
-          <div className="text-2xl font-black text-slate-900 mt-1">{filteredCustomers.length}</div>
+        <div className="bg-gradient-to-br from-indigo-600 to-violet-700 text-white p-4 rounded-2xl shadow-sm">
+          <div className="text-[11px] text-indigo-100 font-bold uppercase tracking-wider">Visible Master Customers</div>
+          <div className="text-2xl font-black font-mono tabular-nums mt-1">{filteredCustomers.length}</div>
         </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-xs text-slate-500 font-medium">Field Confirmed</div>
-          <div className="text-2xl font-black text-emerald-700 mt-1">
-            {filteredCustomers.filter(c => c.verificationStatus === 'Field Confirmed' || c.verificationStatus === 'Document Confirmed').length}
+        <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white p-4 rounded-2xl shadow-sm">
+          <div className="text-[11px] text-emerald-100 font-bold uppercase tracking-wider">Field Confirmed</div>
+          <div className="text-2xl font-black font-mono tabular-nums mt-1">
+            {filteredCustomers.filter(c => c.verificationStatus === 'Field Confirmed' || c.verificationStatus === 'Document Confirmed' || c.verificationStatus === 'Verified').length}
           </div>
         </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-xs text-slate-500 font-medium">Active Scheme Inquiries</div>
-          <div className="text-2xl font-black text-blue-700 mt-1">
+        <div className="bg-gradient-to-br from-sky-600 to-blue-700 text-white p-4 rounded-2xl shadow-sm">
+          <div className="text-[11px] text-sky-100 font-bold uppercase tracking-wider">Active Scheme Inquiries</div>
+          <div className="text-2xl font-black font-mono tabular-nums mt-1">
             {filteredCustomers.filter(c => c.products && c.products.length > 0).length}
           </div>
         </div>
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-          <div className="text-xs text-slate-500 font-medium">Assigned / My Entries</div>
-          <div className="text-2xl font-black text-purple-700 mt-1">
+        <div className="bg-gradient-to-br from-amber-500 to-orange-600 text-white p-4 rounded-2xl shadow-sm">
+          <div className="text-[11px] text-amber-50 font-bold uppercase tracking-wider">Assigned / My Entries</div>
+          <div className="text-2xl font-black font-mono tabular-nums mt-1">
             {filteredCustomers.filter(c => c.enteredBy || c.assignedStaffEmail).length}
           </div>
         </div>
@@ -496,12 +612,32 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
                 </>
               ) : (
                 <>
-                  <option value="All">All Beats (1-33)</option>
-                  {Array.from({ length: 33 }, (_, i) => String(i + 1)).map((b) => (
+                  <option value="All">All Beats (1-34)</option>
+                  {Array.from({ length: 34 }, (_, i) => String(i + 1)).map((b) => (
                     <option key={b} value={b}>Beat {b}</option>
                   ))}
                 </>
               )}
+            </select>
+          </div>
+
+          {/* Residency Tag Filter */}
+          <div className="flex items-center gap-1.5 sm:ml-1">
+            <span className="text-slate-500 font-semibold">Residency:</span>
+            <select
+              value={selectedResidency}
+              onChange={(e) => {
+                setSelectedResidency(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="py-1.5 px-2.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-900 font-bold text-xs focus:ring-2 focus:ring-indigo-600"
+            >
+              <option value="All">All Residency Tags</option>
+              <option value="Owner">Owner</option>
+              <option value="Tenant">Tenant</option>
+              <option value="Commercial">Commercial / Shop</option>
+              <option value="Senior Citizen">Senior Citizen (60+)</option>
+              <option value="Unmapped">Unmapped House No</option>
             </select>
           </div>
 
@@ -591,7 +727,205 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
         )}
       </div>
 
-      {/* Customer Master Table */}
+      {/* Colorful Card Grid View vs Master Table View */}
+      {viewMode === 'cards' ? (
+        <div className="space-y-4">
+          {paginatedCustomers.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center text-slate-500 text-xs">
+              No customers match your search criteria. Try modifying your Colony, Beat (1–34), or Residency filters.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {paginatedCustomers.map((cust, custIdx) => {
+                const isVerified =
+                  cust.verificationStatus === 'Field Confirmed' ||
+                  cust.verificationStatus === 'Verified' ||
+                  cust.verificationStatus === 'Document Confirmed';
+                const cardTopGradient = isVerified
+                  ? 'from-emerald-600 to-teal-700'
+                  : cust.hasConflict
+                  ? 'from-rose-600 to-red-700'
+                  : 'from-amber-500 to-orange-600';
+                const borderAccent = isVerified
+                  ? 'border-emerald-200 hover:border-emerald-400'
+                  : cust.hasConflict
+                  ? 'border-rose-200 hover:border-rose-400'
+                  : 'border-amber-200 hover:border-amber-400';
+
+                return (
+                  <article
+                    key={cust.id ? `card-${cust.id}-${custIdx}` : `card-row-${custIdx}`}
+                    className={`bg-white rounded-3xl border-2 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition flex flex-col justify-between ${borderAccent}`}
+                  >
+                    <div>
+                      <div className={`bg-gradient-to-r ${cardTopGradient} px-4 py-3 text-white flex items-center justify-between gap-2`}>
+                        <span className="font-mono font-black text-[11px] tracking-wide bg-black/25 px-2 py-0.5 rounded-md">
+                          {cust.masterId || cust.id}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-2 py-0.5 rounded-md bg-white/20 text-white text-[10px] font-bold">
+                            Beat {cust.beatNo || '2'}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md bg-white text-slate-900 text-[10px] font-black">
+                            {cust.livingStatus || 'Resident'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-4 space-y-2.5 text-xs">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <h3
+                              onClick={() => setSelectedCustomer(cust)}
+                              className="font-black text-base text-slate-900 hover:text-red-700 cursor-pointer leading-snug"
+                            >
+                              {cust.name}
+                            </h3>
+                            {cust.fatherHusbandName && (
+                              <div className="text-[11px] text-slate-500">S/o {cust.fatherHusbandName}</div>
+                            )}
+                          </div>
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold shrink-0 ${
+                            isVerified ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
+                          }`}>
+                            {cust.verificationStatus}
+                          </span>
+                        </div>
+
+                        <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                          <div className="flex items-center gap-1.5 text-slate-800 font-semibold">
+                            <MapPin size={13} className="text-red-600 shrink-0" />
+                            <span className="truncate">
+                              {cust.houseNo || cust.address?.houseNumber || 'House/Plot'} · {cust.sector || 'Sector'} · {cust.area || 'Dadabari'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] font-mono text-slate-700 pt-1 border-t border-slate-200/70">
+                            <span>Mob: <strong>{cust.mobile || '—'}</strong></span>
+                            <span>PIN: <strong>{cust.pincode || '324009'}</strong></span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-1.5 flex-wrap">
+                      <div className="flex items-center gap-1">
+                        {cust.mobile && (
+                          <a
+                            href={`tel:${cust.mobile}`}
+                            className="p-1.5 bg-sky-100 hover:bg-sky-200 text-sky-800 rounded-lg transition"
+                            title="Call Customer"
+                          >
+                            <Phone size={13} />
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMessageCustomer(cust);
+                            setShowMessageModal(true);
+                          }}
+                          className="p-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-lg transition cursor-pointer"
+                          title="Send WhatsApp / SMS"
+                        >
+                          <MessageSquare size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedCustomer(cust)}
+                          className="p-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg transition cursor-pointer"
+                          title="View 360 Profile"
+                        >
+                          <Eye size={13} />
+                        </button>
+                        {customerService.canEditRecord(cust, userProfile) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCustomerToEdit(cust);
+                              setShowAddModal(true);
+                            }}
+                            className="p-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg transition cursor-pointer"
+                            title="Edit Record"
+                          >
+                            <Edit3 size={13} />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onAddLead) onAddLead(cust);
+                            else navigate('/leads', { state: { initialCustomer: cust } });
+                          }}
+                          className="px-2.5 py-1 bg-red-700 hover:bg-red-800 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+                        >
+                          <Target size={12} />
+                          <span>Lead</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onAddFollowUp) onAddFollowUp(cust);
+                            else navigate('/followups', { state: { initialCustomer: cust } });
+                          }}
+                          className="px-2.5 py-1 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+                        >
+                          <Calendar size={12} />
+                          <span>Visit</span>
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Shared Pagination Footer for Card Grid */}
+          <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="text-slate-600 font-medium">
+              Showing <span className="font-bold text-slate-900">{sortedCustomers.length === 0 ? 0 : (safePage - 1) * pageSize + 1}</span> to{' '}
+              <span className="font-bold text-slate-900">{Math.min(safePage * pageSize, sortedCustomers.length)}</span> of{' '}
+              <span className="font-bold text-slate-900">{sortedCustomers.length}</span> customers
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-700"
+              >
+                <option value={6}>6 / page</option>
+                <option value={12}>12 / page</option>
+                <option value={24}>24 / page</option>
+                <option value={500}>Show All ({sortedCustomers.length})</option>
+              </select>
+              <button
+                type="button"
+                disabled={safePage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 disabled:opacity-40 hover:bg-slate-100 cursor-pointer"
+              >
+                Prev
+              </button>
+              <span className="font-bold text-slate-800 px-2">Page {safePage} / {totalPages}</span>
+              <button
+                type="button"
+                disabled={safePage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 disabled:opacity-40 hover:bg-slate-100 cursor-pointer"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+      /* Customer Master Table */
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left text-slate-700">
@@ -870,6 +1204,86 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
           </div>
         </div>
       </div>
+      )}
+
+      {/* CSV Bulk Import Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-indigo-200 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div>
+                <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
+                  <Upload size={18} className="text-indigo-700" />
+                  <span>Bulk Customer CSV Import (Beats 1–34)</span>
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Upload a .csv file or paste rows with columns: Name, Mobile, Colony, Sector, House, Beat, LivingStatus
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowImportModal(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3.5 bg-indigo-50/70 border border-indigo-200 rounded-2xl space-y-2">
+                <label className="block font-bold text-indigo-950">Upload CSV File (.csv)</label>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      if (typeof reader.result === 'string') {
+                        setImportCsvText(reader.result);
+                      }
+                    };
+                    reader.readAsText(file);
+                  }}
+                  className="block w-full text-xs text-slate-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-700 file:text-white hover:file:bg-indigo-800 cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Or Paste CSV Content Directly:
+                </label>
+                <textarea
+                  rows={5}
+                  value={importCsvText}
+                  onChange={(e) => setImportCsvText(e.target.value)}
+                  placeholder={`Name,Mobile,Colony,Sector,House,Beat,LivingStatus\nRamesh Sharma,9829012345,Keshavpura,Sector 4,4-K-12,Beat 2,Self-Owned`}
+                  className="w-full p-3 bg-slate-50 border border-slate-300 rounded-2xl font-mono text-[11px] focus:ring-2 focus:ring-indigo-600 focus:bg-white"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setShowImportModal(false)}
+                className="px-4 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleBulkCsvTextImport(importCsvText)}
+                className="px-5 py-2 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl text-xs font-black shadow-sm flex items-center gap-1.5 cursor-pointer"
+              >
+                <Upload size={14} />
+                <span>Import &amp; Sync Customers</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Staff Assignment Modal */}
       {assignTargetCustomer && (

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Target, Plus, ArrowRight, CheckCircle2, Clock, User, Phone, Filter, ChevronRight, X, MessageSquare, Eye } from 'lucide-react';
+import { Target, Plus, ArrowRight, CheckCircle2, Clock, User, Phone, Filter, ChevronRight, X, MessageSquare, Eye, Calendar } from 'lucide-react';
 import { Lead, LeadStage, Customer } from '../../types/models';
 import { customerService } from '../../services/customerService';
 import { POSTAL_PRODUCTS } from '../../data/productsData';
@@ -15,7 +15,7 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
   const isSuperAdmin = staffPermissionService.isSuperAdmin(userProfile);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
-  const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'SMALL_SAVINGS' | 'IPPB' | 'INSURANCE' | 'SERVICE_REQ'>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'SMALL_SAVINGS' | 'IPPB' | 'IPPB_MERCHANT_QR' | 'INSURANCE' | 'SERVICE_REQ'>('ALL');
   const [beatFilter, setBeatFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddLeadModal, setShowAddLeadModal] = useState(false);
@@ -142,6 +142,30 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
     }
   };
 
+  const handleScheduleDoorstepFollowUp = (lead: Lead) => {
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    customerService.scheduleFollowUp({
+      customerId: lead.customerId,
+      customerName: lead.customerName,
+      customerMobile: lead.customerMobile,
+      customerAddress: lead.customerAddress || 'Dadabari S.O. 324009',
+      leadId: lead.id,
+      productCode: lead.productCode,
+      productName: lead.productName,
+      scheduledDate: tomorrow,
+      scheduledTime: '11:00',
+      currentStatus: 'Pending',
+      priority: lead.priority === 'Urgent' ? 'Urgent' : 'High',
+      nextAction: `Doorstep Follow-up for ${lead.productName}`,
+      assignedStaffName: userProfile?.name || lead.assignedStaffName || 'Mahendra Kumar Meena',
+      assignedStaffEmail: userProfile?.email,
+      beatNo: lead.beatNo || 'Beat 2',
+      remarks: `Scheduled directly from Leads Pipeline (${lead.id})`,
+    });
+    customerService.updateLeadStage(lead.id, 'Follow-up Scheduled');
+    showToast(`Doorstep visit scheduled for ${lead.customerName} on ${tomorrow} (${lead.productName}).`);
+  };
+
   const handleOpenLeadCustomerProfile = (lead: Lead) => {
     const existing =
       customerService.getCustomerById(lead.customerId) ||
@@ -178,6 +202,8 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
         if (!['PPF', 'SSY', 'SSA', 'NSC', 'KVP', 'MIS', 'SCSS', 'RD', 'TD', 'SB', 'MSSC'].some(k => code.includes(k) || name.includes(k))) return false;
       } else if (categoryFilter === 'IPPB') {
         if (!code.includes('IPPB') && !name.includes('IPPB') && !req.includes('AEPS') && !req.includes('DOORSTEP')) return false;
+      } else if (categoryFilter === 'IPPB_MERCHANT_QR') {
+        if (!code.includes('QR') && !name.includes('QR') && !name.includes('MERCHANT') && !req.includes('QR') && !req.includes('MERCHANT')) return false;
       } else if (categoryFilter === 'INSURANCE') {
         if (!code.includes('PLI') && !code.includes('RPLI') && !name.includes('INSURANCE') && !name.includes('BIMA')) return false;
       } else if (categoryFilter === 'SERVICE_REQ') {
@@ -271,16 +297,17 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
           {[
             { id: 'ALL', label: 'All Inquiries' },
             { id: 'SMALL_SAVINGS', label: 'Small Savings (PPF/SSY/NSC/MIS)' },
-            { id: 'IPPB', label: 'IPPB & Doorstep Banking' },
+            { id: 'IPPB', label: 'IPPB Doorstep Banking' },
+            { id: 'IPPB_MERCHANT_QR', label: 'IPPB Merchant QR' },
             { id: 'INSURANCE', label: 'PLI / RPLI Insurance' },
             { id: 'SERVICE_REQ', label: 'Service Requests (Aadhaar/Mail)' },
           ].map(tab => (
             <button
               key={tab.id}
               onClick={() => setCategoryFilter(tab.id as any)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
                 categoryFilter === tab.id
-                  ? 'bg-slate-900 text-white shadow-xs'
+                  ? 'bg-gradient-to-r from-red-700 to-rose-700 text-white shadow-xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
@@ -293,14 +320,12 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
             <select
               value={beatFilter}
               onChange={(e) => setBeatFilter(e.target.value)}
-              className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
+              className="px-2.5 py-1.5 bg-indigo-50 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-900"
             >
-              <option value="ALL">All Beats</option>
-              <option value="1">Beat 1</option>
-              <option value="2">Beat 2</option>
-              <option value="3">Beat 3</option>
-              <option value="4">Beat 4</option>
-              <option value="5">Beat 5</option>
+              <option value="ALL">All Beats (1–34)</option>
+              {Array.from({ length: 34 }, (_, i) => String(i + 1)).map((b) => (
+                <option key={b} value={b}>Beat {b}</option>
+              ))}
             </select>
           )}
           <input
@@ -324,99 +349,134 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
             return (
               <div
                 key={stage}
-                className="w-72 shrink-0 bg-slate-100/90 rounded-2xl p-3 border border-slate-200/80 flex flex-col max-h-[750px]"
+                className="w-80 shrink-0 bg-gradient-to-b from-slate-100 to-slate-50 rounded-2xl p-3 border border-slate-200/90 flex flex-col max-h-[750px] shadow-xs"
               >
-                <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200">
-                  <span className="font-bold text-xs text-slate-800 tracking-tight">{stage}</span>
-                  <span className="px-2 py-0.5 bg-white text-slate-700 rounded-full text-[11px] font-bold shadow-xs">
+                <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-slate-200">
+                  <span className="font-black text-xs text-slate-900 tracking-tight">{stage}</span>
+                  <span className="px-2.5 py-0.5 bg-slate-900 text-white rounded-full text-[11px] font-mono font-bold shadow-xs">
                     {stageLeads?.length || 0}
                   </span>
                 </div>
 
                 <div className="space-y-3 overflow-y-auto flex-1 pr-1">
-                  {paginatedStageLeads.map((lead) => (
-                    <div
-                      key={lead.id}
-                      className="bg-white rounded-xl p-3.5 border border-slate-200 hover:border-red-300 hover:shadow-xs transition space-y-2 text-xs"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-[10px] font-bold text-slate-500">{lead.id}</span>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          lead.priority === 'Urgent' ? 'bg-red-100 text-red-800' :
-                          lead.priority === 'High' ? 'bg-amber-100 text-amber-800' :
-                          'bg-blue-100 text-blue-800'
-                        }`}>
-                          {lead.priority}
-                        </span>
-                      </div>
+                  {paginatedStageLeads.map((lead) => {
+                    const pStr = `${lead.productCode || ''} ${lead.productName || ''}`.toUpperCase();
+                    const schemeBadge = pStr.includes('PLI') || pStr.includes('RPLI')
+                      ? 'bg-indigo-100 text-indigo-900 border-indigo-200'
+                      : pStr.includes('SSA') || pStr.includes('SSY') || pStr.includes('SUKANYA')
+                      ? 'bg-rose-100 text-rose-900 border-rose-200'
+                      : pStr.includes('IPPB') || pStr.includes('QR')
+                      ? 'bg-sky-100 text-sky-900 border-sky-200'
+                      : 'bg-emerald-100 text-emerald-900 border-emerald-200';
+                    const custWaPhone = (lead.customerMobile || '').replace(/\D/g, '').slice(-10) || '8769706002';
+                    const pitchHref = `https://api.whatsapp.com/send?phone=91${custWaPhone}&text=${encodeURIComponent(
+                      `नमस्ते ${lead.customerName} जी,\nइंडिया पोस्ट दादाबाड़ी S.O. (PIN 324009) से आपकी *${lead.productName}* पूछताछ हेतु संपर्क कर रहे हैं। डोरस्टेप KYC व खाता खोलने हेतु Beat 2 (8769706002) या S.O. Desk (9460020640) से जुड़ें।`
+                    )}`;
 
+                    return (
                       <div
-                        onClick={() => handleOpenLeadCustomerProfile(lead)}
-                        className="font-bold text-slate-900 text-sm hover:text-red-700 hover:underline cursor-pointer"
+                        key={lead.id}
+                        className="bg-white rounded-2xl p-3.5 border-2 border-slate-200 hover:border-indigo-400 hover:shadow-md transition space-y-2 text-xs"
                       >
-                        {lead.customerName}
-                      </div>
-                      <div className="text-slate-500 font-mono text-[11px] flex items-center justify-between">
-                        <div className="flex items-center gap-1">
-                          <Phone size={11} className="text-emerald-600" />
-                          <span>{lead.customerMobile}</span>
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-[10px] font-bold text-slate-500">{lead.id}</span>
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
+                            lead.priority === 'Urgent' ? 'bg-rose-600 text-white' :
+                            lead.priority === 'High' ? 'bg-amber-500 text-slate-950' :
+                            'bg-sky-100 text-sky-800'
+                          }`}>
+                            {lead.priority}
+                          </span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMessageLead(lead);
-                            setShowMessageModal(true);
-                          }}
-                          className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded border border-emerald-200 text-[10px] font-semibold flex items-center gap-1 transition"
-                          title="Send WhatsApp/SMS update to lead"
+
+                        <div
+                          onClick={() => handleOpenLeadCustomerProfile(lead)}
+                          className="font-black text-slate-900 text-sm hover:text-red-700 hover:underline cursor-pointer"
                         >
-                          <MessageSquare size={11} />
-                          <span>Chat</span>
-                        </button>
-                      </div>
-
-                      <div className="p-2 bg-red-50/60 rounded-lg text-red-900 font-semibold text-[11px]">
-                        {lead.productName}
-                      </div>
-
-                      <p className="text-slate-600 line-clamp-2 text-[11px]">{lead.requirement}</p>
-
-                      {lead.estimatedValue && (
-                        <div className="text-[11px] text-slate-700 font-bold">
-                          Est. Value: ₹{lead.estimatedValue.toLocaleString('en-IN')}
+                          {lead.customerName}
                         </div>
-                      )}
+                        <div className="text-slate-600 font-mono text-[11px] flex items-center justify-between gap-1">
+                          <div className="flex items-center gap-1">
+                            <Phone size={11} className="text-emerald-600" />
+                            <span>{lead.customerMobile}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <a
+                              href={pitchHref}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold flex items-center gap-1 transition"
+                              title="Send Pre-Formatted Hindi WhatsApp Pitch"
+                            >
+                              <MessageSquare size={10} />
+                              <span>Pitch</span>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMessageLead(lead);
+                                setShowMessageModal(true);
+                              }}
+                              className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded text-[10px] font-semibold transition cursor-pointer"
+                              title="Open Direct Message Drawer"
+                            >
+                              SMS
+                            </button>
+                          </div>
+                        </div>
 
-                      {/* Stage Actions */}
-                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                        <button
-                          onClick={() => { setLeadToLink(lead); setShowLinkModal(true); }}
-                          className="text-[10px] font-bold text-indigo-700 hover:text-indigo-800"
-                        >
-                          Link Household
-                        </button>
-                        {stage !== 'Converted - Product Opened' && stage !== 'Closed - Not Interested' ? (
-                          <>
-                            <button
-                              onClick={() => handleConvertToProduct(lead)}
-                              className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-0.5"
-                            >
-                              <CheckCircle2 size={12} /> Convert
-                            </button>
-                            <button
-                              onClick={() => handleAdvanceStage(lead.id, lead.stage)}
-                              className="text-[11px] font-bold text-red-700 hover:text-red-800 flex items-center gap-0.5"
-                            >
-                              <span>Advance</span>
-                              <ChevronRight size={12} />
-                            </button>
-                          </>
-                        ) : (
-                          <span className="text-[11px] text-slate-400 italic">Lifecycle final</span>
+                        <div className={`p-2 rounded-xl border font-bold text-[11px] ${schemeBadge}`}>
+                          {lead.productName}
+                        </div>
+
+                        <p className="text-slate-600 line-clamp-2 text-[11px]">{lead.requirement}</p>
+
+                        {lead.estimatedValue && (
+                          <div className="text-[11px] text-slate-800 font-black font-mono tabular-nums">
+                            Est. Value: ₹{lead.estimatedValue.toLocaleString('en-IN')}
+                          </div>
                         )}
+
+                        {/* Stage & Follow-up Quick Actions */}
+                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between flex-wrap gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleScheduleDoorstepFollowUp(lead)}
+                            className="px-2 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-[10px] font-bold text-sky-800 flex items-center gap-1 cursor-pointer"
+                            title="Schedule Doorstep Follow-up Visit for Tomorrow"
+                          >
+                            <Calendar size={11} />
+                            <span>Schedule Visit</span>
+                          </button>
+                          <button
+                            onClick={() => { setLeadToLink(lead); setShowLinkModal(true); }}
+                            className="text-[10px] font-bold text-indigo-700 hover:text-indigo-800 cursor-pointer"
+                          >
+                            Link HH
+                          </button>
+                          {stage !== 'Converted - Product Opened' && stage !== 'Closed - Not Interested' ? (
+                            <div className="flex items-center gap-2 ml-auto">
+                              <button
+                                onClick={() => handleConvertToProduct(lead)}
+                                className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-0.5 cursor-pointer"
+                              >
+                                <CheckCircle2 size={12} /> Convert
+                              </button>
+                              <button
+                                onClick={() => handleAdvanceStage(lead.id, lead.stage)}
+                                className="text-[11px] font-bold text-red-700 hover:text-red-800 flex items-center gap-0.5 cursor-pointer"
+                              >
+                                <span>Advance</span>
+                                <ChevronRight size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-slate-400 italic">Lifecycle final</span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {stageLeads?.length === 0 && (
                     <div className="p-6 text-center text-slate-400 text-xs italic">
@@ -587,6 +647,7 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
                   onChange={(e) => setLeadProductCode(e.target.value)}
                   className="w-full p-2.5 border border-slate-300 rounded-xl bg-white"
                 >
+                  <option value="IPPB_MERCHANT_QR">IPPB Merchant QR &amp; Zero-MDR Soundbox Kit (IPPB_MERCHANT_QR)</option>
                   {POSTAL_PRODUCTS.map((p) => (
                     <option key={p.code} value={p.code}>
                       {p.name} ({p.code})

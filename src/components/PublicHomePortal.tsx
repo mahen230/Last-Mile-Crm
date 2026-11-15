@@ -33,6 +33,7 @@ import { POSTAL_PRODUCTS } from '../data/productsData';
 import { ProductDefinition } from '../types/models';
 import { customerService } from '../services/customerService';
 import heroPostalBanking from '../assets/images/hero_postal_banking_1791904267944.jpg';
+import PublicStorefrontSection from './PublicStorefrontSection';
 
 interface PublicHomePortalProps {
   isStandalone?: boolean;
@@ -1056,17 +1057,17 @@ export default function PublicHomePortal({
                               </button>
                             </div>
 
-                            {/* Interactive Share Strip: WhatsApp direct + Multi-Platform Social Share Modal */}
+                            {/* Interactive Share Strip: WhatsApp Partner Pitching + Multi-Platform Social Share Modal */}
                             <div className="flex items-center gap-2">
                               <a
                                 href={getWhatsAppUrl(product)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="flex-1 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0"
-                                title="Share formatted scheme details on WhatsApp"
+                                title="WhatsApp Partner Pitching with scheme details & rates"
                               >
                                 <MessageCircle size={13} className="text-emerald-600 shrink-0" />
-                                <span>Share on WhatsApp</span>
+                                <span>WhatsApp Partner Pitching</span>
                               </a>
 
                               {/* Multi-Platform Social Share Button (WhatsApp, Telegram, Facebook, X, Native) */}
@@ -1090,6 +1091,9 @@ export default function PublicHomePortal({
             })}
         </div>
       </section>
+
+      {/* 3B. MULTI-VERTICAL PARTNER & DIGITAL STOREFRONT GRID */}
+      <PublicStorefrontSection />
 
       {/* 4. CITIZEN PROOF & PAN-INDIA DOORSTEP ASSISTANCE SECTION */}
       <section className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xs">

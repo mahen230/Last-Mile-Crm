@@ -1158,6 +1158,152 @@ export interface CommercialStoreRecord {
   syncedToVerificationQueue: boolean;
   createdAt: string;
   updatedAt: string;
+
+  // AI 4-Factor Verification & Freshness Fields
+  fourFactorVerification?: FourFactorVerificationResult;
+  lastCheckedDate?: string;
+  listedDate?: string;
+  freshnessStatus?: FourFactorFreshnessStatus;
+  fieldVerifiedByStaffId?: string;
+  fieldVerifiedByStaffName?: string;
+  fieldVerifiedAt?: string;
+}
+
+export type FourFactorFreshnessStatus = 'FRESH_ACTIVE' | 'STALE_EXCLUDED' | 'NEEDS_FIELD_RECHECK';
+
+export interface FourFactorVerificationResult {
+  factor1ActiveLicense: boolean; // Active license / Trade Registration / eMitra-CSC identifier
+  factor1Details: string;
+  factor2GeospatialAccuracy: boolean; // Exact centroid & valid postal boundary match (324009 / 324005)
+  factor2Details: string;
+  factor3OperationalStatus: boolean; // Confirmed open and physically operating
+  factor3Details: string;
+  factor4DigitalFootprint: boolean; // Verified Google Maps presence, recent ratings/reviews
+  factor4Details: string;
+  score: number; // 0 - 100
+  passedFactorsCount: number; // 0 - 4
+  freshnessStatus: FourFactorFreshnessStatus;
+  lastCheckedDate: string;
+  listedDate: string;
+  isOlderThanOneYear: boolean;
+  fieldVerifiedByStaffId?: string;
+  fieldVerifiedByStaffName?: string;
+  fieldVerifiedAt?: string;
+  aiAuditNotes?: string;
+}
+
+export interface CustomerDemographicMatch {
+  customerId: string;
+  customerName: string;
+  customerMobile: string;
+  colony: string;
+  sector?: string;
+  houseNo?: string;
+  pincode: string;
+  beatNo: string;
+  matchedCategory: string;
+  matchScore: number; // e.g. 94%
+  matchReason: string;
+  recommendedPitchMessage: string;
+}
+
+export interface BeatProductMatchingPlan {
+  beatNo: string;
+  cleanBeatNo: string;
+  pincode: string;
+  subOffice: string;
+  pincodeManagerId: string;
+  pincodeManagerName: string;
+  pincodeManagerContact: string;
+  totalFreshStoresCount: number;
+  totalMatchedCustomersCount: number;
+  storeMatches: Array<{
+    storeId: string;
+    storeName: string;
+    category: CommercialStoreCategory;
+    matchedCustomers: CustomerDemographicMatch[];
+  }>;
+}
+
+export interface LogisticsDispatchOrder {
+  id: string; // e.g. "XPD-COD-10492"
+  storeId?: string;
+  storeName: string;
+  productId?: string;
+  productTitle: string;
+  productSku: string;
+  productPrice: number;
+  customerName: string;
+  customerMobile: string;
+  deliveryAddress: string;
+  colony: string;
+  pincode: string;
+  beatNo: string;
+  pincodeManagerId: string;
+  pincodeManagerName: string;
+  pincodeManagerContact: string;
+  serviceType: 'Speed Post COD' | 'Xpeedo Local Parcel' | 'Doorstep Service Pickup';
+  status: 'PENDING_PICKUP' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'COD_SETTLED' | 'CANCELLED';
+  speedPostBarcode?: string;
+  codAmount: number;
+  ippbQrSettlementRef?: string;
+  ippbQrSettledAt?: string;
+  bookedAt: string;
+  deliveredAt?: string;
+  remarks?: string;
+}
+
+export type StaffProductVertical =
+  | 'Logistics & Courier Services'
+  | 'Banking & Finance'
+  | 'Documents & Digital Services'
+  | 'Course & Skill Academy'
+  | 'Custom Staff / Partner Products';
+
+export type ProductPricingModel = 'Fixed Price' | 'Subscription' | 'Commission-based' | 'Free Service';
+
+export type ProductItemType = 'Physical Item' | 'Digital Download' | 'Service' | 'Subscription';
+
+export interface StaffProductItem {
+  id: string;
+  sku: string;
+  title: string;
+  vertical: StaffProductVertical;
+  pricingModel: ProductPricingModel;
+  productType: ProductItemType;
+  price: number;
+  commissionRate?: string;
+  description: string;
+  features: string[];
+  thumbnailUrl: string;
+  staffId: string;
+  staffName: string;
+  staffMobile: string;
+  whatsappNumber: string;
+  beatNumber?: string;
+  subOffice?: string;
+  pincode?: string;
+  status: 'ACTIVE' | 'HIDDEN' | 'FEATURED';
+  isGlobalAdminItem?: boolean;
+  assignedBeats?: string[];
+  freshnessStatus?: FourFactorFreshnessStatus;
+  lastCheckedDate?: string;
+  commercialStoreId?: string;
+  logisticsServiceType?: 'Speed Post COD' | 'Xpeedo Local Parcel' | 'Doorstep Service Pickup';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StaffSalesRights {
+  staffId: string;
+  staffName: string;
+  assignedBeat: string;
+  allowedVerticals: StaffProductVertical[];
+  allowedBeats: string[];
+  hiddenGlobalProductIds: string[];
+  canCreateCustomProducts: boolean;
+  updatedBy?: string;
+  updatedAt: string;
 }
 
 

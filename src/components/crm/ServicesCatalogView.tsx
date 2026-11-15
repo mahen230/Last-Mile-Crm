@@ -11,6 +11,8 @@ export default function ServicesCatalogView({ onSelectProductForLead }: { onSele
   const [showShareModal, setShowShareModal] = useState<boolean>(false);
   const [calcAmount, setCalcAmount] = useState<number>(50000);
   const [calcYears, setCalcYears] = useState<number>(5);
+  const [pitchLang, setPitchLang] = useState<'hi' | 'en'>('hi');
+  const [whatsappTarget, setWhatsappTarget] = useState<'918769706002' | '919460020640'>('918769706002');
 
   const filteredProducts = POSTAL_PRODUCTS.filter((prod) => {
     if (activeCategory === 'ALL') return true;
@@ -86,22 +88,34 @@ export default function ServicesCatalogView({ onSelectProductForLead }: { onSele
 
   const calcResult = calculateReturn();
 
-  const handleContactClick = (productName: string) => {
-    const message = `Namaste! I am interested in knowing more about [Product: ${productName}]. Can you please provide more details?`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+  const buildWhatsappPitchUrl = (prod: ProductDefinition) => {
+    const deskLabel = whatsappTarget === '918769706002' ? 'Beat 2 (Mahendra Kumar Meena)' : 'Dadabari S.O. Desk';
+    const message =
+      pitchLang === 'hi'
+        ? `नमस्ते ${deskLabel}! मुझे India Post योजना "${prod.name}" (${prod.code}) — लाभ: ${prod.interestRateOrBonus}, न्यूनतम: ${prod.minInvestment} के बारे में पूरी जानकारी और होम विजिट बुकिंग चाहिए। (Xpeedo Last Mile · PIN 324009)`
+        : `Namaste ${deskLabel}! I am interested in "${prod.name}" (${prod.code}) — Highlight: ${prod.interestRateOrBonus}, Min: ${prod.minInvestment}. Please share enrollment details / Speed Post COD pickup info. (Xpeedo Last Mile · PIN 324009)`;
+    return `https://api.whatsapp.com/send?phone=${whatsappTarget}&text=${encodeURIComponent(message)}`;
+  };
+
+  const getProductTheme = (cat: string) => {
+    const c = cat.toLowerCase();
+    if (c.includes('insurance')) return { grad: 'from-indigo-600 to-violet-700', border: 'border-indigo-200', activeBg: 'bg-indigo-50/80 border-indigo-400', badge: 'bg-indigo-100 text-indigo-800 border-indigo-200' };
+    if (c.includes('ippb') || c.includes('aadhaar')) return { grad: 'from-sky-600 to-blue-700', border: 'border-sky-200', activeBg: 'bg-sky-50/80 border-sky-400', badge: 'bg-sky-100 text-sky-800 border-sky-200' };
+    if (c.includes('commercial') || c.includes('merchandise')) return { grad: 'from-amber-500 to-orange-600', border: 'border-amber-200', activeBg: 'bg-amber-50/80 border-amber-400', badge: 'bg-amber-100 text-amber-900 border-amber-200' };
+    return { grad: 'from-emerald-600 to-teal-700', border: 'border-emerald-200', activeBg: 'bg-emerald-50/80 border-emerald-400', badge: 'bg-emerald-100 text-emerald-800 border-emerald-200' };
   };
 
   return (
     <div className="space-y-6" id="services-catalog-view-root">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-red-800 via-rose-700 to-amber-700 text-white p-6 rounded-3xl shadow-md">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <Briefcase size={22} className="text-red-700" />
+          <h2 className="text-xl font-black text-white flex items-center gap-2">
+            <Briefcase size={22} className="text-amber-300" />
             <span>Postal Services, Financial Schemes &amp; Commercial Catalog</span>
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Small Savings, PLI/RPLI, IPPB Banking, Aadhaar &amp; Commercial Merchandise (MyStamp, Gangajal, DNK Parcel)
+          <p className="text-xs text-rose-100 mt-1">
+            Small Savings, PLI/RPLI, IPPB Banking, Aadhaar &amp; Commercial Merchandise (MyStamp, Gangajal, Speed Post COD)
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -133,43 +147,45 @@ export default function ServicesCatalogView({ onSelectProductForLead }: { onSele
         
         {/* Left Side: Product Selector List */}
         <div className="lg:col-span-5 space-y-3">
-          {filteredProducts.map((prod) => (
-            <div
-              key={prod.id}
-              onClick={() => setSelectedProduct(prod)}
-              className={`p-4 rounded-2xl border transition cursor-pointer flex items-center justify-between ${
-                selectedProduct.id === prod.id
-                  ? 'bg-red-50/70 border-red-400 shadow-xs'
-                  : 'bg-white border-slate-200 hover:border-slate-300'
-              }`}
-            >
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-900 text-sm">{prod.name}</span>
-                  <span className="text-[11px] font-mono font-bold bg-white text-red-700 px-2 py-0.5 rounded border border-red-200">
-                    {prod.code}
-                  </span>
+          {filteredProducts.map((prod) => {
+            const theme = getProductTheme(prod.category);
+            const isSelected = selectedProduct.id === prod.id;
+            return (
+              <div
+                key={prod.id}
+                onClick={() => setSelectedProduct(prod)}
+                className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between shadow-2xs hover:shadow-md ${
+                  isSelected ? theme.activeBg : `bg-white ${theme.border}`
+                }`}
+              >
+                <div className="min-w-0 pr-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-black text-slate-900 text-sm">{prod.name}</span>
+                    <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full border ${theme.badge}`}>
+                      {prod.code}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">{prod.category}</div>
+                  <div className="text-xs font-black text-red-700 mt-1 tabular-nums">{prod.interestRateOrBonus}</div>
                 </div>
-                <div className="text-xs text-slate-500 mt-1">{prod.category}</div>
-                <div className="text-xs font-bold text-red-700 mt-1">{prod.interestRateOrBonus}</div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSharingProduct(prod);
+                      setShowShareModal(true);
+                    }}
+                    className="p-2 bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 rounded-xl border border-slate-200 transition cursor-pointer"
+                    title={`Share ${prod.name} via WhatsApp / SMS`}
+                  >
+                    <Share2 size={14} />
+                  </button>
+                  <ArrowRight size={18} className={isSelected ? 'text-red-700' : 'text-slate-300'} />
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSharingProduct(prod);
-                    setShowShareModal(true);
-                  }}
-                  className="p-1.5 bg-slate-50 hover:bg-emerald-50 text-slate-500 hover:text-emerald-700 rounded-lg border border-slate-200 transition"
-                  title={`Share ${prod.name} via WhatsApp / SMS`}
-                >
-                  <Share2 size={14} />
-                </button>
-                <ArrowRight size={18} className={selectedProduct.id === prod.id ? 'text-red-700' : 'text-slate-300'} />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Right Side: Detailed View & Calculator */}
@@ -277,27 +293,66 @@ export default function ServicesCatalogView({ onSelectProductForLead }: { onSele
               </div>
             </div>
 
-            <div className="pt-4 mt-4 border-t border-slate-100 flex flex-wrap gap-3">
-              <button 
-                type="button"
-                onClick={() => {
-                  setSharingProduct(selectedProduct);
-                  setShowShareModal(true);
-                }}
-                className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center justify-center gap-2"
-                id="share-selected-product-btn"
-              >
-                <Share2 size={16} />
-                <span>Share Product (WhatsApp / SMS / Broadcast)</span>
-              </button>
+            <div className="pt-4 mt-4 border-t border-slate-100 space-y-3">
+              {/* Bilingual WhatsApp Pitch & Desk Routing */}
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-emerald-50/70 border border-emerald-200 p-3 rounded-2xl text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-emerald-950">WhatsApp Desk:</span>
+                  <select
+                    value={whatsappTarget}
+                    onChange={(e) => setWhatsappTarget(e.target.value as '918769706002' | '919460020640')}
+                    className="px-2.5 py-1 bg-white border border-emerald-300 rounded-lg font-bold text-emerald-900 cursor-pointer"
+                  >
+                    <option value="918769706002">Beat 2 · 8769706002</option>
+                    <option value="919460020640">Dadabari S.O. · 9460020640</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-emerald-200">
+                  <button
+                    type="button"
+                    onClick={() => setPitchLang('hi')}
+                    className={`px-2 py-1 rounded-md font-bold cursor-pointer ${
+                      pitchLang === 'hi' ? 'bg-emerald-600 text-white' : 'text-slate-600'
+                    }`}
+                  >
+                    हिंदी
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPitchLang('en')}
+                    className={`px-2 py-1 rounded-md font-bold cursor-pointer ${
+                      pitchLang === 'en' ? 'bg-emerald-600 text-white' : 'text-slate-600'
+                    }`}
+                  >
+                    English
+                  </button>
+                </div>
+              </div>
 
-              <button 
-                type="button"
-                onClick={() => handleContactClick(selectedProduct.name)}
-                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition"
-              >
-                Inquiry
-              </button>
+              <div className="flex flex-wrap gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSharingProduct(selectedProduct);
+                    setShowShareModal(true);
+                  }}
+                  className="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+                  id="share-selected-product-btn"
+                >
+                  <Share2 size={15} />
+                  <span>Broadcast / CRM Share</span>
+                </button>
+
+                <a
+                  href={buildWhatsappPitchUrl(selectedProduct)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center justify-center gap-2"
+                >
+                  <Send size={15} />
+                  <span>WhatsApp Pitch ({pitchLang === 'hi' ? 'हिंदी' : 'EN'})</span>
+                </a>
+              </div>
             </div>
           </div>
         </div>

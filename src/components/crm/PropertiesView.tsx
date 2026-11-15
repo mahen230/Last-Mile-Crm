@@ -44,8 +44,10 @@ export default function PropertiesView() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('All');
+  const [selectedColony, setSelectedColony] = useState('All');
+  const [selectedBeat, setSelectedBeat] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
-  const PROPERTIES_PER_PAGE = 5;
+  const PROPERTIES_PER_PAGE = 6;
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -72,7 +74,7 @@ export default function PropertiesView() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, filterType]);
+  }, [search, filterType, selectedColony, selectedBeat]);
 
   const handleEditProperty = (prop: Property) => {
     setSelectedProperty(prop);
@@ -182,7 +184,16 @@ export default function PropertiesView() {
         matchesType = !p.housePlotNumber || !p.housePlotNumber.trim() || p.housePlotNumber === 'Plot Unit';
       }
 
-      return matchesSearch && matchesType;
+      const matchesColony =
+        selectedColony === 'All' ||
+        `${p.colony || ''} ${p.area || ''} ${formatPropertyAddress(p.address)}`
+          .toLowerCase()
+          .includes(selectedColony.toLowerCase());
+
+      const cleanBeat = String(p.beatNo || '').replace(/\D/g, '');
+      const matchesBeat = selectedBeat === 'All' || cleanBeat === selectedBeat;
+
+      return matchesSearch && matchesType && matchesColony && matchesBeat;
     })
     .sort((a, b) => {
       const colA = (a.colony || a.address || '').trim();
@@ -193,7 +204,7 @@ export default function PropertiesView() {
       const hB = (b.housePlotNumber || '').trim();
       return hA.localeCompare(hB, undefined, { numeric: true, sensitivity: 'base' });
     });
-  }, [properties, search, filterType]);
+  }, [properties, search, filterType, selectedColony, selectedBeat]);
 
   const totalPropertyPages = Math.max(1, Math.ceil(filteredProperties.length / PROPERTIES_PER_PAGE));
   const safePropertyPage = Math.min(currentPage, totalPropertyPages);
@@ -304,6 +315,17 @@ export default function PropertiesView() {
 
         <div className="flex flex-wrap items-center gap-2">
           <select
+            value={selectedBeat}
+            onChange={(e) => setSelectedBeat(e.target.value)}
+            className="px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-900 focus:outline-hidden"
+          >
+            <option value="All">All Beats (1–34)</option>
+            {Array.from({ length: 34 }, (_, i) => String(i + 1)).map((b) => (
+              <option key={b} value={b}>Beat {b}</option>
+            ))}
+          </select>
+
+          <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
             className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 focus:outline-hidden"
@@ -333,6 +355,28 @@ export default function PropertiesView() {
             <span>Add Property</span>
           </button>
         </div>
+      </div>
+
+      {/* Hierarchical Colony Quick-Filter Pills */}
+      <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center gap-2 text-xs">
+        <span className="font-black text-slate-700 flex items-center gap-1">
+          <MapPin size={14} className="text-red-600" />
+          <span>Colony Filter:</span>
+        </span>
+        {['All', 'Keshavpura', 'Basant Vihar', 'Dadabari', 'Mahaveer Nagar', 'Talwandi'].map((col) => (
+          <button
+            key={col}
+            type="button"
+            onClick={() => setSelectedColony(col)}
+            className={`px-3 py-1 rounded-lg font-bold transition cursor-pointer ${
+              selectedColony === col
+                ? 'bg-gradient-to-r from-red-700 to-rose-700 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            {col === 'All' ? 'All Colonies' : col}
+          </button>
+        ))}
       </div>
 
       {/* House Number & Vacancy Compliance Banner */}
@@ -412,15 +456,17 @@ export default function PropertiesView() {
             return (
               <div
                 key={prop.id}
-                className={`bg-white rounded-2xl border transition p-5 flex flex-col justify-between hover:shadow-md ${
+                className={`bg-white rounded-3xl border-2 transition p-5 flex flex-col justify-between shadow-sm hover:shadow-xl hover:-translate-y-0.5 ${
                   !hasHouseNo || prop.status === 'Vacant'
-                    ? 'border-amber-200/90 bg-amber-50/20'
-                    : 'border-slate-200 hover:border-red-300'
+                    ? 'border-amber-300 bg-gradient-to-b from-amber-50/40 to-white'
+                    : prop.status === 'Commercial'
+                    ? 'border-indigo-300 bg-gradient-to-b from-indigo-50/40 to-white'
+                    : 'border-emerald-200 hover:border-emerald-400 bg-gradient-to-b from-emerald-50/30 to-white'
                 }`}
               >
                 <div>
                   <div className="flex items-start justify-between gap-2 mb-3">
-                    <span className="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                    <span className="font-mono text-xs font-black text-white bg-slate-900 px-2.5 py-1 rounded-lg">
                       {prop.propertyCode || prop.id}
                     </span>
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">

@@ -334,12 +334,12 @@ export default function PostalLMSView() {
                 return (
                   <div
                     key={mod.id}
-                    className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden transition"
+                    className="bg-white rounded-3xl border border-indigo-200/80 shadow-sm hover:shadow-md overflow-hidden transition"
                   >
                     {/* Chapter Header */}
                     <div
                       onClick={() => toggleModuleAccordion(mod.id)}
-                      className="p-5 sm:p-6 bg-gradient-to-r from-slate-50 via-white to-slate-50 hover:bg-slate-100/50 cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100"
+                      className="p-5 sm:p-6 bg-gradient-to-r from-indigo-50 via-white to-amber-50/40 hover:from-indigo-100/60 cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-indigo-100"
                     >
                       <div className="space-y-1.5 flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
@@ -525,46 +525,46 @@ export default function PostalLMSView() {
 
             {/* 4 Stat Metric Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                <span className="text-[11px] font-bold uppercase text-slate-500 block">
+              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 p-4 rounded-2xl border border-emerald-200 shadow-2xs">
+                <span className="text-[11px] font-bold uppercase text-emerald-800 block">
                   Syllabus Mastered
                 </span>
-                <div className="text-2xl font-black font-mono text-slate-900 mt-1">
-                  {completedTopicsCount} <span className="text-xs text-slate-400">/ {totalTopicsInCourse}</span>
+                <div className="text-2xl font-black font-mono text-emerald-950 mt-1 tabular-nums">
+                  {completedTopicsCount} <span className="text-xs text-emerald-700">/ {totalTopicsInCourse}</span>
                 </div>
-                <span className="text-xs text-emerald-600 font-bold">
+                <span className="text-xs text-emerald-700 font-bold tabular-nums">
                   {Math.round((completedTopicsCount / Math.max(totalTopicsInCourse, 1)) * 100)}% Coverage
                 </span>
               </div>
 
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                <span className="text-[11px] font-bold uppercase text-slate-500 block">
+              <div className="bg-gradient-to-br from-indigo-50 to-violet-50 p-4 rounded-2xl border border-indigo-200 shadow-2xs">
+                <span className="text-[11px] font-bold uppercase text-indigo-800 block">
                   Total Test Attempts
                 </span>
-                <div className="text-2xl font-black font-mono text-slate-900 mt-1">
+                <div className="text-2xl font-black font-mono text-indigo-950 mt-1 tabular-nums">
                   {quizAttempts.length}
                 </div>
-                <span className="text-xs text-slate-500 font-bold">Topic & Mock Tests</span>
+                <span className="text-xs text-indigo-700 font-bold">Topic &amp; Mock Tests</span>
               </div>
 
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                <span className="text-[11px] font-bold uppercase text-slate-500 block">
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-4 rounded-2xl border border-amber-200 shadow-2xs">
+                <span className="text-[11px] font-bold uppercase text-amber-900 block">
                   Average Quiz Accuracy
                 </span>
-                <div className="text-2xl font-black font-mono text-amber-600 mt-1">
+                <div className="text-2xl font-black font-mono text-amber-950 mt-1 tabular-nums">
                   {averageQuizScore}%
                 </div>
-                <span className="text-xs text-emerald-600 font-bold">Above Cutoff (40%)</span>
+                <span className="text-xs text-emerald-700 font-bold">Above Cutoff (40%)</span>
               </div>
 
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                <span className="text-[11px] font-bold uppercase text-slate-500 block">
+              <div className="bg-gradient-to-br from-rose-50 to-red-50 p-4 rounded-2xl border border-rose-200 shadow-2xs">
+                <span className="text-[11px] font-bold uppercase text-rose-800 block">
                   Exam Readiness
                 </span>
-                <div className="text-2xl font-black text-emerald-700 mt-1">
+                <div className="text-2xl font-black text-rose-950 mt-1">
                   High
                 </div>
-                <span className="text-xs text-slate-500 font-bold">Targeting Merit List</span>
+                <span className="text-xs text-rose-700 font-bold">Targeting Merit List</span>
               </div>
             </div>
 
@@ -657,7 +657,7 @@ export default function PostalLMSView() {
             {allTopicPyqs.map((item, idx) => (
               <div
                 key={item.id}
-                className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3"
+                className="p-5 rounded-2xl bg-gradient-to-br from-indigo-50/40 via-white to-amber-50/30 border border-indigo-200/80 shadow-2xs space-y-3"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs font-bold text-slate-700">

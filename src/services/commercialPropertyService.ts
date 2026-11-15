@@ -177,7 +177,7 @@ class CommercialPropertyService {
       const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           this.stores = parsed;
           return;
         }
@@ -186,6 +186,7 @@ class CommercialPropertyService {
       console.warn('Failed to load commercial stores from storage:', e);
     }
     this.stores = [];
+    this.importExistingCrmBaselineRegistry();
   }
 
   private saveToStorage() {

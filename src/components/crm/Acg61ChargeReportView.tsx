@@ -177,18 +177,31 @@ export default function Acg61ChargeReportView() {
   return (
     <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8 space-y-8 max-w-5xl mx-auto">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-red-800 via-red-700 to-red-900 text-white p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
+      <div className="bg-gradient-to-r from-rose-800 via-red-700 to-amber-700 text-white p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-6 relative overflow-hidden">
         <div className="relative z-10 space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-950/60 border border-red-500/30 text-amber-300 text-xs font-black uppercase tracking-wider">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 border border-white/25 text-amber-200 text-xs font-black uppercase tracking-wider">
             <ShieldCheck size={14} />
-            <span>Department of Posts · Form ACG-61</span>
+            <span>Department of Posts · Form ACG-61 (Beats 1–34)</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
             Form ACG-61: Certificate of Transfer of Charge
           </h1>
-          <p className="text-red-100 text-xs sm:text-sm leading-relaxed max-w-2xl">
-            Fill in the candidate handover details (Relieved & Relieving Officers, Date, AM/PM session, and Office info) to generate and download the official departmental certificate.
+          <p className="text-rose-100 text-xs sm:text-sm leading-relaxed max-w-2xl">
+            Fill in the candidate handover details (Relieved &amp; Relieving Officers, Date, AM/PM session, and Office info) to generate and download the official departmental certificate.
           </p>
+        </div>
+
+        <div className="relative z-10 grid grid-cols-2 gap-3 text-xs shrink-0">
+          <div className="bg-white/15 backdrop-blur-xs border border-white/25 rounded-2xl px-4 py-3">
+            <span className="text-[10px] uppercase font-bold text-amber-200 block">Stored Handovers</span>
+            <span className="text-xl font-black font-mono tabular-nums text-white">{chargeReports.length}</span>
+          </div>
+          <div className="bg-white/15 backdrop-blur-xs border border-white/25 rounded-2xl px-4 py-3">
+            <span className="text-[10px] uppercase font-bold text-emerald-200 block">Verified by SPM</span>
+            <span className="text-xl font-black font-mono tabular-nums text-white">
+              {chargeReports.filter((r) => r.status.toLowerCase().includes('verified') || r.status.toLowerCase().includes('approved')).length}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -641,18 +654,98 @@ export default function Acg61ChargeReportView() {
                 No stored charge handover reports found. Submit the ACG-61 form above to archive a new handover certificate.
               </div>
             ) : (
-              <div className="overflow-x-auto border border-slate-200 rounded-2xl">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                    <tr>
-                      <th className="p-3">Voucher No.</th>
-                      <th className="p-3">Handover Details</th>
-                      <th className="p-3">Beat &amp; Office</th>
-                      <th className="p-3">Transfer Date</th>
-                      <th className="p-3">Status</th>
-                      <th className="p-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
+              <div className="space-y-4">
+                {/* Colorful Quick Cards View for Mobile & Quick Audit */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {pageRows.map((rec) => {
+                    const isVerified =
+                      rec.status.toLowerCase().includes('verified') ||
+                      rec.status.toLowerCase().includes('approved');
+                    return (
+                      <div
+                        key={`card-${rec.id}`}
+                        className={`rounded-2xl border p-4 shadow-2xs hover:shadow-md transition flex flex-col justify-between gap-3 ${
+                          isVerified
+                            ? 'bg-emerald-50/40 border-emerald-200'
+                            : 'bg-amber-50/40 border-amber-200'
+                        }`}
+                      >
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="font-mono font-black text-red-800 bg-white px-2.5 py-0.5 rounded-lg border border-red-200">
+                              {rec.billNumber}
+                            </span>
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                                isVerified ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-slate-950'
+                              }`}
+                            >
+                              {rec.status}
+                            </span>
+                          </div>
+                          <div className="font-black text-sm text-slate-900">{rec.title}</div>
+                          <div className="text-[11px] text-slate-600">
+                            {rec.beatNo} · {rec.officeName} · Date: <span className="font-mono font-bold">{rec.fromDate}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200/70">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              downloadOfficialAcg61Pdf({
+                                relievedOfficerName: rec.details?.relievedOfficerName || rec.employeeName,
+                                relievingOfficerName: rec.details?.relievingOfficerName || 'VACANT',
+                                postName: rec.details?.postName || 'O/S POSTMAN',
+                                placeName: rec.details?.placeName || rec.officeName,
+                                date: rec.fromDate,
+                                noonSection: rec.details?.noonSection || 'PM',
+                                authorityOrderNo: rec.details?.authorityOrderNo || '',
+                                divisionName: rec.details?.divisionName || 'KOTA DIVISION',
+                                headOfficeName: rec.details?.headOfficeName || 'NGM H.O.',
+                                subDivisionName: rec.details?.subDivisionName || "ASPO's KOTA EAST",
+                                copyToList: rec.details?.copyToList || [
+                                  "The SSPO's KOTA DIVISION",
+                                  'A/C BRANCH NGM H.O.',
+                                  "ASPO's KOTA EAST",
+                                  'PF of the official',
+                                ],
+                              })
+                            }
+                            className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[11px] font-bold cursor-pointer inline-flex items-center gap-1.5"
+                          >
+                            <Download size={12} />
+                            <span>Download ACG-61 PDF</span>
+                          </button>
+                          {isSuperior && !isVerified && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                operationsService.updateSpecialBillStatus(rec.id, 'Verified by SPM');
+                                setStatusMessage(`Charge Report ${rec.billNumber} marked Verified by SPM.`);
+                              }}
+                              className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-[11px] font-bold cursor-pointer"
+                            >
+                              Verify SPM
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="overflow-x-auto border border-slate-200 rounded-2xl">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                      <tr>
+                        <th className="p-3">Voucher No.</th>
+                        <th className="p-3">Handover Details</th>
+                        <th className="p-3">Beat &amp; Office</th>
+                        <th className="p-3">Transfer Date</th>
+                        <th className="p-3">Status</th>
+                        <th className="p-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
                   <tbody className="divide-y divide-slate-100">
                     {pageRows.map((rec) => (
                       <tr key={rec.id} className="hover:bg-slate-50">
@@ -741,6 +834,7 @@ export default function Acg61ChargeReportView() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
 

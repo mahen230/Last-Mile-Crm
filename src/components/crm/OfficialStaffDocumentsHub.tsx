@@ -494,13 +494,13 @@ export default function OfficialStaffDocumentsHub() {
               onChange={(e) => setBeatFilter(e.target.value)}
               className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700"
             >
-              <option value="ALL">All Beats</option>
-              <option value="Beat 2">Beat 2 (Mahendra Meena)</option>
-              <option value="Beat 17">Beat 17 (Priyanshu Trivedi)</option>
-              <option value="Beat 5">Beat 5 (Mohit Arvind)</option>
-              <option value="Beat 1">Beat 1 (Muskan Sharma)</option>
-              <option value="Beat 4">Beat 4</option>
-              <option value="Beat 6">Beat 6</option>
+              <option value="ALL">All Beats (1–34)</option>
+              {Array.from({ length: 34 }, (_, i) => `Beat ${i + 1}`).map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                  {b === 'Beat 2' ? ' (Mahendra Meena)' : b === 'Beat 17' ? ' (Priyanshu Trivedi)' : b === 'Beat 5' ? ' (Mohit Arvind)' : b === 'Beat 1' ? ' (Muskan Sharma)' : ''}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -564,11 +564,43 @@ export default function OfficialStaffDocumentsHub() {
             const isConsolidated = doc.type === 'CONSOLIDATED_BILL';
             const isNpr = doc.type === 'NPR_CENSUS_LOG';
 
+            const headerGradient = isFuel
+              ? 'from-emerald-600 to-teal-700'
+              : isCharge
+              ? 'from-indigo-600 to-violet-700'
+              : isByod
+              ? 'from-sky-600 to-blue-700'
+              : isOutsider
+              ? 'from-amber-500 to-orange-600'
+              : isConsolidated
+              ? 'from-rose-600 to-red-700'
+              : 'from-teal-600 to-cyan-700';
+
+            const cardBorder = isFuel
+              ? 'border-emerald-200 hover:border-emerald-400'
+              : isCharge
+              ? 'border-indigo-200 hover:border-indigo-400'
+              : isByod
+              ? 'border-sky-200 hover:border-sky-400'
+              : isOutsider
+              ? 'border-amber-200 hover:border-amber-400'
+              : 'border-slate-200 hover:border-slate-400';
+
             return (
               <div
                 key={doc.id}
-                className="bg-white rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition flex flex-col justify-between overflow-hidden"
+                className={`bg-white rounded-3xl border shadow-sm hover:shadow-lg transition-all duration-200 flex flex-col justify-between overflow-hidden ${cardBorder}`}
               >
+                {/* Colorful Category Gradient Accent Bar */}
+                <div className={`bg-gradient-to-r ${headerGradient} px-5 py-2.5 text-white flex items-center justify-between gap-2`}>
+                  <span className="text-[10px] font-black uppercase tracking-wider">
+                    {doc.type.replace(/_/g, ' ')}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-white/20 backdrop-blur-xs border border-white/30">
+                    {doc.status}
+                  </span>
+                </div>
+
                 {/* Card Header */}
                 <div className="p-5 space-y-3">
                   <div className="flex items-center justify-between gap-2">
@@ -577,24 +609,19 @@ export default function OfficialStaffDocumentsHub() {
                         doc.type
                       )}`}
                     >
-                      {doc.type.replace(/_/g, ' ')}
+                      {doc.beatNo}
                     </span>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getStatusColor(
-                        doc.status
-                      )}`}
-                    >
-                      {doc.status}
+                    <span className="text-[10px] font-mono font-bold text-slate-500 tabular-nums">
+                      {doc.billNumber}
                     </span>
                   </div>
 
                   <div>
-                    <span className="text-[10px] font-mono font-bold text-slate-400 block">{doc.billNumber}</span>
-                    <h3 className="font-black text-sm text-slate-900 leading-snug mt-0.5">{doc.title}</h3>
+                    <h3 className="font-black text-sm text-slate-900 leading-snug">{doc.title}</h3>
                   </div>
 
                   {/* Staff & Beat Details */}
-                  <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-1.5 text-xs">
+                  <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1.5 text-xs">
                     <div className="flex items-center justify-between">
                       <span className="text-slate-500 font-medium">Associated Staff:</span>
                       <strong className="text-slate-900">{doc.employeeName}</strong>
@@ -605,17 +632,17 @@ export default function OfficialStaffDocumentsHub() {
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-500 font-medium">Billing Period:</span>
-                      <span className="text-slate-700 font-mono text-[11px]">
+                      <span className="text-slate-700 font-mono text-[11px] tabular-nums">
                         {doc.fromDate} to {doc.toDate}
                       </span>
                     </div>
                   </div>
 
                   {/* Operational Metrics Strip */}
-                  <div className="bg-gradient-to-r from-slate-900 to-slate-800 text-white p-3 rounded-2xl text-xs space-y-1">
+                  <div className={`bg-gradient-to-r ${headerGradient} text-white p-3 rounded-2xl text-xs space-y-1 shadow-xs`}>
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] uppercase font-bold text-slate-300">Statutory Metric:</span>
-                      <span className="text-amber-300 font-black font-mono">
+                      <span className="text-[10px] uppercase font-bold text-white/85">Statutory Metric:</span>
+                      <span className="text-amber-200 font-black font-mono tabular-nums">
                         {isFuel && `₹${doc.totalAmount.toLocaleString('en-IN')} (${doc.totalDays}d × ${doc.fixedKm}km @ ₹3.60)`}
                         {isCharge && `${doc.details?.sessionType || 'Forenoon (F/N)'} Handover`}
                         {isByod && `₹${doc.totalAmount} (₹250 Data + ₹200 Device)`}
@@ -624,7 +651,7 @@ export default function OfficialStaffDocumentsHub() {
                         {isNpr && `${doc.details?.householdsVerified || 184} Households Verified`}
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-300 line-clamp-1">
+                    <p className="text-[11px] text-white/90 line-clamp-1">
                       {doc.details?.remarks || doc.officeName}
                     </p>
                   </div>

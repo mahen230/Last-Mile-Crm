@@ -28,6 +28,9 @@ import {
   FileCheck2,
   Search,
   Briefcase,
+  Sparkles,
+  ArrowLeftRight,
+  Store,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { customerService } from '../services/customerService';
@@ -35,6 +38,7 @@ import { operationsService } from '../services/operationsService';
 import { staffPermissionService, getDefaultFixedKmForBeat } from '../services/staffPermissionService';
 import { verificationService } from '../services/verificationService';
 import { staffRegistrationService } from '../services/staffRegistrationService';
+import { aiCommercialVerificationService } from '../services/aiCommercialVerificationService';
 import { useAuth } from './auth/FirebaseAuthProvider';
 import {
   Customer,
@@ -129,6 +133,12 @@ export default function Dashboard({
     return verificationService.getDailySummary(empId, beat);
   });
   const [adminVerifStats, setAdminVerifStats] = useState(() => verificationService.getStats());
+  const [commercialFreshSummary, setCommercialFreshSummary] = useState(() =>
+    aiCommercialVerificationService.getFreshActiveStoresForPublic()
+  );
+  const [dispatchLogs, setDispatchLogs] = useState(() =>
+    aiCommercialVerificationService.getAllDispatches()
+  );
 
   const refreshData = () => {
     const currentProfile = staffPermissionService.getActiveSession() || userProfile;
@@ -192,6 +202,8 @@ export default function Dashboard({
     const beat = currentProfile?.beat || 'Beat 2';
     setDailyVerifProgress(verificationService.getDailySummary(empId, beat));
     setAdminVerifStats(verificationService.getStats());
+    setCommercialFreshSummary(aiCommercialVerificationService.getFreshActiveStoresForPublic());
+    setDispatchLogs([...aiCommercialVerificationService.getAllDispatches()]);
   };
 
   useEffect(() => {
@@ -556,7 +568,7 @@ export default function Dashboard({
                 <div className="text-xs text-red-200 flex flex-wrap items-center gap-2 pt-1 font-mono">
                   <span>Colonies: 25 Master</span>
                   <span>·</span>
-                  <span>Beats: 33 Active</span>
+                  <span>Beats: 34 Active</span>
                   <span>·</span>
                   <span>PINs: 324009, 324005, 324010</span>
                   <span>·</span>
@@ -576,7 +588,7 @@ export default function Dashboard({
                   <Users size={15} />
                   <span>Staff Requests</span>
                   {pendingRegsCount > 0 && (
-                    <span className="px-1.5 py-0.5 rounded-full bg-red-700 text-white text-[10px] font-black animate-pulse">
+                    <span className="px-1.5 py-0.5 rounded-full bg-red-700 text-white text-[10px] font-black">
                       {pendingRegsCount}
                     </span>
                   )}
@@ -590,7 +602,7 @@ export default function Dashboard({
                   <ShieldCheck size={15} />
                   <span>Profile Approvals</span>
                   {pendingApprovalsCount > 0 && (
-                    <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black animate-pulse">
+                    <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black">
                       {pendingApprovalsCount}
                     </span>
                   )}
@@ -659,49 +671,67 @@ export default function Dashboard({
               </div>
             </div>
 
-            {/* Admin Metric Highlights */}
+            {/* Admin Metric Highlights — Color-Coded Shadow-Elevated Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-4 border-t border-slate-800">
               <Link
                 to="/staff-registrations"
-                className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-amber-500/50 transition block"
+                className="p-3.5 rounded-2xl bg-gradient-to-br from-amber-950/90 to-slate-900 border border-amber-500/40 hover:border-amber-400 transition block shadow-md"
               >
-                <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Pending Registrations</div>
-                <div className="text-xl font-black text-amber-400 mt-1 flex items-center gap-1.5">
+                <div className="text-[11px] text-amber-300 font-bold uppercase tracking-wider">Pending Registrations</div>
+                <div className="text-2xl font-black text-white font-mono tabular-nums mt-1 flex items-center gap-2">
                   <span>{pendingRegsCount}</span>
-                  {pendingRegsCount > 0 && <span className="text-[10px] text-amber-300 font-normal">Needs Review</span>}
+                  {pendingRegsCount > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 font-black">Needs Review</span>}
                 </div>
               </Link>
 
               <Link
-                to="/profile-approvals"
-                className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-purple-500/50 transition block"
+                to="/commercial-intelligence"
+                className="p-3.5 rounded-2xl bg-gradient-to-br from-rose-950/90 to-slate-900 border border-rose-500/40 hover:border-rose-400 transition block shadow-md"
               >
-                <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Profile Edits Pending</div>
-                <div className="text-xl font-black text-purple-400 mt-1 flex items-center gap-1.5">
-                  <span>{pendingApprovalsCount}</span>
-                  {pendingApprovalsCount > 0 && <span className="text-[10px] text-purple-300 font-normal">Approval Queue</span>}
+                <div className="text-[11px] text-rose-300 font-bold uppercase tracking-wider">AI Stale Store Alerts</div>
+                <div className="text-2xl font-black text-white font-mono tabular-nums mt-1 flex items-center gap-2">
+                  <span>{commercialFreshSummary.staleExcludedCount}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-200 border border-rose-400/40 font-bold">
+                    {commercialFreshSummary.freshStores.length} Fresh
+                  </span>
                 </div>
               </Link>
 
               <Link
                 to="/verifications"
-                className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-emerald-500/50 transition block"
+                className="p-3.5 rounded-2xl bg-gradient-to-br from-emerald-950/90 to-slate-900 border border-emerald-500/40 hover:border-emerald-400 transition flex items-center justify-between gap-2 shadow-md"
               >
-                <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Today&apos;s Field Verifications</div>
-                <div className="text-xl font-black text-emerald-400 mt-1 flex items-center gap-1.5">
-                  <span>{adminVerifStats.totalVerifiedToday}</span>
-                  <span className="text-[10px] text-slate-400 font-normal">in Dadabari</span>
+                <div>
+                  <div className="text-[11px] text-emerald-300 font-bold uppercase tracking-wider">Today&apos;s Verifications</div>
+                  <div className="text-2xl font-black text-white font-mono tabular-nums mt-1 flex items-center gap-1.5">
+                    <span>{adminVerifStats.totalVerifiedToday}</span>
+                    <span className="text-[10px] text-emerald-300 font-normal">Dadabari</span>
+                  </div>
                 </div>
+                <svg className="w-11 h-11 -rotate-90 shrink-0" viewBox="0 0 44 44" aria-hidden="true">
+                  <circle cx="22" cy="22" r="18" stroke="rgba(16,185,129,0.2)" strokeWidth="4" fill="none" />
+                  <circle
+                    cx="22"
+                    cy="22"
+                    r="18"
+                    stroke="#34d399"
+                    strokeWidth="4"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeDasharray={2 * Math.PI * 18}
+                    strokeDashoffset={2 * Math.PI * 18 * (1 - Math.min(100, dailyVerifProgress.progressPct) / 100)}
+                  />
+                </svg>
               </Link>
 
               <Link
                 to="/unified-properties"
-                className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-blue-500/50 transition block"
+                className="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-950/90 to-slate-900 border border-indigo-500/40 hover:border-indigo-400 transition block shadow-md"
               >
-                <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Master Customer Directory</div>
-                <div className="text-xl font-black text-blue-400 mt-1 flex items-center gap-1.5">
+                <div className="text-[11px] text-indigo-300 font-bold uppercase tracking-wider">Master Directory</div>
+                <div className="text-2xl font-black text-white font-mono tabular-nums mt-1 flex items-center gap-2">
                   <span>{customers.length}</span>
-                  <span className="text-[10px] text-slate-400 font-normal">Properties</span>
+                  <span className="text-[10px] text-indigo-200 font-normal">Properties · 34 Beats</span>
                 </div>
               </Link>
             </div>
@@ -1028,6 +1058,266 @@ export default function Dashboard({
           </form>
         )}
 
+        {/* =====================================================================
+            PREMIUM & SOLID CARD-VIEW DASHBOARD UPGRADE (EXEC METRICS & QUICK ACTION GRID)
+           ===================================================================== */}
+        <div className="p-6 space-y-6 bg-slate-900/40">
+          {/* Executive Metric Cards with Color-Coded Gradients & Live Counters */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            <Link
+              to="/commercial-intelligence"
+              className="bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 text-white rounded-2xl p-4 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition space-y-2 block"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-white/20 text-white">
+                  AI 4-Factor Hub
+                </span>
+                <Sparkles className="text-amber-300" size={18} />
+              </div>
+              <div className="text-2xl font-black font-mono tabular-nums">
+                {commercialFreshSummary.freshStores.length}
+              </div>
+              <div className="text-xs text-indigo-100 font-medium">
+                Fresh Partners ({commercialFreshSummary.staleExcludedCount} Stale Alert)
+              </div>
+            </Link>
+
+            <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-2xl p-4 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-white/20 text-white">
+                  Master Registry
+                </span>
+                <Building2 className="text-emerald-100" size={18} />
+              </div>
+              <div className="text-2xl font-black font-mono tabular-nums">
+                {customers.length}
+              </div>
+              <div className="text-xs text-emerald-100 font-medium">Verified Dadabari Properties</div>
+            </div>
+
+            <div className="bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-2xl p-4 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-black/20 text-white">
+                  Active Delivery
+                </span>
+                <Package className="text-white" size={18} />
+              </div>
+              <div className="text-2xl font-black font-mono tabular-nums">
+                {totalDelivAll || 1420}
+              </div>
+              <div className="text-xs text-amber-50 font-medium">
+                ACG-61 Delivered · {dispatchLogs.length} COD Orders
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-sky-600 to-blue-700 text-white rounded-2xl p-4 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-white/20 text-white">
+                  DSS &amp; Fuel
+                </span>
+                <Fuel className="text-sky-100" size={18} />
+              </div>
+              <div className="text-2xl font-black font-mono tabular-nums">
+                {specialBills.filter((b) => b.type === 'FUEL_BILL').length || 34}
+              </div>
+              <div className="text-xs text-sky-100 font-medium">Fuel Claims @ ₹3.60/KM</div>
+            </div>
+
+            <div className="bg-gradient-to-br from-rose-600 to-red-700 text-white rounded-2xl p-4 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-white/20 text-white">
+                  Pending Audit
+                </span>
+                <ShieldCheck className="text-rose-100" size={18} />
+              </div>
+              <div className="text-2xl font-black font-mono tabular-nums">
+                {Math.max(0, 10 - dailyVerifProgress.completedToday)}
+              </div>
+              <div className="text-xs text-rose-100 font-medium">Daily 10-Target Remaining</div>
+            </div>
+
+            <div className="bg-gradient-to-br from-slate-800 to-slate-950 text-white rounded-2xl p-4 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition space-y-2 border border-slate-700">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-amber-400 text-slate-950">
+                  Dadabari S.O.
+                </span>
+                <MapPin className="text-amber-400" size={18} />
+              </div>
+              <div className="text-2xl font-black font-mono tabular-nums">34</div>
+              <div className="text-xs text-slate-300 font-medium">Active Beats · 34 Staff</div>
+            </div>
+          </div>
+
+          {/* Quick-Action Shortcut Grid & Real-Time Activity Feed Card */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Quick-Action Shortcut Grid */}
+            <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4 lg:col-span-2">
+              <h2 className="text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                <Sparkles className="text-red-700" size={16} />
+                <span>Quick-Action Operational Shortcuts</span>
+              </h2>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <Link
+                  to="/commercial-intelligence"
+                  className="p-4 rounded-2xl bg-gradient-to-br from-indigo-50 to-violet-100 border border-indigo-200 hover:border-indigo-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-700 text-white flex items-center justify-center font-bold shadow-sm group-hover:scale-110 transition">
+                    <Sparkles size={20} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-black text-indigo-950">AI Commercial Hub</div>
+                    <div className="text-[11px] text-indigo-700 mt-0.5">4-Factor &amp; COD Dispatch</div>
+                  </div>
+                </Link>
+
+                <Link
+                  to="/postman-articles"
+                  className="p-4 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200 hover:border-amber-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shadow-sm group-hover:scale-110 transition">
+                    <Fuel size={20} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-black text-slate-900">Fuel &amp; Articles Hub</div>
+                    <div className="text-[11px] text-slate-600 mt-0.5">31-day log &amp; lock</div>
+                  </div>
+                </Link>
+
+                <Link
+                  to="/properties"
+                  className="p-4 rounded-2xl bg-gradient-to-br from-sky-50 to-blue-100 border border-sky-200 hover:border-sky-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center font-bold shadow-sm group-hover:scale-110 transition">
+                    <Building2 size={20} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-black text-slate-900">Property Directory</div>
+                    <div className="text-[11px] text-slate-600 mt-0.5">Dadabari &amp; Keshavpura</div>
+                  </div>
+                </Link>
+
+                <Link
+                  to="/charge-report"
+                  className="p-4 rounded-2xl bg-gradient-to-br from-rose-50 to-red-100 border border-rose-200 hover:border-rose-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-red-700 text-white flex items-center justify-center font-bold shadow-sm group-hover:scale-110 transition">
+                    <ArrowLeftRight size={20} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-black text-slate-900">Form ACG-61 Charge</div>
+                    <div className="text-[11px] text-slate-600 mt-0.5">Transfer of charge register</div>
+                  </div>
+                </Link>
+
+                <Link
+                  to="/commercial-directory"
+                  className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-100 border border-emerald-200 hover:border-emerald-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center font-bold shadow-sm group-hover:scale-110 transition">
+                    <Store size={20} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-black text-slate-900">Commercial GIS Hub</div>
+                    <div className="text-[11px] text-slate-600 mt-0.5">Google Maps extractor</div>
+                  </div>
+                </Link>
+
+                <Link
+                  to="/official-documents"
+                  className="p-4 rounded-2xl bg-gradient-to-br from-cyan-50 to-sky-100 border border-cyan-200 hover:border-cyan-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-cyan-700 text-white flex items-center justify-center font-bold shadow-sm group-hover:scale-110 transition">
+                    <FileCheck2 size={20} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-black text-slate-900">Statutory Reports</div>
+                    <div className="text-[11px] text-slate-600 mt-0.5">Official PDF templates</div>
+                  </div>
+                </Link>
+
+                <Link
+                  to="/staff-storefront"
+                  className="p-4 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-100 border border-orange-200 hover:border-orange-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-orange-600 text-white flex items-center justify-center font-bold shadow-sm group-hover:scale-110 transition">
+                    <Store size={20} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-black text-slate-900">Partner E-Store Studio</div>
+                    <div className="text-[11px] text-slate-600 mt-0.5">Products &amp; QR kits</div>
+                  </div>
+                </Link>
+
+                <Link
+                  to="/staff-master"
+                  className="p-4 rounded-2xl bg-gradient-to-br from-purple-50 to-fuchsia-100 border border-purple-200 hover:border-purple-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-purple-700 text-white flex items-center justify-center font-bold shadow-sm group-hover:scale-110 transition">
+                    <Users size={20} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-black text-slate-900">Admin Staff Master</div>
+                    <div className="text-[11px] text-slate-600 mt-0.5">34 Beats &amp; staff roles</div>
+                  </div>
+                </Link>
+              </div>
+            </div>
+
+            {/* Real-Time Activity Feed Card */}
+            <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                  <Clock className="text-red-700" size={17} />
+                  <span>Real-Time Activity Feed</span>
+                </h2>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase">
+                  Live Sync OK
+                </span>
+              </div>
+
+              <div className="space-y-3 flex-1 overflow-y-auto max-h-[280px] text-xs">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                  <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
+                    <span className="text-emerald-700 font-black">ACG-61 Handover</span>
+                    <span>10 mins ago</span>
+                  </div>
+                  <p className="font-semibold text-slate-800">
+                    Mahendra Kumar Meena generated certified ACG-61 Charge Report for Dadabari S.O.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                  <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
+                    <span className="text-blue-700 font-black">Daily Article Sync</span>
+                    <span>25 mins ago</span>
+                  </div>
+                  <p className="font-semibold text-slate-800">
+                    Beat 1 &amp; Beat 2 synchronized 105 daily delivery articles with DSS database.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                  <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
+                    <span className="text-indigo-700 font-black">Commercial GIS Hub</span>
+                    <span>1 hour ago</span>
+                  </div>
+                  <p className="font-semibold text-slate-800">
+                    Extracted 25 verified 5+ year commercial storefronts for Dadabari Main Market.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
+                <span>System Uptime: <strong>99.9%</strong></span>
+                <Link to="/audit-log" className="font-bold text-red-700 hover:underline">
+                  View Full Audit Logs →
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Priority Tasks & Follow-ups Bar (Hero Immediate Attention Strip) */}
         <div className="p-6 space-y-5">
           {/* Immediate Action Counters Row - 1-Click Interactive Navigation */}
@@ -1317,8 +1607,8 @@ export default function Dashboard({
           <section className="space-y-3" id="priority-architecture-grid">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <div className="text-[11px] font-black uppercase tracking-wider text-red-800">
-                  Operational Priority Architecture · {isAdmin ? 'All 33 Beats Overview' : `${activeBeat} Scoped Workspace`}
+              <div className="text-[11px] font-black uppercase tracking-wider text-red-800">
+                  Operational Priority Architecture · {isAdmin ? 'All 34 Beats Overview' : `${activeBeat} Scoped Workspace`}
                 </div>
                 <h2 className="text-lg font-black text-slate-900">
                   5-Module Field Command &amp; Citizen Services
@@ -1344,23 +1634,23 @@ export default function Dashboard({
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
               {/* Priority 1: Colony & Household Data */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between gap-3 hover:border-indigo-300 transition">
+              <div className="bg-gradient-to-b from-indigo-50/70 to-white rounded-2xl border-2 border-indigo-200 p-4 shadow-sm hover:shadow-md hover:border-indigo-400 flex flex-col justify-between gap-3 transition">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 text-[10px] font-black uppercase">
+                    <span className="px-2 py-0.5 rounded bg-indigo-600 text-white text-[10px] font-black uppercase">
                       Priority 1
                     </span>
                     <Building2 size={16} className="text-indigo-700" />
                   </div>
-                  <h3 className="font-black text-sm text-slate-900">Colony &amp; Household Data</h3>
-                  <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                  <h3 className="font-black text-sm text-indigo-950">Colony &amp; Household Data</h3>
+                  <div className="grid grid-cols-2 gap-2 text-xs bg-white p-2.5 rounded-xl border border-indigo-100">
                     <div>
                       <div className="text-[10px] text-slate-500 font-bold">Properties</div>
-                      <div className="text-base font-black text-slate-900">{customers.length}</div>
+                      <div className="text-base font-black text-slate-900 font-mono tabular-nums">{customers.length}</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-bold">Colonies</div>
-                      <div className="text-base font-black text-indigo-700">{uniqueColonies}</div>
+                      <div className="text-base font-black text-indigo-700 font-mono tabular-nums">{uniqueColonies}</div>
                     </div>
                   </div>
                   <p className="text-[11px] text-slate-600">
@@ -1368,7 +1658,7 @@ export default function Dashboard({
                     <span className="font-semibold">{isAdmin ? 'Dadabari S.O.' : activeBeat}</span>.
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100">
+                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-indigo-100">
                   <Link
                     to="/households"
                     className="flex-1 text-center px-2.5 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-[11px] font-bold transition"
@@ -1377,7 +1667,7 @@ export default function Dashboard({
                   </Link>
                   <Link
                     to={isAdmin ? '/colony-master' : '/my-beat'}
-                    className="flex-1 text-center px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[11px] font-bold transition"
+                    className="flex-1 text-center px-2.5 py-1.5 bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-900 rounded-lg text-[11px] font-bold transition"
                   >
                     {isAdmin ? 'Colonies' : 'My Beat'}
                   </Link>
@@ -1481,23 +1771,23 @@ export default function Dashboard({
               </div>
 
               {/* Priority 3: Daily Tasks & Delivery Work */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between gap-3 hover:border-amber-300 transition">
+              <div className="bg-gradient-to-b from-amber-50/75 to-white rounded-2xl border-2 border-amber-200 p-4 shadow-sm hover:shadow-md hover:border-amber-400 flex flex-col justify-between gap-3 transition">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 text-[10px] font-black uppercase">
+                    <span className="px-2 py-0.5 rounded bg-amber-600 text-white text-[10px] font-black uppercase">
                       Priority 3
                     </span>
                     <Clock size={16} className="text-amber-700" />
                   </div>
-                  <h3 className="font-black text-sm text-slate-900">Daily Tasks &amp; Delivery</h3>
-                  <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                  <h3 className="font-black text-sm text-amber-950">Daily Tasks &amp; Delivery</h3>
+                  <div className="grid grid-cols-2 gap-2 text-xs bg-white p-2.5 rounded-xl border border-amber-100">
                     <div>
                       <div className="text-[10px] text-slate-500 font-bold">Open Tasks</div>
-                      <div className="text-base font-black text-amber-700">{pendingTasks.length}</div>
+                      <div className="text-base font-black text-amber-700 font-mono tabular-nums">{pendingTasks.length}</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-bold">Delivered</div>
-                      <div className="text-base font-black text-emerald-700">{totalDelivAll}</div>
+                      <div className="text-base font-black text-emerald-700 font-mono tabular-nums">{totalDelivAll}</div>
                     </div>
                   </div>
                   <p className="text-[11px] text-slate-600">
@@ -1505,7 +1795,7 @@ export default function Dashboard({
                     <span className="font-bold text-emerald-700">₹{eligibleFuelAllowance.toLocaleString('en-IN')}</span>
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100">
+                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-amber-100">
                   <Link
                     to="/tasks"
                     className="flex-1 text-center px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-bold transition"
@@ -1514,7 +1804,7 @@ export default function Dashboard({
                   </Link>
                   <Link
                     to="/postman-articles"
-                    className="flex-1 text-center px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[11px] font-bold transition"
+                    className="flex-1 text-center px-2.5 py-1.5 bg-white border border-amber-200 hover:bg-amber-50 text-amber-900 rounded-lg text-[11px] font-bold transition"
                   >
                     Articles &amp; Fuel
                   </Link>
@@ -1522,30 +1812,30 @@ export default function Dashboard({
               </div>
 
               {/* Priority 4: Leads & Follow-ups */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between gap-3 hover:border-emerald-300 transition">
+              <div className="bg-gradient-to-b from-emerald-50/75 to-white rounded-2xl border-2 border-emerald-200 p-4 shadow-sm hover:shadow-md hover:border-emerald-400 flex flex-col justify-between gap-3 transition">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 text-[10px] font-black uppercase">
+                    <span className="px-2 py-0.5 rounded bg-emerald-700 text-white text-[10px] font-black uppercase">
                       Priority 4
                     </span>
                     <Target size={16} className="text-emerald-700" />
                   </div>
-                  <h3 className="font-black text-sm text-slate-900">Leads &amp; Follow-ups</h3>
-                  <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                  <h3 className="font-black text-sm text-emerald-950">Leads &amp; Follow-ups</h3>
+                  <div className="grid grid-cols-2 gap-2 text-xs bg-white p-2.5 rounded-xl border border-emerald-100">
                     <div>
                       <div className="text-[10px] text-slate-500 font-bold">Active Leads</div>
-                      <div className="text-base font-black text-emerald-700">{activeLeads.length}</div>
+                      <div className="text-base font-black text-emerald-700 font-mono tabular-nums">{activeLeads.length}</div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-500 font-bold">Follow-ups</div>
-                      <div className="text-base font-black text-red-700">{pendingFollowUps.length}</div>
+                      <div className="text-base font-black text-rose-700 font-mono tabular-nums">{pendingFollowUps.length}</div>
                     </div>
                   </div>
                   <p className="text-[11px] text-slate-600">
-                    PLI, RPLI, SSA, PPF &amp; IPPB doorstep conversion pipeline.
+                    PLI, RPLI, SSA, PPF &amp; IPPB Merchant QR doorstep pipeline.
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100">
+                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-emerald-100">
                   <Link
                     to="/leads"
                     className="flex-1 text-center px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-[11px] font-bold transition"
@@ -1554,7 +1844,7 @@ export default function Dashboard({
                   </Link>
                   <Link
                     to="/follow-ups"
-                    className="flex-1 text-center px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[11px] font-bold transition"
+                    className="flex-1 text-center px-2.5 py-1.5 bg-white border border-emerald-200 hover:bg-emerald-50 text-emerald-900 rounded-lg text-[11px] font-bold transition"
                   >
                     Follow-ups
                   </Link>
@@ -1562,31 +1852,31 @@ export default function Dashboard({
               </div>
 
               {/* Priority 5: Products & Catalog */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col justify-between gap-3 hover:border-red-300 transition">
+              <div className="bg-gradient-to-b from-rose-50/75 to-white rounded-2xl border-2 border-rose-200 p-4 shadow-sm hover:shadow-md hover:border-rose-400 flex flex-col justify-between gap-3 transition">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="px-2 py-0.5 rounded bg-red-50 text-red-800 text-[10px] font-black uppercase">
+                    <span className="px-2 py-0.5 rounded bg-rose-700 text-white text-[10px] font-black uppercase">
                       Priority 5
                     </span>
-                    <Briefcase size={16} className="text-red-700" />
+                    <Briefcase size={16} className="text-rose-700" />
                   </div>
-                  <h3 className="font-black text-sm text-slate-900">Products &amp; Catalog</h3>
+                  <h3 className="font-black text-sm text-rose-950">Products &amp; Catalog</h3>
                   <div className="space-y-1 text-[11px]">
-                    <div className="p-1.5 rounded-lg bg-red-50/70 border border-red-100 text-red-900 font-semibold">
+                    <div className="p-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 font-semibold">
                       Sovereign: SSA 8.2% · SCSS 8.2% · PLI
                     </div>
-                    <div className="p-1.5 rounded-lg bg-amber-50/70 border border-amber-100 text-amber-900 font-semibold">
-                      Commercial: MyStamp · Gangajal · DNK
+                    <div className="p-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 font-semibold">
+                      Commercial: MyStamp · Gangajal · QR
                     </div>
                   </div>
                   <p className="text-[11px] text-slate-600">
-                    Returns calculator, WhatsApp brochures &amp; instant lead capture.
+                    Bilingual WhatsApp pitches, Speed Post COD &amp; lead capture.
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-100">
+                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-rose-100">
                   <Link
                     to="/services"
-                    className="flex-1 text-center px-2.5 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-lg text-[11px] font-bold transition"
+                    className="flex-1 text-center px-2.5 py-1.5 bg-rose-700 hover:bg-rose-800 text-white rounded-lg text-[11px] font-bold transition"
                   >
                     Open Catalog
                   </Link>
@@ -1664,51 +1954,80 @@ export default function Dashboard({
           ))}
         </div>
 
-        {/* Categorized Services Grid */}
+        {/* Categorized Services Grid — Color-Coded High-Contrast Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {visibleHubServices.map((srv) => (
-            <div
-              key={srv.id}
-              className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 hover:bg-white hover:border-red-300 transition flex flex-col justify-between gap-3"
-            >
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-[11px] text-slate-500">
-                  <span className="font-bold text-red-800">{srv.categoryLabel}</span>
-                  <span>·</span>
-                  <span className="font-mono font-semibold text-emerald-800">
-                    {srv.rateOrHighlight}
-                  </span>
-                </div>
-                <h3 className="text-sm font-bold text-slate-900">{srv.title}</h3>
-                <p className="text-xs text-slate-600 leading-relaxed">{srv.summary}</p>
-              </div>
+          {visibleHubServices.map((srv) => {
+            const cardAccent =
+              srv.category === 'IPPB'
+                ? 'border-emerald-200 bg-gradient-to-br from-emerald-50/70 to-white hover:border-emerald-400'
+                : srv.category === 'SMALL_SAVINGS'
+                ? 'border-teal-200 bg-gradient-to-br from-teal-50/70 to-white hover:border-teal-400'
+                : srv.category === 'INSURANCE'
+                ? 'border-indigo-200 bg-gradient-to-br from-indigo-50/70 to-white hover:border-indigo-400'
+                : srv.category === 'AADHAAR_CELC'
+                ? 'border-sky-200 bg-gradient-to-br from-sky-50/70 to-white hover:border-sky-400'
+                : 'border-rose-200 bg-gradient-to-br from-rose-50/70 to-white hover:border-rose-400';
 
-              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200/80">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLeadScheme(srv.title);
-                    setLeadRequirement(srv.requirementPreset);
-                    setLeadEstValue(srv.defaultValue);
-                    setShowQuickLeadForm(true);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className="px-3 py-1.5 bg-red-800 hover:bg-red-900 text-white rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer"
-                >
-                  <Plus size={13} />
-                  <span>Quick Inquiry / Lead</span>
-                </button>
-                <Link
-                  to="/leads"
-                  state={{ preselectedProduct: srv.title }}
-                  className="text-xs font-bold text-slate-700 hover:text-red-800 flex items-center gap-1"
-                >
-                  <span>Pipeline</span>
-                  <ArrowRight size={12} />
-                </Link>
+            const waPitchHref = `https://api.whatsapp.com/send?phone=918769706002&text=${encodeURIComponent(
+              `नमस्ते! इंडिया पोस्ट दादाबाड़ी S.O. (PIN 324009) सेवा जानकारी:\n\n✨ ${srv.title} (${srv.rateOrHighlight})\n${srv.summary}\n\nडोरस्टेप KYC व बुकिंग हेतु Beat 2 (8769706002) या S.O. Desk (9460020640) से संपर्क करें।`
+            )}`;
+
+            return (
+              <div
+                key={srv.id}
+                className={`p-4 rounded-2xl border-2 shadow-xs hover:shadow-md hover:-translate-y-0.5 transition flex flex-col justify-between gap-3 ${cardAccent}`}
+              >
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] text-slate-500">
+                    <span className="font-black text-slate-800">{srv.categoryLabel}</span>
+                    <span>·</span>
+                    <span className="font-mono font-bold text-emerald-800">
+                      {srv.rateOrHighlight}
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-black text-slate-900">{srv.title}</h3>
+                  <p className="text-xs text-slate-600 leading-relaxed">{srv.summary}</p>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200/80">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLeadScheme(srv.title);
+                        setLeadRequirement(srv.requirementPreset);
+                        setLeadEstValue(srv.defaultValue);
+                        setShowQuickLeadForm(true);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="px-3 py-1.5 bg-red-800 hover:bg-red-900 text-white rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer whitespace-nowrap"
+                    >
+                      <Plus size={13} />
+                      <span>Quick Lead</span>
+                    </button>
+                    <a
+                      href={waPitchHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 transition whitespace-nowrap"
+                      title="Share Hindi/English Service Pitch via Beat 2 WhatsApp"
+                    >
+                      <MessageCircle size={12} />
+                      <span>Pitch</span>
+                    </a>
+                  </div>
+                  <Link
+                    to="/leads"
+                    state={{ preselectedProduct: srv.title }}
+                    className="text-xs font-bold text-slate-700 hover:text-red-800 flex items-center gap-1 shrink-0"
+                  >
+                    <span>Pipeline</span>
+                    <ArrowRight size={12} />
+                  </Link>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

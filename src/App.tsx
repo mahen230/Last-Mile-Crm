@@ -57,6 +57,8 @@ const PostmanAllDayArticlesOverview = lazy(() => import('./components/postman/Po
 const OfficialStaffDocumentsHub = lazy(() => import('./components/crm/OfficialStaffDocumentsHub'));
 const ColleagueStaffDirectory = lazy(() => import('./components/crm/ColleagueStaffDirectory'));
 const OfficialApplicationsView = lazy(() => import('./components/crm/OfficialApplicationsView'));
+const StaffProductStudioView = lazy(() => import('./components/crm/StaffProductStudioView'));
+const AICommercialIntelligenceHub = lazy(() => import('./components/crm/AICommercialIntelligenceHub'));
 
 function ServiceModuleGuard({
   moduleKey,
@@ -424,6 +426,16 @@ function AuthenticatedApp() {
           }
         />
         <Route
+          path="/commercial-intelligence"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (AI Commercial Intelligence & 4-Factor Engine)">
+                <AICommercialIntelligenceHub />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/tasks"
           element={
             <ProtectedRoute requiredTier="STAFF">
@@ -667,6 +679,14 @@ function AuthenticatedApp() {
           element={
             <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <SettingsView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/staff-storefront"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <StaffProductStudioView />
             </ProtectedRoute>
           }
         />

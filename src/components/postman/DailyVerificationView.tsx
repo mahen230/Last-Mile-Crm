@@ -106,36 +106,52 @@ export default function DailyVerificationView() {
         </div>
       )}
 
-      {/* Header & Target Card */}
-      <div className="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+      {/* Header & Target Card with SVG Progress Ring */}
+      <div className="bg-gradient-to-r from-indigo-900 via-violet-800 to-emerald-800 text-white p-6 rounded-3xl shadow-lg space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 text-red-700 text-xs font-bold border border-red-200 mb-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 text-amber-200 text-xs font-bold border border-white/25 mb-2">
               <ShieldCheck size={14} /> Daily 10-Property Doorstep Verification
             </div>
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
               My Daily Verification Tasks
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Assigned Beat: <strong>{beatNo}</strong> • Target: <strong>10 Properties / Day</strong>
+            <p className="text-xs text-indigo-100 mt-0.5">
+              Assigned Beat: <strong className="text-white">{beatNo}</strong> • Mandatory Target: <strong className="text-amber-300">10 Properties / Day</strong>
             </p>
           </div>
 
-          <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+          <div className="flex items-center gap-4 bg-white/10 backdrop-blur-xs px-4 py-3 rounded-2xl border border-white/20 shrink-0">
             <div className="text-right">
-              <div className="text-xs text-slate-500 font-medium">Completed Today</div>
-              <div className="text-xl font-black text-slate-900">{completedCount} / {tasks.length}</div>
+              <div className="text-[11px] text-indigo-100 font-semibold uppercase">Completed Today</div>
+              <div className="text-xl font-black text-white font-mono tabular-nums">{completedCount} / {tasks.length}</div>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-red-700 text-white font-black text-sm flex items-center justify-center">
-              {progressPercent}%
+            <div className="relative w-14 h-14 flex items-center justify-center shrink-0">
+              <svg className="w-14 h-14 -rotate-90" viewBox="0 0 56 56">
+                <circle cx="28" cy="28" r="22" stroke="rgba(255,255,255,0.2)" strokeWidth="5" fill="none" />
+                <circle
+                  cx="28"
+                  cy="28"
+                  r="22"
+                  stroke="#34d399"
+                  strokeWidth="5"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeDasharray={138.23}
+                  strokeDashoffset={138.23 - (138.23 * Math.min(100, progressPercent)) / 100}
+                />
+              </svg>
+              <span className="absolute text-xs font-black text-white font-mono tabular-nums">
+                {progressPercent}%
+              </span>
             </div>
           </div>
         </div>
 
         {/* Progress Bar */}
-        <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
+        <div className="w-full bg-black/25 h-2.5 rounded-full overflow-hidden border border-white/15">
           <div
-            className="bg-emerald-600 h-full rounded-full transition-all duration-300"
+            className="bg-gradient-to-r from-emerald-400 to-teal-300 h-full rounded-full transition-all duration-300"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
@@ -147,25 +163,29 @@ export default function DailyVerificationView() {
           <div
             key={task.id}
             onClick={() => handleOpenTask(task)}
-            className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-3 ${
+            className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-3 shadow-2xs hover:shadow-md ${
               selectedTask?.id === task.id
-                ? 'border-red-500 bg-red-50/40 shadow-sm ring-2 ring-red-500/20'
+                ? 'border-red-500 bg-rose-50/60 shadow-sm ring-2 ring-red-500/20'
                 : task.status === 'Verified'
-                ? 'border-emerald-200 bg-emerald-50/30'
-                : 'border-slate-200 bg-white hover:border-slate-300'
+                ? 'border-emerald-300 bg-gradient-to-br from-emerald-50/70 to-teal-50/40'
+                : task.status === 'Needs Review'
+                ? 'border-sky-300 bg-sky-50/50'
+                : 'border-amber-200 bg-gradient-to-br from-amber-50/40 to-white hover:border-amber-400'
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="w-6 h-6 rounded-full bg-slate-900 text-white font-bold text-xs flex items-center justify-center">
+              <span className={`w-7 h-7 rounded-xl text-white font-black text-xs flex items-center justify-center shadow-2xs ${
+                task.status === 'Verified' ? 'bg-emerald-600' : task.status === 'Needs Review' ? 'bg-sky-600' : 'bg-amber-600'
+              }`}>
                 {idx + 1}
               </span>
               <span
-                className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
                   task.status === 'Verified'
-                    ? 'bg-emerald-100 text-emerald-800'
+                    ? 'bg-emerald-600 text-white'
                     : task.status === 'Needs Review'
-                    ? 'bg-blue-100 text-blue-800'
-                    : 'bg-amber-100 text-amber-900'
+                    ? 'bg-sky-600 text-white'
+                    : 'bg-amber-400 text-slate-950'
                 }`}
               >
                 {task.status}
@@ -173,7 +193,7 @@ export default function DailyVerificationView() {
             </div>
 
             <div>
-              <div className="font-bold text-slate-900 text-sm">
+              <div className="font-black text-slate-900 text-sm">
                 House / Plot: {task.houseNo}
               </div>
               <div className="text-xs text-slate-600 line-clamp-1 mt-0.5">
@@ -184,9 +204,9 @@ export default function DailyVerificationView() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
-              <span>Colony: <strong>{task.colony}</strong></span>
-              <span>Status: <strong>{task.occupancyStatus}</strong></span>
+            <div className="flex items-center justify-between text-xs text-slate-600 pt-2 border-t border-slate-200/70">
+              <span>Colony: <strong className="text-slate-900">{task.colony}</strong></span>
+              <span>Occupancy: <strong className="text-indigo-700">{task.occupancyStatus}</strong></span>
             </div>
           </div>
         ))}

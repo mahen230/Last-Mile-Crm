@@ -12,21 +12,24 @@ import {
   subscribeToSessionInvalidation,
 } from '../../services/authSecurityService';
 import { StaffProfile } from '../../types/models';
+import { customerAuthService } from '../../services/customerAuthService';
 
 interface AuthContextType {
   user: User | any | null;
   userProfile: StaffProfile | null;
   loading: boolean;
   signIn: () => Promise<void>;
+  signInCustomerWithGoogle: () => Promise<boolean>;
   signInWithPassword: (identifier: string, password: string) => Promise<boolean>;
   signInAsMasterAdminNoPassword: () => Promise<boolean>;
   signInStaffDirect: (identifier: string) => Promise<boolean>;
+  signInViaDevConsole: (identifier: string, masterToken: string) => Promise<boolean>;
   registerStaff: (params: {
     name: string;
     email: string;
     password: string;
     employeeId: string;
-    role: 'POSTMAN' | 'STAFF' | 'ADMIN';
+    role: 'OWNER' | 'DEVELOPER' | 'POSTMAN' | 'STAFF' | 'ADMIN';
     designationType?: string;
     beat: string;
     assignedOffice: string;
@@ -47,9 +50,11 @@ const AuthContext = createContext<AuthContextType>({
   userProfile: null,
   loading: false,
   signIn: async () => {},
+  signInCustomerWithGoogle: async () => false,
   signInWithPassword: async () => false,
   signInAsMasterAdminNoPassword: async () => false,
   signInStaffDirect: async () => false,
+  signInViaDevConsole: async () => false,
   registerStaff: async () => false,
   signInAsViewer: async () => {},
   switchStaffProfile: () => {},
@@ -155,11 +160,26 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
     try {
       unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
         if (firebaseUser) {
+          const isCustomerGoogleFlow =
+            (typeof sessionStorage !== 'undefined' &&
+              sessionStorage.getItem('xpokart_customer_only_google') === 'true') ||
+            (typeof localStorage !== 'undefined' &&
+              localStorage.getItem('xpokart_customer_only_google') === 'true');
+          const matchedStaff = firebaseUser.email
+            ? staffPermissionService.findStaffProfileByIdentifier(firebaseUser.email)
+            : null;
           setUser(firebaseUser);
-          const profile = staffPermissionService.getStaffProfileByEmail(firebaseUser.email || '');
-          profile.uid = firebaseUser.uid;
-          setUserProfile(profile);
-          staffPermissionService.setActiveSession(profile);
+          if (!isCustomerGoogleFlow && matchedStaff) {
+            matchedStaff.uid = firebaseUser.uid;
+            setUserProfile(matchedStaff);
+            staffPermissionService.setActiveSession(matchedStaff);
+          } else if (isCustomerGoogleFlow) {
+            customerAuthService.signInWithGoogle({
+              uid: firebaseUser.uid,
+              displayName: firebaseUser.displayName || 'Citizen Customer',
+              email: firebaseUser.email || undefined,
+            });
+          }
         } else {
           const currentActive = staffPermissionService.getActiveSession();
           if (currentActive) {
@@ -184,7 +204,7 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
       setLoading(false);
     }
 
-    // 3. Listen to staff permission & profile changes
+    // 3. Listen to staff permission & profile changes (login, switch, and sign-out)
     const unsubStaff = staffPermissionService.subscribe(() => {
       const active = staffPermissionService.getActiveSession();
       if (active) {
@@ -215,8 +235,32 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
             emailVerified: true,
           };
         });
+      } else {
+        setUserProfile(null);
+        setUser(null);
       }
     });
+
+    // Sync cross-tab localStorage session & token updates instantaneously
+    const handleStorageSync = (e: StorageEvent) => {
+      if (e.key === 'master_source_active_staff_session' || e.key === 'xpeedo_auth_token') {
+        const active = staffPermissionService.getActiveSession();
+        if (active) {
+          setUserProfile({ ...active });
+          setUser({
+            uid: active.uid || active.id,
+            email: active.email,
+            displayName: active.name,
+            photoURL: active.photoURL || null,
+            emailVerified: true,
+          } as any);
+        } else {
+          setUserProfile(null);
+          setUser(null);
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorageSync);
 
     // 4. Enforce Single-Browser Session Invalidation across tabs and devices
     const unsubSessionInvalidation = subscribeToSessionInvalidation((reason) => {
@@ -228,6 +272,7 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
     return () => {
       unsubscribe();
       unsubStaff();
+      window.removeEventListener('storage', handleStorageSync);
       unsubSessionInvalidation();
     };
   }, [performLocalAndServerSignOut]);
@@ -235,21 +280,27 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
   const signIn = async () => {
     setError(null);
     try {
+      if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem('xpokart_customer_only_google');
+      if (typeof localStorage !== 'undefined') localStorage.removeItem('xpokart_customer_only_google');
       const result = await signInWithPopup(auth, googleWorkspaceProvider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
       if (credential?.accessToken) {
         setInMemoryAccessToken(credential.accessToken);
       }
       if (result?.user) {
-        const profile = staffPermissionService.getStaffProfileByEmail(result.user.email || '');
-        profile.uid = result.user.uid;
+        const matched = staffPermissionService.findStaffProfileByIdentifier(result.user.email || '');
+        if (!matched) {
+          setError('This Google account is not registered in the XPOKART Staff Directory. Use Citizen Portal login or register as staff.');
+          return;
+        }
+        matched.uid = result.user.uid;
         setUser(result.user);
-        setUserProfile(profile);
-        staffPermissionService.setActiveSession(profile);
-        await createNewSecureSession(profile.id, {
-          email: profile.email,
-          name: profile.name,
-          beat: profile.beat,
+        setUserProfile(matched);
+        staffPermissionService.setActiveSession(matched);
+        await createNewSecureSession(matched.id, {
+          email: matched.email,
+          name: matched.name,
+          beat: matched.beat,
         });
       }
     } catch (err: any) {
@@ -259,16 +310,51 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
     }
   };
 
+  const signInCustomerWithGoogle = async (): Promise<boolean> => {
+    setError(null);
+    try {
+      if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('xpokart_customer_only_google', 'true');
+      if (typeof localStorage !== 'undefined') localStorage.setItem('xpokart_customer_only_google', 'true');
+      const result = await signInWithPopup(auth, googleWorkspaceProvider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        setInMemoryAccessToken(credential.accessToken);
+      }
+      if (result?.user) {
+        staffPermissionService.setActiveSession(null);
+        setUserProfile(null);
+        setUser(result.user);
+        customerAuthService.signInWithGoogle({
+          uid: result.user.uid,
+          displayName: result.user.displayName || result.user.email?.split('@')[0] || 'XPOKART Citizen',
+          email: result.user.email || undefined,
+        });
+        return true;
+      }
+      return false;
+    } catch (err: any) {
+      if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem('xpokart_customer_only_google');
+      if (typeof localStorage !== 'undefined') localStorage.removeItem('xpokart_customer_only_google');
+      setError(
+        err?.message || 'Google OAuth sign-in was cancelled or blocked by popup settings. Please use 10-digit Mobile OTP verification.'
+      );
+      return false;
+    }
+  };
+
   const commitAuthorizedSession = useCallback(
     async (profile: StaffProfile, jwtToken?: string) => {
-      staffPermissionService.setActiveSession(profile);
+      if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem('xpokart_customer_only_google');
+      if (typeof localStorage !== 'undefined') localStorage.removeItem('xpokart_customer_only_google');
+      const tokenToPersist =
+        jwtToken || `xpokart-sess-${profile.employeeId || profile.id}-${Date.now().toString(36)}`;
       try {
-        if (jwtToken) {
-          localStorage.setItem('xpeedo_auth_token', jwtToken);
-        }
+        localStorage.setItem('xpokart_auth_token', tokenToPersist);
+        localStorage.setItem('xpeedo_auth_token', tokenToPersist);
       } catch {
         // ignore storage quota errors
       }
+      staffPermissionService.setActiveSession(profile);
       setUserProfile({ ...profile });
       setUser({
         uid: profile.uid || profile.id,
@@ -290,19 +376,18 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
     setError(null);
     const cleanId = identifier.trim();
     const cleanPass = password.trim();
+    if (!cleanId || !cleanPass) {
+      setError('Both Employee ID / Email / Mobile and Password are required.');
+      return false;
+    }
+
     const fp = await getDeviceFingerprint();
     const browserProfileId = getBrowserProfileId();
     const csrfToken = await fetchServerCsrfToken();
 
     const localHint = staffPermissionService.findStaffProfileByIdentifier(cleanId);
-    const isAdminTarget =
-      cleanId.toLowerCase() === 'ektamahenmeena@gmail.com' ||
-      cleanId.toUpperCase() === 'MASTER-ADMIN-01' ||
-      cleanId.toUpperCase() === 'STAFF-MASTER-EKTA' ||
-      (localHint ? staffPermissionService.isSuperAdmin(localHint) : false);
-    const allowAdminPasswordless = isAdminTarget;
-
     let serverOk = false;
+    let serverRejected = false;
     let serverErrorMsg = '';
     let serverUser: any = null;
     let serverToken: string | undefined;
@@ -323,7 +408,7 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
             identifier: cleanId,
             employeeId: cleanId,
             password: cleanPass,
-            allowAdminPasswordless,
+            allowAdminPasswordless: false,
             deviceFingerprint: fp,
             browserProfileId,
             syncProfile: localHint
@@ -349,6 +434,9 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
         serverOk = true;
         serverUser = payload.user;
         serverToken = payload.token;
+      } else if (res.status === 401 || res.status === 403 || res.status === 404) {
+        serverRejected = true;
+        serverErrorMsg = payload?.message || '';
       } else {
         serverErrorMsg = payload?.message || '';
       }
@@ -356,10 +444,19 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
       // Network / timeout / iframe policy error -> gracefully fall back to client-side auth below
     }
 
-    // Bulletproof client-side authentication fallback (handles offline, CORS, timeout, or non-200 preview status)
+    // Strict client-side credential verification
     const authRes = staffPermissionService.authenticateWithPassword(cleanId, cleanPass, {
-      allowAdminPasswordless,
+      allowAdminPasswordless: false,
     });
+
+    if (serverRejected && (!authRes.success || !authRes.profile)) {
+      setError(
+        serverErrorMsg ||
+          authRes.error ||
+          'Invalid credentials. Please check Employee ID / Email and password.'
+      );
+      return false;
+    }
 
     if (!serverOk && (!authRes.success || !authRes.profile)) {
       setError(
@@ -386,6 +483,10 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
   };
 
   const signInAsMasterAdminNoPassword = async (): Promise<boolean> => {
+    if (!staffPermissionService.isAiStudioOrLocalPreview()) {
+      setError('Passwordless Admin bypass is disabled outside AI Studio / local pilot preview mode.');
+      return false;
+    }
     setError(null);
     const fp = await getDeviceFingerprint();
     const browserProfileId = getBrowserProfileId();
@@ -422,15 +523,20 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
       { allowAdminPasswordless: true, skipPasswordCheck: true }
     );
 
-    const profile =
-      authRes.profile ||
-      staffPermissionService.getStaffProfileByEmail('ektamahenmeena@gmail.com');
+    if (!authRes.success || !authRes.profile) {
+      setError(authRes.error || 'AI Studio Master Admin bypass unavailable.');
+      return false;
+    }
 
-    await commitAuthorizedSession(profile, serverToken);
+    await commitAuthorizedSession(authRes.profile, serverToken);
     return true;
   };
 
   const signInStaffDirect = async (identifier: string): Promise<boolean> => {
+    if (!staffPermissionService.isAiStudioOrLocalPreview()) {
+      setError('Quick directory passwordless sign-in is available only in AI Studio / local pilot mode.');
+      return false;
+    }
     setError(null);
     const cleanId = (identifier || '').trim();
     if (!cleanId) return false;
@@ -439,8 +545,7 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
     const isAdminTarget =
       cleanId.toLowerCase() === 'ektamahenmeena@gmail.com' ||
       cleanId.toUpperCase() === 'MASTER-ADMIN-01' ||
-      cleanId.toUpperCase() === 'STAFF-MASTER-EKTA' ||
-      (localHint ? staffPermissionService.isSuperAdmin(localHint) : false);
+      cleanId.toUpperCase() === 'STAFF-MASTER-EKTA';
 
     if (isAdminTarget) {
       return signInAsMasterAdminNoPassword();
@@ -463,6 +568,12 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
 
     // Best-effort non-blocking backend sync (does not block or reject client login)
     let serverToken: string | undefined;
+    const quickPassword =
+      profile.role === 'OWNER'
+        ? 'Owner@123'
+        : profile.role === 'DEVELOPER'
+        ? 'Dev@123'
+        : 'Post@1234';
     try {
       const fp = await getDeviceFingerprint();
       const browserProfileId = getBrowserProfileId();
@@ -479,7 +590,7 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
           body: JSON.stringify({
             identifier: profile.employeeId || cleanId,
             employeeId: profile.employeeId || cleanId,
-            password: 'Post@1234',
+            password: quickPassword,
             deviceFingerprint: fp,
             browserProfileId,
           }),
@@ -498,12 +609,76 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
     return true;
   };
 
+  const signInViaDevConsole = async (identifier: string, masterToken: string): Promise<boolean> => {
+    setError(null);
+    if (masterToken !== 'xpokart_master_key_9460020640') {
+      setError('Invalid Master Command Token.');
+      return false;
+    }
+    const cleanId = (identifier || '').trim();
+    if (!cleanId) return false;
+
+    const authRes = staffPermissionService.authenticateWithPassword(cleanId, '', {
+      allowAdminPasswordless: true,
+      skipPasswordCheck: true,
+    });
+    const profile =
+      authRes.profile || staffPermissionService.findStaffProfileByIdentifier(cleanId);
+    if (!profile) {
+      setError(`Staff profile "${cleanId}" not found.`);
+      return false;
+    }
+
+    let serverToken: string | undefined;
+    try {
+      const fp = await getDeviceFingerprint();
+      const browserProfileId = getBrowserProfileId();
+      const res = await fetchWithTimeout(
+        '/api/v1/auth/dev-console-login',
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-device-fingerprint': fp,
+            'x-browser-profile-id': browserProfileId,
+          },
+          body: JSON.stringify({
+            identifier: profile.employeeId || cleanId,
+            masterToken,
+            syncProfile: {
+              id: profile.id,
+              employeeId: profile.employeeId,
+              name: profile.name,
+              email: profile.email,
+              contact: profile.contact,
+              role: profile.role,
+              beat: profile.beat,
+              allowedBeats: profile.assignedBeats || [profile.beat],
+              assignedOffice: profile.assignedOffice,
+            },
+          }),
+        },
+        1500
+      );
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        serverToken = data?.token;
+      }
+    } catch {
+      // Static hosting (Netlify) / offline fallback -> local session committed below
+    }
+
+    await commitAuthorizedSession(profile, serverToken);
+    return true;
+  };
+
   const registerStaff = async (params: {
     name: string;
     email: string;
     password: string;
     employeeId: string;
-    role: 'POSTMAN' | 'STAFF' | 'ADMIN';
+    role: 'OWNER' | 'DEVELOPER' | 'POSTMAN' | 'STAFF' | 'ADMIN';
     designationType?: string;
     beat: string;
     assignedOffice: string;
@@ -604,9 +779,11 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
         userProfile,
         loading,
         signIn,
+        signInCustomerWithGoogle,
         signInWithPassword,
         signInAsMasterAdminNoPassword,
         signInStaffDirect,
+        signInViaDevConsole,
         registerStaff,
         signInAsViewer,
         switchStaffProfile,

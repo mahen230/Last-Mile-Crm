@@ -40,6 +40,8 @@ class DataClearanceSanitizer {
     if (staff && staff.role) {
       const normalizedRole = String(staff.role).toUpperCase();
       const isAdmin =
+        normalizedRole === 'OWNER' ||
+        normalizedRole === 'DEVELOPER' ||
         normalizedRole === 'MASTER_ADMIN' ||
         normalizedRole === 'SUPER_ADMIN' ||
         normalizedRole === 'ADMIN' ||

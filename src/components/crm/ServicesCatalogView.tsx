@@ -92,8 +92,8 @@ export default function ServicesCatalogView({ onSelectProductForLead }: { onSele
     const deskLabel = whatsappTarget === '918769706002' ? 'Beat 2 (Mahendra Kumar Meena)' : 'Dadabari S.O. Desk';
     const message =
       pitchLang === 'hi'
-        ? `नमस्ते ${deskLabel}! मुझे India Post योजना "${prod.name}" (${prod.code}) — लाभ: ${prod.interestRateOrBonus}, न्यूनतम: ${prod.minInvestment} के बारे में पूरी जानकारी और होम विजिट बुकिंग चाहिए। (Xpeedo Last Mile · PIN 324009)`
-        : `Namaste ${deskLabel}! I am interested in "${prod.name}" (${prod.code}) — Highlight: ${prod.interestRateOrBonus}, Min: ${prod.minInvestment}. Please share enrollment details / Speed Post COD pickup info. (Xpeedo Last Mile · PIN 324009)`;
+        ? `नमस्ते ${deskLabel}! मुझे India Post योजना "${prod.name}" (${prod.code}) — लाभ: ${prod.interestRateOrBonus}, न्यूनतम: ${prod.minInvestment} के बारे में पूरी जानकारी और होम विजिट बुकिंग चाहिए। (XPOKART · PIN 324009)`
+        : `Namaste ${deskLabel}! I am interested in "${prod.name}" (${prod.code}) — Highlight: ${prod.interestRateOrBonus}, Min: ${prod.minInvestment}. Please share enrollment details / Speed Post COD pickup info. (XPOKART · PIN 324009)`;
     return `https://api.whatsapp.com/send?phone=${whatsappTarget}&text=${encodeURIComponent(message)}`;
   };
 

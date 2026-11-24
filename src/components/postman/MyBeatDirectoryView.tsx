@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Map, MapPin, Building, ShieldCheck, 
-  Navigation, CheckCircle2, ArrowRight, Home, Users, Fuel 
+  Navigation, CheckCircle2, ArrowRight, Home, Users, Fuel, Store
 } from 'lucide-react';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import { customerService } from '../../services/customerService';
@@ -141,7 +141,18 @@ export default function MyBeatDirectoryView() {
       </div>
 
       {/* Quick Links */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div
+          onClick={() => navigate('/beat-merchant-register')}
+          className="p-5 bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border border-amber-300 hover:border-amber-500 hover:shadow-md transition shadow-xs cursor-pointer space-y-2 group"
+        >
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-600 to-orange-700 text-white flex items-center justify-center group-hover:scale-105 transition shadow-xs">
+            <Store size={20} />
+          </div>
+          <h3 className="font-black text-slate-900 text-sm">Beat Storefront &amp; Registration</h3>
+          <p className="text-xs text-slate-600">Onboard local stores, 4-factor audit, and bind delivery pipeline.</p>
+        </div>
+
         <div
           onClick={() => navigate('/daily-verification')}
           className="p-5 bg-gradient-to-br from-rose-50 to-white rounded-2xl border border-rose-200 hover:border-red-400 hover:shadow-md transition shadow-xs cursor-pointer space-y-2 group"

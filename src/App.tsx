@@ -6,8 +6,10 @@ import PublicHomePortal from './components/PublicHomePortal';
 import Dashboard from './components/Dashboard';
 import { FirebaseAuthProvider, useAuth } from './components/auth/FirebaseAuthProvider';
 import { staffPermissionService } from './services/staffPermissionService';
-import { ServiceModulePermissions } from './types/models';
+import { featureVisibilityService } from './services/featureVisibilityService';
+import { FeatureVisibilityKey, ServiceModulePermissions } from './types/models';
 import LoginPage from './pages/LoginPage';
+import XpeedoHomeLoginPage from './pages/XpeedoHomeLoginPage';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { OTAUpdateNotification } from './components/common/OTAUpdateNotification';
 
@@ -30,6 +32,7 @@ const BeatManagementView = lazy(() => import('./components/crm/BeatManagementVie
 const StaffView = lazy(() => import('./components/crm/StaffView'));
 const OfficeMasterView = lazy(() => import('./components/crm/OfficeMasterView'));
 const StaffMasterView = lazy(() => import('./components/crm/StaffMasterView'));
+const RoleAccessDashboard = lazy(() => import('./components/crm/RoleAccessDashboard'));
 const SpecialFormsView = lazy(() => import('./components/crm/SpecialFormsView'));
 const Acg61ChargeReportView = lazy(() => import('./components/crm/Acg61ChargeReportView'));
 const CommunicationView = lazy(() => import('./components/crm/CommunicationView'));
@@ -52,6 +55,7 @@ const DailyVerificationView = lazy(() => import('./components/postman/DailyVerif
 const MySubmissionsView = lazy(() => import('./components/postman/MySubmissionsView'));
 const MyBeatDirectoryView = lazy(() => import('./components/postman/MyBeatDirectoryView'));
 const MyProfileView = lazy(() => import('./components/postman/MyProfileView'));
+const StaffStorefrontView = lazy(() => import('./components/postman/StaffStorefrontView'));
 const MasterDataUploadView = lazy(() => import('./components/admin/MasterDataUploadView'));
 const PostmanAllDayArticlesOverview = lazy(() => import('./components/postman/PostmanAllDayArticlesOverview'));
 const OfficialStaffDocumentsHub = lazy(() => import('./components/crm/OfficialStaffDocumentsHub'));
@@ -59,80 +63,357 @@ const ColleagueStaffDirectory = lazy(() => import('./components/crm/ColleagueSta
 const OfficialApplicationsView = lazy(() => import('./components/crm/OfficialApplicationsView'));
 const StaffProductStudioView = lazy(() => import('./components/crm/StaffProductStudioView'));
 const AICommercialIntelligenceHub = lazy(() => import('./components/crm/AICommercialIntelligenceHub'));
+const VendorProductEcosystemHub = lazy(() => import('./components/crm/VendorProductEcosystemHub'));
+const DynamicProductPageView = lazy(() => import('./components/common/DynamicProductPageView'));
+const PrivateDevConsole = lazy(() => import('./pages/PrivateDevConsole'));
+const BrandStorePage = lazy(() => import('./pages/BrandStorePage'));
+const B2BPartnerPortalPage = lazy(() => import('./pages/B2BPartnerPortalPage'));
+const LocationIntelligenceHub = lazy(() => import('./components/crm/LocationIntelligenceHub'));
+const DoorstepSurveyWorkflowView = lazy(() => import('./components/postman/DoorstepSurveyWorkflowView'));
+const DataBackupCenterView = lazy(() => import('./components/admin/DataBackupCenterView'));
+const PartnerBrandManagementHub = lazy(() => import('./components/admin/PartnerBrandManagementHub'));
+const PartnerLoginPage = lazy(() => import('./pages/PartnerLoginPage'));
+const PartnerScopedWorkspacePage = lazy(() => import('./pages/PartnerScopedWorkspacePage'));
+const BrandOwnerLoginPage = lazy(() => import('./pages/BrandOwnerLoginPage'));
+const BrandOwnerPortalPage = lazy(() => import('./pages/BrandOwnerPortalPage'));
+const BrandStaffCustomerLoginPage = lazy(() => import('./pages/BrandStaffCustomerLoginPage'));
+const BrandScopedPortalPage = lazy(() => import('./pages/BrandScopedPortalPage'));
+const IndiaPostStorefrontView = lazy(() => import('./components/crm/IndiaPostStorefrontView'));
+
+// Xpeedo IT Services — Owner Command Center & Client Operations Modules
+const OwnerCommandDashboard = lazy(() => import('./components/xpeedo/OwnerCommandDashboard'));
+const ClientsDirectoryView = lazy(() => import('./components/xpeedo/ClientsDirectoryView'));
+const ClientDetailsView = lazy(() => import('./components/xpeedo/ClientDetailsView'));
+const ProjectsAndTasksView = lazy(() => import('./components/xpeedo/ProjectsAndTasksView'));
+const IndiaPostCommandWorkspace = lazy(() => import('./components/xpeedo/IndiaPostCommandWorkspace'));
+const XpeedoEvWorkWorkspace = lazy(() => import('./components/xpeedo/XpeedoEvWorkWorkspace'));
+const SettingsRbacMigrationView = lazy(() => import('./components/xpeedo/SettingsRbacMigrationView'));
+const DepartmentsDirectoryView = lazy(() =>
+  import('./components/xpeedo/OperationsSupportViews').then((m) => ({
+    default: m.DepartmentsDirectoryView,
+  }))
+);
+const EmployeesDirectoryView = lazy(() =>
+  import('./components/xpeedo/OperationsSupportViews').then((m) => ({
+    default: m.EmployeesDirectoryView,
+  }))
+);
+const WorkflowsAutomationView = lazy(() =>
+  import('./components/xpeedo/OperationsSupportViews').then((m) => ({
+    default: m.WorkflowsAutomationView,
+  }))
+);
+const DocumentsCenterView = lazy(() =>
+  import('./components/xpeedo/OperationsSupportViews').then((m) => ({
+    default: m.DocumentsCenterView,
+  }))
+);
+const FinanceLedgerView = lazy(() =>
+  import('./components/xpeedo/OperationsSupportViews').then((m) => ({
+    default: m.FinanceLedgerView,
+  }))
+);
+const ReportsCenterView = lazy(() =>
+  import('./components/xpeedo/OperationsSupportViews').then((m) => ({
+    default: m.ReportsCenterView,
+  }))
+);
+const NotificationsCenterView = lazy(() =>
+  import('./components/xpeedo/OperationsSupportViews').then((m) => ({
+    default: m.NotificationsCenterView,
+  }))
+);
+import { xpeedoOpsService } from './services/xpeedoOpsService';
 
 function ServiceModuleGuard({
   moduleKey,
+  featureKey,
   moduleTitle,
   children,
 }: {
   moduleKey: keyof ServiceModulePermissions;
+  featureKey?: FeatureVisibilityKey;
   moduleTitle: string;
   children: React.ReactNode;
 }) {
   const { userProfile } = useAuth();
-  const allowed = staffPermissionService.canAccessServiceModule(userProfile, moduleKey);
+  const [, setVisTick] = useState(0);
+  useEffect(() => featureVisibilityService.subscribe(() => setVisTick((v) => v + 1)), []);
 
-  if (allowed) {
+  const legacyAllowed = staffPermissionService.canAccessServiceModule(userProfile, moduleKey);
+  const featureAllowed = featureKey ? featureVisibilityService.isFeatureVisible(userProfile, featureKey) : true;
+  const isWhiteLabel = featureVisibilityService.isWhiteLabelPostalMode(userProfile);
+
+  if (legacyAllowed && featureAllowed) {
     return <>{children}</>;
   }
 
   return (
-    <div className="bg-white rounded-3xl border border-red-200 p-8 max-w-2xl mx-auto my-8 shadow-lg text-center space-y-4">
-      <div className="w-16 h-16 rounded-2xl bg-red-50 border border-red-200 text-red-700 flex items-center justify-center mx-auto">
-        <Lock size={30} />
+    <div className="bg-white rounded-2xl border border-slate-200 p-8 max-w-xl mx-auto my-8 shadow-sm text-center space-y-4">
+      <div className="w-14 h-14 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center mx-auto">
+        <Lock size={28} />
       </div>
-      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-black uppercase">
-        <ShieldAlert size={14} /> Granular Service-Level Access Control
+      <div className="text-xs font-mono font-bold uppercase tracking-wider text-slate-500">
+        {isWhiteLabel ? 'India Post Vendor System · Visibility Control' : 'Service-Level Visibility Control'}
       </div>
-      <h2 className="text-xl font-black text-slate-900">
-        Authorization Required: {moduleTitle}
+      <h2 className="text-lg font-bold text-slate-900">
+        Module Not Enabled: {moduleTitle}
       </h2>
-      <p className="text-xs text-slate-600 leading-relaxed max-w-lg mx-auto">
-        Your current staff profile (<strong>{userProfile?.name}</strong> •{' '}
-        <span className="font-mono">{userProfile?.employeeId || userProfile?.email}</span>) does not have active authorization for the{' '}
-        <strong>{moduleTitle}</strong> module, or your account approval status is currently{' '}
-        <span className="font-bold text-red-700">
-          {userProfile?.permissions?.approvalStatus || 'Restricted'}
-        </span>
-        .
+      <p className="text-xs text-slate-600 leading-relaxed max-w-md mx-auto">
+        Your profile (<strong>{userProfile?.name}</strong> ·{' '}
+        <span className="font-mono">{userProfile?.employeeId || userProfile?.email}</span>) does not currently have{' '}
+        <strong>{moduleTitle}</strong> enabled in your workspace visibility settings.
       </p>
-      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-700 max-w-lg mx-auto text-left space-y-1.5">
-        <div className="font-bold text-slate-900">Scoped Access & Approval Engine:</div>
-        <div>• Master Admin (<strong>Ektamahenmeena@gmail.com</strong>) can approve or revoke access to each of the 5 Service Modules per staff member.</div>
-        <div>• Assigned Beats Scope: <strong>{(userProfile?.permissions?.allowedBeats || [userProfile?.beat]).join(', ')}</strong></div>
-        <div>• Assigned Offices Scope: <strong>{(userProfile?.permissions?.allowedOffices || [userProfile?.subOffice]).join(', ')}</strong></div>
-      </div>
       <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
         <Link
-          to="/dashboard"
-          className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5"
+          to="/properties"
+          className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5"
         >
-          <span>Return to Dashboard</span>
+          <span>Properties</span>
           <ArrowRight size={14} />
+        </Link>
+        <Link
+          to="/customers"
+          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition"
+        >
+          Members
+        </Link>
+        <Link
+          to="/dashboard"
+          className="px-4 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition"
+        >
+          Dashboard
         </Link>
       </div>
     </div>
   );
 }
 
+function WorkspaceBoundaryGuard({
+  requiredWorkspace,
+  children,
+}: {
+  requiredWorkspace?: 'INDIA_POST' | 'XPEEDO_EV';
+  children: React.ReactNode;
+}) {
+  const { userProfile } = useAuth();
+  const [, setTick] = useState(0);
+  useEffect(() => xpeedoOpsService.subscribe(() => setTick((t) => t + 1)), []);
+
+  if (!requiredWorkspace) return <>{children}</>;
+  const scoped = xpeedoOpsService.getScopedWorkspaceKeys(userProfile);
+  if (scoped === 'ALL' || scoped.includes(requiredWorkspace)) {
+    return <>{children}</>;
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-8 max-w-xl mx-auto my-8 text-center space-y-4">
+      <div className="w-12 h-12 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center mx-auto">
+        <Lock size={22} />
+      </div>
+      <div className="text-xs font-mono font-semibold uppercase text-slate-500">
+        Workspace Isolation Boundary
+      </div>
+      <h2 className="text-lg font-bold text-slate-900">
+        Restricted Workspace: {requiredWorkspace}
+      </h2>
+      <p className="text-xs text-slate-600 leading-relaxed max-w-md mx-auto">
+        Your active role scope (<strong>{userProfile?.name}</strong>) is strictly isolated and does
+        not permit access to <strong>{requiredWorkspace}</strong> records or screens.
+      </p>
+      <Link
+        to="/dashboard"
+        className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-semibold"
+      >
+        <span>Return to Permitted Dashboard</span>
+        <ArrowRight size={14} />
+      </Link>
+    </div>
+  );
+}
+
+function DashboardRouter({ onSwitchToCustomerPortal }: { onSwitchToCustomerPortal: () => void }) {
+  const { userProfile } = useAuth();
+  const isWhiteLabel = featureVisibilityService.isWhiteLabelPostalMode(userProfile);
+  const strictVendor = featureVisibilityService.isStrictlyScopedToVendor(userProfile);
+  const isFieldPostal =
+    isWhiteLabel ||
+    strictVendor === 'INDIA_POST' ||
+    ['POSTMAN', 'GDS', 'SALES_FIELD_STAFF'].includes(String(userProfile?.role || '').toUpperCase());
+
+  if (isFieldPostal) {
+    return <Dashboard onSwitchToCustomerPortal={onSwitchToCustomerPortal} />;
+  }
+  return <OwnerCommandDashboard />;
+}
+
+function DormantRetailRedirect() {
+  const { userProfile } = useAuth();
+  return <Navigate to={userProfile ? '/dashboard' : '/'} replace />;
+}
+
 function AuthenticatedApp() {
   const { user, userProfile } = useAuth();
   const [showPortalMode, setShowPortalMode] = useState(false);
+  const [retailActive, setRetailActive] = useState(() =>
+    featureVisibilityService.isRetailServicesActive()
+  );
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    return featureVisibilityService.subscribe(() => {
+      setRetailActive(featureVisibilityService.isRetailServicesActive());
+    });
+  }, []);
 
   const isPublicRoute =
     location.pathname === '/' ||
     location.pathname === '/home' ||
     location.pathname === '/portal' ||
-    location.pathname === '/staff-gateway';
+    location.pathname === '/staff-gateway' ||
+    location.pathname === '/dev-command-secure-portal' ||
+    location.pathname === '/b2b-partner' ||
+    location.pathname.startsWith('/brand') ||
+    location.pathname.startsWith('/partner/login') ||
+    location.pathname.startsWith('/partner/workspace') ||
+    location.pathname.startsWith('/client/login') ||
+    location.pathname.startsWith('/client/workspace') ||
+    location.pathname.startsWith('/product/');
+
+  if (location.pathname.startsWith('/brand-login')) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-xs font-semibold text-slate-600">Loading Brand Owner Login...</div>}>
+        <Routes>
+          <Route path="/brand-login/:brandSlug" element={<BrandOwnerLoginPage />} />
+          <Route path="/brand-login" element={<BrandOwnerLoginPage />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
+  if (location.pathname.startsWith('/brand-portal')) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-xs font-semibold text-slate-600">Loading Brand Workspace...</div>}>
+        <Routes>
+          <Route path="/brand-portal/:brandSlug" element={<BrandOwnerPortalPage />} />
+          <Route path="/brand-portal" element={<BrandOwnerPortalPage />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
+  if (location.pathname.startsWith('/brand-access')) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-xs font-semibold text-slate-600">Loading Brand Staff &amp; Customer Portal...</div>}>
+        <Routes>
+          <Route path="/brand-access/:brandSlug" element={<BrandStaffCustomerLoginPage />} />
+          <Route path="/brand-access" element={<BrandStaffCustomerLoginPage />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
+  if (location.pathname.startsWith('/brand-member-portal')) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-xs font-semibold text-slate-600">Loading Brand Member Workspace...</div>}>
+        <Routes>
+          <Route path="/brand-member-portal/:brandSlug" element={<BrandScopedPortalPage />} />
+          <Route path="/brand-member-portal" element={<BrandScopedPortalPage />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
+  if (location.pathname.startsWith('/partner/login') || location.pathname.startsWith('/client/login')) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-xs font-semibold text-slate-600">Loading Client &amp; Partner Portal...</div>}>
+        <Routes>
+          <Route path="/client/login/:partnerSlug" element={<PartnerLoginPage />} />
+          <Route path="/client/login" element={<PartnerLoginPage />} />
+          <Route path="/partner/login/:partnerSlug" element={<PartnerLoginPage />} />
+          <Route path="/partner/login" element={<PartnerLoginPage />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
+  if (location.pathname.startsWith('/partner/workspace') || location.pathname.startsWith('/client/workspace')) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-xs font-semibold text-slate-600">Loading Workspace...</div>}>
+        <Routes>
+          <Route path="/client/workspace/:partnerSlug" element={<PartnerScopedWorkspacePage />} />
+          <Route path="/client/workspace" element={<PartnerScopedWorkspacePage />} />
+          <Route path="/partner/workspace/:partnerSlug" element={<PartnerScopedWorkspacePage />} />
+          <Route path="/partner/workspace" element={<PartnerScopedWorkspacePage />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
+  if (location.pathname === '/dev-command-secure-portal') {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-slate-950 p-8 text-center text-sm font-bold text-amber-300">Verifying Master Gateway...</div>}>
+        <PrivateDevConsole />
+      </Suspense>
+    );
+  }
+
+  if (!retailActive && (location.pathname === '/' || location.pathname === '/home')) {
+    return (
+      <>
+        <XpeedoHomeLoginPage />
+        <OTAUpdateNotification />
+      </>
+    );
+  }
+
+  if (!retailActive && location.pathname === '/b2b-partner') {
+    return <DormantRetailRedirect />;
+  }
+
+  if (location.pathname === '/b2b-partner') {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-sm font-bold text-slate-700">Loading XPOKART B2B Partner Portal...</div>}>
+        <B2BPartnerPortalPage />
+      </Suspense>
+    );
+  }
+
+  if (location.pathname.startsWith('/brand')) {
+    if (!retailActive) {
+      return <DormantRetailRedirect />;
+    }
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-sm font-bold text-slate-700">Loading Official Brand Store...</div>}>
+        <Routes>
+          <Route path="/brand/:brandSlug" element={<BrandStorePage />} />
+          <Route path="/brand" element={<BrandStorePage />} />
+        </Routes>
+      </Suspense>
+    );
+  }
 
   if (location.pathname === '/staff-gateway') {
+    if (userProfile) {
+      return <Navigate to="/dashboard" replace />;
+    }
     return <LoginPage initialTier="STAFF" isStaffDirect={true} />;
   }
 
   if (location.pathname === '/login' || (!user && !userProfile && !isPublicRoute)) {
-    return <LoginPage initialTier="CUSTOMER" />;
+    if (location.pathname === '/login' && userProfile) {
+      return <Navigate to="/dashboard" replace />;
+    }
+    if (!retailActive && location.pathname !== '/login') {
+      return <XpeedoHomeLoginPage />;
+    }
+    return (
+      <LoginPage
+        initialTier={retailActive ? 'CUSTOMER' : 'STAFF'}
+        isStaffDirect={!retailActive}
+      />
+    );
   }
 
   const triggerStaffAuthModal = () => {
@@ -184,7 +465,7 @@ function AuthenticatedApp() {
             path="/dashboard"
             element={
               <ProtectedRoute requiredTier="STAFF">
-                <Dashboard onSwitchToCustomerPortal={() => navigate('/')} />
+                <DashboardRouter onSwitchToCustomerPortal={() => navigate('/')} />
               </ProtectedRoute>
             }
           />
@@ -197,11 +478,121 @@ function AuthenticatedApp() {
             }
           />
 
+          {/* Xpeedo IT Services — Owner Command Center & Client Operations */}
+          <Route
+            path="/clients"
+            element={
+              <ProtectedRoute requiredTier="STAFF">
+                <ClientsDirectoryView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/clients/:clientId"
+            element={
+              <ProtectedRoute requiredTier="STAFF">
+                <ClientDetailsView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/projects"
+            element={
+              <ProtectedRoute requiredTier="STAFF">
+                <ProjectsAndTasksView mode="projects" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/task-management"
+            element={
+              <ProtectedRoute requiredTier="STAFF">
+                <ProjectsAndTasksView mode="tasks" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employees"
+            element={
+              <ProtectedRoute requiredTier="STAFF">
+                <EmployeesDirectoryView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/departments"
+            element={
+              <ProtectedRoute requiredTier="STAFF">
+                <DepartmentsDirectoryView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/workflows"
+            element={
+              <ProtectedRoute requiredTier="STAFF">
+                <WorkflowsAutomationView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/india-post"
+            element={
+              <ProtectedRoute requiredTier="STAFF">
+                <WorkspaceBoundaryGuard requiredWorkspace="INDIA_POST">
+                  <IndiaPostCommandWorkspace />
+                </WorkspaceBoundaryGuard>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/xpeedo-ev"
+            element={
+              <ProtectedRoute requiredTier="STAFF">
+                <WorkspaceBoundaryGuard requiredWorkspace="XPEEDO_EV">
+                  <XpeedoEvWorkWorkspace />
+                </WorkspaceBoundaryGuard>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/documents"
+            element={
+              <ProtectedRoute requiredTier="STAFF">
+                <DocumentsCenterView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/finance"
+            element={
+              <ProtectedRoute requiredTier="STAFF">
+                <FinanceLedgerView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reports-center"
+            element={
+              <ProtectedRoute requiredTier="STAFF">
+                <ReportsCenterView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <ProtectedRoute requiredTier="STAFF">
+                <NotificationsCenterView />
+              </ProtectedRoute>
+            }
+          />
+
         {/* Staff Directory, Auto-Managed Office Master & Colony-Beat Address Engine */}
         <Route
           path="/staff-master"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN', 'CIRCLE_INCHARGE', 'DIVISION_INCHARGE', 'DISTRICT_INCHARGE', 'DISTRICT_MANAGER', 'CATEGORY_MANAGER']}>
               <StaffMasterView />
             </ProtectedRoute>
           }
@@ -209,7 +600,7 @@ function AuthenticatedApp() {
         <Route
           path="/staff"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <StaffView />
             </ProtectedRoute>
           }
@@ -217,15 +608,23 @@ function AuthenticatedApp() {
         <Route
           path="/office-master"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" requiredVendor="INDIA_POST" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN', 'CIRCLE_INCHARGE', 'DIVISION_INCHARGE', 'DISTRICT_INCHARGE', 'DISTRICT_MANAGER', 'CATEGORY_MANAGER']}>
               <OfficeMasterView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/role-access-dashboard"
+          element={
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN', 'CIRCLE_INCHARGE', 'DIVISION_INCHARGE', 'DISTRICT_INCHARGE', 'DISTRICT_MANAGER', 'CATEGORY_MANAGER', 'BLOCK_INCHARGE', 'OFFICE_INCHARGE']}>
+              <RoleAccessDashboard />
             </ProtectedRoute>
           }
         />
         <Route
           path="/address-resolution"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <AddressResolutionView />
             </ProtectedRoute>
           }
@@ -233,7 +632,7 @@ function AuthenticatedApp() {
         <Route
           path="/beats"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <BeatManagementView />
             </ProtectedRoute>
           }
@@ -241,7 +640,7 @@ function AuthenticatedApp() {
         <Route
           path="/beat-management"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <BeatManagementView />
             </ProtectedRoute>
           }
@@ -249,7 +648,7 @@ function AuthenticatedApp() {
         <Route
           path="/beats-overview"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <BeatsView />
             </ProtectedRoute>
           }
@@ -257,7 +656,7 @@ function AuthenticatedApp() {
         <Route
           path="/beats-map"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="beats">
               <BeatMap />
             </ProtectedRoute>
           }
@@ -267,7 +666,7 @@ function AuthenticatedApp() {
         <Route
           path="/staff-registrations"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN']}>
               <StaffRegistrationsView />
             </ProtectedRoute>
           }
@@ -275,7 +674,7 @@ function AuthenticatedApp() {
         <Route
           path="/profile-approvals"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN']}>
               <ProfileApprovalsView />
             </ProtectedRoute>
           }
@@ -283,7 +682,7 @@ function AuthenticatedApp() {
         <Route
           path="/verifications"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN']}>
               <AdminVerificationsView />
             </ProtectedRoute>
           }
@@ -291,7 +690,7 @@ function AuthenticatedApp() {
         <Route
           path="/daily-verification"
           element={
-            <ProtectedRoute requiredTier="STAFF" allowedRoles={['POSTMAN', 'GDS', 'STAFF', 'ADMIN', 'MASTER_ADMIN']}>
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="dailyVerification" allowedRoles={['OWNER', 'DEVELOPER', 'POSTMAN', 'GDS', 'STAFF', 'ADMIN', 'MASTER_ADMIN']}>
               <DailyVerificationView />
             </ProtectedRoute>
           }
@@ -299,7 +698,7 @@ function AuthenticatedApp() {
         <Route
           path="/my-submissions"
           element={
-            <ProtectedRoute requiredTier="STAFF" allowedRoles={['POSTMAN', 'GDS', 'STAFF', 'ADMIN', 'MASTER_ADMIN']}>
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="communication" allowedRoles={['OWNER', 'DEVELOPER', 'POSTMAN', 'GDS', 'STAFF', 'ADMIN', 'MASTER_ADMIN']}>
               <MySubmissionsView />
             </ProtectedRoute>
           }
@@ -307,9 +706,21 @@ function AuthenticatedApp() {
         <Route
           path="/my-beat"
           element={
-            <ProtectedRoute requiredTier="STAFF" allowedRoles={['POSTMAN', 'GDS', 'STAFF', 'ADMIN', 'MASTER_ADMIN']}>
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="beats" allowedRoles={['OWNER', 'DEVELOPER', 'POSTMAN', 'GDS', 'STAFF', 'ADMIN', 'MASTER_ADMIN']}>
               <MyBeatDirectoryView />
             </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/beat-merchant-register"
+          element={
+            retailActive ? (
+              <ProtectedRoute requiredTier="STAFF" requiredFeature="storefront" requiredVendor="COMMERCIAL_PARTNERS" allowedRoles={['OWNER', 'DEVELOPER', 'POSTMAN', 'GDS', 'STAFF', 'ADMIN', 'MASTER_ADMIN']}>
+                <StaffStorefrontView />
+              </ProtectedRoute>
+            ) : (
+              <DormantRetailRedirect />
+            )
           }
         />
         <Route
@@ -321,12 +732,12 @@ function AuthenticatedApp() {
           }
         />
 
-        {/* 1. CRM Section (Customer & Property Management) */}
+        {/* 1. CRM Section (Members & Property Management) */}
         <Route
           path="/customers"
           element={
-            <ProtectedRoute requiredTier="STAFF">
-              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="members">
+              <ServiceModuleGuard moduleKey="crmSection" featureKey="members" moduleTitle="Members Directory">
                 <CustomerList
                   onAddLead={(customer) => navigate('/leads', { state: { initialCustomer: customer } })}
                   onAddFollowUp={(customer) => navigate('/follow-ups', { state: { initialCustomer: customer } })}
@@ -338,8 +749,8 @@ function AuthenticatedApp() {
         <Route
           path="/households"
           element={
-            <ProtectedRoute requiredTier="STAFF">
-              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="property">
+              <ServiceModuleGuard moduleKey="crmSection" featureKey="property" moduleTitle="Households & Property Registry">
                 <HouseholdsView />
               </ServiceModuleGuard>
             </ProtectedRoute>
@@ -348,8 +759,8 @@ function AuthenticatedApp() {
         <Route
           path="/properties"
           element={
-            <ProtectedRoute requiredTier="STAFF">
-              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="property">
+              <ServiceModuleGuard moduleKey="crmSection" featureKey="property" moduleTitle="Property Registry">
                 <PropertiesView />
               </ServiceModuleGuard>
             </ProtectedRoute>
@@ -358,8 +769,8 @@ function AuthenticatedApp() {
         <Route
           path="/sequence-properties"
           element={
-            <ProtectedRoute requiredTier="STAFF">
-              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="property">
+              <ServiceModuleGuard moduleKey="crmSection" featureKey="property" moduleTitle="Sequence Property Ledger">
                 <SequenceWisePropertyHub />
               </ServiceModuleGuard>
             </ProtectedRoute>
@@ -368,8 +779,8 @@ function AuthenticatedApp() {
         <Route
           path="/property-sequence"
           element={
-            <ProtectedRoute requiredTier="STAFF">
-              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="property">
+              <ServiceModuleGuard moduleKey="crmSection" featureKey="property" moduleTitle="Sequence Property Ledger">
                 <SequenceWisePropertyHub />
               </ServiceModuleGuard>
             </ProtectedRoute>
@@ -378,8 +789,8 @@ function AuthenticatedApp() {
         <Route
           path="/unified-properties"
           element={
-            <ProtectedRoute requiredTier="STAFF">
-              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="property">
+              <ServiceModuleGuard moduleKey="crmSection" featureKey="property" moduleTitle="Property & Family Hub">
                 <UnifiedPropertyFamilyHub />
               </ServiceModuleGuard>
             </ProtectedRoute>
@@ -388,8 +799,8 @@ function AuthenticatedApp() {
         <Route
           path="/unified-family"
           element={
-            <ProtectedRoute requiredTier="STAFF">
-              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="property">
+              <ServiceModuleGuard moduleKey="crmSection" featureKey="property" moduleTitle="Property & Family Hub">
                 <UnifiedPropertyFamilyHub />
               </ServiceModuleGuard>
             </ProtectedRoute>
@@ -398,8 +809,8 @@ function AuthenticatedApp() {
         <Route
           path="/family"
           element={
-            <ProtectedRoute requiredTier="STAFF">
-              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="members">
+              <ServiceModuleGuard moduleKey="crmSection" featureKey="members" moduleTitle="Members & Family Tree">
                 <FamilyView />
               </ServiceModuleGuard>
             </ProtectedRoute>
@@ -408,40 +819,84 @@ function AuthenticatedApp() {
         <Route
           path="/businesses"
           element={
-            <ProtectedRoute requiredTier="STAFF">
-              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Customer & Property Management)">
-                <BusinessesView />
-              </ServiceModuleGuard>
-            </ProtectedRoute>
+            retailActive ? (
+              <ProtectedRoute requiredTier="STAFF" requiredFeature="commercialDirectory" requiredVendor="COMMERCIAL_PARTNERS">
+                <ServiceModuleGuard moduleKey="crmSection" featureKey="commercialDirectory" moduleTitle="Commercial Directory">
+                  <BusinessesView />
+                </ServiceModuleGuard>
+              </ProtectedRoute>
+            ) : (
+              <DormantRetailRedirect />
+            )
           }
         />
         <Route
           path="/commercial-directory"
           element={
-            <ProtectedRoute requiredTier="STAFF">
-              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Commercial Property & Store Directory)">
-                <CommercialPropertyHub />
-              </ServiceModuleGuard>
-            </ProtectedRoute>
+            retailActive ? (
+              <ProtectedRoute requiredTier="STAFF" requiredFeature="commercialDirectory" requiredVendor="COMMERCIAL_PARTNERS">
+                <ServiceModuleGuard moduleKey="crmSection" featureKey="commercialDirectory" moduleTitle="Commercial Store Directory">
+                  <CommercialPropertyHub />
+                </ServiceModuleGuard>
+              </ProtectedRoute>
+            ) : (
+              <DormantRetailRedirect />
+            )
           }
         />
         <Route
           path="/commercial-intelligence"
           element={
-            <ProtectedRoute requiredTier="STAFF">
-              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (AI Commercial Intelligence & 4-Factor Engine)">
-                <AICommercialIntelligenceHub />
-              </ServiceModuleGuard>
-            </ProtectedRoute>
+            retailActive ? (
+              <ProtectedRoute requiredTier="STAFF" requiredFeature="commercialDirectory" requiredVendor="COMMERCIAL_PARTNERS">
+                <ServiceModuleGuard moduleKey="crmSection" featureKey="commercialDirectory" moduleTitle="Commercial Intelligence Engine">
+                  <AICommercialIntelligenceHub />
+                </ServiceModuleGuard>
+              </ProtectedRoute>
+            ) : (
+              <DormantRetailRedirect />
+            )
           }
         />
         <Route
           path="/tasks"
           element={
-            <ProtectedRoute requiredTier="STAFF">
-              <ServiceModuleGuard moduleKey="crmSection" moduleTitle="CRM Section (Field Tasks & Operations)">
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="dailyOperations">
+              <ServiceModuleGuard moduleKey="crmSection" featureKey="dailyOperations" moduleTitle="Field Tasks & Daily Operations">
                 <TasksView />
               </ServiceModuleGuard>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/location-intelligence"
+          element={
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="locationIntelligence">
+              <ServiceModuleGuard moduleKey="crmSection" featureKey="locationIntelligence" moduleTitle="Location Intelligence, Street & House Master">
+                <LocationIntelligenceHub />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/doorstep-surveys"
+          element={
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="dailyVerification">
+              <ServiceModuleGuard moduleKey="crmSection" featureKey="dailyVerification" moduleTitle="Doorstep Survey Workflow">
+                <DoorstepSurveyWorkflowView />
+              </ServiceModuleGuard>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/data-backup-center"
+          element={
+            <ProtectedRoute
+              requiredTier="ADMIN"
+              requiredFeature="dataBackupCenter"
+              allowedRoles={['OWNER', 'DEVELOPER', 'MASTER_ADMIN', 'SUPER_ADMIN', 'ADMIN', 'DIVISIONAL_HEAD', 'ASST_DIVISIONAL_ADMIN', 'DEO']}
+            >
+              <DataBackupCenterView />
             </ProtectedRoute>
           }
         />
@@ -450,9 +905,10 @@ function AuthenticatedApp() {
         <Route
           path="/special-forms"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="officialDocuments">
               <ServiceModuleGuard
                 moduleKey="specialBillsSection"
+                featureKey="officialDocuments"
                 moduleTitle="Special Bills Section (Fuel Bill, Charge Report, Outsider Bill, BYOD)"
               >
                 <SpecialFormsView />
@@ -463,9 +919,10 @@ function AuthenticatedApp() {
         <Route
           path="/charge-report"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="officialDocuments">
               <ServiceModuleGuard
                 moduleKey="specialBillsSection"
+                featureKey="officialDocuments"
                 moduleTitle="Special Bills Section (ACG-61 Charge Report)"
               >
                 <Acg61ChargeReportView />
@@ -476,23 +933,35 @@ function AuthenticatedApp() {
         <Route
           path="/official-documents"
           element={
-            <ProtectedRoute requiredTier="STAFF">
-              <OfficialStaffDocumentsHub />
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="officialDocuments">
+              <ServiceModuleGuard
+                moduleKey="specialBillsSection"
+                featureKey="officialDocuments"
+                moduleTitle="Official Staff Documents & Statutory Reports Hub"
+              >
+                <OfficialStaffDocumentsHub />
+              </ServiceModuleGuard>
             </ProtectedRoute>
           }
         />
         <Route
           path="/statutory-reports"
           element={
-            <ProtectedRoute requiredTier="STAFF">
-              <OfficialStaffDocumentsHub />
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="officialDocuments">
+              <ServiceModuleGuard
+                moduleKey="specialBillsSection"
+                featureKey="officialDocuments"
+                moduleTitle="Official Staff Documents & Statutory Reports Hub"
+              >
+                <OfficialStaffDocumentsHub />
+              </ServiceModuleGuard>
             </ProtectedRoute>
           }
         />
         <Route
           path="/staff-directory"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="staffDirectory">
               <ColleagueStaffDirectory />
             </ProtectedRoute>
           }
@@ -500,7 +969,11 @@ function AuthenticatedApp() {
         <Route
           path="/official-applications"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute
+              requiredTier="STAFF"
+              requiredFeature="officialDocuments"
+              allowedRoles={['OWNER', 'DEVELOPER', 'POSTMAN', 'GDS', 'STAFF', 'POSTMASTER', 'ADMIN', 'MASTER_ADMIN']}
+            >
               <OfficialApplicationsView />
             </ProtectedRoute>
           }
@@ -510,9 +983,10 @@ function AuthenticatedApp() {
         <Route
           path="/postal-lms"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="lms">
               <ServiceModuleGuard
                 moduleKey="departmentalLearningSection"
+                featureKey="lms"
                 moduleTitle="Departmental Learning Section (GDS to MTS / Postman / PA LMS)"
               >
                 <PostalLMSView />
@@ -525,9 +999,10 @@ function AuthenticatedApp() {
         <Route
           path="/leads"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="leadsAndSchemes">
               <ServiceModuleGuard
                 moduleKey="productSchemeLeadSection"
+                featureKey="leadsAndSchemes"
                 moduleTitle="Product & Scheme Lead Section (PLI, SSA, IPPB, Savings Schemes)"
               >
                 <LeadsPipelineView />
@@ -538,9 +1013,10 @@ function AuthenticatedApp() {
         <Route
           path="/services"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="leadsAndSchemes">
               <ServiceModuleGuard
                 moduleKey="productSchemeLeadSection"
+                featureKey="leadsAndSchemes"
                 moduleTitle="Product & Scheme Lead Section (PLI, SSA, IPPB, Savings Schemes)"
               >
                 <ServicesCatalogView />
@@ -551,9 +1027,10 @@ function AuthenticatedApp() {
         <Route
           path="/follow-ups"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="leadsAndSchemes">
               <ServiceModuleGuard
                 moduleKey="productSchemeLeadSection"
+                featureKey="leadsAndSchemes"
                 moduleTitle="Product & Scheme Lead Section (PLI, SSA, IPPB, Savings Schemes)"
               >
                 <FollowUpsView />
@@ -566,9 +1043,10 @@ function AuthenticatedApp() {
         <Route
           path="/communication"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="communication">
               <ServiceModuleGuard
                 moduleKey="contentSharingDispatchSection"
+                featureKey="communication"
                 moduleTitle="Content Sharing & Customer Request Dispatch Capabilities"
               >
                 <CommunicationView />
@@ -581,7 +1059,7 @@ function AuthenticatedApp() {
         <Route
           path="/reports"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <ReportsView />
             </ProtectedRoute>
           }
@@ -589,7 +1067,7 @@ function AuthenticatedApp() {
         <Route
           path="/data-quality"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <DataQualityView />
             </ProtectedRoute>
           }
@@ -597,7 +1075,7 @@ function AuthenticatedApp() {
         <Route
           path="/audit-log"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <AuditLogView />
             </ProtectedRoute>
           }
@@ -605,7 +1083,7 @@ function AuthenticatedApp() {
         <Route
           path="/master-data-upload"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <MasterDataUploadView />
             </ProtectedRoute>
           }
@@ -613,7 +1091,7 @@ function AuthenticatedApp() {
         <Route
           path="/master-upload"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <MasterDataUploadView />
             </ProtectedRoute>
           }
@@ -621,23 +1099,35 @@ function AuthenticatedApp() {
         <Route
           path="/postman-articles"
           element={
-            <ProtectedRoute requiredTier="STAFF" allowedRoles={['POSTMAN', 'GDS', 'STAFF', 'ADMIN', 'MASTER_ADMIN']}>
-              <PostmanAllDayArticlesOverview />
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="dailyOperations" allowedRoles={['OWNER', 'DEVELOPER', 'POSTMAN', 'GDS', 'STAFF', 'POSTMASTER', 'ADMIN', 'MASTER_ADMIN']}>
+              <ServiceModuleGuard
+                moduleKey="specialBillsSection"
+                featureKey="dailyOperations"
+                moduleTitle="Monthly Fuel Bills & Article Register"
+              >
+                <PostmanAllDayArticlesOverview />
+              </ServiceModuleGuard>
             </ProtectedRoute>
           }
         />
         <Route
           path="/fuel-bills"
           element={
-            <ProtectedRoute requiredTier="STAFF" allowedRoles={['POSTMAN', 'GDS', 'STAFF', 'ADMIN', 'MASTER_ADMIN']}>
-              <PostmanAllDayArticlesOverview />
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="dailyOperations" allowedRoles={['OWNER', 'DEVELOPER', 'POSTMAN', 'GDS', 'STAFF', 'POSTMASTER', 'ADMIN', 'MASTER_ADMIN']}>
+              <ServiceModuleGuard
+                moduleKey="specialBillsSection"
+                featureKey="dailyOperations"
+                moduleTitle="Monthly Fuel Bills & Article Register"
+              >
+                <PostmanAllDayArticlesOverview />
+              </ServiceModuleGuard>
             </ProtectedRoute>
           }
         />
         <Route
           path="/master-data-hub"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <MasterDataHub />
             </ProtectedRoute>
           }
@@ -645,7 +1135,7 @@ function AuthenticatedApp() {
         <Route
           path="/colony-master"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <MasterDataHub />
             </ProtectedRoute>
           }
@@ -653,7 +1143,7 @@ function AuthenticatedApp() {
         <Route
           path="/unified-master-hub"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <MasterDataHub />
             </ProtectedRoute>
           }
@@ -661,7 +1151,7 @@ function AuthenticatedApp() {
         <Route
           path="/master-source"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
               <MasterSourceSync />
             </ProtectedRoute>
           }
@@ -669,7 +1159,7 @@ function AuthenticatedApp() {
         <Route
           path="/ai-assistant"
           element={
-            <ProtectedRoute requiredTier="STAFF">
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="aiAssistant" requiredVendor="COMMERCIAL_PARTNERS">
               <AIAssistantView />
             </ProtectedRoute>
           }
@@ -677,28 +1167,104 @@ function AuthenticatedApp() {
         <Route
           path="/settings"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
-              <SettingsView />
+            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
+              <SettingsRbacMigrationView />
             </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/india-post-storefront"
+          element={
+            retailActive ? (
+              <ProtectedRoute requiredTier="STAFF">
+                <IndiaPostStorefrontView />
+              </ProtectedRoute>
+            ) : (
+              <DormantRetailRedirect />
+            )
           }
         />
         <Route
           path="/staff-storefront"
           element={
-            <ProtectedRoute requiredTier="STAFF">
-              <StaffProductStudioView />
+            retailActive ? (
+              <ProtectedRoute requiredTier="STAFF" requiredFeature="storefront" requiredVendor="COMMERCIAL_PARTNERS">
+                <StaffProductStudioView />
+              </ProtectedRoute>
+            ) : (
+              <DormantRetailRedirect />
+            )
+          }
+        />
+        <Route
+          path="/vendor-ecosystem"
+          element={
+            retailActive ? (
+              <ProtectedRoute requiredTier="STAFF" requiredFeature="vendorSection">
+                <VendorProductEcosystemHub />
+              </ProtectedRoute>
+            ) : (
+              <DormantRetailRedirect />
+            )
+          }
+        />
+        <Route
+          path="/vendor-ecosystem/:vendorId"
+          element={
+            retailActive ? (
+              <ProtectedRoute requiredTier="STAFF" requiredFeature="vendorSection">
+                <VendorProductEcosystemHub />
+              </ProtectedRoute>
+            ) : (
+              <DormantRetailRedirect />
+            )
+          }
+        />
+        <Route
+          path="/partner-brand-management"
+          element={
+            <ProtectedRoute
+              requiredTier="ADMIN"
+              requiredFeature="vendorSection"
+              allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}
+            >
+              <PartnerBrandManagementHub />
             </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/product/:productKey"
+          element={
+            retailActive ? (
+              <div className="min-h-screen bg-slate-50 p-4 sm:p-6">
+                <DynamicProductPageView />
+              </div>
+            ) : (
+              <DormantRetailRedirect />
+            )
           }
         />
 
           <Route path="/staff-gateway" element={<LoginPage initialTier="STAFF" isStaffDirect={true} />} />
-          <Route path="/login" element={<LoginPage initialTier="CUSTOMER" />} />
+          <Route
+            path="/login"
+            element={
+              <LoginPage
+                initialTier={retailActive ? 'CUSTOMER' : 'STAFF'}
+                isStaffDirect={!retailActive}
+              />
+            }
+          />
           <Route
             path="/portal"
             element={
-              <ProtectedRoute requiredTier="PUBLIC">
-                <CustomerPortal onBackToCRM={() => navigate('/')} />
-              </ProtectedRoute>
+              retailActive ? (
+                <ProtectedRoute requiredTier="PUBLIC">
+                  <CustomerPortal onBackToCRM={() => navigate('/')} />
+                </ProtectedRoute>
+              ) : (
+                <DormantRetailRedirect />
+              )
             }
           />
           <Route path="*" element={<Navigate to="/" replace />} />

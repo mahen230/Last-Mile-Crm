@@ -73,6 +73,36 @@ const CATEGORY_PIN_STYLE: Record<
     badge: 'bg-red-50 text-red-800 border-red-200',
     label: 'eMitra / CSC Kiosk',
   },
+  'Public Safety & Law Enforcement': {
+    bg: '#2563eb',
+    border: '#1d4ed8',
+    badge: 'bg-blue-50 text-blue-800 border-blue-200',
+    label: 'Public Safety',
+  },
+  'Postal & Government Services': {
+    bg: '#ca8a04',
+    border: '#a16207',
+    badge: 'bg-yellow-50 text-yellow-800 border-yellow-200',
+    label: 'Postal & Govt',
+  },
+  'Insurance & Financial Institutions': {
+    bg: '#0d9488',
+    border: '#0f766e',
+    badge: 'bg-teal-50 text-teal-800 border-teal-200',
+    label: 'Finance & Insurance',
+  },
+  'Events & Hospitality Venues': {
+    bg: '#9333ea',
+    border: '#7e22ce',
+    badge: 'bg-purple-50 text-purple-800 border-purple-200',
+    label: 'Venues & Hospitality',
+  },
+  'Healthcare & Education': {
+    bg: '#e11d48',
+    border: '#be123c',
+    badge: 'bg-rose-50 text-rose-800 border-rose-200',
+    label: 'Health & Education',
+  },
 };
 
 function sanitizeWhatsappUrl(phone: string, storeName: string): string | null {
@@ -80,7 +110,7 @@ function sanitizeWhatsappUrl(phone: string, storeName: string): string | null {
   if (digits.length < 10) return null;
   const full = digits.length === 10 ? `91${digits}` : digits;
   const msg = encodeURIComponent(
-    `Namaste from India Post (Xpeedo Last Mile · Dadabari S.O. 324009) regarding ${storeName}.`
+    `Namaste from XPOKART · India Post (Dadabari S.O. 324009) regarding ${storeName}.`
   );
   return `https://wa.me/${full}?text=${msg}`;
 }
@@ -394,7 +424,7 @@ export default function CommercialPropertyHub() {
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-1.5">
               <span className="px-2.5 py-0.5 rounded-lg bg-red-700 text-white text-[11px] font-black uppercase tracking-wide">
-                Xpeedo Last Mile · Commercial GIS
+                XPOKART · Commercial GIS Hub
               </span>
               <span className="px-2.5 py-0.5 rounded-lg bg-amber-100 text-amber-900 text-[11px] font-bold border border-amber-200">
                 Dadabari S.O. 324009 · Beat 1–34

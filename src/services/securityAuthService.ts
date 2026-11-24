@@ -289,10 +289,54 @@ class SecurityAuthService {
    * Checks whether the employee ID / IP is currently locked out
    */
   public checkLockout(identifier: string): LockoutStatus {
+    const cleanId = (identifier || '').trim().toLowerCase();
+    if (!cleanId) {
+      return {
+        isLocked: false,
+        failedAttempts: 0,
+        remainingAttempts: MAX_FAILED_ATTEMPTS,
+        lockedUntil: null,
+        secondsRemaining: 0,
+      };
+    }
+
+    const record = this.failedAttemptsMap[cleanId];
+    if (!record) {
+      return {
+        isLocked: false,
+        failedAttempts: 0,
+        remainingAttempts: MAX_FAILED_ATTEMPTS,
+        lockedUntil: null,
+        secondsRemaining: 0,
+      };
+    }
+
+    const now = Date.now();
+    if (record.lockedUntil && now < record.lockedUntil) {
+      return {
+        isLocked: true,
+        failedAttempts: record.count,
+        remainingAttempts: 0,
+        lockedUntil: new Date(record.lockedUntil).toISOString(),
+        secondsRemaining: Math.ceil((record.lockedUntil - now) / 1000),
+      };
+    }
+
+    if (record.lockedUntil && now >= record.lockedUntil) {
+      delete this.failedAttemptsMap[cleanId];
+      return {
+        isLocked: false,
+        failedAttempts: 0,
+        remainingAttempts: MAX_FAILED_ATTEMPTS,
+        lockedUntil: null,
+        secondsRemaining: 0,
+      };
+    }
+
     return {
       isLocked: false,
-      failedAttempts: 0,
-      remainingAttempts: 5,
+      failedAttempts: record.count,
+      remainingAttempts: Math.max(0, MAX_FAILED_ATTEMPTS - record.count),
       lockedUntil: null,
       secondsRemaining: 0,
     };

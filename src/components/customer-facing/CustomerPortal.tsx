@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { 
   Shield, PiggyBank, HeartHandshake, Award, FileCheck, CheckCircle2, 
   HelpCircle, ArrowRight, Phone, MessageSquare, Search, Sparkles, 
-  Calculator, UserCheck, AlertCircle, RefreshCw, ChevronRight, X
+  Calculator, UserCheck, AlertCircle, RefreshCw, ChevronRight, X, Copy, Check, Truck
 } from 'lucide-react';
 import { POSTAL_PRODUCTS } from '../../data/productsData';
-import { ProductDefinition, Customer } from '../../types/models';
+import { ProductDefinition, Customer, LogisticsDispatchOrder } from '../../types/models';
 import { customerService } from '../../services/customerService';
+import { customerAuthService } from '../../services/customerAuthService';
+import { aiCommercialVerificationService } from '../../services/aiCommercialVerificationService';
 
 export default function CustomerPortal({ onSwitchToStaff, onBackToCRM }: { onSwitchToStaff?: () => void; onBackToCRM?: () => void }) {
   const handleReturnToStaff = onBackToCRM || onSwitchToStaff;
@@ -34,8 +36,15 @@ export default function CustomerPortal({ onSwitchToStaff, onBackToCRM }: { onSwi
     customer?: Customer;
     inquiries?: any[];
     leads?: any[];
+    dispatches?: LogisticsDispatchOrder[];
     searched: boolean;
   }>({ searched: false });
+  const [copiedRef, setCopiedRef] = useState(false);
+
+  const activeCustomer = customerAuthService.getActiveCustomer();
+  const referralCode = activeCustomer?.id ? `XPO-${activeCustomer.id.slice(-6).toUpperCase()}` : 'XPO-324009-REF';
+  const referralUrl =
+    typeof window !== 'undefined' ? `${window.location.origin}/?ref=${referralCode}` : `https://xpokart.in/?ref=${referralCode}`;
 
   // Filter products
   const filteredProducts = POSTAL_PRODUCTS.filter(prod => {
@@ -89,14 +98,22 @@ export default function CustomerPortal({ onSwitchToStaff, onBackToCRM }: { onSwi
     e.preventDefault();
     if (!trackPhone) return;
 
-    const cust = customerService.getCustomerByMobile(trackPhone);
-    const allInquiries = customerService.getInquiries().filter(i => i.mobile.includes(trackPhone.slice(-10)));
-    const allLeads = customerService.getLeads().filter(l => l.customerMobile.includes(trackPhone.slice(-10)));
+    const cleanQuery = trackPhone.trim();
+    const cust = customerService.getCustomerByMobile(cleanQuery);
+    const allInquiries = customerService.getInquiries().filter(i => i.mobile.includes(cleanQuery.slice(-10)));
+    const allLeads = customerService.getLeads().filter(l => l.customerMobile.includes(cleanQuery.slice(-10)));
+    const allDispatches = aiCommercialVerificationService.getAllDispatches().filter(
+      (d) =>
+        d.customerMobile.includes(cleanQuery.slice(-10)) ||
+        (d.speedPostBarcode || '').toLowerCase().includes(cleanQuery.toLowerCase()) ||
+        d.id.toLowerCase().includes(cleanQuery.toLowerCase())
+    );
 
     setTrackResult({
       customer: cust,
       inquiries: allInquiries,
       leads: allLeads,
+      dispatches: allDispatches,
       searched: true
     });
   };
@@ -107,10 +124,12 @@ export default function CustomerPortal({ onSwitchToStaff, onBackToCRM }: { onSwi
       <div className="bg-gradient-to-r from-red-800 via-red-700 to-amber-700 text-white px-4 py-2.5 text-xs md:text-sm flex flex-wrap items-center justify-between gap-2 shadow-sm">
         <div className="flex items-center gap-2 font-medium">
           <Shield size={16} className="text-amber-300" />
-          <span>India Post Official Citizen Services — Dadabari Sub-Post Office & Field Beats</span>
+          <span>XPOKART — Sovereign B2B &amp; E-Commerce Marketplace · Dadabari S.O. (PIN 324009) · 34 Active Beats</span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="hidden sm:inline-block bg-red-900/60 px-2 py-0.5 rounded text-amber-200">Doorstep Banking & Aadhaar Available</span>
+          <span className="hidden sm:inline-block bg-red-900/60 px-2 py-0.5 rounded text-amber-200">
+            {activeCustomer ? `Buyer: ${activeCustomer.name}` : 'Speed Post COD · Doorstep Banking & B2B'}
+          </span>
           {onSwitchToStaff && (
             <button 
               onClick={onSwitchToStaff}
@@ -131,8 +150,8 @@ export default function CustomerPortal({ onSwitchToStaff, onBackToCRM }: { onSwi
               📮
             </div>
             <div>
-              <h1 className="font-bold text-slate-900 text-base md:text-lg leading-tight">Dak Seva & Financial Services</h1>
-              <p className="text-xs text-slate-500">Government of India Guaranteed Small Savings & Insurance</p>
+              <h1 className="font-bold text-slate-900 text-base md:text-lg leading-tight">XPOKART Buyer &amp; Citizen Hub</h1>
+              <p className="text-xs text-slate-500">Sovereign Postal Schemes, Speed Post COD &amp; Verified B2B Orders</p>
             </div>
           </div>
 
@@ -219,20 +238,44 @@ export default function CustomerPortal({ onSwitchToStaff, onBackToCRM }: { onSwi
                 </div>
               </div>
 
-              {/* Trust Badges */}
+              {/* Trust & Affiliate Referral Strip */}
               <div className="pt-2 flex flex-wrap gap-4 text-xs text-slate-600 font-medium">
                 <div className="flex items-center gap-1.5">
                   <CheckCircle2 size={15} className="text-emerald-600" />
-                  <span>Triple Tax Benefit (EEE)</span>
+                  <span>Speed Post COD (34 Beats)</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <CheckCircle2 size={15} className="text-emerald-600" />
-                  <span>Highest Bonus Life Cover</span>
+                  <span>₹100/Referral Affiliate Link</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <CheckCircle2 size={15} className="text-emerald-600" />
                   <span>Doorstep Postman Assistance</span>
                 </div>
+              </div>
+
+              {/* ₹100/Referral Affiliate Link Banner */}
+              <div className="p-3.5 rounded-2xl bg-slate-900 text-white flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div>
+                  <div className="font-bold text-amber-300">Share XPOKART &amp; Earn ₹100 / Successful Referral</div>
+                  <div className="font-mono text-[11px] text-slate-300 mt-0.5 truncate max-w-xs sm:max-w-md">{referralUrl}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(referralUrl);
+                    } catch {
+                      // ignore clipboard error
+                    }
+                    setCopiedRef(true);
+                    setTimeout(() => setCopiedRef(false), 2000);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black flex items-center gap-1.5 cursor-pointer"
+                >
+                  {copiedRef ? <Check size={13} /> : <Copy size={13} />}
+                  <span>{copiedRef ? 'Copied!' : 'Copy Affiliate Link'}</span>
+                </button>
               </div>
             </div>
 
@@ -734,6 +777,26 @@ export default function CustomerPortal({ onSwitchToStaff, onBackToCRM }: { onSwi
                   </div>
                 )}
 
+                {trackResult.dispatches && trackResult.dispatches.length > 0 && (
+                  <div className="space-y-2">
+                    <h5 className="font-bold text-xs text-slate-700 flex items-center gap-1.5">
+                      <Truck size={14} className="text-red-700" />
+                      <span>Speed Post COD Parcel Orders ({trackResult.dispatches.length}):</span>
+                    </h5>
+                    {trackResult.dispatches.map((d) => (
+                      <div key={d.id} className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl text-xs space-y-1">
+                        <div className="flex justify-between font-bold text-slate-900">
+                          <span>{d.productTitle}</span>
+                          <span className="font-mono text-emerald-800">{d.status}</span>
+                        </div>
+                        <div className="text-[11px] font-mono text-slate-600">
+                          Barcode: {d.speedPostBarcode} · COD ₹{d.codAmount} · {d.beatNo} ({d.pincodeManagerName})
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {trackResult.inquiries && trackResult.inquiries.length > 0 && (
                   <div className="space-y-2">
                     <h5 className="font-bold text-xs text-slate-700">Submitted Web Inquiries:</h5>
@@ -881,12 +944,12 @@ export default function CustomerPortal({ onSwitchToStaff, onBackToCRM }: { onSwi
       <footer className="bg-slate-900 text-slate-400 py-8 border-t border-slate-800 text-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-4">
           <div>
-            <span className="font-bold text-white text-sm">Dadabari Sub-Post Office & Beats CRM</span>
-            <p className="text-slate-500 mt-0.5">Keshavpura Sector 2, 4, 6, 7 & Santoshi Nagar, Kota - 324009</p>
+            <span className="font-bold text-white text-sm">XPOKART — Sovereign B2B &amp; E-Commerce Marketplace</span>
+            <p className="text-slate-500 mt-0.5">Dadabari S.O. • Kota Division, Rajasthan Circle • PIN 324009 (34 Active Beats)</p>
           </div>
           <div className="flex items-center gap-6">
-            <span>Sovereign Government Safety</span>
-            <span>AePS Doorstep Banking</span>
+            <span>Speed Post COD</span>
+            <span>₹100 Referral Bonus</span>
             <span>Aadhaar CELC Certified</span>
           </div>
         </div>

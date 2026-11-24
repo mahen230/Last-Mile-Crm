@@ -1,12 +1,12 @@
 {
   "sessions": {
     "STAFF-MASTER-EKTA": {
-      "sessionId": "SESS-1794650563381-fa21b5063252",
+      "sessionId": "SESS-1795057073338-218f2ff274ab",
       "userId": "STAFF-MASTER-EKTA",
-      "tokenHash": "077ceb32192347f928a7051f4f8d7b9fc3b1d098a8dd4754f0d463e0f118c7a5",
-      "deviceFingerprintHash": "72928c6b2ef191e7c8fb0277621d31463f3e958f065a30f471211311c1f5053d",
-      "browserProfileId": "default",
-      "userAgent": "curl/7.88.1",
+      "tokenHash": "0e6e54238ab3a1a8e0b95b7700571012110f814c2ec6c1a2730abdebee46722b",
+      "deviceFingerprintHash": "cd795009c844c5555834777abf8ea3a15ad0d693437fa1996bbe59804b5da209",
+      "browserProfileId": "BP-aef3ec49-1a95-461f-a1a9-df273a359864",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Mobile Safari/537.36",
       "ipAddress": "127.0.0.1",
       "tier": "ADMIN",
       "role": "MASTER_ADMIN",
@@ -17,29 +17,8 @@
         "All Beats"
       ],
       "assignedOffice": "All Divisions / Kota Division (324009)",
-      "issuedAt": "2026-11-14T10:02:43.381Z",
-      "expiresAt": 1794679363381,
-      "isRevoked": false
-    },
-    "STAFF-50457421": {
-      "sessionId": "SESS-1794650563400-1968186c725c",
-      "userId": "STAFF-50457421",
-      "tokenHash": "db598149ec5d9454b8735d62073247f70486760b3cae34953300400467e331ae",
-      "deviceFingerprintHash": "72928c6b2ef191e7c8fb0277621d31463f3e958f065a30f471211311c1f5053d",
-      "browserProfileId": "default",
-      "userAgent": "curl/7.88.1",
-      "ipAddress": "127.0.0.1",
-      "tier": "STAFF",
-      "role": "POSTMAN",
-      "email": "mahen.comtech@gmail.com",
-      "name": "Mahendra Kumar Meena",
-      "assignedBeat": "Beat 2",
-      "allowedBeats": [
-        "Beat 2"
-      ],
-      "assignedOffice": "Dadabari S.O. (324009)",
-      "issuedAt": "2026-11-14T10:02:43.400Z",
-      "expiresAt": 1794679363400,
+      "issuedAt": "2026-11-19T02:57:53.339Z",
+      "expiresAt": 1795085873339,
       "isRevoked": false
     }
   }

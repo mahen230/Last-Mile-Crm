@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   Lock, User, ShieldCheck, KeyRound, UserPlus, 
   ArrowRight, CheckCircle2, AlertCircle, Phone, Mail, Building, Flame 
@@ -11,19 +11,30 @@ interface LoginModalProps {
   onLoginSuccess: () => void;
 }
 
-const isMasterAdminInput = (val: string): boolean => {
+const isElevatedRoleInput = (val: string): boolean => {
   const clean = (val || '').trim().toLowerCase();
   return (
     clean === 'ektamahenmeena@gmail.com' ||
     clean === 'master-admin-01' ||
-    clean === 'staff-master-ekta'
+    clean === 'staff-master-ekta' ||
+    clean === 'owner@xpokart.in' ||
+    clean === 'owner-01' ||
+    clean === 'dev@xpokart.in' ||
+    clean === 'dev-01'
   );
 };
 
 export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
-  const { signInWithPassword, signInAsMasterAdminNoPassword, signInStaffDirect } = useAuth();
+  const { userProfile, signInWithPassword, signInAsMasterAdminNoPassword, signInStaffDirect } = useAuth();
+  const isAiStudioContext = staffPermissionService.isAiStudioOrLocalPreview();
   const [viewMode, setViewMode] = useState<'LOGIN' | 'FIRST_LOGIN_CHANGE' | 'REGISTER' | 'FORGOT_PASSWORD'>('LOGIN');
   const directoryStaffList = useMemo(() => staffPermissionService.getDirectoryStaff(), []);
+
+  useEffect(() => {
+    if (userProfile) {
+      onLoginSuccess();
+    }
+  }, [userProfile, onLoginSuccess]);
 
   // Login Form State
   const [username, setUsername] = useState('');
@@ -54,6 +65,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
   const [otpStep, setOtpStep] = useState<'ID' | 'VERIFY'>('ID');
 
   const handleInstantAdminLogin = async () => {
+    if (!isAiStudioContext) {
+      setError('Instant passwordless Admin login is restricted to AI Studio / local pilot mode.');
+      return;
+    }
     setError('');
     setStatusMessage('');
     setLoading(true);
@@ -62,23 +77,20 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
       setLoading(false);
       if (ok) {
         onLoginSuccess();
-        return;
       }
     } catch {
-      // Fallback handled cleanly below
-    }
-    const fallback = staffPermissionService.authenticateWithPassword('ektamahenmeena@gmail.com', '', {
-      allowAdminPasswordless: true,
-      skipPasswordCheck: true,
-    });
-    setLoading(false);
-    if (fallback.success) {
-      onLoginSuccess();
+      setLoading(false);
+      setError('Unable to sign in as Admin in pilot mode.');
     }
   };
 
   const handleQuickSelectDirectoryStaff = async (empId: string) => {
     if (!empId) return;
+    if (!isAiStudioContext) {
+      setUsername(empId);
+      setPassword(DEFAULT_STAFF_FALLBACK_PASSWORD);
+      return;
+    }
     setError('');
     setStatusMessage('');
     setLoading(true);
@@ -87,20 +99,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
       setLoading(false);
       if (ok) {
         onLoginSuccess();
-        return;
+      } else {
+        setError('Unable to sign in selected staff member.');
       }
     } catch {
-      // Fallback handled cleanly below
-    }
-    const directRes = staffPermissionService.authenticateWithPassword(empId, '', {
-      allowAdminPasswordless: true,
-      skipPasswordCheck: true,
-    });
-    setLoading(false);
-    if (directRes.success) {
-      onLoginSuccess();
-    } else {
-      setError(directRes.error || 'Unable to sign in selected staff member.');
+      setLoading(false);
+      setError('Unable to sign in selected staff member.');
     }
   };
 
@@ -110,9 +114,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
     setStatusMessage('');
     const rawUser = username.trim();
     const rawPass = password.trim();
-    const isAdmin = isMasterAdminInput(rawUser);
 
-    if (!rawUser || (!rawPass && !isAdmin)) {
+    if (!rawUser || !rawPass) {
       setError('Please enter Employee ID / Mobile / Email and Password.');
       return;
     }
@@ -220,8 +223,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
           <div className="w-14 h-14 bg-red-600/20 border border-red-500/30 rounded-2xl flex items-center justify-center text-red-400 mb-3 shadow-inner">
             <ShieldCheck className="w-8 h-8" />
           </div>
-          <h2 className="text-xl sm:text-2xl font-black tracking-tight">Xpeedo Last Mile</h2>
-          <p className="text-xs text-slate-400 mt-0.5">Xpeedo Last Mile • Dadabari S.O. • PIN 324009 • XPEEDO Private Limited</p>
+          <h2 className="text-xl sm:text-2xl font-black tracking-tight">XPOKART</h2>
+          <p className="text-xs text-slate-400 mt-0.5">Sovereign B2B &amp; E-Commerce Marketplace • Dadabari S.O. • PIN 324009</p>
         </div>
 
         {error && (
@@ -239,21 +242,53 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
         {/* MODE 1: STANDARD LOGIN */}
         {viewMode === 'LOGIN' && (
           <form onSubmit={handleLogin} className="space-y-4">
-            {/* Instant AI Studio Master Admin Login */}
-            <button
-              type="button"
-              onClick={handleInstantAdminLogin}
-              disabled={loading}
-              className="w-full py-2.5 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg cursor-pointer disabled:opacity-50"
-            >
-              <Flame className="w-4 h-4 shrink-0" />
-              <span>Instant Admin Login (AI Studio · No Password)</span>
-            </button>
+            {/* Instant 5-Role Quick Access Grid (Pilot Mode Only) */}
+            {isAiStudioContext && (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={handleInstantAdminLogin}
+                  disabled={loading}
+                  className="w-full py-2.5 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg cursor-pointer disabled:opacity-50"
+                >
+                  <Flame className="w-4 h-4 shrink-0" />
+                  <span>Instant Master Admin Login (AI Studio · Pilot)</span>
+                </button>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => void handleQuickSelectDirectoryStaff('OWNER-01')}
+                    className="py-1.5 px-2 bg-amber-400/20 hover:bg-amber-400/30 border border-amber-400/40 text-amber-300 rounded-lg text-[10px] font-bold transition cursor-pointer"
+                  >
+                    Owner
+                  </button>
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => void handleQuickSelectDirectoryStaff('DEV-01')}
+                    className="py-1.5 px-2 bg-sky-400/20 hover:bg-sky-400/30 border border-sky-400/40 text-sky-300 rounded-lg text-[10px] font-bold transition cursor-pointer"
+                  >
+                    Developer
+                  </button>
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => void handleQuickSelectDirectoryStaff('50457421')}
+                    className="py-1.5 px-2 bg-rose-400/20 hover:bg-rose-400/30 border border-rose-400/40 text-rose-200 rounded-lg text-[10px] font-bold transition cursor-pointer"
+                  >
+                    Beat 2 Staff
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Quick Select Employee from Directory */}
             <div>
               <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                Quick Select Employee from Directory ({directoryStaffList.length} Staff · Instant Sign-In)
+                {isAiStudioContext
+                  ? `Quick Select Employee from Directory (${directoryStaffList.length} Staff · Pilot Instant Sign-In)`
+                  : `Select Employee from Directory (${directoryStaffList.length} Staff)`}
               </label>
               <select
                 value=""
@@ -297,8 +332,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-xs font-medium text-slate-300">
-                  {isMasterAdminInput(username)
-                    ? 'Password (Optional for Master Admin)'
+                  {isElevatedRoleInput(username)
+                    ? 'Command Role Password *'
                     : `Password (Default: ${DEFAULT_STAFF_FALLBACK_PASSWORD})`}
                 </label>
                 <button
@@ -318,12 +353,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={
-                    isMasterAdminInput(username)
-                      ? 'Optional (leave blank for Admin bypass)'
+                    isElevatedRoleInput(username)
+                      ? 'Enter command role password'
                       : `Default: ${DEFAULT_STAFF_FALLBACK_PASSWORD} or custom password`
                   }
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-red-500 transition text-white"
-                  required={!isMasterAdminInput(username)}
+                  required
                 />
               </div>
             </div>
@@ -333,7 +368,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
               disabled={loading}
               className="w-full py-3 bg-red-700 hover:bg-red-600 text-white font-bold rounded-xl text-xs sm:text-sm transition shadow-lg shadow-red-700/30 cursor-pointer disabled:opacity-50"
             >
-              {loading ? 'Authenticating...' : 'Authenticate & Enter Xpeedo Last Mile'}
+              {loading ? 'Authenticating...' : 'Authenticate & Enter XPOKART'}
             </button>
 
             {/* Registration Request Link */}

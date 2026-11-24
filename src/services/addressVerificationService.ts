@@ -17,6 +17,7 @@ import { CONSOLIDATED_BEAT_MATRIX, resolveAddressToConsolidatedBeat } from '../d
 import { KOTA_POST_OFFICE_OPTIONS } from '../data/officesData';
 import { UPDATED_STAFF_LIST } from '../data/updatedStaffData';
 import { customerService } from './customerService';
+import { safeStorage } from '../utils/safeStorage';
 
 const STORAGE_KEY_EXCEPTIONS = 'postman_address_exceptions_v1';
 
@@ -83,7 +84,7 @@ class AddressVerificationService {
   private init() {
     if (this.initialized) return;
     try {
-      const stored = localStorage.getItem(STORAGE_KEY_EXCEPTIONS);
+      const stored = safeStorage.getItem(STORAGE_KEY_EXCEPTIONS);
       if (stored) {
         this.exceptions = JSON.parse(stored);
       } else {
@@ -98,11 +99,15 @@ class AddressVerificationService {
 
   private persist() {
     try {
-      localStorage.setItem(STORAGE_KEY_EXCEPTIONS, JSON.stringify(this.exceptions));
-      this.notify();
+      // Cap exceptions array at 20 items to prevent unbounded storage bloat
+      if (this.exceptions.length > 20) {
+        this.exceptions = this.exceptions.slice(0, 20);
+      }
+      safeStorage.setItem(STORAGE_KEY_EXCEPTIONS, JSON.stringify(this.exceptions));
     } catch (e) {
-      console.error('Failed to save address exceptions to storage:', e);
+      console.warn('Address exceptions storage fallback:', e);
     }
+    this.notify();
   }
 
   private notify() {
@@ -184,7 +189,7 @@ class AddressVerificationService {
             beatNumber: 'Beat 2',
             standardColony: 'Keshavpura',
             standardPincode: '324009',
-            assignedStaff: 'Mahendra Kumar Meena (8769706002)',
+            assignedStaff: 'Mahendra Kumar Meena (Beat 2)',
           },
         },
         createdAt: now,
@@ -246,7 +251,7 @@ class AddressVerificationService {
             beatNumber: 'Beat 2',
             standardColony: 'Santoshi Nagar',
             standardPincode: '324009',
-            assignedStaff: 'Mahendra Kumar Meena (8769706002)',
+            assignedStaff: 'Mahendra Kumar Meena (Beat 2)',
           },
         },
         createdAt: now,

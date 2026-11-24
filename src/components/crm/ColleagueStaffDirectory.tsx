@@ -197,7 +197,7 @@ export default function ColleagueStaffDirectory() {
               onChange={(e) => setOfficeFilter(e.target.value)}
               className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800"
             >
-              <option value="ALL">All Post Offices ({officeOptions.length})</option>
+              <option value="ALL">All Offices (Unified Multi-Vertical) ({officeOptions.length})</option>
               {officeOptions.map((off) => (
                 <option key={off} value={off}>
                   {off}

@@ -31,11 +31,15 @@ export default function PropertyAnalytics({ properties }: PropertyAnalyticsProps
       .attr("fill", d => color(d.data.label) as string);
 
     // 2. Bar Chart: Vacancy rate by beat
-    const beatStats = d3.rollup(properties, 
-      v => ({ total: v.length, vacant: v.filter(p => p.status === 'Vacant').length }),
-      d => d.beatNo || 'Unassigned'
-    );
-    const barData = Array.from(beatStats, ([beat, stats]) => ({ beat, rate: stats.vacant / stats.total }));
+    const beatMap = new Map<string, { total: number; vacant: number }>();
+    for (const p of properties) {
+      const key = p.beatNo || 'Unassigned';
+      const entry = beatMap.get(key) || { total: 0, vacant: 0 };
+      entry.total += 1;
+      if (p.status === 'Vacant') entry.vacant += 1;
+      beatMap.set(key, entry);
+    }
+    const barData = Array.from(beatMap, ([beat, stats]) => ({ beat, rate: stats.vacant / stats.total }));
 
     const barSvg = d3.select(barRef.current);
     barSvg.selectAll("*").remove();

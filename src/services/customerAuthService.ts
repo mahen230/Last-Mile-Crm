@@ -6,12 +6,16 @@
  * - Customer session persistence with strict isolation from staff privileges
  */
 
+import { safeStorage } from '../utils/safeStorage';
+import { pincodeOperationsService } from './pincodeOperationsService';
+
 export interface CustomerSession {
   id: string;
   tier: 'CUSTOMER';
   name: string;
   mobile: string;
   email?: string;
+  pincode?: string;
   authProvider: 'GOOGLE' | 'MOBILE_OTP';
   isPhoneVerified: boolean;
   createdAt: string;
@@ -31,9 +35,8 @@ class CustomerAuthService {
   }
 
   private loadSession() {
-    if (typeof localStorage === 'undefined') return;
     try {
-      const stored = localStorage.getItem(CUSTOMER_SESSION_KEY);
+      const stored = safeStorage.getItem(CUSTOMER_SESSION_KEY);
       if (stored) {
         this.activeCustomer = JSON.parse(stored);
       }
@@ -45,12 +48,14 @@ class CustomerAuthService {
 
   private saveSession(session: CustomerSession | null) {
     this.activeCustomer = session;
-    if (typeof localStorage === 'undefined') return;
     try {
       if (session) {
-        localStorage.setItem(CUSTOMER_SESSION_KEY, JSON.stringify(session));
+        safeStorage.setItem(CUSTOMER_SESSION_KEY, JSON.stringify(session));
+        if (session.pincode) {
+          pincodeOperationsService.routePincodeFromLogin(session.pincode);
+        }
       } else {
-        localStorage.removeItem(CUSTOMER_SESSION_KEY);
+        safeStorage.removeItem(CUSTOMER_SESSION_KEY);
       }
       this.notifyListeners();
     } catch (e) {
@@ -123,9 +128,14 @@ class CustomerAuthService {
   /**
    * Verifies the SMS OTP and establishes a customer session
    */
-  public verifyMobileOtp(mobile: string, enteredOtp: string): { success: boolean; message: string; session?: CustomerSession } {
+  public verifyMobileOtp(
+    mobile: string,
+    enteredOtp: string,
+    pincode?: string
+  ): { success: boolean; message: string; session?: CustomerSession } {
     const cleanMobile = mobile.replace(/\D/g, '').slice(-10);
     const cleanOtp = enteredOtp.trim();
+    const cleanPin = (pincode || '').trim() || undefined;
 
     const pendingMap: Record<string, { otp: string; name: string; expiresAt: string }> = (() => {
       try {
@@ -145,6 +155,7 @@ class CustomerAuthService {
           tier: 'CUSTOMER',
           name: 'Citizen Customer',
           mobile: cleanMobile,
+          pincode: cleanPin,
           authProvider: 'MOBILE_OTP',
           isPhoneVerified: true,
           createdAt: new Date().toISOString(),
@@ -175,6 +186,7 @@ class CustomerAuthService {
       tier: 'CUSTOMER',
       name: record.name,
       mobile: cleanMobile,
+      pincode: cleanPin,
       authProvider: 'MOBILE_OTP',
       isPhoneVerified: true,
       createdAt: new Date().toISOString(),
@@ -219,12 +231,14 @@ class CustomerAuthService {
     schemeInterest?: string;
   }): { success: boolean; message: string; session: CustomerSession } {
     const cleanMobile = data.mobile.replace(/\D/g, '').slice(-10);
+    const cleanPin = (data.pincode || '').trim();
     const session: CustomerSession = {
       id: `CUST-${cleanMobile}-${Date.now().toString(36).toUpperCase()}`,
       tier: 'CUSTOMER',
       name: data.name.trim(),
       mobile: cleanMobile,
       email: data.email?.trim() || undefined,
+      pincode: cleanPin || undefined,
       authProvider: 'MOBILE_OTP',
       isPhoneVerified: true,
       createdAt: new Date().toISOString(),
@@ -235,7 +249,7 @@ class CustomerAuthService {
     this.saveSession(session);
     return {
       success: true,
-      message: `Welcome ${data.name}! Citizen account registered successfully.`,
+      message: `Welcome ${data.name}! Your account is routed to PIN ${pincodeOperationsService.getActivePincode()}.`,
       session,
     };
   }

@@ -62,20 +62,25 @@ const EMPTY_SECTORS_FALLBACK: Record<string, string[]> = {};
 
 export default function BeatManagementView({
   onFilterBeat,
+  indiaPostOwnerAccess = false,
 }: {
   onFilterBeat?: (beatNo: string) => void;
+  indiaPostOwnerAccess?: boolean;
 }) {
   const { userProfile } = useAuth();
-  const isActualSuperAdmin = staffPermissionService.isSuperAdmin(userProfile);
+  const isActualSuperAdmin =
+    staffPermissionService.isSuperAdmin(userProfile) || Boolean(indiaPostOwnerAccess);
 
   // Optional Role Simulation for Super Admin to verify Non-Admin / Postmaster Scoped View
   const [simulateNonAdminOfficeId, setSimulateNonAdminOfficeId] = useState<string | null>(null);
   const isSuperAdmin = isActualSuperAdmin && !simulateNonAdminOfficeId;
 
-  const canDispatch = staffPermissionService.canAccessServiceModule(
-    userProfile,
-    'contentSharingDispatchSection'
-  );
+  const canDispatch =
+    Boolean(indiaPostOwnerAccess) ||
+    staffPermissionService.canAccessServiceModule(
+      userProfile,
+      'contentSharingDispatchSection'
+    );
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [dynamicBeats, setDynamicBeats] = useState<any[]>([]);
@@ -1727,7 +1732,7 @@ export default function BeatManagementView({
               >
                 <option value="ALL">
                   {selectedDivisionFilter === 'ALL'
-                    ? 'All Post Offices (Full Circle)'
+                    ? 'All Offices (Unified Multi-Vertical)'
                     : `All Offices in ${selectedDivisionFilter}`}
                 </option>
                 {availableOfficesForDivision.map((hub) => (

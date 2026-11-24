@@ -7,6 +7,8 @@ import {
 import { INITIAL_CUSTOMERS, normalizeMobile } from '../data/initialMasterData';
 import { POSTAL_PRODUCTS } from '../data/productsData';
 import { staffPermissionService } from './staffPermissionService';
+import { featureVisibilityService } from './featureVisibilityService';
+import { kotaOsHierarchyService } from './kotaOsHierarchyService';
 import { 
   auditAndNormalizeCustomerRecords, 
   getAuditedPincodeForColony, 
@@ -69,9 +71,13 @@ class CustomerService {
       loadedCusts = [...INITIAL_CUSTOMERS];
     }
 
-    // Run audit and normalization on all loaded customer records
+    // Run audit and normalization on all loaded customer records and default to india-post brand
     const { auditedCustomers } = auditAndNormalizeCustomerRecords(loadedCusts);
-    this.customers = auditedCustomers;
+    this.customers = auditedCustomers.map((c) => ({
+      ...c,
+      brandId: c.brandId || 'india-post',
+      brandName: c.brandName || 'India Post',
+    }));
     this.saveCustomersLocal();
 
     // 2. Load leads
@@ -88,13 +94,15 @@ class CustomerService {
         const parsed = JSON.parse(storedLeads);
         this.leads = (Array.isArray(parsed) && parsed.length > 0 ? parsed : this.generateSampleLeads()).map((l: Lead) => ({
           ...l,
+          brandId: l.brandId || 'india-post',
+          brandName: l.brandName || 'India Post',
           stage: normalizeLeadStage(l.stage),
         }));
       } catch (e) {
-        this.leads = this.generateSampleLeads();
+        this.leads = this.generateSampleLeads().map((l) => ({ ...l, brandId: l.brandId || 'india-post', brandName: l.brandName || 'India Post' }));
       }
     } else {
-      this.leads = this.generateSampleLeads();
+      this.leads = this.generateSampleLeads().map((l) => ({ ...l, brandId: l.brandId || 'india-post', brandName: l.brandName || 'India Post' }));
       this.saveLeadsLocal();
     }
 
@@ -102,12 +110,16 @@ class CustomerService {
     const storedFollowups = localStorage.getItem(STORAGE_KEY_FOLLOWUPS);
     if (storedFollowups) {
       try {
-        this.followUps = JSON.parse(storedFollowups);
+        this.followUps = JSON.parse(storedFollowups).map((f: FollowUp) => ({
+          ...f,
+          brandId: f.brandId || 'india-post',
+          brandName: f.brandName || 'India Post',
+        }));
       } catch (e) {
-        this.followUps = this.generateSampleFollowUps();
+        this.followUps = this.generateSampleFollowUps().map((f) => ({ ...f, brandId: f.brandId || 'india-post', brandName: f.brandName || 'India Post' }));
       }
     } else {
-      this.followUps = this.generateSampleFollowUps();
+      this.followUps = this.generateSampleFollowUps().map((f) => ({ ...f, brandId: f.brandId || 'india-post', brandName: f.brandName || 'India Post' }));
       this.saveFollowupsLocal();
     }
 
@@ -525,6 +537,10 @@ class CustomerService {
     priority: 'High' | 'Medium' | 'Low';
     dueDate: string;
     householdsTarget?: number;
+    houseId?: string;
+    streetId?: string;
+    colonyName?: string;
+    floorUnit?: string;
     linkedCustomerId?: string;
     linkedCustomerMasterId?: string;
     linkedCustomerName?: string;
@@ -533,7 +549,7 @@ class CustomerService {
     linkedLeadId?: string;
     linkedLeadProduct?: string;
     linkedLeadStage?: string;
-    linkType?: 'CUSTOMER' | 'LEAD' | 'HOUSEHOLD' | 'NONE';
+    linkType?: 'CUSTOMER' | 'LEAD' | 'HOUSEHOLD' | 'HOUSE_MASTER' | 'NONE';
   }): FieldTask {
     const newTask: FieldTask = {
       id: `TSK-${String(this.tasks.length + 1).padStart(3, '0')}`,
@@ -549,6 +565,10 @@ class CustomerService {
       householdsCovered: 0,
       progressPercent: 0,
       updatedAt: new Date().toISOString(),
+      houseId: taskData.houseId,
+      streetId: taskData.streetId,
+      colonyName: taskData.colonyName,
+      floorUnit: taskData.floorUnit,
       linkedCustomerId: taskData.linkedCustomerId,
       linkedCustomerMasterId: taskData.linkedCustomerMasterId,
       linkedCustomerName: taskData.linkedCustomerName,
@@ -557,7 +577,7 @@ class CustomerService {
       linkedLeadId: taskData.linkedLeadId,
       linkedLeadProduct: taskData.linkedLeadProduct,
       linkedLeadStage: taskData.linkedLeadStage,
-      linkType: taskData.linkType || (taskData.linkedCustomerId ? 'CUSTOMER' : (taskData.linkedLeadId ? 'LEAD' : 'NONE'))
+      linkType: taskData.linkType || (taskData.houseId ? 'HOUSE_MASTER' : taskData.linkedCustomerId ? 'CUSTOMER' : (taskData.linkedLeadId ? 'LEAD' : 'NONE'))
     };
     this.tasks = [newTask, ...this.tasks];
     this.saveTasksLocal();
@@ -972,13 +992,44 @@ class CustomerService {
     return this.customers;
   }
 
+  public getCustomersByBrand(brandIdOrSlug: string): Customer[] {
+    const clean = (brandIdOrSlug || '').trim().toLowerCase();
+    return this.customers.filter((c) => {
+      const bId = (c.brandId || 'india-post').trim().toLowerCase();
+      const bName = (c.brandName || 'India Post').trim().toLowerCase();
+      return bId === clean || bName === clean;
+    });
+  }
+
+  public getLeadsByBrand(brandIdOrSlug: string): Lead[] {
+    const clean = (brandIdOrSlug || '').trim().toLowerCase();
+    return this.leads.filter((l) => {
+      const bId = (l.brandId || 'india-post').trim().toLowerCase();
+      const bName = (l.brandName || 'India Post').trim().toLowerCase();
+      return bId === clean || bName === clean;
+    });
+  }
+
+  public getFollowUpsByBrand(brandIdOrSlug: string): FollowUp[] {
+    const clean = (brandIdOrSlug || '').trim().toLowerCase();
+    return this.followUps.filter((f) => {
+      const bId = (f.brandId || 'india-post').trim().toLowerCase();
+      const bName = (f.brandName || 'India Post').trim().toLowerCase();
+      return bId === clean || bName === clean;
+    });
+  }
+
   /**
    * Scoped Customers getter:
    * - Master Admin / Admin: Returns all customer records across the organization
+   * - Non-Territory Category Agent: Returns only own/assigned records in assignedCategories
    * - Postman / GDS: Returns only customers linked to properties/colonies within assigned beat(s) or created by them
    */
   public getScopedCustomers(activeSession?: any): Customer[] {
     const session = activeSession || staffPermissionService.getActiveSession();
+    if (session && !featureVisibilityService.isFeatureVisible(session, 'members')) {
+      return [];
+    }
     if (!session || !staffPermissionService.isPostmanOrGds(session)) {
       return this.customers;
     }
@@ -986,8 +1037,14 @@ class CustomerService {
     return this.customers.filter(c =>
       staffPermissionService.matchesUserBeatScope(session, {
         beatNo: c.beatNo,
-        createdBy: c.createdBy,
-        assignedStaffEmail: c.createdBy,
+        createdBy: c.createdBy || c.enteredBy,
+        createdById: c.createdById || c.enteredBy,
+        assignedToId: c.assignedToId || c.assignedStaffId,
+        assignedStaffId: c.assignedStaffId,
+        assignedStaffEmail: c.assignedStaffEmail || c.createdBy,
+        enteredBy: c.enteredBy,
+        businessCategory: c.businessCategory || c.category,
+        category: c.category,
         area: c.area,
         colonyName: c.area,
         sector: c.sector,
@@ -1001,8 +1058,11 @@ class CustomerService {
    * - Postman / GDS: Returns only properties belonging to assigned beat(s) / colonies
    */
   public getScopedProperties(activeSession?: any): Property[] {
-    const allProps = this.getProperties();
     const session = activeSession || staffPermissionService.getActiveSession();
+    if (session && !featureVisibilityService.isFeatureVisible(session, 'property')) {
+      return [];
+    }
+    const allProps = this.getProperties();
     if (!session || !staffPermissionService.isPostmanOrGds(session)) {
       return allProps;
     }
@@ -1014,6 +1074,7 @@ class CustomerService {
         colonyName: p.area,
         sector: p.sector,
         pincode: p.pincode,
+        businessCategory: p.commercialCategory,
       })
     );
   }
@@ -1054,6 +1115,9 @@ class CustomerService {
 
   public getScopedLeads(activeSession?: any): Lead[] {
     const session = activeSession || staffPermissionService.getActiveSession();
+    if (session && !featureVisibilityService.isFeatureVisible(session, 'leadsAndSchemes')) {
+      return [];
+    }
     if (!session || !staffPermissionService.isPostmanOrGds(session)) {
       return this.leads;
     }
@@ -1061,10 +1125,13 @@ class CustomerService {
       const cust = this.getCustomerById(l.customerId);
       return staffPermissionService.matchesUserBeatScope(session, {
         beatNo: l.beatNo || cust?.beatNo,
+        createdById: l.createdById,
+        assignedToId: l.assignedToId || l.assignedStaffId,
         assignedStaffId: l.assignedStaffId,
         assignedStaffName: l.assignedStaffName || (l as any).assignedTo,
         assignedStaffEmail: l.assignedStaffEmail,
         assignedTo: (l as any).assignedTo,
+        businessCategory: l.businessCategory || cust?.businessCategory || cust?.category,
         area: cust?.area || (l as any).area,
         sector: cust?.sector,
         officeId: l.officeId || cust?.officeId,
@@ -1079,6 +1146,9 @@ class CustomerService {
 
   public getScopedFollowUps(activeSession?: any): FollowUp[] {
     const session = activeSession || staffPermissionService.getActiveSession();
+    if (session && !featureVisibilityService.isFeatureVisible(session, 'leadsAndSchemes')) {
+      return [];
+    }
     if (!session || !staffPermissionService.isPostmanOrGds(session)) {
       return this.followUps;
     }
@@ -1086,7 +1156,10 @@ class CustomerService {
       const cust = this.getCustomerById(f.customerId);
       return staffPermissionService.matchesUserBeatScope(session, {
         beatNo: cust?.beatNo,
+        createdById: f.createdById,
+        assignedToId: f.assignedToId,
         assignedStaffName: (f as any).assignedTo,
+        businessCategory: f.businessCategory || cust?.businessCategory || cust?.category,
         area: cust?.area,
         sector: cust?.sector,
       });
@@ -1484,9 +1557,14 @@ class CustomerService {
         conflictDetails: [],
         enteredBy: data.enteredBy || '',
         enteredByName: data.enteredByName || '',
+        createdById: data.createdById || data.enteredBy || '',
+        assignedToId: data.assignedToId || data.assignedStaffId || '',
         assignedStaffId: data.assignedStaffId || '',
         assignedStaffName: data.assignedStaffName || '',
         assignedStaffEmail: data.assignedStaffEmail || '',
+        brandId: data.brandId || 'india-post',
+        brandName: data.brandName || 'India Post',
+        businessCategory: data.businessCategory || data.category || 'General',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -2276,10 +2354,10 @@ class CustomerService {
     );
   }
 
-  // EXPORT TO CSV
-  public exportCustomersToCSV(): string {
+  // EXPORT TO CSV (UTF-8 BOM ready)
+  public exportCustomersToCSV(withBom = true): string {
     const headers = [
-      'Master ID', 'Name', 'Mobile', 'WhatsApp', 'Area', 'Sector', 'House No.', 
+      'Master ID', 'Name', 'Mobile', 'WhatsApp', 'Brand', 'Area', 'Sector', 'House No.', 
       'Address', 'Pincode', 'Beat No', 'Office ID', 'Property ID', 'Household ID', 
       'Occupation', 'Existing Banking', 'Financial Interest', 'Lead Score', 
       'Follow-up Status', 'Remarks', 'Verification Status', 'Last Visit', 'Next Follow-up', 'Source'
@@ -2290,6 +2368,7 @@ class CustomerService {
       `"${(c.name || '').replace(/"/g, '""')}"`,
       c.mobile || '',
       c.whatsapp || '',
+      `"${(c.brandName || 'India Post').replace(/"/g, '""')}"`,
       `"${(c.area || '').replace(/"/g, '""')}"`,
       `"${(c.sector || '').replace(/"/g, '""')}"`,
       `"${(c.houseNo || c.address?.houseNumber || '').replace(/"/g, '""')}"`,
@@ -2311,7 +2390,12 @@ class CustomerService {
       `"${(c.source || 'MASTER_UNIQUE.csv').replace(/"/g, '""')}"`
     ]);
 
-    return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    return withBom ? `\uFEFF${csv}` : csv;
+  }
+
+  public exportWithUtf8Bom(csvContent: string): string {
+    return csvContent.startsWith('\uFEFF') ? csvContent : `\uFEFF${csvContent}`;
   }
 
   // RESET TO DEFAULT MASTER SOURCE
@@ -2767,6 +2851,163 @@ class CustomerService {
     } catch (e) {
       console.error('Error saving comm logs', e);
     }
+  }
+
+  public reassignLeadWithClusterGuard(
+    leadId: string,
+    payload: {
+      nextPoolStage?: Lead['poolStage'];
+      nextClusterId?: string;
+      nextClusterName?: string;
+      assignedStaffId?: string;
+      assignedStaffName?: string;
+      assignedOffice?: string;
+      reason?: string;
+    },
+    actor: StaffProfile | null | undefined
+  ): { success: boolean; message: string; lead?: Lead } {
+    const idx = this.leads.findIndex((l) => l.id === leadId);
+    if (idx < 0) return { success: false, message: 'Lead not found.' };
+
+    const targetCluster = payload.nextClusterId || this.leads[idx].clusterId;
+    const guard = kotaOsHierarchyService.canReassignLeadInCluster(actor, targetCluster);
+    if (!guard.allowed) {
+      return { success: false, message: guard.reason };
+    }
+
+    const prev = this.leads[idx];
+    const logEntry = {
+      id: `LR-${Date.now().toString(36).toUpperCase()}`,
+      timestamp: new Date().toISOString(),
+      fromAssignee: prev.assignedStaffName || 'Central Division Pool',
+      toAssignee: payload.assignedStaffName || prev.assignedStaffName || 'Pool Desk',
+      fromClusterId: prev.clusterId,
+      toClusterId: targetCluster,
+      performedBy: actor?.name || 'Supervisor',
+      performedByRole: actor?.officialPost || actor?.role || 'STAFF',
+      reason: payload.reason || 'Division Lead Pool Routing',
+    };
+
+    const updated: Lead = {
+      ...prev,
+      poolStage: payload.nextPoolStage ?? prev.poolStage ?? 'Central Division Lead Pool',
+      stage:
+        payload.nextPoolStage === 'Converted'
+          ? 'Converted - Product Opened'
+          : payload.nextPoolStage === 'Lost'
+          ? 'Closed - Not Interested'
+          : payload.nextPoolStage || prev.stage,
+      clusterId: targetCluster,
+      clusterName: payload.nextClusterName ?? prev.clusterName,
+      assignedStaffId: payload.assignedStaffId ?? prev.assignedStaffId,
+      assignedStaffName: payload.assignedStaffName ?? prev.assignedStaffName,
+      postOfficeName: payload.assignedOffice ?? prev.postOfficeName,
+      reassignmentHistory: [logEntry, ...(prev.reassignmentHistory || [])],
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.leads = [...this.leads.slice(0, idx), updated, ...this.leads.slice(idx + 1)];
+    this.saveLeadsLocal();
+    this.logAudit(
+      'LEAD_CLUSTER_REASSIGNED',
+      'Lead',
+      updated.id,
+      updated.customerName,
+      `${logEntry.fromAssignee} -> ${logEntry.toAssignee} (${updated.poolStage}) by ${logEntry.performedBy}`
+    );
+    kotaOsHierarchyService.recordGovernanceAudit(
+      logEntry.performedBy,
+      logEntry.performedByRole,
+      'LEAD_POOL_ROUTING',
+      updated.id,
+      `Cluster=${targetCluster || 'UNASSIGNED'}, Stage=${updated.poolStage}`
+    );
+    this.notify();
+    return { success: true, message: `Lead ${updated.id} routed to ${updated.poolStage}.`, lead: updated };
+  }
+
+  public reassignRecordBrand(
+    entityType: 'Customer' | 'Lead',
+    recordId: string,
+    brandId: string,
+    brandName: string
+  ): boolean {
+    const now = new Date().toISOString();
+    if (entityType === 'Customer') {
+      const idx = this.customers.findIndex((c) => c.id === recordId || c.masterId === recordId);
+      if (idx < 0) return false;
+      this.customers[idx] = {
+        ...this.customers[idx],
+        brandId,
+        brandName,
+        updatedAt: now,
+      };
+      this.saveCustomersLocal();
+      this.logAudit('CUSTOMER_BRAND_REASSIGNED', 'Customer', recordId, this.customers[idx].name, `Moved to ${brandName} (${brandId})`);
+      this.notify();
+      return true;
+    }
+
+    const lIdx = this.leads.findIndex((l) => l.id === recordId);
+    if (lIdx < 0) return false;
+    this.leads[lIdx] = {
+      ...this.leads[lIdx],
+      brandId,
+      brandName,
+      updatedAt: now,
+    };
+    this.saveLeadsLocal();
+    this.logAudit('LEAD_BRAND_REASSIGNED', 'Lead', recordId, this.leads[lIdx].customerName, `Moved to ${brandName} (${brandId})`);
+    this.notify();
+    return true;
+  }
+
+  public bulkReassignBrand(
+    updates: Array<{ entityType: 'Customer' | 'Lead'; recordId: string; brandId: string; brandName: string }>
+  ): number {
+    if (updates.length === 0) return 0;
+    const now = new Date().toISOString();
+    let changedCustomers = false;
+    let changedLeads = false;
+    let count = 0;
+
+    const custMap = new Map<string, { brandId: string; brandName: string }>();
+    const leadMap = new Map<string, { brandId: string; brandName: string }>();
+
+    updates.forEach((u) => {
+      if (u.entityType === 'Customer') {
+        custMap.set(u.recordId, { brandId: u.brandId, brandName: u.brandName });
+      } else {
+        leadMap.set(u.recordId, { brandId: u.brandId, brandName: u.brandName });
+      }
+    });
+
+    if (custMap.size > 0) {
+      this.customers = this.customers.map((c) => {
+        const hit = custMap.get(c.id) || (c.masterId ? custMap.get(c.masterId) : undefined);
+        if (!hit) return c;
+        if (c.brandId === hit.brandId && c.brandName === hit.brandName) return c;
+        changedCustomers = true;
+        count += 1;
+        return { ...c, brandId: hit.brandId, brandName: hit.brandName, updatedAt: now };
+      });
+    }
+
+    if (leadMap.size > 0) {
+      this.leads = this.leads.map((l) => {
+        const hit = leadMap.get(l.id);
+        if (!hit) return l;
+        if (l.brandId === hit.brandId && l.brandName === hit.brandName) return l;
+        changedLeads = true;
+        count += 1;
+        return { ...l, brandId: hit.brandId, brandName: hit.brandName, updatedAt: now };
+      });
+    }
+
+    if (changedCustomers) this.saveCustomersLocal();
+    if (changedLeads) this.saveLeadsLocal();
+    if (count > 0) this.notify();
+    return count;
   }
 }
 

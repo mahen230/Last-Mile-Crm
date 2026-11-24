@@ -68,6 +68,9 @@ export default function StaffProductStudioView({ embeddedInProfile = false }: St
   );
   const [formWhatsapp, setFormWhatsapp] = useState(userProfile?.contact || userProfile?.mobile || '9414170563');
   const [formAssignedBeat, setFormAssignedBeat] = useState<string>('All Beats');
+  const [formVendorName, setFormVendorName] = useState<string>('');
+  const [formMarginPct, setFormMarginPct] = useState<number>(15);
+  const [formCodEligible, setFormCodEligible] = useState<boolean>(true);
 
   const staffId = userProfile?.employeeId || userProfile?.id || userProfile?.email || 'MASTER-ADMIN-01';
   const staffName = userProfile?.name || 'Ekta Meena';
@@ -139,6 +142,9 @@ export default function StaffProductStudioView({ embeddedInProfile = false }: St
     setFormThumbnail(DEFAULT_VERTICAL_THUMBNAILS[myRights.allowedVerticals[0] || 'Logistics & Courier Services']);
     setFormWhatsapp(userProfile?.contact || userProfile?.mobile || '9414170563');
     setFormAssignedBeat(isSuperAdmin ? 'All Beats' : staffBeat);
+    setFormVendorName('');
+    setFormMarginPct(15);
+    setFormCodEligible(true);
     setIsModalOpen(true);
   };
 
@@ -156,6 +162,9 @@ export default function StaffProductStudioView({ embeddedInProfile = false }: St
     setFormThumbnail(item.thumbnailUrl);
     setFormWhatsapp(item.whatsappNumber);
     setFormAssignedBeat(item.assignedBeats?.[0] || item.beatNumber || 'All Beats');
+    setFormVendorName(item.vendorName || '');
+    setFormMarginPct(item.sellingMarginPercent || 15);
+    setFormCodEligible(item.codEligible ?? true);
     setIsModalOpen(true);
   };
 
@@ -188,6 +197,10 @@ export default function StaffProductStudioView({ embeddedInProfile = false }: St
       ? `91${formWhatsapp.replace(/\D/g, '')}`
       : formWhatsapp.replace(/\D/g, '') || '919414170563';
 
+    const safePrice = Number(formPrice) || 0;
+    const marginPct = Math.max(0, Math.min(60, Number(formMarginPct) || 15));
+    const marginAmt = Math.round((safePrice * marginPct) / 100);
+
     if (editingProduct) {
       staffProductService.updateProduct({
         ...editingProduct,
@@ -196,8 +209,14 @@ export default function StaffProductStudioView({ embeddedInProfile = false }: St
         vertical: formVertical,
         pricingModel: formPricingModel,
         productType: formProductType,
-        price: Number(formPrice) || 0,
-        commissionRate: formCommission.trim(),
+        price: safePrice,
+        commissionRate: formCommission.trim() || `₹${marginAmt} Partner Margin (${marginPct}%)`,
+        sellingMarginAmount: marginAmt,
+        sellingMarginPercent: marginPct,
+        codEligible: formCodEligible,
+        vendorName: formVendorName.trim() || staffName,
+        beatManagerId: staffId,
+        beatManagerName: `${staffName} · ${formAssignedBeat}`,
         description: formDescription.trim(),
         features: featureList,
         thumbnailUrl: formThumbnail.trim(),
@@ -212,8 +231,15 @@ export default function StaffProductStudioView({ embeddedInProfile = false }: St
         vertical: formVertical,
         pricingModel: formPricingModel,
         productType: formProductType,
-        price: Number(formPrice) || 0,
-        commissionRate: formCommission.trim(),
+        price: safePrice,
+        mrpPrice: safePrice > 0 ? Math.round(safePrice * 1.15) : 0,
+        commissionRate: formCommission.trim() || `₹${marginAmt} Partner Margin (${marginPct}%)`,
+        sellingMarginAmount: marginAmt,
+        sellingMarginPercent: marginPct,
+        codEligible: formCodEligible,
+        vendorName: formVendorName.trim() || staffName,
+        beatManagerId: staffId,
+        beatManagerName: `${staffName} · ${formAssignedBeat}`,
         description: formDescription.trim(),
         features: featureList,
         thumbnailUrl: formThumbnail.trim(),
@@ -223,9 +249,11 @@ export default function StaffProductStudioView({ embeddedInProfile = false }: St
         whatsappNumber: normalizedWa,
         beatNumber: formAssignedBeat,
         subOffice: userProfile?.subOffice || 'Dadabari S.O.',
+        pincode: '324009',
         status: 'ACTIVE',
         isGlobalAdminItem: isSuperAdmin,
         assignedBeats: [formAssignedBeat],
+        logisticsServiceType: formCodEligible ? 'Speed Post COD' : 'Doorstep Service Pickup',
       });
       showToast(`Published "${formTitle.trim()}" to your Storefront & Citizen Portal!`);
     }
@@ -674,7 +702,7 @@ export default function StaffProductStudioView({ embeddedInProfile = false }: St
                 </div>
                 <a
                   href={`https://api.whatsapp.com/send?phone=${item.whatsappNumber}&text=${encodeURIComponent(
-                    `Namaste ${item.staffName}, I am interested in "${item.title}" (SKU: ${item.sku}) via Xpeedo Last Mile.`
+                    `Namaste ${item.staffName}, I am interested in "${item.title}" (SKU: ${item.sku}) via XPOKART Marketplace.`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -815,7 +843,7 @@ export default function StaffProductStudioView({ embeddedInProfile = false }: St
                   <h2 className="text-lg font-black text-slate-900">
                     {editingProduct ? 'Edit Storefront Product' : 'Create New Storefront Product'}
                   </h2>
-                  <p className="text-xs text-slate-500">Xpeedo Last Mile • Multi-Vendor E-Commerce Studio</p>
+                  <p className="text-xs text-slate-500">XPOKART • Multi-Vendor Sovereign E-Commerce Studio</p>
                 </div>
               </div>
               <button
@@ -949,6 +977,40 @@ export default function StaffProductStudioView({ embeddedInProfile = false }: St
                       </option>
                     ))}
                   </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-black text-slate-700 uppercase">Local Vendor / Store Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Agrawal Heritage Wholesale"
+                    value={formVendorName}
+                    onChange={(e) => setFormVendorName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:border-red-600"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-black text-slate-700 uppercase">Partner Selling Margin (%)</label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="number"
+                      min={0}
+                      max={60}
+                      value={formMarginPct}
+                      onChange={(e) => setFormMarginPct(Number(e.target.value))}
+                      className="w-24 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900"
+                    />
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-slate-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formCodEligible}
+                        onChange={(e) => setFormCodEligible(e.target.checked)}
+                        className="w-4 h-4 accent-red-700"
+                      />
+                      <span>Speed Post COD Eligible</span>
+                    </label>
+                  </div>
                 </div>
 
                 {/* Thumbnail URL + Upload Preview */}

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Customer } from '../../types/models';
 import { customerService } from '../../services/customerService';
 import { staffPermissionService } from '../../services/staffPermissionService';
+import { featureVisibilityService } from '../../services/featureVisibilityService';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import { 
   Search, Filter, Plus, Download, Upload, Eye, Edit3, Target, Calendar, 
@@ -55,13 +56,26 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
   const [assignTargetCustomer, setAssignTargetCustomer] = useState<Customer | null>(null);
   const [assignStaffEmail, setAssignStaffEmail] = useState('ektamahenmeena@gmail.com');
 
+  const [visibilityTick, setVisibilityTick] = useState(0);
+
   useEffect(() => {
     setCustomers(customerService.getCustomers());
     const unsub = customerService.subscribe(() => {
       setCustomers([...customerService.getCustomers()]);
     });
-    return () => unsub();
+    const unsubVis = featureVisibilityService.subscribe(() => {
+      setVisibilityTick((t) => t + 1);
+    });
+    return () => {
+      unsub();
+      unsubVis();
+    };
   }, []);
+
+  const canAccessLeadsAndFollowUps = React.useMemo(
+    () => featureVisibilityService.isFeatureVisible(userProfile, 'leadsAndSchemes'),
+    [userProfile, visibilityTick]
+  );
 
   const isAdmin = staffPermissionService.isSuperAdmin(userProfile) || userProfile?.role === 'ADMIN';
   const isRestrictedFieldStaff = staffPermissionService.isPostmanOrGds(userProfile);
@@ -852,30 +866,32 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (onAddLead) onAddLead(cust);
-                            else navigate('/leads', { state: { initialCustomer: cust } });
-                          }}
-                          className="px-2.5 py-1 bg-red-700 hover:bg-red-800 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
-                        >
-                          <Target size={12} />
-                          <span>Lead</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (onAddFollowUp) onAddFollowUp(cust);
-                            else navigate('/followups', { state: { initialCustomer: cust } });
-                          }}
-                          className="px-2.5 py-1 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
-                        >
-                          <Calendar size={12} />
-                          <span>Visit</span>
-                        </button>
-                      </div>
+                      {canAccessLeadsAndFollowUps && (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (onAddLead) onAddLead(cust);
+                              else navigate('/leads', { state: { initialCustomer: cust } });
+                            }}
+                            className="px-2.5 py-1 bg-red-700 hover:bg-red-800 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+                          >
+                            <Target size={12} />
+                            <span>Lead</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (onAddFollowUp) onAddFollowUp(cust);
+                              else navigate('/followups', { state: { initialCustomer: cust } });
+                            }}
+                            className="px-2.5 py-1 bg-indigo-700 hover:bg-indigo-800 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+                          >
+                            <Calendar size={12} />
+                            <span>Visit</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </article>
                 );
@@ -1113,32 +1129,36 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
                           </button>
                         )}
 
-                        <button
-                          onClick={() => {
-                            if (onAddLead) {
-                              onAddLead(cust);
-                            } else {
-                              navigate('/leads', { state: { initialCustomer: cust } });
-                            }
-                          }}
-                          className="p-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg transition cursor-pointer"
-                          title="Create Lead"
-                        >
-                          <Target size={14} />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (onAddFollowUp) {
-                              onAddFollowUp(cust);
-                            } else {
-                              navigate('/followups', { state: { initialCustomer: cust } });
-                            }
-                          }}
-                          className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition cursor-pointer"
-                          title="Schedule Follow-up"
-                        >
-                          <Calendar size={14} />
-                        </button>
+                        {canAccessLeadsAndFollowUps && (
+                          <>
+                            <button
+                              onClick={() => {
+                                if (onAddLead) {
+                                  onAddLead(cust);
+                                } else {
+                                  navigate('/leads', { state: { initialCustomer: cust } });
+                                }
+                              }}
+                              className="p-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg transition cursor-pointer"
+                              title="Create Lead"
+                            >
+                              <Target size={14} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (onAddFollowUp) {
+                                  onAddFollowUp(cust);
+                                } else {
+                                  navigate('/followups', { state: { initialCustomer: cust } });
+                                }
+                              }}
+                              className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition cursor-pointer"
+                              title="Schedule Follow-up"
+                            >
+                              <Calendar size={14} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1397,8 +1417,8 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
             setCustomerToEdit(c);
             setShowAddModal(true);
           }}
-          onAddLead={onAddLead}
-          onAddFollowUp={onAddFollowUp}
+          onAddLead={canAccessLeadsAndFollowUps ? onAddLead : undefined}
+          onAddFollowUp={canAccessLeadsAndFollowUps ? onAddFollowUp : undefined}
         />
       )}
 

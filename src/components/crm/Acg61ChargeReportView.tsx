@@ -25,10 +25,15 @@ import {
   formatToDottedDate,
 } from '../../utils/acg61PdfGenerator';
 
-export default function Acg61ChargeReportView() {
+export default function Acg61ChargeReportView({
+  indiaPostOwnerAccess = false,
+}: {
+  indiaPostOwnerAccess?: boolean;
+} = {}) {
   const { userProfile } = useAuth();
   const currentStaff = staffPermissionService.getActiveSession() || userProfile;
-  const isSuperAdmin = staffPermissionService.isSuperAdmin(currentStaff);
+  const isSuperAdmin =
+    staffPermissionService.isSuperAdmin(currentStaff) || Boolean(indiaPostOwnerAccess);
   const isSuperior =
     isSuperAdmin ||
     currentStaff?.role === 'ADMIN' ||

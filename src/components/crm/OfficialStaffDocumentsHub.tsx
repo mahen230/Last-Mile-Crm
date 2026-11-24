@@ -188,7 +188,7 @@ export default function OfficialStaffDocumentsHub() {
           headOfficeName: 'NGM H.O.',
           subDivisionName: "ASPO's KOTA EAST",
           authorityOrderNo: doc.details?.orderReferenceNo || doc.billNumber,
-          remarks: doc.details?.remarks || 'Official ACG-61 certificate generated from Xpeedo Last Mile.',
+          remarks: doc.details?.remarks || 'Official ACG-61 certificate generated from XPOKART.',
         });
       } else {
         // Fuel Bill or generic ACG-61 Bill

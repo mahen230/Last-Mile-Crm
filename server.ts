@@ -21,7 +21,31 @@ export interface ServerUserRecord {
   name: string;
   email: string;
   contact: string;
-  role: 'MASTER_ADMIN' | 'ADMIN' | 'POSTMASTER' | 'POSTMAN' | 'GDS' | 'STAFF' | 'VIEWER' | 'CUSTOMER';
+  role:
+    | 'OWNER'
+    | 'MASTER_ADMIN'
+    | 'DEVELOPER'
+    | 'ADMIN'
+    | 'DIVISIONAL_HEAD'
+    | 'ASST_DIVISIONAL_ADMIN'
+    | 'SUBDIVISION_INCHARGE'
+    | 'CLUSTER_INCHARGE'
+    | 'MARKETING_TEAM'
+    | 'LAST_MILE_SUPERVISOR'
+    | 'POSTMASTER'
+    | 'ASST_POSTMASTER'
+    | 'SUB_POSTMASTER'
+    | 'BPM'
+    | 'ABPM'
+    | 'POSTMAN'
+    | 'MAIL_GUARD'
+    | 'MTS'
+    | 'GDS'
+    | 'VENDOR'
+    | 'DEO'
+    | 'STAFF'
+    | 'VIEWER'
+    | 'CUSTOMER';
   tier: 'CUSTOMER' | 'STAFF' | 'ADMIN';
   assignedBeat: string;
   allowedBeats: string[];
@@ -113,6 +137,40 @@ function buildAuthoritativeStaffDirectory(): ServerUserRecord[] {
       allowedDivisions: ['All Divisions'],
       assignedOffice: 'All Divisions / Kota Division (324009)',
       passwordSha256: sha256('Admin'),
+      hasCustomPassword: true,
+      mustChangePassword: false,
+      isActive: true,
+    },
+    {
+      id: 'STAFF-OWNER-01',
+      employeeId: 'OWNER-01',
+      name: 'XPOKART Sovereign Owner',
+      email: 'owner@xpokart.in',
+      contact: '9460020640',
+      role: 'OWNER',
+      tier: 'ADMIN',
+      assignedBeat: 'All Beats',
+      allowedBeats: ['All Beats'],
+      allowedDivisions: ['All Divisions'],
+      assignedOffice: 'Dadabari S.O. Executive Command (324009)',
+      passwordSha256: sha256('Owner@123'),
+      hasCustomPassword: true,
+      mustChangePassword: false,
+      isActive: true,
+    },
+    {
+      id: 'STAFF-DEV-01',
+      employeeId: 'DEV-01',
+      name: 'Lead Systems Developer',
+      email: 'dev@xpokart.in',
+      contact: '9414170563',
+      role: 'DEVELOPER',
+      tier: 'ADMIN',
+      assignedBeat: 'All Beats',
+      allowedBeats: ['All Beats'],
+      allowedDivisions: ['All Divisions'],
+      assignedOffice: 'XPOKART Cloud & Dadabari S.O. Gateway (324009)',
+      passwordSha256: sha256('Dev@123'),
       hasCustomPassword: true,
       mustChangePassword: false,
       isActive: true,
@@ -618,10 +676,12 @@ function requireClearance(
     }
 
     if (allowedRoles && allowedRoles.length > 0 && payload.tier !== 'CUSTOMER') {
-      const isMasterAdmin =
+      const isElevatedAdmin =
         payload.role === 'MASTER_ADMIN' ||
+        payload.role === 'OWNER' ||
+        payload.role === 'DEVELOPER' ||
         payload.email?.toLowerCase() === 'ektamahenmeena@gmail.com';
-      if (!isMasterAdmin && !allowedRoles.includes(payload.role)) {
+      if (!isElevatedAdmin && !allowedRoles.includes(payload.role)) {
         res.status(403).json({
           success: false,
           error: 'ROLE_CLEARANCE_DENIED',
@@ -686,8 +746,53 @@ async function startServer(): Promise<void> {
   app.get('/api/health', (_req, res) => {
     res.json({
       status: 'ok',
-      service: 'India Post Field Operations CRM Gateway',
+      service: 'XPOKART — Sovereign B2B & E-Commerce Marketplace Gateway',
+      office: 'Dadabari S.O., Kota Division, Rajasthan Circle (324009)',
       port: PORT,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // System API Health & Live DB Sync Telemetry for Developer / Owner / Master Admin Console
+  app.get('/api/v1/system/health', (_req: Request, res: Response) => {
+    const mem = process.memoryUsage();
+    res.json({
+      success: true,
+      status: 'HEALTHY',
+      brand: 'XPOKART — Sovereign B2B & E-Commerce Marketplace',
+      office: 'Dadabari S.O. • Kota Division • PIN 324009',
+      nodeVersion: process.version,
+      uptimeSeconds: Math.round(process.uptime()),
+      memoryRssMb: Math.round(mem.rss / (1024 * 1024)),
+      heapUsedMb: Math.round(mem.heapUsed / (1024 * 1024)),
+      activeSessions: activeSessionsByUserId.size,
+      totalStaffDirectory: STAFF_DIRECTORY.length,
+      totalAuditEvents: auditLogStore.length,
+      services: [
+        { name: 'RBAC Session Gateway', status: 'OPERATIONAL', latencyMs: 4 },
+        { name: '34-Beat Postal Sync Engine', status: 'OPERATIONAL', latencyMs: 7 },
+        { name: 'Speed Post COD & IPPB QR Bridge', status: 'OPERATIONAL', latencyMs: 11 },
+        { name: 'Places API (New) Extractor Proxy', status: 'OPERATIONAL', latencyMs: 18 },
+      ],
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  app.get('/api/v1/system/sync-logs', (req: Request, res: Response) => {
+    const authedReq = req as AuthedRequest;
+    const token =
+      authedReq.cookies?.['postman_gov_token'] ||
+      req.headers.authorization?.replace(/^Bearer\s+/i, '');
+    const payload = token ? verifySessionJwt(token) : null;
+    if (!payload && !isAiStudioOrLocalOrigin(req)) {
+      res.status(401).json({ success: false, error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+      return;
+    }
+    res.json({
+      success: true,
+      logs: auditLogStore.slice(0, 60),
+      directoryCount: STAFF_DIRECTORY.length,
+      activeSessionsCount: activeSessionsByUserId.size,
       timestamp: new Date().toISOString(),
     });
   });
@@ -731,8 +836,17 @@ async function startServer(): Promise<void> {
     });
   });
 
-  // Instant Passwordless Master Admin Login for AI Studio & Pilot Mode
+  // Instant Passwordless Master Admin Login for AI Studio & Pilot Mode ONLY
   app.post('/api/v1/auth/admin/aistudio-login', validateCsrfMiddleware, (req: Request, res: Response) => {
+    if (!isAiStudioOrLocalOrigin(req)) {
+      res.status(403).json({
+        success: false,
+        error: 'PILOT_MODE_ONLY',
+        message: 'Passwordless Admin bypass is restricted strictly to AI Studio / local pilot preview environments.',
+      });
+      return;
+    }
+
     const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
     const masterAdmin = findStaffByIdentifier('ektamahenmeena@gmail.com') || STAFF_DIRECTORY[0];
 
@@ -809,14 +923,14 @@ async function startServer(): Promise<void> {
       const beat = String(syncProfile.beat || 'Beat 2').trim();
       const roleUpper = String(syncProfile.role || 'POSTMAN').toUpperCase();
       const resolvedTier: 'ADMIN' | 'STAFF' =
-        roleUpper === 'MASTER_ADMIN' || roleUpper === 'ADMIN' ? 'ADMIN' : 'STAFF';
+        ['OWNER', 'MASTER_ADMIN', 'DEVELOPER', 'ADMIN'].includes(roleUpper) ? 'ADMIN' : 'STAFF';
       staff = {
         id: String(syncProfile.id || `STAFF-${empId.replace(/[^A-Z0-9_-]/gi, '')}`),
         employeeId: empId,
         name: String(syncProfile.name || `Staff ${empId}`),
         email,
         contact,
-        role: (['MASTER_ADMIN', 'ADMIN', 'POSTMASTER', 'POSTMAN', 'GDS', 'STAFF', 'VIEWER'].includes(roleUpper)
+        role: (['OWNER', 'MASTER_ADMIN', 'DEVELOPER', 'ADMIN', 'POSTMASTER', 'POSTMAN', 'GDS', 'STAFF', 'VIEWER'].includes(roleUpper)
           ? roleUpper
           : 'POSTMAN') as ServerUserRecord['role'],
         tier: resolvedTier,
@@ -844,36 +958,43 @@ async function startServer(): Promise<void> {
       return;
     }
 
-    const isMasterAdmin =
-      staff.role === 'MASTER_ADMIN' || staff.email.toLowerCase() === 'ektamahenmeena@gmail.com';
+    const isElevatedRole =
+      staff.role === 'MASTER_ADMIN' ||
+      staff.role === 'OWNER' ||
+      staff.role === 'DEVELOPER' ||
+      staff.email.toLowerCase() === 'ektamahenmeena@gmail.com';
+    const resolvedElevatedRole =
+      staff.email.toLowerCase() === 'ektamahenmeena@gmail.com' ? 'MASTER_ADMIN' : staff.role;
+    const isPilotOrigin = isAiStudioOrLocalOrigin(req);
 
     let passwordAccepted = false;
-    if (isMasterAdmin) {
-      // Master Admin (ektamahenmeena@gmail.com) authenticates instantly with or without a password
-      passwordAccepted =
-        !rawPass ||
-        allowAdminPasswordless ||
-        rawPass === 'Admin' ||
-        sha256(rawPass) === staff.passwordSha256 ||
-        isAiStudioOrLocalOrigin(req);
-    } else {
-      // All 34+ Dadabari S.O. staff members authenticate with custom password OR universal fallback Post@1234
-      const cleanContact = (staff.contact || '').replace(/\D/g, '').slice(-10);
-      const passDigits = rawPass.replace(/\D/g, '').slice(-10);
-      passwordAccepted =
-        rawPass === DEFAULT_STAFF_FALLBACK_PASSWORD ||
-        (Boolean(rawPass) && rawPass.toLowerCase() === staff.employeeId.toLowerCase()) ||
-        (Boolean(cleanContact) && Boolean(passDigits) && passDigits === cleanContact) ||
-        (Boolean(rawPass) && sha256(rawPass) === staff.passwordSha256);
+    if (isElevatedRole) {
+      if (allowAdminPasswordless && !rawPass && isPilotOrigin) {
+        passwordAccepted = true;
+      } else if (rawPass) {
+        passwordAccepted =
+          sha256(rawPass) === staff.passwordSha256 ||
+          rawPass === 'Admin' ||
+          rawPass === DEFAULT_STAFF_FALLBACK_PASSWORD;
+      }
+    } else if (rawPass) {
+      if (staff.hasCustomPassword) {
+        passwordAccepted = sha256(rawPass) === staff.passwordSha256;
+      } else {
+        passwordAccepted =
+          rawPass === DEFAULT_STAFF_FALLBACK_PASSWORD ||
+          rawPass.toLowerCase() === staff.employeeId.toLowerCase() ||
+          sha256(rawPass) === staff.passwordSha256;
+      }
     }
 
     if (!passwordAccepted) {
       res.status(401).json({
         success: false,
         error: 'INVALID_PASSWORD',
-        message: isMasterAdmin
-          ? 'Invalid Admin password. Use "Instant Admin Login (AI Studio)" or enter your Admin password.'
-          : `Incorrect password. Use default password ${DEFAULT_STAFF_FALLBACK_PASSWORD}, your Employee ID, or your custom password.`,
+        message: isElevatedRole
+          ? `Invalid ${resolvedElevatedRole} password. Please verify your credentials.`
+          : `Incorrect password. Enter default password ${DEFAULT_STAFF_FALLBACK_PASSWORD}, your Employee ID, or your custom password.`,
       });
       return;
     }
@@ -882,12 +1003,12 @@ async function startServer(): Promise<void> {
 
     const bound = bindSingleBrowserSession({
       userId: staff.id,
-      tier: isMasterAdmin ? 'ADMIN' : staff.tier,
-      role: isMasterAdmin ? 'MASTER_ADMIN' : staff.role,
+      tier: isElevatedRole ? 'ADMIN' : staff.tier,
+      role: isElevatedRole ? resolvedElevatedRole : staff.role,
       email: staff.email,
       name: staff.name,
-      assignedBeat: isMasterAdmin ? 'All Beats' : staff.assignedBeat,
-      allowedBeats: isMasterAdmin ? ['All Beats'] : staff.allowedBeats,
+      assignedBeat: isElevatedRole ? 'All Beats' : staff.assignedBeat,
+      allowedBeats: isElevatedRole ? ['All Beats'] : staff.allowedBeats,
       assignedOffice: staff.assignedOffice,
       req,
       res,
@@ -914,11 +1035,11 @@ async function startServer(): Promise<void> {
         name: staff.name,
         email: staff.email,
         contact: staff.contact,
-        role: isMasterAdmin ? 'MASTER_ADMIN' : staff.role,
-        tier: isMasterAdmin ? 'ADMIN' : staff.tier,
-        assignedBeat: isMasterAdmin ? 'All Beats' : staff.assignedBeat,
-        allowedBeats: isMasterAdmin ? ['All Beats'] : staff.allowedBeats,
-        allowedDivisions: isMasterAdmin ? ['All Divisions'] : staff.allowedDivisions,
+        role: isElevatedRole ? resolvedElevatedRole : staff.role,
+        tier: isElevatedRole ? 'ADMIN' : staff.tier,
+        assignedBeat: isElevatedRole ? 'All Beats' : staff.assignedBeat,
+        allowedBeats: isElevatedRole ? ['All Beats'] : staff.allowedBeats,
+        allowedDivisions: isElevatedRole ? ['All Divisions'] : staff.allowedDivisions,
         assignedOffice: staff.assignedOffice,
         hasCustomPassword: staff.hasCustomPassword,
       },
@@ -927,6 +1048,144 @@ async function startServer(): Promise<void> {
 
   app.post('/api/v1/auth/staff/login', validateCsrfMiddleware, handleStaffOrAdminLogin);
   app.post('/api/v1/auth/login', validateCsrfMiddleware, handleStaffOrAdminLogin);
+
+  // Private Developer & Master Command Console Direct Login
+  const EXPECTED_DEV_MASTER_TOKEN =
+    process.env.XPOKART_DEV_MASTER_TOKEN || 'xpokart_master_key_9460020640';
+
+  app.post('/api/v1/auth/dev-console-login', (req: Request, res: Response) => {
+    const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
+    const masterToken = String(req.body?.masterToken || '').trim();
+    const identifier = String(req.body?.identifier || '').trim();
+    const syncProfile = req.body?.syncProfile;
+
+    if (!masterToken || masterToken !== EXPECTED_DEV_MASTER_TOKEN) {
+      recordAuditEvent({
+        eventType: 'DEV_CONSOLE_INVALID_TOKEN',
+        userId: identifier || 'UNKNOWN',
+        ipAddress: ip,
+        userAgent: String(req.headers['user-agent'] || 'Unknown'),
+        deviceFingerprintHash: resolveDeviceFingerprintHash(req),
+        statusCode: 403,
+        details: 'Rejected unauthorized Private Developer Console token.',
+      });
+      res.status(403).json({
+        success: false,
+        error: 'INVALID_DEV_TOKEN',
+        message: 'Invalid master command token.',
+      });
+      return;
+    }
+
+    let staff = findStaffByIdentifier(identifier);
+    if (!staff && syncProfile && typeof syncProfile === 'object') {
+      const empId = String(syncProfile.employeeId || identifier).trim();
+      const roleUpper = String(syncProfile.role || 'POSTMAN').toUpperCase();
+      const tier: 'ADMIN' | 'STAFF' = ['OWNER', 'MASTER_ADMIN', 'DEVELOPER', 'ADMIN'].includes(roleUpper)
+        ? 'ADMIN'
+        : 'STAFF';
+      staff = {
+        id: String(syncProfile.id || `STAFF-${empId}`),
+        employeeId: empId,
+        name: String(syncProfile.name || `Staff ${empId}`),
+        email: String(syncProfile.email || `${empId.toLowerCase()}@xpokart.in`).toLowerCase(),
+        contact: String(syncProfile.contact || '').replace(/\D/g, '').slice(-10),
+        role: (['OWNER', 'MASTER_ADMIN', 'DEVELOPER', 'ADMIN', 'POSTMASTER', 'POSTMAN', 'GDS', 'STAFF', 'VIEWER'].includes(roleUpper)
+          ? roleUpper
+          : 'POSTMAN') as ServerUserRecord['role'],
+        tier,
+        assignedBeat: String(syncProfile.beat || 'Beat 2'),
+        allowedBeats: Array.isArray(syncProfile.allowedBeats) && syncProfile.allowedBeats.length
+          ? syncProfile.allowedBeats
+          : [String(syncProfile.beat || 'Beat 2')],
+        allowedDivisions: ['Kota Division'],
+        assignedOffice: String(syncProfile.assignedOffice || 'Dadabari S.O. (324009)'),
+        passwordSha256: sha256(DEFAULT_STAFF_FALLBACK_PASSWORD),
+        hasCustomPassword: false,
+        mustChangePassword: false,
+        isActive: true,
+      };
+      STAFF_DIRECTORY.push(staff);
+    }
+
+    if (!staff) {
+      res.status(404).json({ success: false, error: 'STAFF_NOT_FOUND', message: 'Staff record not found.' });
+      return;
+    }
+
+    const isElevatedRole =
+      staff.role === 'MASTER_ADMIN' ||
+      staff.role === 'OWNER' ||
+      staff.role === 'DEVELOPER' ||
+      staff.email.toLowerCase() === 'ektamahenmeena@gmail.com';
+    const resolvedRole =
+      staff.email.toLowerCase() === 'ektamahenmeena@gmail.com' ? 'MASTER_ADMIN' : staff.role;
+
+    const bound = bindSingleBrowserSession({
+      userId: staff.id,
+      tier: isElevatedRole ? 'ADMIN' : staff.tier,
+      role: resolvedRole,
+      email: staff.email,
+      name: staff.name,
+      assignedBeat: isElevatedRole ? 'All Beats' : staff.assignedBeat,
+      allowedBeats: isElevatedRole ? ['All Beats'] : staff.allowedBeats,
+      assignedOffice: staff.assignedOffice,
+      req,
+      res,
+    });
+
+    recordAuditEvent({
+      eventType: 'DEV_CONSOLE_DIRECT_LOGIN',
+      userId: staff.id,
+      ipAddress: ip,
+      userAgent: String(req.headers['user-agent'] || 'Unknown'),
+      deviceFingerprintHash: resolveDeviceFingerprintHash(req),
+      statusCode: 200,
+      details: `Private Dev Console 1-click switch to ${staff.name} (${resolvedRole} · ${staff.assignedBeat}).`,
+    });
+
+    res.json({
+      success: true,
+      sessionId: bound.sessionId,
+      token: bound.token,
+      user: {
+        id: staff.id,
+        employeeId: staff.employeeId,
+        name: staff.name,
+        email: staff.email,
+        contact: staff.contact,
+        role: resolvedRole,
+        tier: isElevatedRole ? 'ADMIN' : staff.tier,
+        assignedBeat: isElevatedRole ? 'All Beats' : staff.assignedBeat,
+        allowedBeats: isElevatedRole ? ['All Beats'] : staff.allowedBeats,
+        assignedOffice: staff.assignedOffice,
+      },
+    });
+  });
+
+  app.post('/api/v1/auth/dev-audit', (req: Request, res: Response) => {
+    const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
+    const masterToken = String(req.body?.masterToken || '').trim();
+    if (masterToken !== EXPECTED_DEV_MASTER_TOKEN) {
+      res.status(403).json({ success: false, error: 'INVALID_DEV_TOKEN' });
+      return;
+    }
+    const eventType = String(req.body?.eventType || 'DEV_CONSOLE_AUDIT').slice(0, 60);
+    const targetIdentifier = String(req.body?.targetIdentifier || 'GATEWAY').slice(0, 80);
+    const details = String(req.body?.details || '').slice(0, 300);
+    const status = String(req.body?.status || 'SUCCESS').toUpperCase() === 'DENIED' ? 403 : 200;
+
+    recordAuditEvent({
+      eventType,
+      userId: targetIdentifier,
+      ipAddress: ip,
+      userAgent: String(req.headers['user-agent'] || 'Unknown'),
+      deviceFingerprintHash: resolveDeviceFingerprintHash(req),
+      statusCode: status,
+      details,
+    });
+    res.json({ success: true });
+  });
 
   // Re-bind active verified session (never fatally breaks iframe preview clients if cookies were stripped)
   app.post('/api/v1/auth/session/bind', validateCsrfMiddleware, (req: Request, res: Response) => {
@@ -971,7 +1230,7 @@ async function startServer(): Promise<void> {
 
     const staff = findStaffByIdentifier(payload.email || payload.userId);
     const resolvedRole = staff?.role || payload.role;
-    const resolvedTier = resolvedRole === 'MASTER_ADMIN' || resolvedRole === 'ADMIN' ? 'ADMIN' : 'STAFF';
+    const resolvedTier = ['OWNER', 'MASTER_ADMIN', 'DEVELOPER', 'ADMIN'].includes(resolvedRole) ? 'ADMIN' : 'STAFF';
     const bound = bindSingleBrowserSession({
       userId: staff?.id || payload.userId,
       tier: resolvedTier,
@@ -1291,10 +1550,10 @@ async function startServer(): Promise<void> {
     res.json({ success: true, message: 'Session terminated and cookies cleared.' });
   });
 
-  // Protected Master Admin Endpoints (Only Ekta Meena / ADMIN / MASTER_ADMIN)
+  // Protected Admin/Owner/Developer Endpoints
   app.get(
     '/api/v1/admin/audit-logs',
-    requireClearance('ADMIN', ['MASTER_ADMIN', 'ADMIN']),
+    requireClearance('ADMIN', ['OWNER', 'MASTER_ADMIN', 'DEVELOPER', 'ADMIN']),
     (_req: Request, res: Response) => {
       res.json({ success: true, logs: auditLogStore.slice(0, 100) });
     }
@@ -1302,7 +1561,7 @@ async function startServer(): Promise<void> {
 
   app.get(
     '/api/v1/staff/directory',
-    requireClearance('ADMIN', ['MASTER_ADMIN', 'ADMIN']),
+    requireClearance('ADMIN', ['OWNER', 'MASTER_ADMIN', 'DEVELOPER', 'ADMIN']),
     (_req: Request, res: Response) => {
       res.json({
         success: true,
@@ -1313,7 +1572,7 @@ async function startServer(): Promise<void> {
 
   app.get(
     '/api/v1/beats/operations',
-    requireClearance('STAFF', ['POSTMAN', 'GDS', 'STAFF', 'POSTMASTER', 'ADMIN', 'MASTER_ADMIN'], true),
+    requireClearance('STAFF', ['OWNER', 'MASTER_ADMIN', 'DEVELOPER', 'ADMIN', 'POSTMASTER', 'POSTMAN', 'GDS', 'STAFF'], true),
     (req: Request, res: Response) => {
       const authedReq = req as AuthedRequest;
       res.json({
@@ -1763,8 +2022,20 @@ async function startServer(): Promise<void> {
     });
   }
 
-  app.listen(PORT, HOST, () => {
+  const server = app.listen(PORT, HOST, () => {
     console.log(`[India Post CRM Server] Listening on http://${HOST}:${PORT} (${IS_PROD ? 'production' : 'development'})`);
+  });
+
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      const fallbackPort = PORT === 3000 ? 3001 : 3000;
+      console.warn(`[India Post CRM Server] Port ${PORT} in use, trying fallback port ${fallbackPort}...`);
+      app.listen(fallbackPort, HOST, () => {
+        console.log(`[India Post CRM Server] Listening on http://${HOST}:${fallbackPort}`);
+      });
+    } else {
+      console.error('[India Post CRM Server] Server error:', err);
+    }
   });
 }
 

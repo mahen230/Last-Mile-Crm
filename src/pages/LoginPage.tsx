@@ -47,6 +47,13 @@ import { customerAuthService } from '../services/customerAuthService';
 import { POSTAL_AUTH_DATABASE_SCHEMA_SQL } from '../data/postalAuthSchemaSql';
 import { DesignationType } from '../types/models';
 import SearchableOfficeSelect from '../components/common/SearchableOfficeSelect';
+import {
+  PINCODE_OFFICE_HUBS,
+  getPincodeHub,
+  pincodeOperationsService,
+} from '../services/pincodeOperationsService';
+import { kotaOsHierarchyService } from '../services/kotaOsHierarchyService';
+import { featureVisibilityService } from '../services/featureVisibilityService';
 
 const DESIGNATION_LIST: DesignationType[] = [
   'Postman',
@@ -75,7 +82,8 @@ export default function LoginPage({
   isStaffDirect = false,
 }: LoginPageProps) {
   const {
-    signIn,
+    userProfile,
+    signInCustomerWithGoogle,
     signInWithPassword,
     signInAsMasterAdminNoPassword,
     signInStaffDirect,
@@ -88,17 +96,38 @@ export default function LoginPage({
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Auto-dismiss modal or leave login route instantaneously when userProfile authenticates
+  useEffect(() => {
+    if (!userProfile) return;
+    if (userProfile.pincode) {
+      pincodeOperationsService.routePincodeFromLogin(userProfile.pincode);
+    }
+    if (isModal && onClose) {
+      onClose();
+    }
+    if (location.pathname === '/login' || location.pathname === '/staff-gateway') {
+      const state = location.state as { from?: { pathname: string } } | null;
+      const requested = state?.from?.pathname;
+      const smartDefault = kotaOsHierarchyService.getDefaultWorkspacePath(userProfile);
+      const target =
+        requested &&
+        requested !== '/login' &&
+        requested !== '/staff-gateway' &&
+        requested !== '/' &&
+        requested !== '/home'
+          ? requested
+          : smartDefault;
+      navigate(target, { replace: true });
+    }
+  }, [userProfile, isModal, onClose, location.pathname, location.state, navigate]);
+
   const finishLoginAndEnterCRM = () => {
     if (onClose) {
       onClose();
     }
-    const active = staffPermissionService.getActiveSession();
-    const isAdminUser =
-      staffPermissionService.isSuperAdmin(active) ||
-      active?.role === 'ADMIN' ||
-      active?.role === 'MASTER_ADMIN' ||
-      active?.role === 'SUPER_ADMIN';
-    const defaultLanding = isAdminUser ? '/dashboard' : '/customers';
+    const defaultLanding = kotaOsHierarchyService.getDefaultWorkspacePath(
+      staffPermissionService.getActiveSession() || userProfile
+    );
     const state = location.state as { from?: { pathname: string } } | null;
     const dest = state?.from?.pathname || defaultLanding;
     if (dest === '/login' || dest === '/' || dest === '/home' || dest === '/staff-gateway') {
@@ -115,9 +144,19 @@ export default function LoginPage({
     navigate('/portal', { replace: true });
   };
 
+  const [retailActive, setRetailActive] = useState(() =>
+    featureVisibilityService.isRetailServicesActive()
+  );
+
+  useEffect(() => {
+    return featureVisibilityService.subscribe(() => {
+      setRetailActive(featureVisibilityService.isRetailServicesActive());
+    });
+  }, []);
+
   // Primary Dual-Tier Authentication State: STAFF vs CUSTOMER
-  // Citizens / Customers are primary (First). Staff Gateway is discrete and secured.
   const [authTier, setAuthTier] = useState<'STAFF' | 'CUSTOMER'>(() => {
+    if (!featureVisibilityService.isRetailServicesActive()) return 'STAFF';
     if (initialTier) return initialTier;
     if (typeof window !== 'undefined' && (window.location.pathname.includes('staff') || isStaffDirect)) {
       return 'STAFF';
@@ -125,12 +164,20 @@ export default function LoginPage({
     return 'CUSTOMER';
   });
 
+  useEffect(() => {
+    if (!retailActive && authTier === 'CUSTOMER') {
+      setAuthTier('STAFF');
+    }
+  }, [retailActive, authTier]);
+
   // Customer Tier State (Registration First! as requested)
   const [custRegMode, setCustRegMode] = useState<'REGISTER' | 'LOGIN'>('REGISTER');
   const [custName, setCustName] = useState('');
   const [custMobile, setCustMobile] = useState('');
   const [custRegLocality, setCustRegLocality] = useState('Dadabari Extension');
-  const [custRegPincode, setCustRegPincode] = useState('324009');
+  const [custRegPincode, setCustRegPincode] = useState(() =>
+    pincodeOperationsService.getActivePincode()
+  );
   const [custRegScheme, setCustRegScheme] = useState('Sukanya Samriddhi Yojana (SSY)');
   const [custEnteredOtp, setCustEnteredOtp] = useState('');
   const [custGeneratedOtp, setCustGeneratedOtp] = useState<string | null>(null);
@@ -138,7 +185,7 @@ export default function LoginPage({
 
   // Staff Tier State
   const [mode, setMode] = useState<'LOGIN' | 'REGISTER' | 'FORGOT_PASSWORD' | 'SET_NEW_PASSWORD'>(initialMode);
-  const [identifier, setIdentifier] = useState('50510312');
+  const [identifier, setIdentifier] = useState('50457421');
   const [password, setPassword] = useState(DEFAULT_STAFF_FALLBACK_PASSWORD);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -152,7 +199,7 @@ export default function LoginPage({
 
   // Cybersecurity Controls & Lockout State
   const [lockoutStatus, setLockoutStatus] = useState<LockoutStatus>(() =>
-    securityAuthService.checkLockout('50510312')
+    securityAuthService.checkLockout('50457421')
   );
   const [csrfToken] = useState<string>(() => securityAuthService.getCsrfToken());
   const [showArchModal, setShowArchModal] = useState(false);
@@ -246,14 +293,11 @@ export default function LoginPage({
     clearMessages();
     setIsLoading(true);
     try {
-      await signIn();
-      customerAuthService.signInWithGoogle({
-        uid: `goog_${Date.now()}`,
-        displayName: 'Google Citizen User',
-        email: 'citizen@gmail.com',
-      });
+      const ok = await signInCustomerWithGoogle();
       setIsLoading(false);
-      finishCustomerLogin();
+      if (ok) {
+        finishCustomerLogin();
+      }
     } catch {
       setIsLoading(false);
       setLocalError('Google OAuth sign-in failed. Please try mobile OTP verification.');
@@ -283,13 +327,16 @@ export default function LoginPage({
   const handleCustomerVerifyOtp = (e: React.FormEvent) => {
     e.preventDefault();
     clearMessages();
-    const res = customerAuthService.verifyMobileOtp(custMobile, custEnteredOtp);
+    const res = customerAuthService.verifyMobileOtp(custMobile, custEnteredOtp, custRegPincode);
     if (!res.success) {
       setLocalError(res.message);
       return;
     }
 
-    setSuccessMessage('Phone verified! Launching Citizen Portal...');
+    const routedHub = getPincodeHub(custRegPincode);
+    setSuccessMessage(
+      `Phone verified! Routed to ${routedHub.officeName} (PIN ${routedHub.pincode}) · Launching Portal...`
+    );
     setTimeout(finishCustomerLogin, 400);
   };
 
@@ -299,11 +346,19 @@ export default function LoginPage({
     return (
       lower === 'ektamahenmeena@gmail.com' ||
       lower === 'master-admin-01' ||
-      lower === 'staff-master-ekta'
+      lower === 'staff-master-ekta' ||
+      lower === 'owner@xpokart.in' ||
+      lower === 'owner-01' ||
+      lower === 'dev@xpokart.in' ||
+      lower === 'dev-01'
     );
   };
 
   const handleInstantMasterAdminAiStudioLogin = async () => {
+    if (!isAiStudioContext) {
+      setLocalError('Instant passwordless Admin login is available only in AI Studio / local pilot preview mode.');
+      return;
+    }
     clearMessages();
     setIsLoading(true);
     try {
@@ -312,23 +367,19 @@ export default function LoginPage({
       if (ok) {
         securityAuthService.recordSuccessfulLogin('ektamahenmeena@gmail.com');
         finishLoginAndEnterCRM();
-        return;
       }
     } catch {
-      // Fallback handled cleanly below
-    }
-    const fallback = staffPermissionService.authenticateWithPassword('ektamahenmeena@gmail.com', '', {
-      allowAdminPasswordless: true,
-      skipPasswordCheck: true,
-    });
-    setIsLoading(false);
-    if (fallback.success) {
-      finishLoginAndEnterCRM();
+      setIsLoading(false);
+      setLocalError('Unable to complete AI Studio Pilot Admin login.');
     }
   };
 
   const handleQuickDirectoryLogin = async (staffIdOrEmail: string) => {
     if (!staffIdOrEmail) return;
+    if (!isAiStudioContext) {
+      handlePreFillStaff(staffIdOrEmail);
+      return;
+    }
     clearMessages();
     setIsLoading(true);
     try {
@@ -337,18 +388,10 @@ export default function LoginPage({
       if (ok) {
         securityAuthService.recordSuccessfulLogin(staffIdOrEmail);
         finishLoginAndEnterCRM();
-        return;
       }
     } catch {
-      // Fallback handled cleanly below
-    }
-    const directRes = staffPermissionService.authenticateWithPassword(staffIdOrEmail, '', {
-      allowAdminPasswordless: true,
-      skipPasswordCheck: true,
-    });
-    setIsLoading(false);
-    if (directRes.success) {
-      finishLoginAndEnterCRM();
+      setIsLoading(false);
+      setLocalError('Unable to sign in selected employee.');
     }
   };
 
@@ -372,24 +415,17 @@ export default function LoginPage({
       return;
     }
 
-    const canSkipPassword = isMasterAdminIdentifier(identifier);
-    if (!identifier.trim() || (!password.trim() && !canSkipPassword)) {
-      setLocalError('Please enter your Employee ID / Email / Mobile and Password.');
+    const currentLock = securityAuthService.checkLockout(identifier);
+    if (currentLock.isLocked) {
+      setLockoutStatus(currentLock);
+      setLocalError(
+        `Account temporarily locked due to repeated invalid attempts. Retry in ${currentLock.secondsRemaining}s.`
+      );
       return;
     }
 
-    // First-login default password upgrade prompt for registered non-admin staff
-    if (
-      !canSkipPassword &&
-      verifiedStaffMatch &&
-      !verifiedStaffMatch.hasCustomPassword &&
-      (password.trim() === DEFAULT_STAFF_FALLBACK_PASSWORD ||
-        password.trim().toLowerCase() === (verifiedStaffMatch.employeeId || '').toLowerCase())
-    ) {
-      setMode('SET_NEW_PASSWORD');
-      setSuccessMessage(
-        `Welcome ${verifiedStaffMatch.name}! First-time login with default password detected. Set a personal secure password below or continue to CRM.`
-      );
+    if (!identifier.trim() || !password.trim()) {
+      setLocalError('Please enter your Employee ID / Email / Mobile and Password.');
       return;
     }
 
@@ -399,7 +435,11 @@ export default function LoginPage({
 
     if (ok) {
       securityAuthService.recordSuccessfulLogin(identifier.trim());
+      setLockoutStatus(securityAuthService.checkLockout(identifier.trim()));
       finishLoginAndEnterCRM();
+    } else {
+      const nextLock = securityAuthService.recordFailedAttempt(identifier.trim());
+      setLockoutStatus(nextLock);
     }
   };
 
@@ -568,12 +608,20 @@ export default function LoginPage({
     clearMessages();
     setMode('LOGIN');
     setIdentifier('ektamahenmeena@gmail.com');
-    setPassword('');
+    setPassword('Admin');
     setSuccessMessage(
       isAiStudioContext
-        ? 'Master Admin (ektamahenmeena@gmail.com) selected. Click "Authenticate & Sign In" or use 1-Click AI Studio Admin Login without password.'
-        : 'Master Admin email (ektamahenmeena@gmail.com) pre-filled. Please enter your Admin password to authenticate.'
+        ? 'Master Admin (ektamahenmeena@gmail.com) selected. Click "Authenticate & Sign In" or use 1-Click AI Studio Admin Login.'
+        : 'Master Admin email (ektamahenmeena@gmail.com) pre-filled.'
     );
+  };
+
+  const handlePreFillRoleAccount = (idOrEmail: string, defaultPass: string, roleLabel: string) => {
+    clearMessages();
+    setMode('LOGIN');
+    setIdentifier(idOrEmail);
+    setPassword(defaultPass);
+    setSuccessMessage(`${roleLabel} (${idOrEmail}) selected. Click "Authenticate & Sign In".`);
   };
 
   const handlePreFillStaff = (staffIdOrEmail: string) => {
@@ -594,49 +642,87 @@ export default function LoginPage({
 
   const activeError = localError || error;
 
-  // Reusable Preset Buttons Component
+  // Reusable Preset Buttons Component (All 5 RBAC Roles)
   const presetsList = (
     <div className="space-y-2">
-      {/* 1-Click Master Admin AI Studio Login (No Password) */}
-      <button
-        type="button"
-        onClick={handleInstantMasterAdminAiStudioLogin}
-        disabled={isLoading}
-        id="master-admin-aistudio-instant-btn"
-        className="w-full text-left p-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 border border-emerald-300 transition flex items-center justify-between group shadow-md cursor-pointer"
-      >
-        <div className="min-w-0">
-          <div className="text-xs font-black uppercase tracking-wide flex items-center gap-1.5 truncate">
-            <Flame size={14} className="shrink-0" />
-            <span className="truncate">Instant Admin Login (AI Studio · No Password)</span>
+      {/* 1-Click Master Admin AI Studio Login (Pilot Preview Mode Only) */}
+      {isAiStudioContext && (
+        <button
+          type="button"
+          onClick={handleInstantMasterAdminAiStudioLogin}
+          disabled={isLoading}
+          id="master-admin-aistudio-instant-btn"
+          className="w-full text-left p-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 border border-emerald-300 transition flex items-center justify-between group shadow-md cursor-pointer"
+        >
+          <div className="min-w-0">
+            <div className="text-xs font-black uppercase tracking-wide flex items-center gap-1.5 truncate">
+              <Flame size={14} className="shrink-0" />
+              <span className="truncate">Instant Admin Login (AI Studio · Pilot)</span>
+            </div>
+            <div className="text-[11px] font-mono text-slate-950/90 mt-0.5 truncate">
+              Ekta Meena • MASTER-ADMIN-01 • Global Control
+            </div>
           </div>
-          <div className="text-[11px] font-mono text-slate-950/90 mt-0.5 truncate">
-            Ekta Meena • MASTER-ADMIN-01 • Pilot Instant Access
-          </div>
-        </div>
-        <ArrowRight size={15} className="text-slate-950 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
-      </button>
+          <ArrowRight size={15} className="text-slate-950 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
+        </button>
+      )}
 
-      {/* Master Admin: Ekta Meena */}
+      {/* Role 1: Owner */}
       <button
         type="button"
-        onClick={handlePreFillMasterAdmin}
-        id="master-admin-prefill-btn"
-        className="w-full text-left p-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 border border-amber-400/80 transition flex items-center justify-between group shadow-sm cursor-pointer"
+        onClick={() => handlePreFillRoleAccount('OWNER-01', 'Owner@123', 'Marketplace Owner')}
+        className="w-full text-left p-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 border border-amber-300 transition flex items-center justify-between group shadow-sm cursor-pointer"
       >
         <div className="min-w-0">
           <div className="text-xs font-black uppercase tracking-wide flex items-center gap-1.5 truncate">
             <ShieldCheck size={14} className="shrink-0" />
-            <span className="truncate">Master Admin • Ekta Meena</span>
+            <span className="truncate">1. Owner • XPOKART Sovereign</span>
           </div>
           <div className="text-[11px] font-mono text-slate-900 mt-0.5 truncate">
-            MASTER-ADMIN-01 • ektamahenmeena@gmail.com
+            OWNER-01 • owner@xpokart.in
           </div>
         </div>
         <ArrowRight size={15} className="text-slate-950 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
       </button>
 
-      {/* Beat 2: Mahendra Kumar Meena */}
+      {/* Role 2: Master Admin */}
+      <button
+        type="button"
+        onClick={handlePreFillMasterAdmin}
+        id="master-admin-prefill-btn"
+        className="w-full text-left p-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-white border border-amber-400/50 transition flex items-center justify-between group shadow-sm cursor-pointer"
+      >
+        <div className="min-w-0">
+          <div className="text-xs font-black uppercase tracking-wide flex items-center gap-1.5 truncate">
+            <ShieldCheck size={14} className="text-amber-300 shrink-0" />
+            <span className="truncate">2. Master Admin • Ekta Meena</span>
+          </div>
+          <div className="text-[11px] font-mono text-amber-100 mt-0.5 truncate">
+            MASTER-ADMIN-01 • ektamahenmeena@gmail.com
+          </div>
+        </div>
+        <ArrowRight size={15} className="text-amber-300 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
+      </button>
+
+      {/* Role 3: Developer */}
+      <button
+        type="button"
+        onClick={() => handlePreFillRoleAccount('DEV-01', 'Dev@123', 'Lead Systems Developer')}
+        className="w-full text-left p-2.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/50 transition flex items-center justify-between group text-white cursor-pointer"
+      >
+        <div className="min-w-0">
+          <div className="text-xs font-bold text-sky-200 flex items-center gap-1.5 truncate">
+            <Code2 size={14} className="text-sky-300 shrink-0" />
+            <span className="truncate">3. Developer • API &amp; DB Sync Console</span>
+          </div>
+          <div className="text-[10px] font-mono text-sky-100/80 mt-0.5 truncate">
+            DEV-01 • dev@xpokart.in • Full Telemetry &amp; Catalog
+          </div>
+        </div>
+        <ArrowRight size={14} className="text-sky-300 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
+      </button>
+
+      {/* Role 4: Official Staff Beat 2 (Mahendra Kumar Meena) */}
       <button
         type="button"
         onClick={() => handlePreFillStaff('50457421')}
@@ -645,10 +731,10 @@ export default function LoginPage({
         <div className="min-w-0">
           <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5 truncate">
             <BadgeCheck size={14} className="text-emerald-400 shrink-0" />
-            <span className="truncate">Beat 2 Postman • Mahendra Kumar Meena</span>
+            <span className="truncate">4. Official Staff Beat 2 • Mahendra Kumar Meena</span>
           </div>
           <div className="text-[10px] font-mono text-slate-300 mt-0.5 truncate">
-            Emp ID: 50457421 • Dadabari S.O. (Delivery Execution Only)
+            Emp ID: 50457421 • Dadabari S.O. Beat 2
           </div>
         </div>
         <ArrowRight size={14} className="text-slate-300 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
@@ -658,36 +744,18 @@ export default function LoginPage({
       <button
         type="button"
         onClick={() => handlePreFillStaff('10310736')}
-        className="w-full text-left p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-amber-400/40 transition flex items-center justify-between group text-white cursor-pointer"
+        className="w-full text-left p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 transition flex items-center justify-between group text-white cursor-pointer"
       >
         <div className="min-w-0">
-          <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5 truncate">
-            <BadgeCheck size={14} className="text-amber-400 shrink-0" />
-            <span className="truncate">Beat 5 • Mohit Arvind (Mahaveer Nagar)</span>
+          <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5 truncate">
+            <BadgeCheck size={14} className="text-amber-300 shrink-0" />
+            <span className="truncate">Beat 5 Postman • Mohit Arvind</span>
           </div>
-          <div className="text-[10px] font-mono text-slate-200 mt-0.5 truncate">
-            Emp ID: 10310736 • Dadabari S.O.
-          </div>
-        </div>
-        <ArrowRight size={14} className="text-amber-300 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
-      </button>
-
-      {/* Beat 17: Priyanshu Trivedi */}
-      <button
-        type="button"
-        onClick={() => handlePreFillStaff('50507003')}
-        className="w-full text-left p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-sky-400/40 transition flex items-center justify-between group text-white cursor-pointer"
-      >
-        <div className="min-w-0">
-          <div className="text-xs font-bold text-sky-300 flex items-center gap-1.5 truncate">
-            <BadgeCheck size={14} className="text-sky-400 shrink-0" />
-            <span className="truncate">Beat 17 • Priyanshu Trivedi (Talwandi)</span>
-          </div>
-          <div className="text-[10px] font-mono text-slate-200 mt-0.5 truncate">
-            Emp ID: 50507003 • Dadabari S.O.
+          <div className="text-[10px] font-mono text-slate-300 mt-0.5 truncate">
+            Emp ID: 10310736 • Mahaveer Nagar
           </div>
         </div>
-        <ArrowRight size={14} className="text-sky-300 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
+        <ArrowRight size={14} className="text-slate-300 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
       </button>
     </div>
   );
@@ -715,10 +783,10 @@ export default function LoginPage({
             </div>
             <div className="min-w-0">
               <div className="text-[11px] font-bold text-amber-300 uppercase tracking-wider">
-                Xpeedo Last Mile • India Post Field OS
+                XPOKART • Sovereign B2B &amp; E-Commerce Marketplace
               </div>
               <h1 className="text-lg font-black text-white tracking-tight leading-tight truncate">
-                {authTier === 'STAFF' ? 'Xpeedo Last Mile — Staff Gate' : 'Xpeedo Last Mile — Citizen Portal'}
+                {authTier === 'STAFF' ? 'XPOKART — 5-Role Command Gate' : 'XPOKART — Citizen & Buyer Portal'}
               </h1>
             </div>
           </div>
@@ -726,13 +794,13 @@ export default function LoginPage({
           <div className="space-y-1">
             <h2 className="text-sm font-bold text-slate-100 leading-snug">
               {authTier === 'STAFF'
-                ? 'Directory-Verified Staff & Beat Operations Portal'
-                : '100% Sovereign Guarantee Citizen Portal'}
+                ? 'Owner, Master Admin, Developer & 34-Beat Staff Access'
+                : 'Sovereign Speed Post COD & Marketplace Buyer Portal'}
             </h2>
             <p className="text-xs text-red-100/80 leading-relaxed">
               {authTier === 'STAFF'
-                ? 'Authenticate using your Employee ID (CSI/GDS ID), Mobile, or Email. Staff password is your Employee ID or default Post@1234.'
-                : 'Access postal parcel tracking, Sukanya Samriddhi (SSA), PLI calculators, and doorstep pickup service.'}
+                ? 'Authenticate with Employee ID, Email, or Mobile (Dadabari S.O. 34 Beats). Staff default password: Post@1234.'
+                : 'Shop wholesale & retail stores across 34 Dadabari beats, track COD parcels, and earn ₹100/referral.'}
             </p>
           </div>
 
@@ -750,7 +818,7 @@ export default function LoginPage({
 
         {/* Footer info in left column */}
         <div className="pt-4 border-t border-red-700/40 text-[11px] text-red-200/80 flex items-center justify-between">
-          <span className="font-mono">PIN 324009 • Rajasthan Circle</span>
+          <span className="font-mono">Kota &amp; Baran · 13 Pincode Hubs</span>
           <button
             type="button"
             onClick={() => setShowArchModal(true)}
@@ -764,44 +832,46 @@ export default function LoginPage({
       {/* Right Column: Clean, High-Contrast Authentication Form (7 cols on lg) */}
       <div className="lg:col-span-7 p-5 sm:p-7 bg-white text-slate-900 flex flex-col justify-between">
         <div>
-          {/* Top Primary Tier Switcher: Citizen (Default/Primary) vs Official Staff */}
-          <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-xl mb-4 border border-slate-200">
-            <button
-              type="button"
-              onClick={() => {
-                clearMessages();
-                setAuthTier('CUSTOMER');
-              }}
-              className={`py-2 px-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer touch-target ${
-                authTier === 'CUSTOMER'
-                  ? 'bg-amber-500 text-slate-950 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Users size={14} />
-              <span>Citizen & Customer Portal</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                clearMessages();
-                setAuthTier('STAFF');
-              }}
-              className={`py-2 px-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer touch-target ${
-                authTier === 'STAFF'
-                  ? 'bg-red-800 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <KeyRound size={14} />
-              <span>Official Staff Gateway</span>
-            </button>
-          </div>
+          {/* Top Primary Tier Switcher: Shown only when retail customer services are active */}
+          {retailActive && (
+            <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-xl mb-4 border border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  clearMessages();
+                  setAuthTier('CUSTOMER');
+                }}
+                className={`py-2 px-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer touch-target ${
+                  authTier === 'CUSTOMER'
+                    ? 'bg-amber-500 text-slate-950 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Users size={14} />
+                <span>Citizen & Customer Portal</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  clearMessages();
+                  setAuthTier('STAFF');
+                }}
+                className={`py-2 px-2.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer touch-target ${
+                  authTier === 'STAFF'
+                    ? 'bg-red-800 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <KeyRound size={14} />
+                <span>Official Staff Gateway</span>
+              </button>
+            </div>
+          )}
 
           {/* ========================================================= */}
           {/* TIER 1: CITIZEN / CUSTOMER AUTHENTICATION FLOW            */}
           {/* ========================================================= */}
-          {authTier === 'CUSTOMER' && (
+          {retailActive && authTier === 'CUSTOMER' && (
             <div className="space-y-4">
               <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-950 space-y-1">
                 <div className="font-bold flex items-center justify-between">
@@ -923,17 +993,28 @@ export default function LoginPage({
 
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">
-                        Postal Pincode *
+                        Delivery Pincode Hub (13 Hubs) *
                       </label>
-                      <input
-                        type="text"
+                      <select
                         required
-                        maxLength={6}
                         value={custRegPincode}
-                        onChange={(e) => setCustRegPincode(e.target.value)}
-                        placeholder="324009"
+                        onChange={(e) => {
+                          const pin = e.target.value;
+                          setCustRegPincode(pin);
+                          const h = getPincodeHub(pin);
+                          setCustRegLocality(h.name);
+                        }}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white min-h-[42px]"
-                      />
+                      >
+                        {PINCODE_OFFICE_HUBS.map((h) => (
+                          <option key={h.pincode} value={h.pincode}>
+                            PIN {h.pincode} · {h.officeName}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="text-[10px] text-emerald-700 font-semibold mt-1 truncate">
+                        Stocking Hub: {getPincodeHub(custRegPincode).localStockingPartner}
+                      </div>
                     </div>
                   </div>
 
@@ -1027,6 +1108,22 @@ export default function LoginPage({
                           placeholder="e.g. 9829012345"
                           className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white min-h-[42px]"
                         />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Select Your Delivery Hub (13 Pincodes)
+                        </label>
+                        <select
+                          value={custRegPincode}
+                          onChange={(e) => setCustRegPincode(e.target.value)}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white min-h-[42px]"
+                        >
+                          {PINCODE_OFFICE_HUBS.map((h) => (
+                            <option key={h.pincode} value={h.pincode}>
+                              PIN {h.pincode} · {h.officeName} ({h.localStockingPartner})
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <button
                         type="submit"
@@ -1168,7 +1265,7 @@ export default function LoginPage({
               </div>
 
               {/* AI Studio Pilot Mode Quick Admin Access Strip */}
-              {mode === 'LOGIN' && (
+              {mode === 'LOGIN' && isAiStudioContext && (
                 <div className="mb-3 p-2.5 rounded-xl bg-amber-50 border border-amber-300 flex items-center justify-between gap-2">
                   <div className="text-[11px] text-amber-950 font-semibold leading-tight">
                     <span className="font-black">Pilot Mode (AI Studio):</span> Instant Super Admin bypass.
@@ -1205,10 +1302,12 @@ export default function LoginPage({
                 <form onSubmit={handlePasswordLogin} className="space-y-3">
                   <input type="hidden" name="csrf_token" value={csrfToken} />
 
-                  {/* Directory Quick-Picker for all 34+ Dadabari S.O. Employees (Direct Session Initialization) */}
+                  {/* Directory Quick-Picker: Direct instant login ONLY in AI Studio Pilot mode; otherwise pre-fills Employee ID */}
                   <div>
                     <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                      Quick Select Employee from Directory ({directoryStaffList.length} Staff · Instant Sign-In)
+                      {isAiStudioContext
+                        ? `Quick Select Employee from Directory (${directoryStaffList.length} Staff · Pilot Instant Sign-In)`
+                        : `Select Employee from Directory (${directoryStaffList.length} Staff · Password Required)`}
                     </label>
                     <select
                       value=""
@@ -1278,7 +1377,7 @@ export default function LoginPage({
                     <div className="flex items-center justify-between mb-1">
                       <label className="block text-xs font-bold text-slate-700">
                         {isMasterAdminIdentifier(identifier)
-                          ? 'Password (Optional for Master Admin)'
+                          ? 'Master Admin Password *'
                           : (
                             <>
                               Password (Emp ID or Default: <span className="font-mono text-red-700 font-bold">Post@1234</span>) *
@@ -1628,8 +1727,8 @@ export default function LoginPage({
 
         {/* Clean Footer Bar */}
         <div className="mt-4 pt-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
-          <div className="flex items-center gap-2">
-            <span>Xpeedo Last Mile • Dadabari S.O. • PIN 324009 · XPEEDO Private Limited</span>
+          <div className="flex flex-wrap items-center gap-3">
+            <span>XPOKART • Kota &amp; Baran Division · 13 Pincode Office Hubs</span>
             <button
               type="button"
               onClick={() => setShowArchModal(true)}
@@ -1638,6 +1737,12 @@ export default function LoginPage({
               <ShieldCheck size={12} />
               <span>RBAC Specs</span>
             </button>
+            <a
+              href="/brand-login"
+              className="text-blue-700 hover:text-blue-900 font-bold underline"
+            >
+              Brand Owner Login →
+            </a>
           </div>
           <span className="font-mono tabular-nums">Staff Pass: Emp ID / Post@1234</span>
         </div>

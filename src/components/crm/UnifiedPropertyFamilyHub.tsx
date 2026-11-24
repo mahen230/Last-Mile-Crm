@@ -1328,11 +1328,16 @@ function runPropertyDeduplicationAudit(records: UnifiedPropertyRecord[]): {
   return { cleaned, removedCount, mergedMembersCount };
 }
 
-export default function UnifiedPropertyFamilyHub() {
+export default function UnifiedPropertyFamilyHub({
+  indiaPostOwnerAccess = false,
+}: {
+  indiaPostOwnerAccess?: boolean;
+} = {}) {
   const navigate = useNavigate();
   const { userProfile } = useAuth();
-  const isAdmin = staffPermissionService.isSuperAdmin(userProfile);
-  const isRestrictedStaff = staffPermissionService.isPostmanOrGds(userProfile);
+  const isAdmin =
+    staffPermissionService.isSuperAdmin(userProfile) || Boolean(indiaPostOwnerAccess);
+  const isRestrictedStaff = !indiaPostOwnerAccess && staffPermissionService.isPostmanOrGds(userProfile);
   const HUB_PAGE_SIZE = 5;
 
   // Master Property List with deep consolidation & automatic duplicate clean-up audit
@@ -2147,7 +2152,7 @@ export default function UnifiedPropertyFamilyHub() {
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-bold tracking-wider uppercase border border-blue-400/30">
               <ShieldCheck size={14} className="text-cyan-400" />
-              <span>Xpeedo Last Mile • Dadabari S.O. • PIN 324009</span>
+              <span>India Post Vendor System • Dadabari S.O. • PIN 324009</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
               Unified Property & Family Master Hub

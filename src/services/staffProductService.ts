@@ -1,9 +1,43 @@
-import { StaffProductItem, StaffProductVertical, StaffSalesRights } from '../types/models';
+import {
+  BusinessServiceCategory,
+  ProductListingStatus,
+  ProductSourceType,
+  StaffProductItem,
+  StaffProductVertical,
+  StaffSalesRights,
+  CommercialStoreCategory,
+  CommercialStoreRecord,
+  StaffProfile,
+  StoreEntityType,
+  StoreServiceabilityResult,
+} from '../types/models';
+import { commercialPropertyService } from './commercialPropertyService';
+import { featureVisibilityService } from './featureVisibilityService';
 import imgLogistics from '../assets/images/store_logistics_courier_1794731362561.jpg';
+import imgB2bCodLogistics from '../assets/images/prod_b2b_cod_logistics_1794734840043.jpg';
 import imgBanking from '../assets/images/store_banking_finance_1794731363192.jpg';
+import imgIppbMerchantQr from '../assets/images/prod_ippb_merchant_qr_1794734841471.jpg';
 import imgDigitalDocs from '../assets/images/store_digital_documents_1794731363970.jpg';
+import imgJeevanPramaan from '../assets/images/prod_jeevan_pramaan_dlc_1794734841567.jpg';
+import imgMyStamp from '../assets/images/prod_mystamp_philately_1794734841690.jpg';
+import imgGangajal from '../assets/images/prod_gangajal_sacred_1794734840915.jpg';
 import imgAcademy from '../assets/images/store_academy_courses_1794731365263.jpg';
 import imgHandloom from '../assets/images/store_kota_handloom_1794731364865.jpg';
+import imgB2bKirana from '../assets/images/prod_b2b_kirana_wholesale_1794734842973.jpg';
+import imgB2bPharma from '../assets/images/prod_b2b_pharma_wellness_1794734843342.jpg';
+import imgB2bCoaching from '../assets/images/prod_b2b_stationery_coaching_1794734844056.jpg';
+import imgBrandQsrPizza from '../assets/images/brand_qsr_pizza_1794743632250.jpg';
+import imgBrandSupermarket from '../assets/images/brand_supermarket_mart_1794743632575.jpg';
+import imgBrandApparel from '../assets/images/brand_apparel_fashion_1794743634256.jpg';
+import imgBrandElectronics from '../assets/images/brand_electronics_hub_1794743634422.jpg';
+import imgBrandFootwear from '../assets/images/brand_footwear_sports_1794747058446.jpg';
+import imgBrandHomeGadgets from '../assets/images/brand_home_gadgets_1794747072023.jpg';
+import imgEvScooter from '../assets/images/ev_scooter_mobility_1794822882283.jpg';
+import imgEvBattery from '../assets/images/ev_lithium_battery_1794822883055.jpg';
+import imgEvCharger from '../assets/images/ev_fast_charger_1794822883729.jpg';
+import imgEvAccessories from '../assets/images/ev_accessories_kit_1794822883888.jpg';
+import imgBakeryDairy from '../assets/images/local_bakery_dairy_1794822884061.jpg';
+import imgLaundryEvent from '../assets/images/laundry_event_kit_1794822884997.jpg';
 
 const STORAGE_KEY = 'xpeedo_staff_storefront_products_v1';
 const RIGHTS_STORAGE_KEY = 'xpeedo_staff_sales_rights_v1';
@@ -27,15 +61,292 @@ export const DEFAULT_VERTICAL_THUMBNAILS: Record<StaffProductVertical, string> =
   'Custom Staff / Partner Products': imgHandloom,
 };
 
-function sanitizeProductThumbnail(product: StaffProductItem): StaffProductItem {
-  const thumb = product.thumbnailUrl || '';
-  if (!thumb || thumb.includes('unsplash.com') || thumb.includes('picsum.photos') || thumb.includes('placeholder.com')) {
-    return {
-      ...product,
-      thumbnailUrl: DEFAULT_VERTICAL_THUMBNAILS[product.vertical] || imgLogistics,
-    };
+// Map every seed ID to its unique bespoke thumbnail so cached localStorage records auto-upgrade cleanly
+const SEED_UNIQUE_THUMBNAILS: Record<string, string> = {
+  'PROD-LOG-001': imgLogistics,
+  'PROD-LOG-006': imgB2bCodLogistics,
+  'PROD-BNK-002': imgBanking,
+  'PROD-IPPB-MERCHANT-QR': imgIppbMerchantQr,
+  'PROD-DOC-003': imgDigitalDocs,
+  'PROD-DOC-007': imgJeevanPramaan,
+  'PROD-COMM-MYSTAMP': imgMyStamp,
+  'PROD-COMM-GANGAJAL': imgGangajal,
+  'PROD-EDU-004': imgAcademy,
+  'PROD-CUST-005': imgHandloom,
+  'PROD-B2B-KIRANA-01': imgB2bKirana,
+  'PROD-B2B-PHARMA-02': imgB2bPharma,
+  'PROD-B2B-COACHING-03': imgB2bCoaching,
+  'PROD-BRAND-DOMINOS-01': imgBrandQsrPizza,
+  'PROD-BRAND-SMART-02': imgBrandSupermarket,
+  'PROD-BRAND-DIGITAL-03': imgBrandElectronics,
+  'PROD-BRAND-SOLLY-04': imgBrandApparel,
+  'PROD-BRAND-KFC-05': imgBrandQsrPizza,
+  'PROD-BRAND-MCD-06': imgBrandQsrPizza,
+  'PROD-XPEEDO-EV-SCOOTER': imgEvScooter,
+  'PROD-XPEEDO-EV-BATTERY': imgEvBattery,
+  'PROD-XPEEDO-EV-CHARGER': imgEvCharger,
+  'PROD-XPEEDO-EV-ACCESSORIES': imgEvAccessories,
+  'PROD-LOCAL-BAKERY-01': imgBakeryDairy,
+  'PROD-LOCAL-LAUNDRY-02': imgLaundryEvent,
+};
+
+const SEED_EXTRA_ECONOMICS: Record<
+  string,
+  Pick<
+    StaffProductItem,
+    | 'mrpPrice'
+    | 'sellingMarginAmount'
+    | 'sellingMarginPercent'
+    | 'codEligible'
+    | 'speedPostCharge'
+    | 'vendorName'
+    | 'vendorCategory'
+    | 'beatManagerId'
+    | 'beatManagerName'
+  >
+> = {
+  'PROD-LOG-001': {
+    mrpPrice: 180,
+    sellingMarginAmount: 24,
+    sellingMarginPercent: 16,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Dadabari S.O. Speed Post Hub',
+    vendorCategory: 'Official India Post',
+    beatManagerId: 'MASTER-ADMIN-01',
+    beatManagerName: 'Ekta Meena · Division Head',
+  },
+  'PROD-LOG-006': {
+    mrpPrice: 120,
+    sellingMarginAmount: 18,
+    sellingMarginPercent: 19,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Kota B2B BNPL Parcel Desk',
+    vendorCategory: 'Wholesale',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+  },
+  'PROD-BNK-002': {
+    mrpPrice: 0,
+    sellingMarginAmount: 50,
+    sellingMarginPercent: 100,
+    codEligible: false,
+    speedPostCharge: 0,
+    vendorName: 'India Post Payments Bank (IPPB)',
+    vendorCategory: 'Official India Post',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+  },
+  'PROD-IPPB-MERCHANT-QR': {
+    mrpPrice: 0,
+    sellingMarginAmount: 75,
+    sellingMarginPercent: 100,
+    codEligible: false,
+    speedPostCharge: 0,
+    vendorName: 'IPPB Merchant Soundbox & QR Network',
+    vendorCategory: 'Services',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+  },
+  'PROD-DOC-003': {
+    mrpPrice: 50,
+    sellingMarginAmount: 15,
+    sellingMarginPercent: 30,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Dadabari CELC Mobile Aadhaar Unit',
+    vendorCategory: 'Official India Post',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+  },
+  'PROD-DOC-007': {
+    mrpPrice: 70,
+    sellingMarginAmount: 25,
+    sellingMarginPercent: 36,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Jeevan Pramaan Biometric Kendra',
+    vendorCategory: 'Official India Post',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+  },
+  'PROD-COMM-MYSTAMP': {
+    mrpPrice: 350,
+    sellingMarginAmount: 45,
+    sellingMarginPercent: 15,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Kota Philatelic & MyStamp Bureau',
+    vendorCategory: 'Official India Post',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+  },
+  'PROD-COMM-GANGAJAL': {
+    mrpPrice: 35,
+    sellingMarginAmount: 6,
+    sellingMarginPercent: 20,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Gangotri Sovereign Retail Counter',
+    vendorCategory: 'Official India Post',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+  },
+  'PROD-EDU-004': {
+    mrpPrice: 1499,
+    sellingMarginAmount: 200,
+    sellingMarginPercent: 20,
+    codEligible: false,
+    speedPostCharge: 0,
+    vendorName: 'XPOKART Postal Skill Academy',
+    vendorCategory: 'Services',
+    beatManagerId: 'MASTER-ADMIN-01',
+    beatManagerName: 'Ekta Meena · Division Head',
+  },
+  'PROD-CUST-005': {
+    mrpPrice: 1850,
+    sellingMarginAmount: 240,
+    sellingMarginPercent: 16,
+    codEligible: true,
+    speedPostCharge: 40,
+    vendorName: 'Hadoti Weavers & Handloom Co-op',
+    vendorCategory: 'Retail',
+    beatManagerId: '10310736',
+    beatManagerName: 'Mohit Arvind · Beat 5',
+  },
+  'PROD-B2B-KIRANA-01': {
+    mrpPrice: 720,
+    sellingMarginAmount: 98,
+    sellingMarginPercent: 17,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Agrawal Heritage Masala & Ration Hub',
+    vendorCategory: 'Wholesale',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+  },
+  'PROD-B2B-PHARMA-02': {
+    mrpPrice: 540,
+    sellingMarginAmount: 76,
+    sellingMarginPercent: 18,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Keshavpura Swasthya Ayurveda & Care',
+    vendorCategory: 'Retail',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+  },
+  'PROD-B2B-COACHING-03': {
+    mrpPrice: 899,
+    sellingMarginAmount: 130,
+    sellingMarginPercent: 20,
+    codEligible: true,
+    speedPostCharge: 35,
+    vendorName: 'Kota Scholar Books & Parcel Depot',
+    vendorCategory: 'Wholesale',
+    beatManagerId: '10310736',
+    beatManagerName: 'Mohit Arvind · Beat 5',
+  },
+};
+
+export function inferServiceCategory(product: Partial<StaffProductItem>): BusinessServiceCategory {
+  if (product.serviceCategory) return product.serviceCategory as BusinessServiceCategory;
+  const text = `${product.title || ''} ${product.vertical || ''} ${product.brandCategoryTag || ''} ${product.vendorCategory || ''} ${product.description || ''}`.toLowerCase();
+  if (text.includes('ev') || text.includes('scooter') || text.includes('battery') || text.includes('charger')) {
+    return 'EV Mobility & Batteries';
   }
-  return product;
+  if (text.includes('software') || text.includes('crm') || text.includes('whatsapp api') || text.includes('saas') || text.includes('lovable') || text.includes('n8n') || text.includes('tally') || text.includes('ai video')) {
+    return 'Software, CRMs & AI SaaS';
+  }
+  if (text.includes('solar') || text.includes('inverter')) return 'Solar & Clean Energy';
+  if (text.includes('tour') || text.includes('travel') || text.includes('fleet')) return 'Travel, Tours & Fleet';
+  if (text.includes('ippb') || text.includes('pli') || text.includes('rpli') || text.includes('bank') || text.includes('insurance') || text.includes('savings')) {
+    return 'Banking, PLI & Insurance';
+  }
+  if (text.includes('pharma') || text.includes('health') || text.includes('medical') || text.includes('clinic')) {
+    return 'Healthcare & Wellness';
+  }
+  if (text.includes('emitra') || text.includes('csc') || text.includes('jeevan') || text.includes('digital') || text.includes('document') || text.includes('mystamp') || text.includes('gangajal')) {
+    return 'eMitra & Digital Services';
+  }
+  if (text.includes('speed post') || text.includes('parcel') || text.includes('courier') || text.includes('logistics')) {
+    return 'Postal & Last-Mile Logistics';
+  }
+  return 'Hyperlocal Retail & FMCG';
+}
+
+export function inferSourceOwnership(product: Partial<StaffProductItem>): ProductSourceType {
+  if (product.sourceOwnership) return product.sourceOwnership;
+  const vendor = (product.vendorName || product.vendorCategory || '').toLowerCase();
+  const id = (product.id || '').toUpperCase();
+  if (
+    product.commercialStoreId === 'HOUSE-XPEEDO-XPOKART-324009' ||
+    id.startsWith('PROD-XPEEDO-') ||
+    id.startsWith('PROD-LOG-') ||
+    id.startsWith('PROD-BNK-') ||
+    id.startsWith('PROD-IPPB-') ||
+    id.startsWith('PROD-DOC-') ||
+    id.startsWith('PROD-COMM-') ||
+    id.startsWith('PROD-EDU-') ||
+    vendor.includes('xpeedo') ||
+    vendor.includes('xpokart') ||
+    vendor.includes('official india post')
+  ) {
+    return 'COMPANY_HOUSE';
+  }
+  return 'VENDOR_PARTNER';
+}
+
+function sanitizeProductThumbnail(product: StaffProductItem): StaffProductItem {
+  const uniqueSeedThumb = SEED_UNIQUE_THUMBNAILS[product.id];
+  const seedEcon = SEED_EXTRA_ECONOMICS[product.id];
+  const thumb = product.thumbnailUrl || '';
+
+  const needsImageUpgrade =
+    Boolean(uniqueSeedThumb) ||
+    !thumb ||
+    thumb.includes('unsplash.com') ||
+    thumb.includes('picsum.photos') ||
+    thumb.includes('placeholder.com');
+
+  const marginAmount = product.sellingMarginAmount ?? seedEcon?.sellingMarginAmount;
+  const computedWholesale =
+    product.wholesalePrice ??
+    (product.price > 0
+      ? Math.max(0, marginAmount ? product.price - marginAmount : Math.round(product.price * 0.85))
+      : 0);
+
+  const sourceOwnership = inferSourceOwnership(product);
+  const serviceCategory = inferServiceCategory(product);
+  const listingStatus: ProductListingStatus =
+    product.listingStatus ||
+    (product.status === 'HIDDEN' ? 'Paused' : 'Active');
+
+  return {
+    ...(seedEcon || {}),
+    ...product,
+    thumbnailUrl: uniqueSeedThumb
+      ? uniqueSeedThumb
+      : needsImageUpgrade
+      ? DEFAULT_VERTICAL_THUMBNAILS[product.vertical] || imgLogistics
+      : thumb,
+    codEligible: product.codEligible ?? seedEcon?.codEligible ?? product.productType === 'Physical Item',
+    wholesalePrice: computedWholesale,
+    sellingMarginAmount: marginAmount,
+    sellingMarginPercent: product.sellingMarginPercent ?? seedEcon?.sellingMarginPercent,
+    mrpPrice: product.mrpPrice ?? seedEcon?.mrpPrice,
+    vendorName: product.vendorName || seedEcon?.vendorName || product.staffName,
+    beatManagerName: product.beatManagerName || seedEcon?.beatManagerName || product.staffName,
+    sourceOwnership,
+    serviceCategory,
+    listingStatus,
+    stockQuantity: product.stockQuantity ?? (product.productType === 'Physical Item' ? 25 : 999),
+    linkedOfficeName: product.linkedOfficeName || product.subOffice || 'Dadabari S.O.',
+    ippbSettlementRef:
+      product.ippbSettlementRef ||
+      `IPPB-${product.pincode || '324009'}-${(product.beatNumber || 'B2').replace(/\s+/g, '').toUpperCase()}`,
+  };
 }
 
 const DEFAULT_STOREFRONT_PRODUCTS: StaffProductItem[] = [
@@ -47,7 +358,16 @@ const DEFAULT_STOREFRONT_PRODUCTS: StaffProductItem[] = [
     pricingModel: 'Fixed Price',
     productType: 'Service',
     price: 150,
-    commissionRate: '15% Partner Commission',
+    mrpPrice: 180,
+    commissionRate: '16% Partner Commission',
+    sellingMarginAmount: 24,
+    sellingMarginPercent: 16,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Dadabari S.O. Speed Post Hub',
+    vendorCategory: 'Official India Post',
+    beatManagerId: 'MASTER-ADMIN-01',
+    beatManagerName: 'Ekta Meena · Division Head',
     description:
       'Doorstep pickup and insured express delivery across India through India Post network with live SMS and WhatsApp tracking.',
     features: [
@@ -80,7 +400,16 @@ const DEFAULT_STOREFRONT_PRODUCTS: StaffProductItem[] = [
     pricingModel: 'Commission-based',
     productType: 'Service',
     price: 95,
-    commissionRate: '12% Volume Margin',
+    mrpPrice: 120,
+    commissionRate: '19% Beat Margin · COD Remittance',
+    sellingMarginAmount: 18,
+    sellingMarginPercent: 19,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Kota B2B BNPL Parcel Desk',
+    vendorCategory: 'Wholesale',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
     description:
       'Dedicated bulk parcel booking for Kota coaching centers, medical stores, and local merchants with Cash-on-Delivery remittance.',
     features: [
@@ -89,7 +418,7 @@ const DEFAULT_STOREFRONT_PRODUCTS: StaffProductItem[] = [
       'Pin-to-Pin 1.65L+ Post Office Reach',
       'Dedicated Beat Postman Account Manager',
     ],
-    thumbnailUrl: imgLogistics,
+    thumbnailUrl: imgB2bCodLogistics,
     staffId: 'MASTER-ADMIN-01',
     staffName: 'Ekta Meena (Super Admin)',
     staffMobile: '9414170563',
@@ -113,7 +442,16 @@ const DEFAULT_STOREFRONT_PRODUCTS: StaffProductItem[] = [
     pricingModel: 'Free Service',
     productType: 'Service',
     price: 0,
-    commissionRate: '₹50 per activated account',
+    mrpPrice: 0,
+    commissionRate: '₹50 Direct Partner Activation Incentive',
+    sellingMarginAmount: 50,
+    sellingMarginPercent: 100,
+    codEligible: false,
+    speedPostCharge: 0,
+    vendorName: 'India Post Payments Bank (IPPB)',
+    vendorCategory: 'Official India Post',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
     description:
       'Instant paperless account opening at your doorstep with biometric e-KYC and Aadhaar Enabled Payment System (AePS) cash withdrawal.',
     features: [
@@ -139,6 +477,48 @@ const DEFAULT_STOREFRONT_PRODUCTS: StaffProductItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
+    id: 'PROD-IPPB-MERCHANT-QR',
+    sku: 'IPPB-QR-KHATA-KIT',
+    title: 'IPPB Merchant QR Standee & Digital Khata Kit',
+    vertical: 'Banking & Finance',
+    pricingModel: 'Free Service',
+    productType: 'Service',
+    price: 0,
+    mrpPrice: 0,
+    commissionRate: '₹75 Merchant Onboarding Margin',
+    sellingMarginAmount: 75,
+    sellingMarginPercent: 100,
+    codEligible: false,
+    speedPostCharge: 0,
+    vendorName: 'IPPB Merchant Soundbox & QR Network',
+    vendorCategory: 'Services',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+    description:
+      'Zero-fee UPI QR Soundbox/Standee onboarding for Dadabari S.O. commercial shops & clinics with instant IPPB settlement and Speed Post COD collection sync.',
+    features: [
+      'Zero MDR on UPI Payments to Bank',
+      'Instant Doorstep KYC & QR Activation',
+      'Linked with XPOKART Speed Post COD Ledger',
+      'Dedicated Beat 2 & Dadabari S.O. Desk Support',
+    ],
+    thumbnailUrl: imgIppbMerchantQr,
+    staffId: '50457421',
+    staffName: 'Mahendra Kumar Meena (Postman Beat 2)',
+    staffMobile: '8769706002',
+    whatsappNumber: '918769706002',
+    beatNumber: 'Beat 2',
+    subOffice: 'Dadabari S.O.',
+    pincode: '324009',
+    status: 'FEATURED',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'Doorstep Service Pickup',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
     id: 'PROD-DOC-003',
     sku: 'CHILD-AADHAAR-CELC',
     title: 'Child Aadhaar Biometric Enrolment (0–5 Years) at Home',
@@ -146,7 +526,16 @@ const DEFAULT_STOREFRONT_PRODUCTS: StaffProductItem[] = [
     pricingModel: 'Fixed Price',
     productType: 'Service',
     price: 50,
-    commissionRate: 'Official Postal Service',
+    mrpPrice: 50,
+    commissionRate: '₹15 Postman Doorstep Margin',
+    sellingMarginAmount: 15,
+    sellingMarginPercent: 30,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Dadabari CELC Mobile Aadhaar Unit',
+    vendorCategory: 'Official India Post',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
     description:
       'Special Child Enrolment Lite Client (CELC) mobile kit brought directly to your residence by authorized Dadabari S.O. postal staff.',
     features: [
@@ -179,7 +568,16 @@ const DEFAULT_STOREFRONT_PRODUCTS: StaffProductItem[] = [
     pricingModel: 'Fixed Price',
     productType: 'Service',
     price: 70,
-    commissionRate: '₹20 Delivery Partner Incentive',
+    mrpPrice: 70,
+    commissionRate: '₹25 Partner Doorstep Incentive',
+    sellingMarginAmount: 25,
+    sellingMarginPercent: 36,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Jeevan Pramaan Biometric Kendra',
+    vendorCategory: 'Official India Post',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
     description:
       'Senior citizens can submit annual Digital Life Certificate from home via Postman biometric fingerprint verification with instant SMS receipt.',
     features: [
@@ -188,7 +586,7 @@ const DEFAULT_STOREFRONT_PRODUCTS: StaffProductItem[] = [
       'Direct Submission to Pension Disbursing Bank',
       'Printed & WhatsApp Acknowledgement Receipt',
     ],
-    thumbnailUrl: imgDigitalDocs,
+    thumbnailUrl: imgJeevanPramaan,
     staffId: 'MASTER-ADMIN-01',
     staffName: 'Ekta Meena (Super Admin)',
     staffMobile: '9414170563',
@@ -205,6 +603,90 @@ const DEFAULT_STOREFRONT_PRODUCTS: StaffProductItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
+    id: 'PROD-COMM-MYSTAMP',
+    sku: 'POST-MYSTAMP-300',
+    title: 'My Stamp Personalized Photo Postage Sheet (12 Stamps)',
+    vertical: 'Documents & Digital Services',
+    pricingModel: 'Fixed Price',
+    productType: 'Physical Item',
+    price: 300,
+    mrpPrice: 350,
+    commissionRate: '₹45 Philately Partner Margin (15%)',
+    sellingMarginAmount: 45,
+    sellingMarginPercent: 15,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Kota Philatelic & MyStamp Bureau',
+    vendorCategory: 'Official India Post',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+    description:
+      'Custom-printed valid India Post postage stamps featuring your family photo, wedding portrait, or business logo — valid for all domestic Speed Post & Registered letters.',
+    features: [
+      'Sheet of 12 Valid ₹5 Postage Stamps',
+      'Same-Day Photo Design Approval on WhatsApp',
+      'Official Dadabari S.O. Philately Print',
+      'Doorstep Delivery via Speed Post COD',
+    ],
+    thumbnailUrl: imgMyStamp,
+    staffId: '50457421',
+    staffName: 'Mahendra Kumar Meena (Postman Beat 2)',
+    staffMobile: '8769706002',
+    whatsappNumber: '918769706002',
+    beatNumber: 'Beat 2',
+    subOffice: 'Dadabari S.O.',
+    pincode: '324009',
+    status: 'FEATURED',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'Speed Post COD',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'PROD-COMM-GANGAJAL',
+    sku: 'POST-GANGAJAL-250ML',
+    title: 'Sacred Sovereign Gangajal Bottle (250 ml · Gangotri Sealed)',
+    vertical: 'Custom Staff / Partner Products',
+    pricingModel: 'Fixed Price',
+    productType: 'Physical Item',
+    price: 30,
+    mrpPrice: 35,
+    commissionRate: '₹6 Beat Margin (20%) · Bulk Pack Eligible',
+    sellingMarginAmount: 6,
+    sellingMarginPercent: 20,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Gangotri Sovereign Retail Counter',
+    vendorCategory: 'Official India Post',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+    description:
+      'Pure, untouched Gangotri Gangajal sealed at source and distributed across Dadabari S.O. beats at official subsidized counter price with doorstep Speed Post delivery.',
+    features: [
+      '250ml Tamper-Proof Official Postal Pack',
+      'Subsidized ₹30 Counter Price',
+      'Bulk Pooja / Temple Orders Available',
+      'Instant Doorstep Delivery via Beat Postman',
+    ],
+    thumbnailUrl: imgGangajal,
+    staffId: '50457421',
+    staffName: 'Mahendra Kumar Meena (Postman Beat 2)',
+    staffMobile: '8769706002',
+    whatsappNumber: '918769706002',
+    beatNumber: 'Beat 2',
+    subOffice: 'Dadabari S.O.',
+    pincode: '324009',
+    status: 'FEATURED',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'Speed Post COD',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
     id: 'PROD-EDU-004',
     sku: 'LDCE-POSTAL-EXAM-PRO',
     title: 'Postal LDCE / Inspector / PA Exam Masterclass & Test Series',
@@ -212,7 +694,16 @@ const DEFAULT_STOREFRONT_PRODUCTS: StaffProductItem[] = [
     pricingModel: 'Subscription',
     productType: 'Digital Download',
     price: 999,
-    commissionRate: '20% Referral Commission',
+    mrpPrice: 1499,
+    commissionRate: '20% Referral Margin (₹200/Enrolment)',
+    sellingMarginAmount: 200,
+    sellingMarginPercent: 20,
+    codEligible: false,
+    speedPostCharge: 0,
+    vendorName: 'XPOKART Postal Skill Academy',
+    vendorCategory: 'Services',
+    beatManagerId: 'MASTER-ADMIN-01',
+    beatManagerName: 'Ekta Meena · Division Head',
     description:
       'Comprehensive preparation portal with previous years question papers, mock tests, postal manual vol rules, and video tutorials.',
     features: [
@@ -233,7 +724,7 @@ const DEFAULT_STOREFRONT_PRODUCTS: StaffProductItem[] = [
     isGlobalAdminItem: true,
     assignedBeats: ['All Beats'],
     freshnessStatus: 'FRESH_ACTIVE',
-    logisticsServiceType: 'Xpeedo Local Parcel',
+    logisticsServiceType: 'XPOKART Local Parcel',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -245,7 +736,16 @@ const DEFAULT_STOREFRONT_PRODUCTS: StaffProductItem[] = [
     pricingModel: 'Fixed Price',
     productType: 'Physical Item',
     price: 1499,
-    commissionRate: 'Direct Local Artisan Support',
+    mrpPrice: 1850,
+    commissionRate: '₹240 Beat Partner Margin (16%)',
+    sellingMarginAmount: 240,
+    sellingMarginPercent: 16,
+    codEligible: true,
+    speedPostCharge: 40,
+    vendorName: 'Hadoti Weavers & Handloom Co-op',
+    vendorCategory: 'Retail',
+    beatManagerId: '10310736',
+    beatManagerName: 'Mohit Arvind · Beat 5',
     description:
       'Handcrafted authentic Kota Doria sarees and traditional brass artifacts sourced directly from weavers in Kota and surrounding artisan clusters.',
     features: [
@@ -271,56 +771,32 @@ const DEFAULT_STOREFRONT_PRODUCTS: StaffProductItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'PROD-COMM-MYSTAMP',
-    sku: 'POST-MYSTAMP-300',
-    title: 'My Stamp Personalized Photo Postage Sheet (12 Stamps)',
-    vertical: 'Documents & Digital Services',
-    pricingModel: 'Fixed Price',
-    productType: 'Physical Item',
-    price: 300,
-    commissionRate: 'Official India Post Philately Product',
-    description:
-      'Custom-printed valid India Post postage stamps featuring your family photo, wedding portrait, or business logo — valid for all domestic Speed Post & Registered letters.',
-    features: [
-      'Sheet of 12 Valid ₹5 Postage Stamps',
-      'Same-Day Photo Design Approval on WhatsApp',
-      'Official Dadabari S.O. Philately Print',
-      'Doorstep Delivery via Speed Post COD',
-    ],
-    thumbnailUrl: imgDigitalDocs,
-    staffId: '50457421',
-    staffName: 'Mahendra Kumar Meena (Postman Beat 2)',
-    staffMobile: '8769706002',
-    whatsappNumber: '918769706002',
-    beatNumber: 'Beat 2',
-    subOffice: 'Dadabari S.O.',
-    pincode: '324009',
-    status: 'FEATURED',
-    isGlobalAdminItem: true,
-    assignedBeats: ['All Beats'],
-    freshnessStatus: 'FRESH_ACTIVE',
-    logisticsServiceType: 'Speed Post COD',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'PROD-COMM-GANGAJAL',
-    sku: 'POST-GANGAJAL-250ML',
-    title: 'Sacred Sovereign Gangajal Bottle (250 ml · Gangotri Sealed)',
+    id: 'PROD-B2B-KIRANA-01',
+    sku: 'B2B-KOTA-SPICES-580',
+    title: 'Dadabari Heritage Masala & Organic Pulses Family Crate',
     vertical: 'Custom Staff / Partner Products',
     pricingModel: 'Fixed Price',
     productType: 'Physical Item',
-    price: 30,
-    commissionRate: 'Official Postal Retail Product',
+    price: 580,
+    mrpPrice: 720,
+    commissionRate: '₹98 Direct Beat Profit (17%)',
+    sellingMarginAmount: 98,
+    sellingMarginPercent: 17,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Agrawal Heritage Masala & Ration Hub',
+    vendorCategory: 'Wholesale',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
     description:
-      'Pure, untouched Gangotri Gangajal sealed at source and distributed across Dadabari S.O. beats at official subsidized counter price with doorstep Speed Post delivery.',
+      'Stone-ground Hadoti spices, cold-pressed mustard oil, and organic dal bundle packed hygienically by verified Keshavpura Sector 7 merchants with same-day Speed Post COD delivery.',
     features: [
-      '250ml Tamper-Proof Official Postal Pack',
-      'Subsidized ₹30 Counter Price',
-      'Bulk Pooja / Temple Orders Available',
-      'Instant Doorstep Delivery via Beat Postman',
+      'Direct Wholesale Margin for Beat Partners',
+      'Same-Day Speed Post COD Doorstep Fulfillment',
+      '4-Factor Verified Dadabari Wholesale Store',
+      'IPPB QR Instant Settlement on Delivery',
     ],
-    thumbnailUrl: imgHandloom,
+    thumbnailUrl: imgB2bKirana,
     staffId: '50457421',
     staffName: 'Mahendra Kumar Meena (Postman Beat 2)',
     staffMobile: '8769706002',
@@ -337,23 +813,125 @@ const DEFAULT_STOREFRONT_PRODUCTS: StaffProductItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'PROD-IPPB-MERCHANT-QR',
-    sku: 'IPPB-QR-KHATA-KIT',
-    title: 'IPPB Merchant QR Standee & Digital Khata Kit',
-    vertical: 'Banking & Finance',
-    pricingModel: 'Free Service',
-    productType: 'Service',
-    price: 0,
-    commissionRate: 'Zero MDR Merchant Settlement',
+    id: 'PROD-B2B-PHARMA-02',
+    sku: 'B2B-WELLNESS-KIT-420',
+    title: 'Swasthya Ayurveda Immunity & Family Wellness Express Box',
+    vertical: 'Custom Staff / Partner Products',
+    pricingModel: 'Fixed Price',
+    productType: 'Physical Item',
+    price: 420,
+    mrpPrice: 540,
+    commissionRate: '₹76 Beat Margin (18%) · Seal-Packed',
+    sellingMarginAmount: 76,
+    sellingMarginPercent: 18,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Keshavpura Swasthya Ayurveda & Care',
+    vendorCategory: 'Retail',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
     description:
-      'Zero-fee UPI QR Soundbox/Standee onboarding for Dadabari S.O. commercial shops & clinics with instant IPPB settlement and Speed Post COD collection sync.',
+      'Tamper-evident wellness & herbal immunity combo sourced from verified Dadabari pharmacies for senior citizens and families with priority Beat delivery.',
     features: [
-      'Zero MDR on UPI Payments to Bank',
-      'Instant Doorstep KYC & QR Activation',
-      'Linked with Xpeedo Speed Post COD Ledger',
-      'Dedicated Beat 2 & Dadabari S.O. Desk Support',
+      'Sterile Sealed Parcel Delivery Pouch',
+      'Verified Local Apothecary Inventory',
+      'No Extra Convenience Charge on COD',
+      '18% Partner Entrepreneurship Margin',
     ],
-    thumbnailUrl: imgBanking,
+    thumbnailUrl: imgB2bPharma,
+    staffId: '50457421',
+    staffName: 'Mahendra Kumar Meena (Postman Beat 2)',
+    staffMobile: '8769706002',
+    whatsappNumber: '918769706002',
+    beatNumber: 'Beat 2',
+    subOffice: 'Dadabari S.O.',
+    pincode: '324009',
+    status: 'ACTIVE',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'Speed Post COD',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'PROD-B2B-COACHING-03',
+    sku: 'B2B-KOTA-STUDY-650',
+    title: 'Kota Academic Hostel Study Module & Mock Test Dispatch Pack',
+    vertical: 'Custom Staff / Partner Products',
+    pricingModel: 'Fixed Price',
+    productType: 'Physical Item',
+    price: 650,
+    mrpPrice: 899,
+    commissionRate: '₹130 B2B Partner Profit (20%)',
+    sellingMarginAmount: 130,
+    sellingMarginPercent: 20,
+    codEligible: true,
+    speedPostCharge: 35,
+    vendorName: 'Kota Scholar Books & Parcel Depot',
+    vendorCategory: 'Wholesale',
+    beatManagerId: '10310736',
+    beatManagerName: 'Mohit Arvind · Beat 5',
+    description:
+      'Spiral study binders, formula handbooks, and bundled parcel dispatch kit for Kota coaching students & hostels delivered nationwide via India Post Book Packet & Speed Post.',
+    features: [
+      'Pan-India Hostel & Home Speed Post Shipping',
+      'Direct Merchant Wholesale Pricing',
+      '20% Partner Commission on Every Pack',
+      'Trackable Speed Post Barcode Included',
+    ],
+    thumbnailUrl: imgB2bCoaching,
+    staffId: '10310736',
+    staffName: 'Mohit Arvind (Beat 5 Manager)',
+    staffMobile: '9214056789',
+    whatsappNumber: '919214056789',
+    beatNumber: 'Beat 5',
+    subOffice: 'Dadabari S.O.',
+    pincode: '324009',
+    status: 'ACTIVE',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'Speed Post COD',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'PROD-BRAND-DOMINOS-01',
+    sku: 'BRAND-DOMINOS-PARTY-699',
+    title: "Domino's Pizza · Dadabari Express 4-Pizza Family Box & Sides",
+    vertical: 'Custom Staff / Partner Products',
+    pricingModel: 'Fixed Price',
+    productType: 'Physical Item',
+    price: 699,
+    wholesalePrice: 565,
+    mrpPrice: 849,
+    commissionRate: '₹134 Beat Partner Margin (19%)',
+    sellingMarginAmount: 134,
+    sellingMarginPercent: 19,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: "Domino's Pizza · Dadabari Circle Outlet",
+    vendorCategory: 'Retail',
+    storeType: 'BRAND_FRANCHISE',
+    brandName: "Domino's Pizza",
+    brandLogoUrl: imgBrandQsrPizza,
+    brandCategoryTag: 'QSR & Express Food',
+    serviceablePincodes: ['324009', '324005'],
+    serviceableBeats: ['All Beats'],
+    deliveryRadiusKm: 4.5,
+    commercialStoreId: 'BRAND-DOMINOS-324009',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+    description:
+      "Official Domino's Dadabari Circle franchise family meal box with Garlic Bread & Choco Lava Express — fast neighborhood Beat Dispatch & IPPB QR COD.",
+    features: [
+      'Serviceable in PIN 324009 & 324005',
+      '19% Beat Postman Entrepreneurship Margin',
+      'Tamper-Sealed Hot Express Dispatch',
+      'Cash on Delivery & IPPB QR Settlement',
+    ],
+    thumbnailUrl: imgBrandQsrPizza,
     staffId: '50457421',
     staffName: 'Mahendra Kumar Meena (Postman Beat 2)',
     staffMobile: '8769706002',
@@ -365,7 +943,768 @@ const DEFAULT_STOREFRONT_PRODUCTS: StaffProductItem[] = [
     isGlobalAdminItem: true,
     assignedBeats: ['All Beats'],
     freshnessStatus: 'FRESH_ACTIVE',
-    logisticsServiceType: 'Doorstep Service Pickup',
+    logisticsServiceType: 'XPOKART Local Parcel',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'PROD-BRAND-SMART-02',
+    sku: 'BRAND-RELIANCE-MART-1199',
+    title: 'Reliance Smart Bazaar · Monthly Essentials 12-Item Mega Crate',
+    vertical: 'Custom Staff / Partner Products',
+    pricingModel: 'Fixed Price',
+    productType: 'Physical Item',
+    price: 1199,
+    wholesalePrice: 985,
+    mrpPrice: 1490,
+    commissionRate: '₹214 Franchise Beat Margin (18%)',
+    sellingMarginAmount: 214,
+    sellingMarginPercent: 18,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Reliance Smart Bazaar · Keshavpura Mart',
+    vendorCategory: 'Wholesale',
+    storeType: 'BRAND_FRANCHISE',
+    brandName: 'Reliance Smart Bazaar',
+    brandLogoUrl: imgBrandSupermarket,
+    brandCategoryTag: 'Supermarket & Daily Staples',
+    serviceablePincodes: ['324009', '324005', '324007'],
+    serviceableBeats: ['All Beats'],
+    deliveryRadiusKm: 6,
+    commercialStoreId: 'BRAND-RELIANCE-SMART-324009',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+    description:
+      'Branded staple grocery crate (Basmati Rice, Toor Dal, Cooking Oil, Tea & Home Care) from Reliance Smart Keshavpura with Beat Postman COD doorstep delivery.',
+    features: [
+      'Serviceable in PIN 324009, 324005 & 324007',
+      '₹214 Direct Margin for Beat Postman',
+      'Zero Delivery Fee via Speed Post COD',
+      'Verified Reliance Retail Keshavpura Inventory',
+    ],
+    thumbnailUrl: imgBrandSupermarket,
+    staffId: '50457421',
+    staffName: 'Mahendra Kumar Meena (Postman Beat 2)',
+    staffMobile: '8769706002',
+    whatsappNumber: '918769706002',
+    beatNumber: 'Beat 2',
+    subOffice: 'Dadabari S.O.',
+    pincode: '324009',
+    status: 'FEATURED',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'Speed Post COD',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'PROD-BRAND-DIGITAL-03',
+    sku: 'BRAND-RELIANCE-TECH-2499',
+    title: 'Reliance Digital · ANC Wireless Headphones + 65W GaN Charger Bundle',
+    vertical: 'Custom Staff / Partner Products',
+    pricingModel: 'Fixed Price',
+    productType: 'Physical Item',
+    price: 2499,
+    wholesalePrice: 2099,
+    mrpPrice: 3499,
+    commissionRate: '₹400 High-Margin Tech Commission (16%)',
+    sellingMarginAmount: 400,
+    sellingMarginPercent: 16,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Reliance Digital · South Kota Tech Hub',
+    vendorCategory: 'Retail',
+    storeType: 'BRAND_FRANCHISE',
+    brandName: 'Reliance Digital',
+    brandLogoUrl: imgBrandElectronics,
+    brandCategoryTag: 'Electronics & Appliances',
+    serviceablePincodes: ['324009', '324005', '324007'],
+    serviceableBeats: ['All Beats'],
+    deliveryRadiusKm: 8,
+    commercialStoreId: 'BRAND-RELIANCE-DIGITAL-324005',
+    beatManagerId: '10310736',
+    beatManagerName: 'Mohit Arvind · Beat 5',
+    description:
+      'Authorized Reliance Digital Kota warranty bundle featuring active noise-canceling Bluetooth headset & 65W GaN charger, insured via Speed Post COD.',
+    features: [
+      'Serviceable in PIN 324009, 324005 & 324007',
+      'Official Brand GST Invoice & Warranty',
+      '₹400 Partner Profit per Order',
+      'Insured Speed Post COD & IPPB QR',
+    ],
+    thumbnailUrl: imgBrandElectronics,
+    staffId: '10310736',
+    staffName: 'Mohit Arvind (Beat 5 Manager)',
+    staffMobile: '9214056789',
+    whatsappNumber: '919214056789',
+    beatNumber: 'Beat 5',
+    subOffice: 'Dadabari S.O.',
+    pincode: '324009',
+    status: 'FEATURED',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'Speed Post COD',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'PROD-BRAND-SOLLY-04',
+    sku: 'BRAND-SOLLY-POLO-1799',
+    title: 'Allen Solly · Cotton Polo & Tailored Chino Menswear Combo',
+    vertical: 'Custom Staff / Partner Products',
+    pricingModel: 'Fixed Price',
+    productType: 'Physical Item',
+    price: 1799,
+    wholesalePrice: 1475,
+    mrpPrice: 2499,
+    commissionRate: '₹324 Brand Apparel Margin (18%)',
+    sellingMarginAmount: 324,
+    sellingMarginPercent: 18,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Allen Solly · Dadabari Apparel Studio',
+    vendorCategory: 'Retail',
+    storeType: 'BRAND_FRANCHISE',
+    brandName: 'Allen Solly',
+    brandLogoUrl: imgBrandApparel,
+    brandCategoryTag: 'Branded Apparel & Menswear',
+    serviceablePincodes: ['324009', '324005'],
+    serviceableBeats: ['All Beats'],
+    deliveryRadiusKm: 5,
+    commercialStoreId: 'BRAND-ALLEN-SOLLY-324009',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+    description:
+      'Authentic Allen Solly Dadabari outlet signature pique cotton polo & slim chino pack with Speed Post COD & easy Beat size exchange.',
+    features: [
+      'Serviceable in PIN 324009 & 324005',
+      '18% Beat Partner Commission (₹324)',
+      'Authentic Showroom Sealed Packaging',
+      'Same-Day Speed Post COD Dispatch',
+    ],
+    thumbnailUrl: imgBrandApparel,
+    staffId: '50457421',
+    staffName: 'Mahendra Kumar Meena (Postman Beat 2)',
+    staffMobile: '8769706002',
+    whatsappNumber: '918769706002',
+    beatNumber: 'Beat 3',
+    subOffice: 'Dadabari S.O.',
+    pincode: '324009',
+    status: 'ACTIVE',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'Speed Post COD',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'PROD-BRAND-KFC-05',
+    sku: 'BRAND-KFC-BUCKET-799',
+    title: 'KFC India · Crispy Hot & Spicy Bucket + Dips Express Box',
+    vertical: 'Custom Staff / Partner Products',
+    pricingModel: 'Fixed Price',
+    productType: 'Physical Item',
+    price: 799,
+    wholesalePrice: 649,
+    mrpPrice: 999,
+    commissionRate: '₹150 Franchise Dispatch Margin (19%)',
+    sellingMarginAmount: 150,
+    sellingMarginPercent: 19,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'KFC India · City Mall Kitchen Hub',
+    vendorCategory: 'Retail',
+    storeType: 'BRAND_FRANCHISE',
+    brandName: 'KFC India',
+    brandLogoUrl: imgBrandQsrPizza,
+    brandCategoryTag: 'QSR & Crispy Express',
+    serviceablePincodes: ['324005', '324007'],
+    serviceableBeats: ['All Beats'],
+    deliveryRadiusKm: 4,
+    commercialStoreId: 'BRAND-KFC-324005',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 12',
+    description:
+      'City Mall KFC kitchen express pack delivering strictly inside Talwandi / Vigyan Nagar (324005) and Mahaveer Nagar (324007) zones.',
+    features: [
+      'Serviceable strictly in PIN 324005 & 324007',
+      'Out of Zone for Dadabari 324009',
+      '19% Beat Franchise Margin',
+      'Hot Insulated Courier Pouch',
+    ],
+    thumbnailUrl: imgBrandQsrPizza,
+    staffId: '50457421',
+    staffName: 'Mahendra Kumar Meena (Postman)',
+    staffMobile: '8769706002',
+    whatsappNumber: '918769706002',
+    beatNumber: 'Beat 12',
+    subOffice: 'Talwandi S.O.',
+    pincode: '324005',
+    status: 'ACTIVE',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'XPOKART Local Parcel',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'PROD-BRAND-MCD-06',
+    sku: 'BRAND-MCD-MEAL-549',
+    title: "McDonald's · McSaver Family Burger & Fries Combo Pack",
+    vertical: 'Custom Staff / Partner Products',
+    pricingModel: 'Fixed Price',
+    productType: 'Physical Item',
+    price: 549,
+    wholesalePrice: 450,
+    mrpPrice: 699,
+    commissionRate: '₹99 Brand Dispatch Margin (18%)',
+    sellingMarginAmount: 99,
+    sellingMarginPercent: 18,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: "McDonald's · Gumanpura High Street Drive",
+    vendorCategory: 'Retail',
+    storeType: 'BRAND_FRANCHISE',
+    brandName: "McDonald's",
+    brandLogoUrl: imgBrandQsrPizza,
+    brandCategoryTag: 'QSR & Family Meals',
+    serviceablePincodes: ['324001', '324005'],
+    serviceableBeats: ['All Beats'],
+    deliveryRadiusKm: 4.5,
+    commercialStoreId: 'BRAND-MCDONALDS-324001',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 15',
+    description:
+      "McDonald's Aerodrome Circle drive-thru family meal combo delivering across Nayapura/Kota Junction (324001) and Vigyan Nagar (324005).",
+    features: [
+      'Serviceable in PIN 324001 & 324005 only',
+      '18% Dispatch Partner Commission',
+      'Tamper-Sealed Delivery Bag',
+    ],
+    thumbnailUrl: imgBrandQsrPizza,
+    staffId: '50457421',
+    staffName: 'Mahendra Kumar Meena (Postman)',
+    staffMobile: '8769706002',
+    whatsappNumber: '918769706002',
+    beatNumber: 'Beat 15',
+    subOffice: 'Kota H.O.',
+    pincode: '324001',
+    status: 'ACTIVE',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'XPOKART Local Parcel',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'PROD-BRAND-DENIM-07',
+    sku: 'BRAND-LEVI-DENIM-2499',
+    title: "Levi's · 511 Authentic Stretch Denim & Casual Shirt Pack",
+    vertical: 'Custom Staff / Partner Products',
+    pricingModel: 'Fixed Price',
+    productType: 'Physical Item',
+    price: 2499,
+    wholesalePrice: 1999,
+    mrpPrice: 3499,
+    commissionRate: '₹500 Beat Partner Profit Margin (20%)',
+    sellingMarginAmount: 500,
+    sellingMarginPercent: 20,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Allen Solly · Dadabari Apparel Studio',
+    vendorCategory: 'Retail',
+    storeType: 'BRAND_FRANCHISE',
+    brandName: "Levi's",
+    brandLogoUrl: imgBrandApparel,
+    brandCategoryTag: 'Branded Clothing & Fashion Apparel',
+    serviceablePincodes: ['324009', '324005', '324007'],
+    serviceableBeats: ['All Beats'],
+    deliveryRadiusKm: 6,
+    commercialStoreId: 'BRAND-ALLEN-SOLLY-324009',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+    description:
+      "Original Levi's denim & casual cotton shirt combo verified with authenticity QR tag, sealed packaging, and doorstep Speed Post COD delivery.",
+    features: [
+      'Authentic Brand Seal & GST Invoice',
+      '20% Beat Partner Commission (₹500)',
+      'Free Beat Size Exchange within 48 Hrs',
+      'Doorstep Delivery across PIN 324009',
+    ],
+    thumbnailUrl: imgBrandApparel,
+    staffId: '50457421',
+    staffName: 'Mahendra Kumar Meena (Beat 2)',
+    staffMobile: '8769706002',
+    whatsappNumber: '918769706002',
+    beatNumber: 'Beat 2',
+    subOffice: 'Dadabari S.O.',
+    pincode: '324009',
+    status: 'FEATURED',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'Speed Post COD',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'PROD-BRAND-EARBUDS-09',
+    sku: 'BRAND-BOAT-EARBUDS-1999',
+    title: 'boAt Airdopes Pro 48H ANC Earbuds + 20,000mAh Power Bank Kit',
+    vertical: 'Custom Staff / Partner Products',
+    pricingModel: 'Fixed Price',
+    productType: 'Physical Item',
+    price: 1999,
+    wholesalePrice: 1559,
+    mrpPrice: 2999,
+    commissionRate: '₹440 Smart Tech Partner Margin (22%)',
+    sellingMarginAmount: 440,
+    sellingMarginPercent: 22,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Reliance Digital · South Kota Tech Hub',
+    vendorCategory: 'Retail',
+    storeType: 'BRAND_FRANCHISE',
+    brandName: 'Reliance Digital',
+    brandLogoUrl: imgBrandElectronics,
+    brandCategoryTag: 'Smart Electronics & Mobile Accessories',
+    serviceablePincodes: ['324009', '324005', '324007'],
+    serviceableBeats: ['All Beats'],
+    deliveryRadiusKm: 8,
+    commercialStoreId: 'BRAND-RELIANCE-DIGITAL-324005',
+    beatManagerId: '10310736',
+    beatManagerName: 'Mohit Arvind · Beat 5',
+    description:
+      '48-hour active noise cancelling true wireless earbuds bundled with a dual-output 20,000mAh fast-charge power bank, covered under 1-year brand warranty.',
+    features: [
+      '48 Hours Playback & Dual Mic ENC',
+      '22% Beat Partner Profit (₹440)',
+      '1 Year Official Reliance Warranty',
+      'Speed Post Insured Doorstep Delivery',
+    ],
+    thumbnailUrl: imgBrandElectronics,
+    staffId: '10310736',
+    staffName: 'Mohit Arvind (Beat 5)',
+    staffMobile: '9214056789',
+    whatsappNumber: '919214056789',
+    beatNumber: 'Beat 5',
+    subOffice: 'Dadabari S.O.',
+    pincode: '324009',
+    status: 'FEATURED',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'Speed Post COD',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'PROD-BRAND-AIRFRYER-10',
+    sku: 'BRAND-SMART-AIRFRYER-3499',
+    title: 'Smart Living · 4.5L Digital Touch Air Fryer & Multi-Grill',
+    vertical: 'Custom Staff / Partner Products',
+    pricingModel: 'Fixed Price',
+    productType: 'Physical Item',
+    price: 3499,
+    wholesalePrice: 2764,
+    mrpPrice: 4999,
+    commissionRate: '₹735 High-Yield Appliance Margin (21%)',
+    sellingMarginAmount: 735,
+    sellingMarginPercent: 21,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Smart Living Appliances & Gadgets · Dadabari Mart',
+    vendorCategory: 'Retail',
+    storeType: 'BRAND_FRANCHISE',
+    brandName: 'Smart Living Appliances',
+    brandLogoUrl: imgBrandHomeGadgets,
+    brandCategoryTag: 'Home Appliances & Lifestyle Gadgets',
+    serviceablePincodes: ['324009', '324005', '324007'],
+    serviceableBeats: ['All Beats'],
+    deliveryRadiusKm: 6.5,
+    commercialStoreId: 'BRAND-SMART-LIFESTYLE-324009',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+    description:
+      'Digital touch 360° rapid hot-air circulating fryer with 8 one-touch presets, non-stick ceramic basket, and 2-year doorstep service replacement warranty.',
+    features: [
+      '85% Less Oil Cooking & Rapid Heating',
+      '21% Beat Partner Commission (₹735)',
+      '2-Year Sovereign Home Warranty',
+      'Doorstep Delivery & COD Support',
+    ],
+    thumbnailUrl: imgBrandHomeGadgets,
+    staffId: '50457421',
+    staffName: 'Mahendra Kumar Meena (Beat 2)',
+    staffMobile: '8769706002',
+    whatsappNumber: '918769706002',
+    beatNumber: 'Beat 2',
+    subOffice: 'Dadabari S.O.',
+    pincode: '324009',
+    status: 'FEATURED',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'Speed Post COD',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'PROD-BRAND-FOOTWEAR-12',
+    sku: 'BRAND-VELOCITY-PRO-2299',
+    title: 'Velocity Pro · Breathable Marathon Running Sneakers + Hydration Bottle',
+    vertical: 'Custom Staff / Partner Products',
+    pricingModel: 'Fixed Price',
+    productType: 'Physical Item',
+    price: 2299,
+    wholesalePrice: 1770,
+    mrpPrice: 3299,
+    commissionRate: '₹529 High-Margin Sports Commission (23%)',
+    sellingMarginAmount: 529,
+    sellingMarginPercent: 23,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Velocity Pro Sports & Footwear · Kota Outlet',
+    vendorCategory: 'Retail',
+    storeType: 'BRAND_FRANCHISE',
+    brandName: 'Velocity Sports & Footwear',
+    brandLogoUrl: imgBrandFootwear,
+    brandCategoryTag: 'Footwear & Sports Accessories',
+    serviceablePincodes: ['324009', '324005', '324007'],
+    serviceableBeats: ['All Beats'],
+    deliveryRadiusKm: 6,
+    commercialStoreId: 'BRAND-VELOCITY-SPORTS-324009',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+    description:
+      'Engineered ultra-light breathable mesh sports shoes with responsive EVA foam sole, anti-skid grip, and free sports hydration bottle combo.',
+    features: [
+      'Ultra-Light EVA Sole & Breathable Mesh',
+      '23% Beat Partner Commission (₹529)',
+      'Free Size Replacement by Beat Postman',
+      'Instant Speed Post COD at Dadabari S.O.',
+    ],
+    thumbnailUrl: imgBrandFootwear,
+    staffId: '50457421',
+    staffName: 'Mahendra Kumar Meena (Beat 2)',
+    staffMobile: '8769706002',
+    whatsappNumber: '918769706002',
+    beatNumber: 'Beat 2',
+    subOffice: 'Dadabari S.O.',
+    pincode: '324009',
+    status: 'FEATURED',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'Speed Post COD',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'PROD-XPEEDO-EV-SCOOTER',
+    sku: 'XPEEDO-EV-X1PRO-54999',
+    title: 'XPEEDO EV · X1 Pro City & Cargo Electric Scooter',
+    vertical: 'Custom Staff / Partner Products',
+    pricingModel: 'Fixed Price',
+    productType: 'Physical Item',
+    price: 54999,
+    wholesalePrice: 46749,
+    mrpPrice: 68999,
+    commissionRate: '₹8,250 EV Partner Profit (15%) + ₹15 Beat Del',
+    sellingMarginAmount: 8250,
+    sellingMarginPercent: 15,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'XPEEDO EV & Green Mobility · Regional Hub',
+    vendorCategory: 'Retail',
+    storeType: 'BRAND_FRANCHISE',
+    brandName: 'XPEEDO EV',
+    brandLogoUrl: imgEvScooter,
+    brandCategoryTag: 'EV Mobility & Scooters',
+    serviceablePincodes: ['324009', '324005', '324007'],
+    serviceableBeats: ['All Beats'],
+    deliveryRadiusKm: 8,
+    commercialStoreId: 'BRAND-XPEEDO-EV-324009',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+    description:
+      '85 km range BLDC hub-motor electric scooter with detachable 60V LiFePO4 battery pack, reverse gear, and heavy-duty cargo floorboard.',
+    features: [
+      '85 km Range · 150 kg Payload Capacity',
+      '15% Direct Partner Margin (₹8,250)',
+      'Doorstep Test Ride at Dadabari PIN 324009',
+      'IPPB EMI & Speed Post Booking Support',
+    ],
+    thumbnailUrl: imgEvScooter,
+    staffId: '50457421',
+    staffName: 'Mahendra Kumar Meena (Beat 2)',
+    staffMobile: '8769706002',
+    whatsappNumber: '918769706002',
+    beatNumber: 'Beat 2',
+    subOffice: 'Dadabari S.O.',
+    pincode: '324009',
+    status: 'FEATURED',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'Speed Post COD',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'PROD-XPEEDO-EV-BATTERY',
+    sku: 'XPEEDO-LFP-60V30AH-18499',
+    title: 'XPEEDO EV · 60V 30Ah LiFePO4 Swappable Battery Pack',
+    vertical: 'Custom Staff / Partner Products',
+    pricingModel: 'Fixed Price',
+    productType: 'Physical Item',
+    price: 18499,
+    wholesalePrice: 14799,
+    mrpPrice: 23999,
+    commissionRate: '₹3,700 Lithium Pack Commission (20%)',
+    sellingMarginAmount: 3700,
+    sellingMarginPercent: 20,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'XPEEDO EV & Green Mobility · Regional Hub',
+    vendorCategory: 'Retail',
+    storeType: 'BRAND_FRANCHISE',
+    brandName: 'XPEEDO EV',
+    brandLogoUrl: imgEvBattery,
+    brandCategoryTag: 'EV Lithium Batteries',
+    serviceablePincodes: ['324009', '324005', '324007'],
+    serviceableBeats: ['All Beats'],
+    deliveryRadiusKm: 8,
+    commercialStoreId: 'BRAND-XPEEDO-EV-324009',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+    description:
+      'Smart BMS automotive-grade 60V 30Ah LiFePO4 detachable battery with IP67 aluminum casing, LCD SoC readout, and 3-year warranty.',
+    features: [
+      '2,000+ Lifecycle · IP67 Waterproof Case',
+      '20% Partner Margin (₹3,700)',
+      'Fits X1 Pro & Standard 60V EV Scooters',
+      'Insured Speed Post COD across PIN 324009',
+    ],
+    thumbnailUrl: imgEvBattery,
+    staffId: '50457421',
+    staffName: 'Mahendra Kumar Meena (Beat 2)',
+    staffMobile: '8769706002',
+    whatsappNumber: '918769706002',
+    beatNumber: 'Beat 2',
+    subOffice: 'Dadabari S.O.',
+    pincode: '324009',
+    status: 'FEATURED',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'Speed Post COD',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'PROD-XPEEDO-EV-CHARGER',
+    sku: 'XPEEDO-CHG-60V10A-2999',
+    title: 'XPEEDO EV · 60V/72V 10A Smart Auto-Cut Fast Charger',
+    vertical: 'Custom Staff / Partner Products',
+    pricingModel: 'Fixed Price',
+    productType: 'Physical Item',
+    price: 2999,
+    wholesalePrice: 2339,
+    mrpPrice: 4199,
+    commissionRate: '₹660 Charger Partner Margin (22%)',
+    sellingMarginAmount: 660,
+    sellingMarginPercent: 22,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'XPEEDO EV & Green Mobility · Regional Hub',
+    vendorCategory: 'Retail',
+    storeType: 'BRAND_FRANCHISE',
+    brandName: 'XPEEDO EV',
+    brandLogoUrl: imgEvCharger,
+    brandCategoryTag: 'EV Fast Chargers',
+    serviceablePincodes: ['324009', '324005', '324007'],
+    serviceableBeats: ['All Beats'],
+    deliveryRadiusKm: 8,
+    commercialStoreId: 'BRAND-XPEEDO-EV-324009',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+    description:
+      'Die-cast aluminum finned 10A rapid charger with voltage surge cutoff and live digital charging display.',
+    features: [
+      '0–80% Fast Charge in 2.5 Hours',
+      '22% Beat Partner Margin (₹660)',
+      'Thermal & Reverse-Polarity Safe',
+      'Same-Day Speed Post COD in Dadabari',
+    ],
+    thumbnailUrl: imgEvCharger,
+    staffId: '50457421',
+    staffName: 'Mahendra Kumar Meena (Beat 2)',
+    staffMobile: '8769706002',
+    whatsappNumber: '918769706002',
+    beatNumber: 'Beat 2',
+    subOffice: 'Dadabari S.O.',
+    pincode: '324009',
+    status: 'ACTIVE',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'Speed Post COD',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'PROD-XPEEDO-EV-ACCESSORIES',
+    sku: 'XPEEDO-ACC-KIT-1899',
+    title: 'XPEEDO EV · Helmet, GPS Tracker & Delivery Rack Kit',
+    vertical: 'Custom Staff / Partner Products',
+    pricingModel: 'Fixed Price',
+    productType: 'Physical Item',
+    price: 1899,
+    wholesalePrice: 1424,
+    mrpPrice: 2699,
+    commissionRate: '₹475 Accessories Margin (25%)',
+    sellingMarginAmount: 475,
+    sellingMarginPercent: 25,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'XPEEDO EV & Green Mobility · Regional Hub',
+    vendorCategory: 'Retail',
+    storeType: 'BRAND_FRANCHISE',
+    brandName: 'XPEEDO EV',
+    brandLogoUrl: imgEvAccessories,
+    brandCategoryTag: 'EV Safety & Rider Accessories',
+    serviceablePincodes: ['324009', '324005', '324007'],
+    serviceableBeats: ['All Beats'],
+    deliveryRadiusKm: 8,
+    commercialStoreId: 'BRAND-XPEEDO-EV-324009',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+    description:
+      'ISI matte modular helmet paired with Geo-Trace GPS tracker, CNC phone mount, and waterproof courier saddle bag.',
+    features: [
+      'Complete 4-in-1 Rider & Beat Parcel Kit',
+      '25% Maximum Beat Margin (₹475)',
+      'Instant Beat 2 COD Dispatch',
+    ],
+    thumbnailUrl: imgEvAccessories,
+    staffId: '50457421',
+    staffName: 'Mahendra Kumar Meena (Beat 2)',
+    staffMobile: '8769706002',
+    whatsappNumber: '918769706002',
+    beatNumber: 'Beat 2',
+    subOffice: 'Dadabari S.O.',
+    pincode: '324009',
+    status: 'ACTIVE',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'Speed Post COD',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'PROD-LOCAL-BAKERY-01',
+    sku: 'XPO-BAKERY-DAIRY-649',
+    title: 'Dadabari Fresh · A2 Milk, Malai Paneer & Chocolate Truffle Cake Pack',
+    vertical: 'Custom Staff / Partner Products',
+    pricingModel: 'Fixed Price',
+    productType: 'Physical Item',
+    price: 649,
+    wholesalePrice: 519,
+    mrpPrice: 850,
+    commissionRate: '₹130 Fresh Dairy & Bakery Margin (20%)',
+    sellingMarginAmount: 130,
+    sellingMarginPercent: 20,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Dadabari Fresh Dairy, Artisanal Bakery & Laundry Hub',
+    vendorCategory: 'Retail',
+    storeType: 'LOCAL_MERCHANT',
+    brandName: 'Dadabari Bakery & Dairy',
+    brandLogoUrl: imgBakeryDairy,
+    brandCategoryTag: 'Dairies & Bakeries',
+    serviceablePincodes: ['324009', '324005'],
+    serviceableBeats: ['All Beats'],
+    deliveryRadiusKm: 5,
+    commercialStoreId: 'BRAND-DADABARI-BAKERY-324009',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+    description:
+      'Same-morning pure A2 buffalo milk (2L), 500g fresh malai paneer & 500g artisanal chocolate truffle celebration cake.',
+    features: [
+      'Zero Preservatives · Morning Cold-Chain',
+      '20% Partner Margin + ₹15 Beat Del',
+      'Instant Beat 2 COD Delivery',
+    ],
+    thumbnailUrl: imgBakeryDairy,
+    staffId: '50457421',
+    staffName: 'Mahendra Kumar Meena (Beat 2)',
+    staffMobile: '8769706002',
+    whatsappNumber: '918769706002',
+    beatNumber: 'Beat 2',
+    subOffice: 'Dadabari S.O.',
+    pincode: '324009',
+    status: 'FEATURED',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'XPOKART Local Parcel',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'PROD-LOCAL-LAUNDRY-02',
+    sku: 'XPO-LAUNDRY-EVENT-499',
+    title: 'Dadabari Express · 10-Garment Steam Dry-Clean & Roll-Press Bundle',
+    vertical: 'Custom Staff / Partner Products',
+    pricingModel: 'Fixed Price',
+    productType: 'Service',
+    price: 499,
+    wholesalePrice: 389,
+    mrpPrice: 699,
+    commissionRate: '₹110 Laundry & Event Partner Margin (22%)',
+    sellingMarginAmount: 110,
+    sellingMarginPercent: 22,
+    codEligible: true,
+    speedPostCharge: 0,
+    vendorName: 'Dadabari Fresh Dairy, Artisanal Bakery & Laundry Hub',
+    vendorCategory: 'Services',
+    storeType: 'LOCAL_MERCHANT',
+    brandName: 'Dadabari Express Laundry',
+    brandLogoUrl: imgLaundryEvent,
+    brandCategoryTag: 'Laundries & Events',
+    serviceablePincodes: ['324009', '324005'],
+    serviceableBeats: ['All Beats'],
+    deliveryRadiusKm: 5,
+    commercialStoreId: 'BRAND-DADABARI-BAKERY-324009',
+    beatManagerId: '50457421',
+    beatManagerName: 'Mahendra Kumar Meena · Beat 2',
+    description:
+      'Doorstep garment pickup, eco-steam dry cleaning, crisp starch press, and kraft parcel return within 24 hours across Dadabari S.O.',
+    features: [
+      '24-Hour Doorstep Pickup & Kraft Return',
+      '22% Beat Partner Margin (₹110)',
+      'Hostel, Family & Event Suit Care',
+    ],
+    thumbnailUrl: imgLaundryEvent,
+    staffId: '50457421',
+    staffName: 'Mahendra Kumar Meena (Beat 2)',
+    staffMobile: '8769706002',
+    whatsappNumber: '918769706002',
+    beatNumber: 'Beat 2',
+    subOffice: 'Dadabari S.O.',
+    pincode: '324009',
+    status: 'ACTIVE',
+    isGlobalAdminItem: true,
+    assignedBeats: ['All Beats'],
+    freshnessStatus: 'FRESH_ACTIVE',
+    logisticsServiceType: 'XPOKART Local Parcel',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   },
@@ -373,7 +1712,7 @@ const DEFAULT_STOREFRONT_PRODUCTS: StaffProductItem[] = [
 
 function notifyStorefrontListeners() {
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('xpeedo-storefront-updated'));
+    window.dispatchEvent(new CustomEvent('xpokart-storefront-updated'));
   }
 }
 
@@ -390,15 +1729,28 @@ export const staffProductService = {
       const sanitized = parsed.map(sanitizeProductThumbnail);
       const existingIds = new Set(sanitized.map((p) => p.id));
       const missingSeeds = DEFAULT_STOREFRONT_PRODUCTS.filter((seed) => !existingIds.has(seed.id));
-      if (missingSeeds.length > 0) {
-        const merged = [...sanitized, ...missingSeeds];
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-        return merged;
-      }
-      return sanitized;
+      const finalList = missingSeeds.length > 0 ? [...sanitized, ...missingSeeds] : sanitized;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(finalList));
+      return finalList;
     } catch {
       return DEFAULT_STOREFRONT_PRODUCTS;
     }
+  },
+
+  getScopedProducts(user?: StaffProfile | null): StaffProductItem[] {
+    if (!user) return [];
+    if (
+      !featureVisibilityService.isFeatureVisible(user, 'vendorSection') &&
+      !featureVisibilityService.isFeatureVisible(user, 'storefront')
+    ) {
+      return [];
+    }
+    const all = this.getAllProducts();
+    const strictVendor = featureVisibilityService.isStrictlyScopedToVendor(user);
+    if (strictVendor === 'INDIA_POST') {
+      return all.filter((p) => (p.vendorCategory || '').toLowerCase().includes('india post'));
+    }
+    return all;
   },
 
   saveAllProducts(products: StaffProductItem[]): void {
@@ -475,7 +1827,7 @@ export const staffProductService = {
     if (isSuperAdmin) return all;
     const rights = this.getStaffSalesRights(staffId, '', staffBeat);
     return all.filter((p) => {
-      if (p.staffId === staffId) return true;
+      if (p.staffId === staffId || p.beatManagerId === staffId) return true;
       if (p.isGlobalAdminItem) {
         const verticalAllowed = rights.allowedVerticals.includes(p.vertical);
         const beatAllowed = this.isProductAssignedToBeat(p, staffBeat);
@@ -483,6 +1835,159 @@ export const staffProductService = {
       }
       return false;
     });
+  },
+
+  computeProductMarginScore(product: StaffProductItem): {
+    hasActiveMargin: boolean;
+    marginPercent: number;
+    marginAmount: number;
+  } {
+    const wholesale =
+      product.wholesalePrice !== undefined
+        ? Math.max(0, Number(product.wholesalePrice))
+        : product.price > 0
+        ? Math.round(product.price * 0.85)
+        : 0;
+    const derivedAmount = product.price > 0 ? Math.max(0, product.price - wholesale) : 0;
+    const marginAmount = Math.max(Number(product.sellingMarginAmount || 0), derivedAmount);
+    const marginPercent = Math.max(
+      Number(product.sellingMarginPercent || 0),
+      product.price > 0 && marginAmount > 0 ? Math.round((marginAmount / product.price) * 100) : 0
+    );
+    const hasRateText = Boolean(product.commissionRate && product.commissionRate.trim().length > 0);
+    const hasActiveMargin = marginPercent > 0 || marginAmount > 0 || hasRateText;
+    return { hasActiveMargin, marginPercent, marginAmount };
+  },
+
+  sortProductsByCommissionMargin(items: StaffProductItem[]): StaffProductItem[] {
+    return [...items].sort((a, b) => {
+      const mA = this.computeProductMarginScore(a);
+      const mB = this.computeProductMarginScore(b);
+      if (mA.hasActiveMargin !== mB.hasActiveMargin) {
+        return mA.hasActiveMargin ? -1 : 1;
+      }
+      if (mB.marginPercent !== mA.marginPercent) {
+        return mB.marginPercent - mA.marginPercent;
+      }
+      if (mB.marginAmount !== mA.marginAmount) {
+        return mB.marginAmount - mA.marginAmount;
+      }
+      if (a.status === 'FEATURED' && b.status !== 'FEATURED') return -1;
+      if (b.status === 'FEATURED' && a.status !== 'FEATURED') return 1;
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
+  },
+
+  getVendorCommissionSummary(store: CommercialStoreRecord): {
+    hasActiveMargin: boolean;
+    topMarginPercent: number;
+    topMarginAmount: number;
+    productCount: number;
+    categories: string[];
+  } {
+    const inventory = this.getProductsForVendorStore(store);
+    let topMarginPercent = 0;
+    let topMarginAmount = 0;
+    let hasActiveMargin = false;
+    const cats = new Set<string>();
+    for (const item of inventory) {
+      cats.add(item.vertical);
+      const score = this.computeProductMarginScore(item);
+      if (score.hasActiveMargin) hasActiveMargin = true;
+      if (score.marginPercent > topMarginPercent) topMarginPercent = score.marginPercent;
+      if (score.marginAmount > topMarginAmount) topMarginAmount = score.marginAmount;
+    }
+    return {
+      hasActiveMargin,
+      topMarginPercent,
+      topMarginAmount,
+      productCount: inventory.length,
+      categories: Array.from(cats),
+    };
+  },
+
+  sortVendorStoresByMarginPriority<T extends CommercialStoreRecord>(stores: T[]): T[] {
+    return [...stores].sort((a, b) => {
+      // 1. Enabled vs disabled storefront
+      const enabledA = a.isStorefrontEnabled !== false;
+      const enabledB = b.isStorefrontEnabled !== false;
+      if (enabledA !== enabledB) return enabledA ? -1 : 1;
+
+      // 2. Sponsored Partner / Active Affiliate priority
+      const tierScore = (t?: string) => (t === 'SPONSORED_PARTNER' ? 3 : t === 'ACTIVE_AFFILIATE' ? 2 : 1);
+      const scoreA = tierScore(a.listingTier) + (a.marketingBudgetMonthly ? 1 : 0);
+      const scoreB = tierScore(b.listingTier) + (b.marketingBudgetMonthly ? 1 : 0);
+      if (scoreA !== scoreB) return scoreB - scoreA;
+
+      const freshA = a.freshnessStatus !== 'STALE_EXCLUDED';
+      const freshB = b.freshnessStatus !== 'STALE_EXCLUDED';
+      if (freshA !== freshB) return freshA ? -1 : 1;
+
+      const sumA = this.getVendorCommissionSummary(a);
+      const sumB = this.getVendorCommissionSummary(b);
+      if (sumA.hasActiveMargin !== sumB.hasActiveMargin) {
+        return sumA.hasActiveMargin ? -1 : 1;
+      }
+      if (sumB.topMarginPercent !== sumA.topMarginPercent) {
+        return sumB.topMarginPercent - sumA.topMarginPercent;
+      }
+      return (b.fourFactorVerification?.score || 0) - (a.fourFactorVerification?.score || 0);
+    });
+  },
+
+  checkProductServiceability(
+    product: StaffProductItem,
+    targetPincode = '324009',
+    targetBeat?: string
+  ): StoreServiceabilityResult {
+    const cleanPin = String(targetPincode || '324009').trim();
+    const allStores = commercialPropertyService.getAllStores();
+    const linkedStore = allStores.find(
+      (s) =>
+        (product.commercialStoreId && s.id === product.commercialStoreId) ||
+        (product.vendorName && s.storeName.trim().toLowerCase() === product.vendorName.trim().toLowerCase())
+    );
+    if (linkedStore) {
+      return commercialPropertyService.checkStoreServiceability(linkedStore, cleanPin, targetBeat);
+    }
+
+    const serviceablePincodes =
+      product.serviceablePincodes && product.serviceablePincodes.length > 0
+        ? product.serviceablePincodes
+        : product.isGlobalAdminItem && !product.commercialStoreId && !product.brandName
+        ? ['324009', '324005', '324007', '324001', '324008']
+        : [product.pincode || '324009'];
+    const serviceableBeats =
+      product.serviceableBeats && product.serviceableBeats.length > 0
+        ? product.serviceableBeats
+        : product.assignedBeats && product.assignedBeats.length > 0
+        ? product.assignedBeats
+        : ['All Beats'];
+    const matchedPincode = !cleanPin || cleanPin === 'ALL' || serviceablePincodes.includes(cleanPin);
+    const cleanBeat = targetBeat && targetBeat !== 'ALL' ? targetBeat.trim() : '';
+    const matchedBeat =
+      !cleanBeat ||
+      serviceableBeats.includes('All Beats') ||
+      serviceableBeats.some((b) => b.toLowerCase() === cleanBeat.toLowerCase());
+    const operationalActive = product.freshnessStatus !== 'STALE_EXCLUDED' && product.status !== 'HIDDEN';
+    const isServiceable = operationalActive && matchedPincode && matchedBeat;
+    const reason = !operationalActive
+      ? 'Inactive / Hidden SKU'
+      : !matchedPincode
+      ? `Out of Delivery Zone · Serves PIN ${serviceablePincodes.join(', ')}`
+      : !matchedBeat
+      ? `Out of Beat Zone · Serves ${serviceableBeats.join(', ')}`
+      : `Deliverable in PIN ${cleanPin}`;
+    return {
+      isServiceable,
+      reason,
+      matchedPincode,
+      matchedBeat,
+      operationalActive,
+      serviceablePincodes,
+      serviceableBeats,
+      deliveryRadiusKm: product.deliveryRadiusKm ?? 5,
+    };
   },
 
   getPublicCatalog(partnerStaffId?: string): StaffProductItem[] {
@@ -493,7 +1998,7 @@ export const staffProductService = {
       if (p.status === 'HIDDEN') return false;
       if (p.freshnessStatus === 'STALE_EXCLUDED') return false;
       if (partnerStaffId) {
-        const isOwn = p.staffId === partnerStaffId;
+        const isOwn = p.staffId === partnerStaffId || p.beatManagerId === partnerStaffId;
         const isGlobalAndAllowed =
           Boolean(p.isGlobalAdminItem) &&
           !rights?.hiddenGlobalProductIds.includes(p.id) &&
@@ -504,11 +2009,7 @@ export const staffProductService = {
       return true;
     });
 
-    return visible.sort((a, b) => {
-      if (a.status === 'FEATURED' && b.status !== 'FEATURED') return -1;
-      if (b.status === 'FEATURED' && a.status !== 'FEATURED') return 1;
-      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-    });
+    return this.sortProductsByCommissionMargin(visible);
   },
 
   addProduct(product: Omit<StaffProductItem, 'id' | 'createdAt' | 'updatedAt'>): StaffProductItem {
@@ -523,6 +2024,464 @@ export const staffProductService = {
     all.unshift(newProduct);
     this.saveAllProducts(all);
     return newProduct;
+  },
+
+  /**
+   * Registers a Local B2B Vendor + Product together, auto-assigning it to the designated
+   * Beat Manager for that Beat/PIN and publishing directly to the unified Storefront.
+   */
+  registerB2BVendorListing(input: {
+    storeName: string;
+    ownerName: string;
+    phone: string;
+    vendorCategory: CommercialStoreCategory;
+    colony: string;
+    beatNo: string;
+    pincode?: string;
+    productTitle: string;
+    vertical?: StaffProductVertical;
+    price: number;
+    wholesalePrice?: number;
+    mrpPrice?: number;
+    sellingMarginPercent: number;
+    codEligible?: boolean;
+    description?: string;
+    thumbnailUrl?: string;
+    ippbSettlementRef?: string;
+    storeType?: StoreEntityType;
+    brandName?: string;
+    brandLogoUrl?: string;
+    brandMonogram?: string;
+    brandAccentColor?: string;
+    brandCategoryTag?: string;
+    serviceablePincodes?: string[];
+    serviceableBeats?: string[];
+    deliveryRadiusKm?: number;
+    dispatchCutoffTime?: string;
+  }): { product: StaffProductItem; storeId: string; beatManagerName: string } {
+    const primaryPin = input.pincode || input.serviceablePincodes?.[0] || '324009';
+    const { store, beatMeta } = commercialPropertyService.registerB2BVendorStore({
+      storeName: input.storeName,
+      ownerName: input.ownerName,
+      phone: input.phone,
+      category: input.vendorCategory,
+      colony: input.colony,
+      pincode: primaryPin,
+      beatNo: input.beatNo,
+      storeType: input.storeType,
+      brandName: input.brandName,
+      brandLogoUrl: input.brandLogoUrl || input.thumbnailUrl,
+      brandMonogram: input.brandMonogram,
+      brandAccentColor: input.brandAccentColor,
+      brandCategoryTag: input.brandCategoryTag,
+      serviceablePincodes: input.serviceablePincodes,
+      serviceableBeats: input.serviceableBeats,
+      deliveryRadiusKm: input.deliveryRadiusKm,
+      dispatchCutoffTime: input.dispatchCutoffTime,
+    });
+
+    const vertical: StaffProductVertical =
+      input.vertical ||
+      (input.vendorCategory === 'eMitra/CSC'
+        ? 'Documents & Digital Services'
+        : input.vendorCategory === 'Services'
+        ? 'Logistics & Courier Services'
+        : 'Custom Staff / Partner Products');
+
+    const safePrice = Math.max(0, Number(input.price) || 0);
+    const marginPct = Math.max(0, Math.min(60, Number(input.sellingMarginPercent) || 15));
+    const safeWholesale =
+      input.wholesalePrice !== undefined
+        ? Math.max(0, Math.min(safePrice, Number(input.wholesalePrice)))
+        : Math.max(0, safePrice - Math.round((safePrice * marginPct) / 100));
+    const marginAmount = Math.max(0, safePrice - safeWholesale);
+    const computedMarginPct = safePrice > 0 ? Math.round((marginAmount / safePrice) * 100) : marginPct;
+    const waDigits = (input.phone || beatMeta.staffContact).replace(/\D/g, '').slice(-10);
+    const settleRef =
+      input.ippbSettlementRef || `IPPB-${store.pincode || '324009'}-B${beatMeta.cleanBeatNo}-${store.id.slice(-4).toUpperCase()}`;
+    const pins = store.serviceablePincodes || [primaryPin];
+    const beats = store.serviceableBeats || ['All Beats', beatMeta.beatNo];
+
+    const product = this.addProduct({
+      sku: `${input.storeType === 'BRAND_FRANCHISE' ? 'BND' : 'VND'}-${beatMeta.cleanBeatNo}-${Math.floor(100 + Math.random() * 899)}`,
+      title: input.productTitle.trim(),
+      vertical,
+      pricingModel: safePrice === 0 ? 'Free Service' : 'Fixed Price',
+      productType: input.vendorCategory === 'eMitra/CSC' || input.vendorCategory === 'Services' ? 'Service' : 'Physical Item',
+      price: safePrice,
+      wholesalePrice: safeWholesale,
+      mrpPrice: input.mrpPrice || (safePrice > 0 ? Math.round(safePrice * 1.15) : 0),
+      commissionRate: `₹${marginAmount} Partner Margin (${computedMarginPct}%)`,
+      sellingMarginAmount: marginAmount,
+      sellingMarginPercent: computedMarginPct,
+      codEligible: input.codEligible ?? true,
+      speedPostCharge: 0,
+      vendorName: store.storeName,
+      vendorCategory: input.vendorCategory,
+      storeType: store.storeType,
+      brandName: store.brandName,
+      brandLogoUrl: store.brandLogoUrl,
+      brandCategoryTag: store.brandCategoryTag,
+      serviceablePincodes: pins,
+      serviceableBeats: beats,
+      deliveryRadiusKm: store.deliveryRadiusKm,
+      beatManagerId: beatMeta.staffId,
+      beatManagerName: `${beatMeta.staffName} · ${beatMeta.beatNo}`,
+      description:
+        input.description?.trim() ||
+        `Direct ${store.storeType === 'BRAND_FRANCHISE' ? 'Brand Franchise' : 'B2B'} listing from ${store.storeName} (${store.colony}, PIN ${pins.join(', ')}) managed by Beat Manager ${beatMeta.staffName}.`,
+      features: [
+        `Serviceable PINs: ${pins.join(', ')}`,
+        `Mapped Beat Manager: ${beatMeta.staffName} (${beatMeta.beatNo})`,
+        input.codEligible !== false ? 'Speed Post COD & IPPB QR Supported' : 'Doorstep Fulfillment Included',
+      ],
+      thumbnailUrl: input.thumbnailUrl || store.brandLogoUrl || DEFAULT_VERTICAL_THUMBNAILS[vertical],
+      staffId: beatMeta.staffId,
+      staffName: `${beatMeta.staffName} (${beatMeta.beatNo})`,
+      staffMobile: beatMeta.staffContact,
+      whatsappNumber: `91${waDigits || '8769706002'}`,
+      beatNumber: beatMeta.beatNo,
+      subOffice: beatMeta.subOffice,
+      pincode: store.pincode,
+      status: input.storeType === 'BRAND_FRANCHISE' ? 'FEATURED' : 'ACTIVE',
+      isGlobalAdminItem: true,
+      assignedBeats: beats,
+      freshnessStatus: 'FRESH_ACTIVE',
+      lastCheckedDate: new Date().toISOString(),
+      commercialStoreId: store.id,
+      ippbSettlementRef: settleRef,
+      logisticsServiceType: input.codEligible !== false ? 'Speed Post COD' : 'Doorstep Service Pickup',
+    });
+
+    return {
+      product,
+      storeId: store.id,
+      beatManagerName: `${beatMeta.staffName} (${beatMeta.beatNo})`,
+    };
+  },
+
+  getProductsForVendorStore(store: CommercialStoreRecord): StaffProductItem[] {
+    const all = this.getAllProducts();
+    const matched = all.filter(
+      (p) =>
+        p.commercialStoreId === store.id ||
+        (p.vendorName && p.vendorName.trim().toLowerCase() === store.storeName.trim().toLowerCase())
+    );
+    if (matched.length > 0) return matched;
+
+    const beatMeta = commercialPropertyService.getBeatMeta(store.beatNo || 'Beat 2');
+    const waDigits = (store.whatsappNumber || store.primaryPhone || beatMeta.staffContact).replace(/\D/g, '').slice(-10);
+    const retailPrice = store.category === 'Wholesale' ? 680 : store.category === 'eMitra/CSC' ? 120 : 499;
+    const wholesalePrice = Math.round(retailPrice * 0.84);
+    const marginAmt = retailPrice - wholesalePrice;
+    const vertical: StaffProductVertical =
+      store.category === 'eMitra/CSC'
+        ? 'Documents & Digital Services'
+        : store.category === 'Services'
+        ? 'Logistics & Courier Services'
+        : 'Custom Staff / Partner Products';
+
+    return [
+      sanitizeProductThumbnail({
+        id: `SYNTH-${store.id}`,
+        sku: `B2B-${beatMeta.cleanBeatNo}-${store.id.slice(-4).toUpperCase()}`,
+        title: `${store.storeName} · ${store.category} Standard Trade Pack`,
+        vertical,
+        pricingModel: 'Fixed Price',
+        productType: store.category === 'eMitra/CSC' || store.category === 'Services' ? 'Service' : 'Physical Item',
+        price: retailPrice,
+        wholesalePrice,
+        mrpPrice: Math.round(retailPrice * 1.15),
+        commissionRate: `₹${marginAmt} Partner Margin (16%)`,
+        sellingMarginAmount: marginAmt,
+        sellingMarginPercent: 16,
+        codEligible: true,
+        speedPostCharge: 0,
+        vendorName: store.storeName,
+        vendorCategory: store.category,
+        beatManagerId: beatMeta.staffId,
+        beatManagerName: `${beatMeta.staffName} · ${beatMeta.beatNo}`,
+        description: `Direct Beat-mapped ${store.category} inventory from ${store.storeName} (${store.fullAddress || store.colony}, PIN ${store.pincode || '324009'}).`,
+        features: [
+          `Verified Merchant: ${store.storeName}`,
+          `Beat Delivery by ${beatMeta.staffName} (${beatMeta.beatNo})`,
+          'Speed Post COD & IPPB Merchant Settlement Active',
+        ],
+        thumbnailUrl: DEFAULT_VERTICAL_THUMBNAILS[vertical],
+        staffId: beatMeta.staffId,
+        staffName: `${beatMeta.staffName} (${beatMeta.beatNo})`,
+        staffMobile: beatMeta.staffContact,
+        whatsappNumber: `91${waDigits || '8769706002'}`,
+        beatNumber: beatMeta.beatNo,
+        subOffice: beatMeta.subOffice,
+        pincode: store.pincode || '324009',
+        status: 'ACTIVE',
+        isGlobalAdminItem: true,
+        assignedBeats: [beatMeta.beatNo],
+        freshnessStatus: store.freshnessStatus || 'FRESH_ACTIVE',
+        commercialStoreId: store.id,
+        ippbSettlementRef: store.ippbSettlementRef || `IPPB-${store.pincode || '324009'}-B${beatMeta.cleanBeatNo}-${store.id.slice(-4).toUpperCase()}`,
+        logisticsServiceType: 'Speed Post COD',
+        createdAt: store.createdAt,
+        updatedAt: store.updatedAt,
+      }),
+    ];
+  },
+
+  /**
+   * Unified self (Company/House) + Partner/Vendor Product Registration & Management.
+   * Supports direct XPEEDO/XPO KART house catalog items as well as external vendor/franchise partner listings.
+   */
+  registerUnifiedProductListing(input: {
+    sourceOwnership: ProductSourceType;
+    serviceCategory: BusinessServiceCategory | string;
+    listingStatus?: ProductListingStatus;
+    stockQuantity?: number;
+    linkedOfficeId?: string;
+    linkedOfficeName?: string;
+    storeName?: string;
+    ownerName?: string;
+    phone?: string;
+    vendorCategory?: CommercialStoreCategory;
+    colony?: string;
+    beatNo?: string;
+    pincode?: string;
+    productTitle: string;
+    sku?: string;
+    vertical?: StaffProductVertical;
+    pricingModel?: StaffProductItem['pricingModel'];
+    productType?: StaffProductItem['productType'];
+    price: number;
+    wholesalePrice?: number;
+    mrpPrice?: number;
+    sellingMarginPercent?: number;
+    codEligible?: boolean;
+    description?: string;
+    features?: string[];
+    thumbnailUrl?: string;
+    commercialStoreId?: string;
+    storeType?: StoreEntityType;
+    brandName?: string;
+    serviceablePincodes?: string[];
+    serviceableBeats?: string[];
+    deliveryRadiusKm?: number;
+    logisticsServiceType?: StaffProductItem['logisticsServiceType'];
+  }): { product: StaffProductItem; storeId: string; beatManagerName: string } {
+    const isHouse = input.sourceOwnership === 'COMPANY_HOUSE';
+    const beatNo = input.beatNo || 'Beat 2';
+    const primaryPin = input.pincode || input.serviceablePincodes?.[0] || '324009';
+    const vertical: StaffProductVertical =
+      input.vertical ||
+      (input.serviceCategory === 'Postal & Last-Mile Logistics'
+        ? 'Logistics & Courier Services'
+        : input.serviceCategory === 'Banking, PLI & Insurance'
+        ? 'Banking & Finance'
+        : input.serviceCategory === 'eMitra & Digital Services' || input.serviceCategory === 'Software, CRMs & AI SaaS'
+        ? 'Documents & Digital Services'
+        : 'Custom Staff / Partner Products');
+
+    let storeId = input.commercialStoreId || (isHouse ? 'HOUSE-XPEEDO-XPOKART-324009' : '');
+    let beatManagerName = 'Mahendra Kumar Meena · Beat 2';
+    let beatMeta = commercialPropertyService.getBeatMeta(beatNo);
+    let resolvedStoreName = input.storeName?.trim() || (isHouse ? 'XPEEDO & XPO KART Direct House Desk' : 'Authorized Partner Store');
+
+    if (!isHouse && !storeId) {
+      const reg = commercialPropertyService.registerB2BVendorStore({
+        storeName: resolvedStoreName,
+        ownerName: input.ownerName || 'Partner Proprietor',
+        phone: input.phone || beatMeta.staffContact,
+        category: input.vendorCategory || 'Retail',
+        colony: input.colony || 'Dadabari',
+        pincode: primaryPin,
+        beatNo,
+        storeType: input.storeType || 'LOCAL_MERCHANT',
+        brandName: input.brandName,
+        serviceablePincodes: input.serviceablePincodes || [primaryPin],
+        serviceableBeats: input.serviceableBeats || ['All Beats', beatMeta.beatNo],
+        deliveryRadiusKm: input.deliveryRadiusKm ?? 5,
+        sourceOwnership: 'VENDOR_PARTNER',
+        linkedOfficeId: input.linkedOfficeId,
+        linkedOfficeName: input.linkedOfficeName || beatMeta.subOffice,
+        serviceCategory: input.serviceCategory,
+      });
+      storeId = reg.store.id;
+      resolvedStoreName = reg.store.storeName;
+      beatMeta = reg.beatMeta;
+      beatManagerName = `${reg.beatMeta.staffName} (${reg.beatMeta.beatNo})`;
+    } else {
+      beatManagerName = `${beatMeta.staffName} (${beatMeta.beatNo})`;
+    }
+
+    const safePrice = Math.max(0, Number(input.price) || 0);
+    const marginPct = Math.max(0, Math.min(60, Number(input.sellingMarginPercent ?? 18)));
+    const safeWholesale =
+      input.wholesalePrice !== undefined
+        ? Math.max(0, Math.min(safePrice, Number(input.wholesalePrice)))
+        : Math.max(0, safePrice - Math.round((safePrice * marginPct) / 100));
+    const marginAmount = Math.max(0, safePrice - safeWholesale);
+    const computedMarginPct = safePrice > 0 ? Math.round((marginAmount / safePrice) * 100) : marginPct;
+    const statusMap: Record<ProductListingStatus, StaffProductItem['status']> = {
+      Active: isHouse ? 'FEATURED' : 'ACTIVE',
+      Draft: 'HIDDEN',
+      Paused: 'HIDDEN',
+      'Out of Stock': 'ACTIVE',
+    };
+    const listingStatus: ProductListingStatus = input.listingStatus || 'Active';
+
+    const product = this.addProduct({
+      sku: input.sku?.trim() || `${isHouse ? 'XPD-HSE' : 'VND-PRT'}-${Date.now().toString().slice(-4)}`,
+      title: input.productTitle.trim(),
+      vertical,
+      pricingModel: input.pricingModel || (safePrice === 0 ? 'Free Service' : 'Fixed Price'),
+      productType:
+        input.productType ||
+        (input.serviceCategory === 'Software, CRMs & AI SaaS' || input.serviceCategory === 'eMitra & Digital Services'
+          ? 'Digital Download'
+          : 'Physical Item'),
+      price: safePrice,
+      wholesalePrice: safeWholesale,
+      mrpPrice: input.mrpPrice || (safePrice > 0 ? Math.round(safePrice * 1.18) : 0),
+      commissionRate: `₹${marginAmount} ${isHouse ? 'House Margin' : 'Partner Margin'} (${computedMarginPct}%)`,
+      sellingMarginAmount: marginAmount,
+      sellingMarginPercent: computedMarginPct,
+      codEligible: input.codEligible ?? true,
+      speedPostCharge: 0,
+      vendorName: resolvedStoreName,
+      vendorCategory: isHouse ? 'Official India Post' : input.vendorCategory || 'Retail',
+      storeType: isHouse ? 'BRAND_FRANCHISE' : input.storeType || 'LOCAL_MERCHANT',
+      brandName: input.brandName || (isHouse ? 'XPEEDO & XPO KART' : resolvedStoreName),
+      brandCategoryTag: String(input.serviceCategory),
+      serviceablePincodes: input.serviceablePincodes || [primaryPin],
+      serviceableBeats: input.serviceableBeats || ['All Beats', beatMeta.beatNo],
+      deliveryRadiusKm: input.deliveryRadiusKm ?? 8,
+      beatManagerId: beatMeta.staffId,
+      beatManagerName,
+      description:
+        input.description?.trim() ||
+        `${isHouse ? 'Company-direct' : 'Verified partner'} ${input.serviceCategory} offering linked to ${input.linkedOfficeName || beatMeta.subOffice} (PIN ${primaryPin}).`,
+      features: input.features?.length
+        ? input.features
+        : [
+            isHouse ? 'Direct Company / House Warranty & Support' : `Fulfilled by ${resolvedStoreName}`,
+            `Category: ${input.serviceCategory}`,
+            `Linked Hub: ${input.linkedOfficeName || beatMeta.subOffice} (${primaryPin})`,
+          ],
+      thumbnailUrl: input.thumbnailUrl || DEFAULT_VERTICAL_THUMBNAILS[vertical],
+      staffId: beatMeta.staffId,
+      staffName: beatManagerName,
+      staffMobile: beatMeta.staffContact,
+      whatsappNumber: `91${(input.phone || beatMeta.staffContact).replace(/\D/g, '').slice(-10) || '8769706002'}`,
+      beatNumber: beatMeta.beatNo,
+      subOffice: input.linkedOfficeName || beatMeta.subOffice,
+      pincode: primaryPin,
+      status: statusMap[listingStatus],
+      isGlobalAdminItem: true,
+      assignedBeats: input.serviceableBeats || ['All Beats'],
+      freshnessStatus: 'FRESH_ACTIVE',
+      lastCheckedDate: new Date().toISOString(),
+      commercialStoreId: storeId,
+      logisticsServiceType: input.logisticsServiceType || 'Speed Post COD',
+      listingStatus,
+      stockQuantity: Number(input.stockQuantity ?? 25),
+      sourceOwnership: input.sourceOwnership,
+      linkedOfficeId: input.linkedOfficeId,
+      linkedOfficeName: input.linkedOfficeName || beatMeta.subOffice,
+      serviceCategory: input.serviceCategory,
+    });
+
+    return { product, storeId, beatManagerName };
+  },
+
+  updateProductListing(
+    id: string,
+    patch: {
+      title?: string;
+      price?: number;
+      wholesalePrice?: number;
+      stockQuantity?: number;
+      listingStatus?: ProductListingStatus;
+      serviceCategory?: BusinessServiceCategory | string;
+      sourceOwnership?: ProductSourceType;
+      linkedOfficeId?: string;
+      linkedOfficeName?: string;
+      codEligible?: boolean;
+      description?: string;
+    }
+  ): StaffProductItem | null {
+    const all = this.getAllProducts();
+    const index = all.findIndex((p) => p.id === id);
+    if (index === -1) return null;
+
+    const prev = all[index];
+    const nextPrice = patch.price !== undefined ? Math.max(0, Number(patch.price)) : prev.price;
+    const nextWholesale =
+      patch.wholesalePrice !== undefined
+        ? Math.max(0, Math.min(nextPrice, Number(patch.wholesalePrice)))
+        : prev.wholesalePrice ?? Math.round(nextPrice * 0.85);
+    const marginAmount = Math.max(0, nextPrice - nextWholesale);
+    const marginPercent = nextPrice > 0 ? Math.round((marginAmount / nextPrice) * 100) : 0;
+
+    const nextListingStatus = patch.listingStatus ?? prev.listingStatus ?? 'Active';
+    const nextStorefrontStatus: StaffProductItem['status'] =
+      nextListingStatus === 'Paused' || nextListingStatus === 'Draft'
+        ? 'HIDDEN'
+        : prev.status === 'FEATURED'
+        ? 'FEATURED'
+        : 'ACTIVE';
+
+    const updated = sanitizeProductThumbnail({
+      ...prev,
+      title: patch.title !== undefined ? patch.title.trim() || prev.title : prev.title,
+      price: nextPrice,
+      wholesalePrice: nextWholesale,
+      sellingMarginAmount: marginAmount,
+      sellingMarginPercent: marginPercent,
+      commissionRate: `₹${marginAmount} Margin (${marginPercent}%)`,
+      stockQuantity: patch.stockQuantity !== undefined ? Math.max(0, Number(patch.stockQuantity)) : prev.stockQuantity,
+      listingStatus: nextListingStatus,
+      status: nextStorefrontStatus,
+      serviceCategory: patch.serviceCategory ?? prev.serviceCategory,
+      sourceOwnership: patch.sourceOwnership ?? prev.sourceOwnership,
+      linkedOfficeId: patch.linkedOfficeId ?? prev.linkedOfficeId,
+      linkedOfficeName: patch.linkedOfficeName ?? prev.linkedOfficeName,
+      subOffice: patch.linkedOfficeName || prev.subOffice,
+      codEligible: patch.codEligible !== undefined ? patch.codEligible : prev.codEligible,
+      description: patch.description !== undefined ? patch.description : prev.description,
+      updatedAt: new Date().toISOString(),
+    });
+
+    all[index] = updated;
+    this.saveAllProducts(all);
+    return updated;
+  },
+
+  updateProductEconomics(
+    id: string,
+    patch: { wholesalePrice?: number; price?: number; codEligible?: boolean }
+  ): void {
+    const all = this.getAllProducts();
+    const index = all.findIndex((p) => p.id === id);
+    if (index === -1) return;
+    const prev = all[index];
+    const nextRetail = patch.price !== undefined ? Math.max(0, Number(patch.price)) : prev.price;
+    const nextWholesale =
+      patch.wholesalePrice !== undefined
+        ? Math.max(0, Math.min(nextRetail, Number(patch.wholesalePrice)))
+        : prev.wholesalePrice ?? Math.round(nextRetail * 0.85);
+    const marginAmount = Math.max(0, nextRetail - nextWholesale);
+    const marginPercent = nextRetail > 0 ? Math.round((marginAmount / nextRetail) * 100) : 0;
+
+    all[index] = sanitizeProductThumbnail({
+      ...prev,
+      price: nextRetail,
+      wholesalePrice: nextWholesale,
+      sellingMarginAmount: marginAmount,
+      sellingMarginPercent: marginPercent,
+      commissionRate: `₹${marginAmount} Partner Margin (${marginPercent}%)`,
+      codEligible: patch.codEligible !== undefined ? patch.codEligible : prev.codEligible,
+      updatedAt: new Date().toISOString(),
+    });
+    this.saveAllProducts(all);
   },
 
   updateProduct(updated: StaffProductItem): void {
@@ -545,6 +2504,7 @@ export const staffProductService = {
     const item = all.find((p) => p.id === id);
     if (item) {
       item.status = newStatus;
+      item.listingStatus = newStatus === 'HIDDEN' ? 'Paused' : 'Active';
       item.updatedAt = new Date().toISOString();
       this.saveAllProducts(all);
     }
@@ -552,7 +2512,7 @@ export const staffProductService = {
 
   subscribe(callback: () => void): () => void {
     if (typeof window === 'undefined') return () => {};
-    window.addEventListener('xpeedo-storefront-updated', callback);
-    return () => window.removeEventListener('xpeedo-storefront-updated', callback);
+    window.addEventListener('xpokart-storefront-updated', callback);
+    return () => window.removeEventListener('xpokart-storefront-updated', callback);
   },
 };

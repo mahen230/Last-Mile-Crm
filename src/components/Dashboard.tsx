@@ -31,14 +31,28 @@ import {
   Sparkles,
   ArrowLeftRight,
   Store,
+  Activity,
+  Server,
+  Database,
+  RefreshCw,
+  Copy,
+  Gift,
+  Wallet,
+  Shield,
+  Home,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { customerService } from '../services/customerService';
 import { operationsService } from '../services/operationsService';
 import { staffPermissionService, getDefaultFixedKmForBeat } from '../services/staffPermissionService';
+import { featureVisibilityService } from '../services/featureVisibilityService';
 import { verificationService } from '../services/verificationService';
 import { staffRegistrationService } from '../services/staffRegistrationService';
 import { aiCommercialVerificationService } from '../services/aiCommercialVerificationService';
+import { staffProductService } from '../services/staffProductService';
+import { propertyRegistryService } from '../services/propertyRegistryService';
+import { academyTrainingService } from '../services/academyTrainingService';
+import { partnerBrandService } from '../services/partnerBrandService';
 import { useAuth } from './auth/FirebaseAuthProvider';
 import {
   Customer,
@@ -47,12 +61,14 @@ import {
   DataConflict,
   DailyArticleEntry,
   SpecialBillRecord,
+  Property,
 } from '../types/models';
 import CustomerProfileModal from './customers/CustomerProfileModal';
 import AddCustomerModal from './customers/AddCustomerModal';
 import PostmanAllDayArticlesOverview from './postman/PostmanAllDayArticlesOverview';
 import OfficialStaffDocumentsHub from './crm/OfficialStaffDocumentsHub';
 import DailyOperationsHub from './crm/DailyOperationsHub';
+import PartnerBrandManagementHub from './admin/PartnerBrandManagementHub';
 
 export default function Dashboard({
   onSwitchToCustomerPortal,
@@ -62,8 +78,10 @@ export default function Dashboard({
   const { userProfile } = useAuth();
   const navigate = useNavigate();
 
-  const [postmanActiveTab, setPostmanActiveTab] = useState<'OPERATIONS_HUB' | 'ALL_DAY_ARTICLES' | 'CRM_FIELD' | 'OFFICIAL_DOCUMENTS'>('OPERATIONS_HUB');
+  const [postmanActiveTab, setPostmanActiveTab] = useState<'OPERATIONS_HUB' | 'ALL_DAY_ARTICLES' | 'CRM_FIELD' | 'OFFICIAL_DOCUMENTS'>('CRM_FIELD');
   const [adminShowAllDayHub, setAdminShowAllDayHub] = useState<'OPERATIONS_HUB' | 'CRM' | 'ALL_DAY_ARTICLES' | 'OFFICIAL_DOCUMENTS'>('OPERATIONS_HUB');
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [, setVisibilityTick] = useState(0);
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -140,6 +158,58 @@ export default function Dashboard({
     aiCommercialVerificationService.getAllDispatches()
   );
 
+  // Developer & Master Admin API Health + DB Sync Console State
+  const [systemHealth, setSystemHealth] = useState<{
+    status: string;
+    nodeVersion: string;
+    uptimeSeconds: number;
+    memoryRssMb: number;
+    heapUsedMb: number;
+    activeSessions: number;
+    totalStaffDirectory: number;
+    totalAuditEvents: number;
+    services: Array<{ name: string; status: string; latencyMs: number }>;
+    timestamp: string;
+  } | null>(null);
+  const [syncLogs, setSyncLogs] = useState<Array<{
+    id: string;
+    timestamp: string;
+    eventType: string;
+    userId: string;
+    ipAddress: string;
+    statusCode: number;
+    details: string;
+  }>>([]);
+  const [isLoadingSystem, setIsLoadingSystem] = useState(false);
+  const [affiliateCopied, setAffiliateCopied] = useState(false);
+
+  const fetchSystemTelemetry = async () => {
+    setIsLoadingSystem(true);
+    try {
+      const token =
+        localStorage.getItem('xpokart_auth_token') ||
+        localStorage.getItem('xpeedo_auth_token') ||
+        '';
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const [healthRes, logsRes] = await Promise.all([
+        fetch('/api/v1/system/health', { headers }),
+        fetch('/api/v1/system/sync-logs', { headers }),
+      ]);
+      if (healthRes.ok) {
+        const hJson = await healthRes.json();
+        if (hJson?.success) setSystemHealth(hJson);
+      }
+      if (logsRes.ok) {
+        const lJson = await logsRes.json();
+        if (lJson?.success && Array.isArray(lJson.logs)) setSyncLogs(lJson.logs);
+      }
+    } catch {
+      // ignore offline transient fetch
+    } finally {
+      setIsLoadingSystem(false);
+    }
+  };
+
   const refreshData = () => {
     const currentProfile = staffPermissionService.getActiveSession() || userProfile;
     const scopedCusts = customerService
@@ -155,43 +225,55 @@ export default function Dashboard({
       return hA.localeCompare(hB, undefined, { numeric: true, sensitivity: 'base' });
     });
     setCustomers(scopedCusts);
+    setProperties(customerService.getScopedProperties(currentProfile));
     setLeads(
-      customerService
-        .getLeads()
-        .filter((l) => staffPermissionService.matchesUserBeatScope(currentProfile, l))
+      featureVisibilityService.isFeatureVisible(currentProfile, 'leadsAndSchemes')
+        ? customerService
+            .getLeads()
+            .filter((l) => staffPermissionService.matchesUserBeatScope(currentProfile, l))
+        : []
     );
     setFollowUps(
-      customerService
-        .getFollowUps()
-        .filter((f) => staffPermissionService.matchesUserBeatScope(currentProfile, f))
+      featureVisibilityService.isFeatureVisible(currentProfile, 'leadsAndSchemes')
+        ? customerService
+            .getFollowUps()
+            .filter((f) => staffPermissionService.matchesUserBeatScope(currentProfile, f))
+        : []
     );
     setTasks(
-      customerService
-        .getTasks()
-        .filter((t) => staffPermissionService.matchesUserBeatScope(currentProfile, t))
+      featureVisibilityService.isFeatureVisible(currentProfile, 'dailyOperations')
+        ? customerService
+            .getTasks()
+            .filter((t) => staffPermissionService.matchesUserBeatScope(currentProfile, t))
+        : []
     );
     setConflicts([...customerService.getConflicts()]);
     setDailyEntries(
-      operationsService
-        .getDailyEntries()
-        .filter((d) =>
-          staffPermissionService.matchesUserBeatScope(currentProfile, {
-            beatNo: d.beatNo,
-            assignedStaffName: d.staffName,
-            assignedStaffEmail: d.staffEmail,
-          })
-        )
+      featureVisibilityService.isFeatureVisible(currentProfile, 'dailyOperations')
+        ? operationsService
+            .getDailyEntries()
+            .filter((d) =>
+              staffPermissionService.matchesUserBeatScope(currentProfile, {
+                beatNo: d.beatNo,
+                assignedStaffName: d.staffName,
+                assignedStaffEmail: d.staffEmail,
+              })
+            )
+        : []
     );
     setSpecialBills(
-      operationsService
-        .getSpecialBills()
-        .filter((b) =>
-          staffPermissionService.matchesUserBeatScope(currentProfile, {
-            beatNo: b.beatNo,
-            assignedStaffName: b.employeeName,
-            assignedStaffEmail: b.employeeEmail,
-          })
-        )
+      featureVisibilityService.isFeatureVisible(currentProfile, 'officialDocuments') ||
+        featureVisibilityService.isFeatureVisible(currentProfile, 'dailyOperations')
+        ? operationsService
+            .getSpecialBills()
+            .filter((b) =>
+              staffPermissionService.matchesUserBeatScope(currentProfile, {
+                beatNo: b.beatNo,
+                assignedStaffName: b.employeeName,
+                assignedStaffEmail: b.employeeEmail,
+              })
+            )
+        : []
     );
     setBackupState(operationsService.getBackupState());
 
@@ -213,13 +295,31 @@ export default function Dashboard({
     const unsubStaff = staffPermissionService.subscribe(refreshData);
     const unsubStaffReg = staffRegistrationService.subscribe(refreshData);
     const unsubVerif = verificationService.subscribe(refreshData);
+    const unsubVis = featureVisibilityService.subscribe(() => {
+      setVisibilityTick((v) => v + 1);
+      refreshData();
+    });
     return () => {
       unsubCust();
       unsubOps();
       unsubStaff();
       unsubStaffReg();
       unsubVerif();
+      unsubVis();
     };
+  }, [userProfile]);
+
+  useEffect(() => {
+    const role = userProfile?.role;
+    if (
+      role === 'OWNER' ||
+      role === 'DEVELOPER' ||
+      role === 'MASTER_ADMIN' ||
+      role === 'SUPER_ADMIN' ||
+      userProfile?.email?.toLowerCase() === 'ektamahenmeena@gmail.com'
+    ) {
+      fetchSystemTelemetry();
+    }
   }, [userProfile]);
 
   // Computed Hero Priority Metrics
@@ -539,135 +639,282 @@ export default function Dashboard({
       : ALL_POSTAL_SERVICES_HUB.filter((s) => s.category === activeServiceHubCat);
 
   const isAdmin =
+    userProfile?.role === 'OWNER' ||
+    userProfile?.role === 'DEVELOPER' ||
     userProfile?.role === 'MASTER_ADMIN' ||
     userProfile?.role === 'SUPER_ADMIN' ||
     userProfile?.role === 'ADMIN' ||
     userProfile?.email?.toLowerCase() === 'ektamahenmeena@gmail.com';
 
+  const isDeveloperOrOwner =
+    userProfile?.role === 'DEVELOPER' ||
+    userProfile?.role === 'OWNER' ||
+    userProfile?.role === 'MASTER_ADMIN' ||
+    userProfile?.role === 'SUPER_ADMIN' ||
+    userProfile?.email?.toLowerCase() === 'ektamahenmeena@gmail.com';
+
+  const brandIdentity = featureVisibilityService.getBrandIdentity(userProfile);
+  const isWhiteLabel = brandIdentity.isWhiteLabel;
+  const strictVendorId = featureVisibilityService.isStrictlyScopedToVendor(userProfile);
+
+  const showProperty = featureVisibilityService.isFeatureVisible(userProfile, 'property');
+  const showMembers = featureVisibilityService.isFeatureVisible(userProfile, 'members');
+  const showBeats = featureVisibilityService.isFeatureVisible(userProfile, 'beats');
+  const showDailyOps = featureVisibilityService.isFeatureVisible(userProfile, 'dailyOperations');
+  const showOfficialDocs = featureVisibilityService.isFeatureVisible(userProfile, 'officialDocuments');
+  const showLeads = featureVisibilityService.isFeatureVisible(userProfile, 'leadsAndSchemes');
+  const showVerification = featureVisibilityService.isFeatureVisible(userProfile, 'dailyVerification');
+  const showCommunication = featureVisibilityService.isFeatureVisible(userProfile, 'communication');
+  const showStaffDir = featureVisibilityService.isFeatureVisible(userProfile, 'staffDirectory');
+  const showCommercial =
+    !isWhiteLabel &&
+    strictVendorId !== 'INDIA_POST' &&
+    featureVisibilityService.isFeatureVisible(userProfile, 'commercialDirectory');
+  const showVendorSection =
+    !isWhiteLabel &&
+    strictVendorId !== 'INDIA_POST' &&
+    featureVisibilityService.isFeatureVisible(userProfile, 'vendorSection');
+  const showStorefront =
+    !isWhiteLabel &&
+    strictVendorId !== 'INDIA_POST' &&
+    featureVisibilityService.isFeatureVisible(userProfile, 'storefront');
+
+  const isPropertyMembersOnlyMode =
+    !isAdmin &&
+    !showBeats &&
+    !showDailyOps &&
+    !showOfficialDocs &&
+    !showLeads &&
+    !showVerification &&
+    !showCommercial &&
+    !showVendorSection &&
+    !showStorefront;
+
+  const canAccessSpecialBills = showOfficialDocs || showDailyOps;
+
+  const topMarginVendors = showVendorSection
+    ? staffProductService.sortVendorStoresByMarginPriority(commercialFreshSummary.freshStores).slice(0, 3)
+    : [];
+
+  const beatScopedDispatches = isAdmin
+    ? dispatchLogs
+    : dispatchLogs.filter((d) => (d.beatNo || '').toLowerCase() === activeBeat.toLowerCase());
+  const beatDeliveredDispatches = beatScopedDispatches.filter(
+    (d) => d.status === 'DELIVERED' || d.status === 'COD_SETTLED'
+  );
+  const beatParcelCodTotal = beatScopedDispatches.reduce((s, d) => s + (d.codAmount || 0), 0);
+  const beatDeliveryFeeEarned = beatDeliveredDispatches.length * 15;
+  const staffReferralCode = `XPO-${(userProfile?.employeeId || 'BEAT2').replace(/[^A-Z0-9]/gi, '').slice(0, 8).toUpperCase()}`;
+
   return (
     <div className="space-y-6" id="dashboard-view">
       {/* =====================================================================
-          HERO SECTION: ROLE-TAILORED COMMAND STRIP (ADMIN EKTA MEENA vs POSTMAN)
+          HERO SECTION: ROLE-TAILORED COMMAND STRIP (OWNER/ADMIN/DEV vs WHITE-LABEL POSTMAN/GDS)
          ===================================================================== */}
       <div className="bg-slate-900 text-white rounded-2xl border border-slate-800 overflow-hidden shadow-md">
         {isAdmin ? (
-          /* ================= ADMIN COMMAND CENTER (EKTA MEENA) ================= */
+          /* ================= EXECUTIVE / DEVELOPER / MASTER ADMIN COMMAND CENTER ================= */
           <div className="bg-gradient-to-r from-red-950 via-slate-900 to-slate-950 p-6 border-b border-red-900/40">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div className="space-y-1.5">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-900/60 border border-red-700/60 text-amber-300 text-xs font-bold tracking-wide">
                   <ShieldCheck size={14} className="text-amber-400" />
-                  <span>Administrative Control Room · Ekta Meena (Ektamahenmeena@gmail.com)</span>
+                  <span>
+                    {userProfile?.role === 'DEVELOPER'
+                      ? 'Developer System Console'
+                      : userProfile?.role === 'OWNER'
+                      ? 'Sovereign Owner Command Room'
+                      : 'Master Admin Control Room'}{' '}
+                    · {userProfile?.name || 'Ekta Meena'} ({userProfile?.email || 'ektamahenmeena@gmail.com'})
+                  </span>
                 </div>
                 <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
-                  <span>Xpeedo Last Mile — Dadabari S.O. • PIN 324009</span>
+                  <span>
+                    {strictVendorId === 'INDIA_POST' || isWhiteLabel
+                      ? 'India Post Vendor System — Operations Control'
+                      : 'XPOKART — Sovereign B2B & E-Commerce Marketplace'}
+                  </span>
                 </h1>
                 <p className="text-xs text-slate-300 max-w-2xl">
-                  Xpeedo Last Mile • Dadabari S.O. • PIN 324009 (XPEEDO Private Limited). Centralized jurisdictional command: review staff registrations, authorize profile edits, monitor daily verifications, and audit field delivery beats.
+                  {strictVendorId === 'INDIA_POST' || isWhiteLabel
+                    ? 'Scoped Postal Operations Desk: manage offices, beats, properties, members, daily articles, and statutory documents within your assigned postal jurisdiction.'
+                    : 'Dadabari S.O. • Kota Division, Rajasthan Circle • PIN 324009 (34 Active Beats). Centralized jurisdictional command: review staff registrations, monitor API health & DB sync logs, manage vendor monetization, and audit Beat Speed Post COD settlements.'}
                 </p>
                 <div className="text-xs text-red-200 flex flex-wrap items-center gap-2 pt-1 font-mono">
                   <span>Colonies: 25 Master</span>
                   <span>·</span>
                   <span>Beats: 34 Active</span>
-                  <span>·</span>
-                  <span>PINs: 324009, 324005, 324010</span>
+                  {!isWhiteLabel && strictVendorId !== 'INDIA_POST' && (
+                    <>
+                      <span>·</span>
+                      <span>Payouts: ₹15/Del · ₹100/Ref · 15–25% B2B</span>
+                    </>
+                  )}
                   <span>·</span>
                   <Link to="/staff-master" className="text-amber-400 hover:underline">
                     Staff Management ↗
                   </Link>
+                  {onSwitchToCustomerPortal && showStorefront && !isWhiteLabel && (
+                    <>
+                      <span>·</span>
+                      <button
+                        type="button"
+                        onClick={onSwitchToCustomerPortal}
+                        className="text-emerald-300 hover:underline cursor-pointer"
+                      >
+                        Storefront Preview ↗
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
               {/* Admin Primary Action Strip */}
               <div className="flex flex-wrap items-center gap-2.5 shrink-0">
                 <Link
-                  to="/staff-registrations"
-                  className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap"
-                  title="Review Staff Registration Requests"
+                  to="/role-access-dashboard"
+                  state={{ initialTab: 'VISIBILITY' }}
+                  className="px-3.5 py-2.5 bg-red-700 hover:bg-red-600 text-white border border-amber-400/50 rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap"
+                  title="Toggle Role Feature Visibility & Assign Scoped Vendor Access"
                 >
-                  <Users size={15} />
-                  <span>Staff Requests</span>
-                  {pendingRegsCount > 0 && (
-                    <span className="px-1.5 py-0.5 rounded-full bg-red-700 text-white text-[10px] font-black">
-                      {pendingRegsCount}
-                    </span>
-                  )}
+                  <Shield size={15} className="text-amber-300" />
+                  <span>Visibility &amp; Vendor Access</span>
                 </Link>
 
-                <Link
-                  to="/profile-approvals"
-                  className="px-3.5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap"
-                  title="Review Postman Profile Change Requests"
-                >
-                  <ShieldCheck size={15} />
-                  <span>Profile Approvals</span>
-                  {pendingApprovalsCount > 0 && (
-                    <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black">
-                      {pendingApprovalsCount}
-                    </span>
-                  )}
-                </Link>
+                {(!strictVendorId || strictVendorId === 'INDIA_POST') && (
+                  <Link
+                    to="/india-post?tab=STAFF_ROLES"
+                    className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap"
+                    title="Manage India Post Staff Post-Wise Roles, Promotions & Profiles"
+                  >
+                    <Users size={15} className="text-sky-300" />
+                    <span>Staff Roles &amp; Promotions</span>
+                  </Link>
+                )}
 
-                <Link
-                  to="/verifications"
-                  className="px-3.5 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap"
-                  title="Daily 10-Property Field Verification Monitor"
-                >
-                  <CheckCircle2 size={15} />
-                  <span>Verifications Monitor</span>
-                </Link>
+                {!strictVendorId && (
+                  <>
+                    <Link
+                      to="/staff-registrations"
+                      className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap"
+                      title="Review Staff Registration Requests"
+                    >
+                      <Users size={15} />
+                      <span>Staff Requests</span>
+                      {pendingRegsCount > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-red-700 text-white text-[10px] font-black">
+                          {pendingRegsCount}
+                        </span>
+                      )}
+                    </Link>
 
-                <button
-                  type="button"
-                  onClick={() => setAdminShowAllDayHub(adminShowAllDayHub === 'OPERATIONS_HUB' ? 'CRM' : 'OPERATIONS_HUB')}
-                  className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap ${
-                    adminShowAllDayHub === 'OPERATIONS_HUB'
-                      ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300'
-                      : 'bg-red-950 hover:bg-red-900 text-amber-300 border border-amber-400/40'
-                  }`}
-                  title="Daily Operations Hub & Fuel Reconciliation"
-                >
-                  <Package size={15} />
-                  <span>{adminShowAllDayHub === 'OPERATIONS_HUB' ? 'View Full CRM Grid' : 'Operations Hub & Fuel'}</span>
-                </button>
+                    <Link
+                      to="/profile-approvals"
+                      className="px-3.5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap"
+                      title="Review Staff Profile Change Requests"
+                    >
+                      <ShieldCheck size={15} />
+                      <span>Profile Approvals</span>
+                      {pendingApprovalsCount > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black">
+                          {pendingApprovalsCount}
+                        </span>
+                      )}
+                    </Link>
+                  </>
+                )}
 
-                <button
-                  type="button"
-                  onClick={() => setAdminShowAllDayHub(adminShowAllDayHub === 'ALL_DAY_ARTICLES' ? 'CRM' : 'ALL_DAY_ARTICLES')}
-                  className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap ${
-                    adminShowAllDayHub === 'ALL_DAY_ARTICLES'
-                      ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300'
-                      : 'bg-blue-800 hover:bg-blue-700 text-white'
-                  }`}
-                  title="View All-Day Article Delivery Overview & Beat Fuel Bills"
-                >
-                  <FileText size={15} />
-                  <span>{adminShowAllDayHub === 'ALL_DAY_ARTICLES' ? 'Dashboard CRM' : 'All-Day Articles & Fuel'}</span>
-                </button>
+                {showVendorSection && (
+                  <>
+                    <Link
+                      to="/partner-brand-management"
+                      className="px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-950 rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap"
+                      title="Manage Brands, Linked Stores, Direct Stores & Isolated Partner Portals"
+                    >
+                      <Building2 size={15} className="text-red-700" />
+                      <span>Partner &amp; Brand Hub</span>
+                    </Link>
+                    <Link
+                      to="/vendor-ecosystem"
+                      className="px-3.5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap"
+                      title="Open Consolidated Vendor Section (India Post & Partner Network)"
+                    >
+                      <Store size={15} />
+                      <span>Vendor Section</span>
+                    </Link>
+                  </>
+                )}
 
-                <button
-                  type="button"
-                  onClick={() => setAdminShowAllDayHub(adminShowAllDayHub === 'OFFICIAL_DOCUMENTS' ? 'CRM' : 'OFFICIAL_DOCUMENTS')}
-                  className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap ${
-                    adminShowAllDayHub === 'OFFICIAL_DOCUMENTS'
-                      ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300'
-                      : 'bg-emerald-800 hover:bg-emerald-700 text-white'
-                  }`}
-                  title="Official Staff Documents & Statutory Reports Hub"
-                >
-                  <FileCheck2 size={15} />
-                  <span>{adminShowAllDayHub === 'OFFICIAL_DOCUMENTS' ? 'Dashboard CRM' : 'Official Documents Hub'}</span>
-                </button>
+                {showVerification && (
+                  <Link
+                    to="/verifications"
+                    className="px-3.5 py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap"
+                    title="Daily 10-Property Field Verification Monitor"
+                  >
+                    <CheckCircle2 size={15} />
+                    <span>Verifications Monitor</span>
+                  </Link>
+                )}
 
-                <button
-                  type="button"
-                  onClick={() => setShowAddCustomerModal(true)}
-                  id="admin-add-customer-btn"
-                  className="px-3.5 py-2.5 bg-red-900/80 hover:bg-red-900 text-white border border-red-400/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-                >
-                  <Plus size={15} />
-                  <span>Add Customer</span>
-                </button>
+                {showDailyOps && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setAdminShowAllDayHub(adminShowAllDayHub === 'OPERATIONS_HUB' ? 'CRM' : 'OPERATIONS_HUB')}
+                      className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap ${
+                        adminShowAllDayHub === 'OPERATIONS_HUB'
+                          ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300'
+                          : 'bg-red-950 hover:bg-red-900 text-amber-300 border border-amber-400/40'
+                      }`}
+                      title="Daily Operations Hub & Fuel Reconciliation"
+                    >
+                      <Package size={15} />
+                      <span>{adminShowAllDayHub === 'OPERATIONS_HUB' ? 'View Full CRM Grid' : 'Operations Hub & Fuel'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setAdminShowAllDayHub(adminShowAllDayHub === 'ALL_DAY_ARTICLES' ? 'CRM' : 'ALL_DAY_ARTICLES')}
+                      className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap ${
+                        adminShowAllDayHub === 'ALL_DAY_ARTICLES'
+                          ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300'
+                          : 'bg-blue-800 hover:bg-blue-700 text-white'
+                      }`}
+                      title="View All-Day Article Delivery Overview & Beat Fuel Bills"
+                    >
+                      <FileText size={15} />
+                      <span>{adminShowAllDayHub === 'ALL_DAY_ARTICLES' ? 'Dashboard CRM' : 'All-Day Articles & Fuel'}</span>
+                    </button>
+                  </>
+                )}
+
+                {showOfficialDocs && (
+                  <button
+                    type="button"
+                    onClick={() => setAdminShowAllDayHub(adminShowAllDayHub === 'OFFICIAL_DOCUMENTS' ? 'CRM' : 'OFFICIAL_DOCUMENTS')}
+                    className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap ${
+                      adminShowAllDayHub === 'OFFICIAL_DOCUMENTS'
+                        ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300'
+                        : 'bg-emerald-800 hover:bg-emerald-700 text-white'
+                    }`}
+                    title="Official Staff Documents & Statutory Reports Hub"
+                  >
+                    <FileCheck2 size={15} />
+                    <span>{adminShowAllDayHub === 'OFFICIAL_DOCUMENTS' ? 'Dashboard CRM' : 'Official Documents Hub'}</span>
+                  </button>
+                )}
+
+                {showMembers && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCustomerModal(true)}
+                    id="admin-add-customer-btn"
+                    className="px-3.5 py-2.5 bg-red-900/80 hover:bg-red-900 text-white border border-red-400/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  >
+                    <Plus size={15} />
+                    <span>Add Customer</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -684,18 +931,20 @@ export default function Dashboard({
                 </div>
               </Link>
 
-              <Link
-                to="/commercial-intelligence"
-                className="p-3.5 rounded-2xl bg-gradient-to-br from-rose-950/90 to-slate-900 border border-rose-500/40 hover:border-rose-400 transition block shadow-md"
-              >
-                <div className="text-[11px] text-rose-300 font-bold uppercase tracking-wider">AI Stale Store Alerts</div>
-                <div className="text-2xl font-black text-white font-mono tabular-nums mt-1 flex items-center gap-2">
-                  <span>{commercialFreshSummary.staleExcludedCount}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-200 border border-rose-400/40 font-bold">
-                    {commercialFreshSummary.freshStores.length} Fresh
-                  </span>
-                </div>
-              </Link>
+              {showCommercial && !isWhiteLabel && (
+                <Link
+                  to="/commercial-intelligence"
+                  className="p-3.5 rounded-2xl bg-gradient-to-br from-rose-950/90 to-slate-900 border border-rose-500/40 hover:border-rose-400 transition block shadow-md"
+                >
+                  <div className="text-[11px] text-rose-300 font-bold uppercase tracking-wider">AI Stale Store Alerts</div>
+                  <div className="text-2xl font-black text-white font-mono tabular-nums mt-1 flex items-center gap-2">
+                    <span>{commercialFreshSummary.staleExcludedCount}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-200 border border-rose-400/40 font-bold">
+                      {commercialFreshSummary.freshStores.length} Fresh
+                    </span>
+                  </div>
+                </Link>
+              )}
 
               <Link
                 to="/verifications"
@@ -737,30 +986,45 @@ export default function Dashboard({
             </div>
           </div>
         ) : (
-          /* ================= FIELD POSTMAN COMMAND CENTER ================= */
-          <div className="bg-gradient-to-r from-red-900 via-red-800 to-slate-900 p-6 border-b border-red-800/50">
+          /* ================= WHITE-LABEL / SCOPED POSTMAN & GDS COMMAND WORKSPACE ================= */
+          <div className="bg-gradient-to-r from-red-950 via-red-900 to-slate-900 p-6 border-b border-red-800/50">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div className="space-y-1.5">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-950/70 border border-red-700/60 text-amber-300 text-xs font-bold tracking-wide">
-                  <MapPin size={13} className="text-amber-400" />
-                  <span>Field Postman Operations · {userProfile?.name || 'Postal Staff'} ({userProfile?.employeeId || 'CSI-ID'})</span>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-red-950/80 border border-red-700/60 text-amber-300 text-xs font-bold tracking-wide">
+                  <Building2 size={13} className="text-amber-400" />
+                  <span>
+                    {brandIdentity.title} · {userProfile?.name || 'Postal Staff'} ({userProfile?.employeeId || 'Staff'})
+                  </span>
                 </div>
                 <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
-                  <span>{activeBeat} Delivery & Verification Command</span>
+                  <span>
+                    {isPropertyMembersOnlyMode
+                      ? `${activeBeat} — Property & Members Workspace`
+                      : `${activeBeat} Postal Operations Workspace`}
+                  </span>
                 </h1>
                 <p className="text-xs text-red-100 max-w-2xl">
-                  Dadabari S.O. (324009) Beat Delivery Operations. Complete mandatory 10 doorstep verifications today, capture scheme leads, and navigate delivery sequences.
+                  {userProfile?.subOffice || 'Dadabari S.O.'} (PIN {userProfile?.officePincode || '324009'} ·{' '}
+                  {userProfile?.division || 'Kota Division'}). Focused departmental view displaying only your enabled operational sections for {activeBeat}.
                 </p>
                 <div className="text-xs text-red-200 flex flex-wrap items-center gap-2 pt-1 font-mono">
-                  <span>Beat: {activeBeat}</span>
-                  <span>·</span>
-                  <Link to="/my-beat" className="text-amber-300 hover:underline">
-                    My Beat Directory ↗
-                  </Link>
-                  <span>·</span>
-                  <Link to="/my-submissions" className="text-amber-300 hover:underline">
-                    My Submissions ↗
-                  </Link>
+                  <span>Jurisdiction: {activeBeat}</span>
+                  {showBeats && (
+                    <>
+                      <span>·</span>
+                      <Link to="/my-beat" className="text-amber-300 hover:underline">
+                        My Beat Directory ↗
+                      </Link>
+                    </>
+                  )}
+                  {showCommunication && (
+                    <>
+                      <span>·</span>
+                      <Link to="/my-submissions" className="text-amber-300 hover:underline">
+                        My Submissions ↗
+                      </Link>
+                    </>
+                  )}
                   <span>·</span>
                   <Link to="/my-profile" className="text-amber-300 hover:underline">
                     My Profile ↗
@@ -768,140 +1032,173 @@ export default function Dashboard({
                 </div>
               </div>
 
-              {/* Postman Primary Action Strip */}
+              {/* Dynamic Feature-Gated Action Strip (What is Visible is What Shows) */}
               <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPostmanActiveTab(
-                      postmanActiveTab === 'OPERATIONS_HUB' ? 'CRM_FIELD' : 'OPERATIONS_HUB'
-                    )
-                  }
-                  className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm ${
-                    postmanActiveTab === 'OPERATIONS_HUB'
-                      ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300'
-                      : 'bg-red-950 text-amber-300 border border-amber-400/50 hover:bg-red-900'
-                  }`}
-                  title="Daily Operations Hub & Fuel Reconciliation"
-                >
-                  <Package size={15} />
-                  <span>
-                    {postmanActiveTab === 'OPERATIONS_HUB'
-                      ? 'View Field CRM'
-                      : '★ Operations Hub & Fuel'}
-                  </span>
-                </button>
+                {showProperty && (
+                  <Link
+                    to="/properties"
+                    className="px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-950 rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                  >
+                    <Building2 size={15} className="text-red-800" />
+                    <span>Property ({properties.length})</span>
+                  </Link>
+                )}
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPostmanActiveTab(
-                      postmanActiveTab === 'ALL_DAY_ARTICLES' ? 'CRM_FIELD' : 'ALL_DAY_ARTICLES'
-                    )
-                  }
-                  className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm ${
-                    postmanActiveTab === 'ALL_DAY_ARTICLES'
-                      ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300'
-                      : 'bg-blue-900 text-white hover:bg-blue-800'
-                  }`}
-                  title="Toggle All-Day Article Delivery Overview & Monthly Fuel Sheet"
-                >
-                  <FileText size={15} />
-                  <span>
-                    {postmanActiveTab === 'ALL_DAY_ARTICLES'
-                      ? 'View Field CRM'
-                      : 'All-Day Articles'}
-                  </span>
-                </button>
+                {showMembers && (
+                  <Link
+                    to="/customers"
+                    className="px-3.5 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                  >
+                    <Users size={15} />
+                    <span>Members ({customers.length})</span>
+                  </Link>
+                )}
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPostmanActiveTab(
-                      postmanActiveTab === 'OFFICIAL_DOCUMENTS' ? 'CRM_FIELD' : 'OFFICIAL_DOCUMENTS'
-                    )
-                  }
-                  className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm ${
-                    postmanActiveTab === 'OFFICIAL_DOCUMENTS'
-                      ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300'
-                      : 'bg-emerald-950 text-emerald-200 border border-emerald-400/50 hover:bg-emerald-900'
-                  }`}
-                  title="Official Staff Documents & Statutory Reports Hub"
+                {showDailyOps && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPostmanActiveTab(
+                          postmanActiveTab === 'OPERATIONS_HUB' ? 'CRM_FIELD' : 'OPERATIONS_HUB'
+                        )
+                      }
+                      className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm ${
+                        postmanActiveTab === 'OPERATIONS_HUB'
+                          ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300'
+                          : 'bg-red-950 text-amber-300 border border-amber-400/50 hover:bg-red-900'
+                      }`}
+                    >
+                      <Package size={15} />
+                      <span>
+                        {postmanActiveTab === 'OPERATIONS_HUB' ? 'Overview' : 'Operations Hub & Fuel'}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPostmanActiveTab(
+                          postmanActiveTab === 'ALL_DAY_ARTICLES' ? 'CRM_FIELD' : 'ALL_DAY_ARTICLES'
+                        )
+                      }
+                      className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm ${
+                        postmanActiveTab === 'ALL_DAY_ARTICLES'
+                          ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300'
+                          : 'bg-blue-900 text-white hover:bg-blue-800'
+                      }`}
+                    >
+                      <FileText size={15} />
+                      <span>All-Day Articles</span>
+                    </button>
+                  </>
+                )}
+
+                {showOfficialDocs && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPostmanActiveTab(
+                        postmanActiveTab === 'OFFICIAL_DOCUMENTS' ? 'CRM_FIELD' : 'OFFICIAL_DOCUMENTS'
+                      )
+                    }
+                    className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm ${
+                      postmanActiveTab === 'OFFICIAL_DOCUMENTS'
+                        ? 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-300'
+                        : 'bg-emerald-950 text-emerald-200 border border-emerald-400/50 hover:bg-emerald-900'
+                    }`}
+                  >
+                    <FileCheck2 size={15} />
+                    <span>Official Docs</span>
+                  </button>
+                )}
+
+                {showVendorSection && (
+                  <Link
+                    to="/vendor-ecosystem"
+                    className="px-3.5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                  >
+                    <Store size={15} />
+                    <span>Vendor Ecosystem</span>
+                  </Link>
+                )}
+
+                {showVerification && (
+                  <Link
+                    to="/daily-verification"
+                    className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                  >
+                    <CheckCircle2 size={16} />
+                    <span>Daily Verification ({dailyVerifProgress.completedToday}/10)</span>
+                  </Link>
+                )}
+
+                {showLeads && (
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickLeadForm(!showQuickLeadForm)}
+                    id="postman-quick-lead-btn"
+                    className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-bold shadow-sm transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  >
+                    <Plus size={15} />
+                    <span>{showQuickLeadForm ? 'Close Form' : '+ Scheme Lead'}</span>
+                  </button>
+                )}
+
+                {(showProperty || showMembers) && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCustomerModal(true)}
+                    id="postman-add-customer-btn"
+                    className="px-3.5 py-2.5 bg-red-950/80 hover:bg-red-950 text-white border border-red-400/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  >
+                    <Plus size={15} />
+                    <span>Add Member / Property</span>
+                  </button>
+                )}
+
+                <Link
+                  to="/india-post-storefront"
+                  className="px-3.5 py-2.5 bg-gradient-to-r from-red-700 to-red-800 hover:from-red-600 hover:to-red-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm whitespace-nowrap"
                 >
-                  <FileCheck2 size={15} />
-                  <span>
-                    {postmanActiveTab === 'OFFICIAL_DOCUMENTS'
-                      ? 'View Field CRM'
-                      : 'Official Docs'}
-                  </span>
-                </button>
+                  <Store size={15} />
+                  <span>India Post Storefront</span>
+                </Link>
+              </div>
+            </div>
+
+            {/* Daily Verification Progress Card — Cascaded Hidden unless dailyVerification is enabled */}
+            {showVerification && (
+              <div className="mt-5 p-4 rounded-xl bg-slate-950/70 border border-red-700/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1.5 flex-1">
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className="text-white flex items-center gap-1.5">
+                      <CheckCircle2 size={14} className={dailyVerifProgress.isCompleted ? 'text-emerald-400' : 'text-amber-400'} />
+                      Today&apos;s Doorstep Verification Target
+                    </span>
+                    <span className="text-amber-400 font-mono tabular-nums">
+                      {dailyVerifProgress.completedToday} / {dailyVerifProgress.targetDaily} ({dailyVerifProgress.progressPct}%)
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        dailyVerifProgress.isCompleted ? 'bg-emerald-500' : 'bg-gradient-to-r from-amber-500 to-emerald-400'
+                      }`}
+                      style={{ width: `${dailyVerifProgress.progressPct}%` }}
+                    />
+                  </div>
+                </div>
 
                 <Link
                   to="/daily-verification"
-                  className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer whitespace-nowrap"
-                  title="Open Daily 10-Property Doorstep Verification"
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 self-start md:self-center shrink-0 cursor-pointer"
                 >
-                  <CheckCircle2 size={16} />
-                  <span>Daily 10 Verification ({dailyVerifProgress.completedToday}/10)</span>
+                  <span>Open Verification</span>
+                  <ArrowRight size={14} />
                 </Link>
-
-                <button
-                  type="button"
-                  onClick={() => setShowQuickLeadForm(!showQuickLeadForm)}
-                  id="postman-quick-lead-btn"
-                  className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-bold shadow-sm transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-                >
-                  <Plus size={15} />
-                  <span>{showQuickLeadForm ? 'Close Form' : '+ Scheme Lead'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowAddCustomerModal(true)}
-                  id="postman-add-customer-btn"
-                  className="px-3.5 py-2.5 bg-red-950/80 hover:bg-red-950 text-white border border-red-400/30 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-                >
-                  <Users size={15} />
-                  <span>Add Property/Citizen</span>
-                </button>
               </div>
-            </div>
-
-            {/* Postman Daily 10 Verification Progress Card */}
-            <div className="mt-5 p-4 rounded-xl bg-slate-950/70 border border-red-700/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="space-y-1.5 flex-1">
-                <div className="flex items-center justify-between text-xs font-bold">
-                  <span className="text-white flex items-center gap-1.5">
-                    <CheckCircle2 size={14} className={dailyVerifProgress.isCompleted ? 'text-emerald-400' : 'text-amber-400'} />
-                    Today&apos;s Mandatory Doorstep Verification (10 Properties Target)
-                  </span>
-                  <span className="text-amber-400 font-mono">
-                    {dailyVerifProgress.completedToday} / {dailyVerifProgress.targetDaily} ({dailyVerifProgress.progressPct}%)
-                  </span>
-                </div>
-                <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      dailyVerifProgress.isCompleted ? 'bg-emerald-500' : 'bg-gradient-to-r from-amber-500 to-emerald-400'
-                    }`}
-                    style={{ width: `${dailyVerifProgress.progressPct}%` }}
-                  />
-                </div>
-                <div className="text-[11px] text-slate-300">
-                  {dailyVerifProgress.isCompleted
-                    ? '🎉 Excellent work! All 10 daily property verifications completed for your assigned beat.'
-                    : `Remaining: ${dailyVerifProgress.remainingToday} properties to verify today. Live GPS coordinates and occupancy details required.`}
-                </div>
-              </div>
-
-              <Link
-                to="/daily-verification"
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 self-start md:self-center shrink-0 cursor-pointer"
-              >
-                <span>Launch Verification Workbench</span>
-                <ArrowRight size={14} />
-              </Link>
-            </div>
+            )}
           </div>
         )}
 
@@ -922,44 +1219,47 @@ export default function Dashboard({
           </div>
         )}
 
-        {/* Module 3: Daily Operations Hub & Fuel Reconciliation (For Postman or Admin toggled) */}
-        {((!isAdmin && postmanActiveTab === 'OPERATIONS_HUB') || (isAdmin && adminShowAllDayHub === 'OPERATIONS_HUB')) && (
-          <div className="p-4 sm:p-6 bg-slate-950 border-b border-slate-800">
-            <DailyOperationsHub
-              onOpenCustomerModal={(c) => setSelectedCustomer(c)}
-              onOpenLeadModal={(l) => {
-                setSelectedLeadForModal(l);
-                setLeadModalStage(l.stage);
-                setLeadModalNotes(l.notes || '');
-              }}
-              onNavigateToFullLog={() => {
-                if (isAdmin) setAdminShowAllDayHub('ALL_DAY_ARTICLES');
-                else setPostmanActiveTab('ALL_DAY_ARTICLES');
-              }}
-            />
-          </div>
-        )}
+        {/* Daily Operations Hub & Fuel Reconciliation (Strictly gated on showDailyOps) */}
+        {showDailyOps &&
+          ((!isAdmin && postmanActiveTab === 'OPERATIONS_HUB') || (isAdmin && adminShowAllDayHub === 'OPERATIONS_HUB')) && (
+            <div className="p-4 sm:p-6 bg-slate-950 border-b border-slate-800">
+              <DailyOperationsHub
+                onOpenCustomerModal={(c) => setSelectedCustomer(c)}
+                onOpenLeadModal={(l) => {
+                  setSelectedLeadForModal(l);
+                  setLeadModalStage(l.stage);
+                  setLeadModalNotes(l.notes || '');
+                }}
+                onNavigateToFullLog={() => {
+                  if (isAdmin) setAdminShowAllDayHub('ALL_DAY_ARTICLES');
+                  else setPostmanActiveTab('ALL_DAY_ARTICLES');
+                }}
+              />
+            </div>
+          )}
 
-        {/* All-Day Register, Speed Post & Fuel Sheet Hub (For Postman or Admin toggled) */}
-        {((!isAdmin && postmanActiveTab === 'ALL_DAY_ARTICLES') || (isAdmin && adminShowAllDayHub === 'ALL_DAY_ARTICLES')) && (
-          <div className="p-4 sm:p-6 bg-slate-900/90 border-b border-slate-800">
-            <PostmanAllDayArticlesOverview
-              initialBeat={activeBeat}
-              initialMonth="2026-10"
-              embedded={true}
-            />
-          </div>
-        )}
+        {/* All-Day Register, Speed Post & Fuel Sheet Hub */}
+        {showDailyOps &&
+          ((!isAdmin && postmanActiveTab === 'ALL_DAY_ARTICLES') || (isAdmin && adminShowAllDayHub === 'ALL_DAY_ARTICLES')) && (
+            <div className="p-4 sm:p-6 bg-slate-900/90 border-b border-slate-800">
+              <PostmanAllDayArticlesOverview
+                initialBeat={activeBeat}
+                initialMonth="2026-10"
+                embedded={true}
+              />
+            </div>
+          )}
 
         {/* Dedicated Official Staff Documents & Statutory Reports Hub */}
-        {((!isAdmin && postmanActiveTab === 'OFFICIAL_DOCUMENTS') || (isAdmin && adminShowAllDayHub === 'OFFICIAL_DOCUMENTS')) && (
-          <div className="p-4 sm:p-6 bg-slate-900/90 border-b border-slate-800">
-            <OfficialStaffDocumentsHub />
-          </div>
-        )}
+        {showOfficialDocs &&
+          ((!isAdmin && postmanActiveTab === 'OFFICIAL_DOCUMENTS') || (isAdmin && adminShowAllDayHub === 'OFFICIAL_DOCUMENTS')) && (
+            <div className="p-4 sm:p-6 bg-slate-900/90 border-b border-slate-800">
+              <OfficialStaffDocumentsHub />
+            </div>
+          )}
 
-        {/* Collapsible 1-Click Quick Scheme Lead Form right inside Hero Section */}
-        {showQuickLeadForm && (
+        {/* Collapsible 1-Click Quick Scheme Lead Form (Only if leadsAndSchemes is visible) */}
+        {showLeads && showQuickLeadForm && (
           <form
             onSubmit={handleQuickLeadSubmit}
             className="p-6 bg-slate-950 border-b border-slate-800 space-y-4"
@@ -1058,519 +1358,661 @@ export default function Dashboard({
           </form>
         )}
 
-        {/* =====================================================================
-            PREMIUM & SOLID CARD-VIEW DASHBOARD UPGRADE (EXEC METRICS & QUICK ACTION GRID)
-           ===================================================================== */}
-        <div className="p-6 space-y-6 bg-slate-900/40">
-          {/* Executive Metric Cards with Color-Coded Gradients & Live Counters */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-            <Link
-              to="/commercial-intelligence"
-              className="bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 text-white rounded-2xl p-4 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition space-y-2 block"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-white/20 text-white">
-                  AI 4-Factor Hub
-                </span>
-                <Sparkles className="text-amber-300" size={18} />
-              </div>
-              <div className="text-2xl font-black font-mono tabular-nums">
-                {commercialFreshSummary.freshStores.length}
-              </div>
-              <div className="text-xs text-indigo-100 font-medium">
-                Fresh Partners ({commercialFreshSummary.staleExcludedCount} Stale Alert)
-              </div>
-            </Link>
-
-            <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-2xl p-4 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-white/20 text-white">
-                  Master Registry
-                </span>
-                <Building2 className="text-emerald-100" size={18} />
-              </div>
-              <div className="text-2xl font-black font-mono tabular-nums">
-                {customers.length}
-              </div>
-              <div className="text-xs text-emerald-100 font-medium">Verified Dadabari Properties</div>
-            </div>
-
-            <div className="bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-2xl p-4 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-black/20 text-white">
-                  Active Delivery
-                </span>
-                <Package className="text-white" size={18} />
-              </div>
-              <div className="text-2xl font-black font-mono tabular-nums">
-                {totalDelivAll || 1420}
-              </div>
-              <div className="text-xs text-amber-50 font-medium">
-                ACG-61 Delivered · {dispatchLogs.length} COD Orders
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-sky-600 to-blue-700 text-white rounded-2xl p-4 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-white/20 text-white">
-                  DSS &amp; Fuel
-                </span>
-                <Fuel className="text-sky-100" size={18} />
-              </div>
-              <div className="text-2xl font-black font-mono tabular-nums">
-                {specialBills.filter((b) => b.type === 'FUEL_BILL').length || 34}
-              </div>
-              <div className="text-xs text-sky-100 font-medium">Fuel Claims @ ₹3.60/KM</div>
-            </div>
-
-            <div className="bg-gradient-to-br from-rose-600 to-red-700 text-white rounded-2xl p-4 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-white/20 text-white">
-                  Pending Audit
-                </span>
-                <ShieldCheck className="text-rose-100" size={18} />
-              </div>
-              <div className="text-2xl font-black font-mono tabular-nums">
-                {Math.max(0, 10 - dailyVerifProgress.completedToday)}
-              </div>
-              <div className="text-xs text-rose-100 font-medium">Daily 10-Target Remaining</div>
-            </div>
-
-            <div className="bg-gradient-to-br from-slate-800 to-slate-950 text-white rounded-2xl p-4 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition space-y-2 border border-slate-700">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-amber-400 text-slate-950">
-                  Dadabari S.O.
-                </span>
-                <MapPin className="text-amber-400" size={18} />
-              </div>
-              <div className="text-2xl font-black font-mono tabular-nums">34</div>
-              <div className="text-xs text-slate-300 font-medium">Active Beats · 34 Staff</div>
-            </div>
-          </div>
-
-          {/* Quick-Action Shortcut Grid & Real-Time Activity Feed Card */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Quick-Action Shortcut Grid */}
-            <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4 lg:col-span-2">
-              <h2 className="text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
-                <Sparkles className="text-red-700" size={16} />
-                <span>Quick-Action Operational Shortcuts</span>
-              </h2>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <Link
-                  to="/commercial-intelligence"
-                  className="p-4 rounded-2xl bg-gradient-to-br from-indigo-50 to-violet-100 border border-indigo-200 hover:border-indigo-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-700 text-white flex items-center justify-center font-bold shadow-sm group-hover:scale-110 transition">
-                    <Sparkles size={20} />
-                  </div>
-                  <div>
-                    <div className="text-xs font-black text-indigo-950">AI Commercial Hub</div>
-                    <div className="text-[11px] text-indigo-700 mt-0.5">4-Factor &amp; COD Dispatch</div>
-                  </div>
-                </Link>
-
-                <Link
-                  to="/postman-articles"
-                  className="p-4 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200 hover:border-amber-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shadow-sm group-hover:scale-110 transition">
-                    <Fuel size={20} />
-                  </div>
-                  <div>
-                    <div className="text-xs font-black text-slate-900">Fuel &amp; Articles Hub</div>
-                    <div className="text-[11px] text-slate-600 mt-0.5">31-day log &amp; lock</div>
-                  </div>
-                </Link>
-
+        {/* Clean Property & Members Focused Strip for Restricted Postman/GDS Mode */}
+        {isPropertyMembersOnlyMode ? (
+          <div className="p-6 bg-slate-900/50">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {showProperty && (
                 <Link
                   to="/properties"
-                  className="p-4 rounded-2xl bg-gradient-to-br from-sky-50 to-blue-100 border border-sky-200 hover:border-sky-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                  className="p-5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-amber-400/60 transition flex items-center justify-between gap-4"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center font-bold shadow-sm group-hover:scale-110 transition">
-                    <Building2 size={20} />
+                  <div className="space-y-1">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-amber-400">
+                      Assigned Property Registry
+                    </div>
+                    <div className="text-3xl font-black text-white font-mono tabular-nums">
+                      {properties.length}
+                    </div>
+                    <div className="text-xs text-slate-300">
+                      Properties mapped in {activeBeat} ({userProfile?.subOffice || 'Dadabari S.O.'})
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-xs font-black text-slate-900">Property Directory</div>
-                    <div className="text-[11px] text-slate-600 mt-0.5">Dadabari &amp; Keshavpura</div>
+                  <div className="px-3.5 py-2 rounded-xl bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shrink-0">
+                    <span>Open Property</span>
+                    <ArrowRight size={14} />
                   </div>
                 </Link>
+              )}
 
+              {showMembers && (
                 <Link
-                  to="/charge-report"
-                  className="p-4 rounded-2xl bg-gradient-to-br from-rose-50 to-red-100 border border-rose-200 hover:border-rose-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                  to="/customers"
+                  className="p-5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-emerald-400/60 transition flex items-center justify-between gap-4"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-red-700 text-white flex items-center justify-center font-bold shadow-sm group-hover:scale-110 transition">
-                    <ArrowLeftRight size={20} />
+                  <div className="space-y-1">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
+                      Assigned Members Directory
+                    </div>
+                    <div className="text-3xl font-black text-white font-mono tabular-nums">
+                      {customers.length}
+                    </div>
+                    <div className="text-xs text-slate-300">
+                      Verified residents &amp; members under {activeBeat}
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-xs font-black text-slate-900">Form ACG-61 Charge</div>
-                    <div className="text-[11px] text-slate-600 mt-0.5">Transfer of charge register</div>
-                  </div>
-                </Link>
-
-                <Link
-                  to="/commercial-directory"
-                  className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-100 border border-emerald-200 hover:border-emerald-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center font-bold shadow-sm group-hover:scale-110 transition">
-                    <Store size={20} />
-                  </div>
-                  <div>
-                    <div className="text-xs font-black text-slate-900">Commercial GIS Hub</div>
-                    <div className="text-[11px] text-slate-600 mt-0.5">Google Maps extractor</div>
+                  <div className="px-3.5 py-2 rounded-xl bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shrink-0">
+                    <span>Open Members</span>
+                    <ArrowRight size={14} />
                   </div>
                 </Link>
-
-                <Link
-                  to="/official-documents"
-                  className="p-4 rounded-2xl bg-gradient-to-br from-cyan-50 to-sky-100 border border-cyan-200 hover:border-cyan-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-cyan-700 text-white flex items-center justify-center font-bold shadow-sm group-hover:scale-110 transition">
-                    <FileCheck2 size={20} />
-                  </div>
-                  <div>
-                    <div className="text-xs font-black text-slate-900">Statutory Reports</div>
-                    <div className="text-[11px] text-slate-600 mt-0.5">Official PDF templates</div>
-                  </div>
-                </Link>
-
-                <Link
-                  to="/staff-storefront"
-                  className="p-4 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-100 border border-orange-200 hover:border-orange-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-orange-600 text-white flex items-center justify-center font-bold shadow-sm group-hover:scale-110 transition">
-                    <Store size={20} />
-                  </div>
-                  <div>
-                    <div className="text-xs font-black text-slate-900">Partner E-Store Studio</div>
-                    <div className="text-[11px] text-slate-600 mt-0.5">Products &amp; QR kits</div>
-                  </div>
-                </Link>
-
-                <Link
-                  to="/staff-master"
-                  className="p-4 rounded-2xl bg-gradient-to-br from-purple-50 to-fuchsia-100 border border-purple-200 hover:border-purple-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-purple-700 text-white flex items-center justify-center font-bold shadow-sm group-hover:scale-110 transition">
-                    <Users size={20} />
-                  </div>
-                  <div>
-                    <div className="text-xs font-black text-slate-900">Admin Staff Master</div>
-                    <div className="text-[11px] text-slate-600 mt-0.5">34 Beats &amp; staff roles</div>
-                  </div>
-                </Link>
-              </div>
-            </div>
-
-            {/* Real-Time Activity Feed Card */}
-            <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                  <Clock className="text-red-700" size={17} />
-                  <span>Real-Time Activity Feed</span>
-                </h2>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase">
-                  Live Sync OK
-                </span>
-              </div>
-
-              <div className="space-y-3 flex-1 overflow-y-auto max-h-[280px] text-xs">
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                  <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
-                    <span className="text-emerald-700 font-black">ACG-61 Handover</span>
-                    <span>10 mins ago</span>
-                  </div>
-                  <p className="font-semibold text-slate-800">
-                    Mahendra Kumar Meena generated certified ACG-61 Charge Report for Dadabari S.O.
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                  <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
-                    <span className="text-blue-700 font-black">Daily Article Sync</span>
-                    <span>25 mins ago</span>
-                  </div>
-                  <p className="font-semibold text-slate-800">
-                    Beat 1 &amp; Beat 2 synchronized 105 daily delivery articles with DSS database.
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-                  <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
-                    <span className="text-indigo-700 font-black">Commercial GIS Hub</span>
-                    <span>1 hour ago</span>
-                  </div>
-                  <p className="font-semibold text-slate-800">
-                    Extracted 25 verified 5+ year commercial storefronts for Dadabari Main Market.
-                  </p>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
-                <span>System Uptime: <strong>99.9%</strong></span>
-                <Link to="/audit-log" className="font-bold text-red-700 hover:underline">
-                  View Full Audit Logs →
-                </Link>
-              </div>
+              )}
             </div>
           </div>
-        </div>
-
-        {/* Priority Tasks & Follow-ups Bar (Hero Immediate Attention Strip) */}
-        <div className="p-6 space-y-5">
-          {/* Immediate Action Counters Row - 1-Click Interactive Navigation */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
-            <Link
-              to="/tasks"
-              className="group bg-slate-950/90 hover:bg-slate-950 border border-slate-800 hover:border-amber-500/80 p-4 rounded-xl flex items-center justify-between transition duration-200 cursor-pointer shadow-xs hover:shadow-amber-500/10"
-              title="Click to Open All Priority Tasks"
-            >
-              <div>
-                <span className="text-[11px] text-amber-400 font-semibold flex items-center gap-1">
-                  <span>Immediate Action</span>
-                  <span className="text-[10px] text-amber-300 opacity-0 group-hover:opacity-100 transition">→</span>
-                </span>
-                <span className="text-3xl font-black text-white font-mono tabular-nums mt-0.5 block">
-                  {immediateActionsCount}
-                </span>
-                <span className="text-[11px] text-slate-400">Tasks + Follow-ups Due</span>
-              </div>
-              <Clock className="w-8 h-8 text-amber-400 opacity-80 group-hover:scale-110 transition duration-200" />
-            </Link>
-
-            <Link
-              to="/tasks"
-              className="group bg-slate-950/90 hover:bg-slate-950 border border-slate-800 hover:border-red-500/80 p-4 rounded-xl flex items-center justify-between transition duration-200 cursor-pointer shadow-xs hover:shadow-red-500/10"
-              title="Click to Open Field Tasks"
-            >
-              <div>
-                <span className="text-[11px] text-red-400 font-semibold flex items-center gap-1">
-                  <span>Pending Field Tasks</span>
-                  <span className="text-[10px] text-red-300 opacity-0 group-hover:opacity-100 transition">→</span>
-                </span>
-                <span className="text-3xl font-black text-white font-mono tabular-nums mt-0.5 block">
-                  {pendingTasks.length}
-                </span>
-                <span className="text-[11px] text-slate-400">Doorstep KYC & Passbooks</span>
-              </div>
-              <CheckCircle2 className="w-8 h-8 text-red-400 opacity-80 group-hover:scale-110 transition duration-200" />
-            </Link>
-
-            <Link
-              to="/follow-ups"
-              className="group bg-slate-950/90 hover:bg-slate-950 border border-slate-800 hover:border-emerald-500/80 p-4 rounded-xl flex items-center justify-between transition duration-200 cursor-pointer shadow-xs hover:shadow-emerald-500/10"
-              title="Click to Open Today's Follow-ups"
-            >
-              <div>
-                <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
-                  <span>Today&apos;s Follow-ups</span>
-                  <span className="text-[10px] text-emerald-300 opacity-0 group-hover:opacity-100 transition">→</span>
-                </span>
-                <span className="text-3xl font-black text-white font-mono tabular-nums mt-0.5 block">
-                  {pendingFollowUps.length}
-                </span>
-                <span className="text-[11px] text-slate-400">Scheduled Scheme Visits</span>
-              </div>
-              <Target className="w-8 h-8 text-emerald-400 opacity-80 group-hover:scale-110 transition duration-200" />
-            </Link>
-
-            <Link
-              to="/leads"
-              className="group bg-slate-950/90 hover:bg-slate-950 border border-slate-800 hover:border-blue-500/80 p-4 rounded-xl flex items-center justify-between transition duration-200 cursor-pointer shadow-xs hover:shadow-blue-500/10"
-              title="Click to Open Scheme Leads Pipeline"
-            >
-              <div>
-                <span className="text-[11px] text-blue-400 font-semibold flex items-center gap-1">
-                  <span>Active Scheme Leads</span>
-                  <span className="text-[10px] text-blue-300 opacity-0 group-hover:opacity-100 transition">→</span>
-                </span>
-                <span className="text-3xl font-black text-white font-mono tabular-nums mt-0.5 block">
-                  {activeLeads.length}
-                </span>
-                <span className="text-[11px] text-slate-400">PLI · SSA · IPPB · SCSS</span>
-              </div>
-              <Users className="w-8 h-8 text-blue-400 opacity-80 group-hover:scale-110 transition duration-200" />
-            </Link>
-
-            <Link
-              to="/unified-properties"
-              className="group bg-slate-950/90 hover:bg-slate-950 border border-slate-800 hover:border-indigo-500/80 p-4 rounded-xl flex items-center justify-between transition duration-200 cursor-pointer shadow-xs hover:shadow-indigo-500/10"
-              title="Click to Open Unified Properties & Family Hub"
-            >
-              <div>
-                <span className="text-[11px] text-indigo-400 font-semibold flex items-center gap-1">
-                  <span>Verified Master Hub</span>
-                  <span className="text-[10px] text-indigo-300 opacity-0 group-hover:opacity-100 transition">→</span>
-                </span>
-                <span className="text-3xl font-black text-white font-mono tabular-nums mt-0.5 block">
-                  {customers.length}
-                </span>
-                <span className="text-[11px] text-slate-400">Properties & Family Trees</span>
-              </div>
-              <Building2 className="w-8 h-8 text-indigo-400 opacity-80 group-hover:scale-110 transition duration-200" />
-            </Link>
-          </div>
-
-          {/* Side-by-Side Priority Tasks & Today's Follow-ups Queue right in the Hero Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {/* Hero Priority Box 1: Pending Field Tasks */}
-            <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xs font-bold text-amber-400 tracking-wide uppercase">
-                  01. Priority Pending Field Tasks ({pendingTasks.length})
-                </h2>
-                <Link to="/tasks" className="text-xs text-slate-300 hover:text-white font-semibold">
-                  Open Tasks →
-                </Link>
-              </div>
-
-              <div className="space-y-2">
-                {pendingTasks.slice(0, 3).map((task) => (
-                  <div
-                    key={task.id}
-                    className="p-3 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between gap-3 text-xs hover:border-slate-700 transition"
+        ) : (
+          <>
+            {/* Executive Metric Cards — Strictly Cascading Based on Enabled Visibility */}
+            <div className="p-6 space-y-6 bg-slate-900/40">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                {showCommercial && (
+                  <Link
+                    to="/commercial-intelligence"
+                    className="bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 text-white rounded-2xl p-4 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition space-y-2 block"
                   >
-                    <div
-                      onClick={() => setSelectedTaskForModal(task)}
-                      className="min-w-0 flex-1 cursor-pointer"
-                      title="Click to view & action task in popup"
-                    >
-                      <div className="font-bold text-white truncate hover:text-amber-300 transition flex items-center gap-1.5">
-                        <span>{task.title}</span>
-                        <span className="text-[10px] text-amber-400 bg-amber-950/80 px-1.5 py-0.2 rounded border border-amber-800 font-normal">
-                          {task.status || 'Pending'}
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-white/20 text-white">
+                        AI 4-Factor Hub
+                      </span>
+                      <Sparkles className="text-amber-300" size={18} />
+                    </div>
+                    <div className="text-2xl font-black font-mono tabular-nums">
+                      {commercialFreshSummary.freshStores.length}
+                    </div>
+                    <div className="text-xs text-indigo-100 font-medium">
+                      Fresh Partners ({commercialFreshSummary.staleExcludedCount} Stale Alert)
+                    </div>
+                  </Link>
+                )}
+
+                {showProperty && (
+                  <Link
+                    to="/properties"
+                    className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-2xl p-4 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition space-y-2 block"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-white/20 text-white">
+                        Property Registry
+                      </span>
+                      <Building2 className="text-emerald-100" size={18} />
+                    </div>
+                    <div className="text-2xl font-black font-mono tabular-nums">
+                      {properties.length}
+                    </div>
+                    <div className="text-xs text-emerald-100 font-medium">Scoped Properties</div>
+                  </Link>
+                )}
+
+                {showMembers && (
+                  <Link
+                    to="/customers"
+                    className="bg-gradient-to-br from-sky-700 to-blue-800 text-white rounded-2xl p-4 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition space-y-2 block"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-white/20 text-white">
+                        Members Directory
+                      </span>
+                      <Users className="text-sky-100" size={18} />
+                    </div>
+                    <div className="text-2xl font-black font-mono tabular-nums">
+                      {customers.length}
+                    </div>
+                    <div className="text-xs text-sky-100 font-medium">Assigned Members</div>
+                  </Link>
+                )}
+
+                {showDailyOps && (
+                  <>
+                    <div className="bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-2xl p-4 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-black/20 text-white">
+                          Active Delivery
                         </span>
+                        <Package className="text-white" size={18} />
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 truncate">
-                        {task.category} · {task.location} · Due:{' '}
-                        <span className="font-mono tabular-nums text-slate-300">{task.dueDate}</span>
+                      <div className="text-2xl font-black font-mono tabular-nums">
+                        {totalDelivAll || 1420}
+                      </div>
+                      <div className="text-xs text-amber-50 font-medium">
+                        Daily Article Deliveries
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedTaskForModal(task)}
-                        className="p-1.5 rounded-lg bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 border border-indigo-700/50 cursor-pointer"
-                        title="[Profile & Hub] View task detail & update status"
-                      >
-                        <Eye size={12} />
-                      </button>
-                      <a
-                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                          `${task.location || 'Dadabari'}, Kota Rajasthan 324009`
-                        )}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-1.5 rounded-lg bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-700/50 cursor-pointer"
-                        title="[Verify Location] Open coordinates on Google Maps"
-                      >
-                        <Navigation size={12} />
-                      </a>
-                      <button
-                        type="button"
-                        onClick={() => customerService.updateTask(task.id, { status: 'Completed' })}
-                        className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
-                        title="Mark Task as Done"
-                      >
-                        <Check size={12} />
-                        <span>Done</span>
-                      </button>
+
+                    <div className="bg-gradient-to-br from-sky-600 to-blue-700 text-white rounded-2xl p-4 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-white/20 text-white">
+                          DSS &amp; Fuel
+                        </span>
+                        <Fuel className="text-sky-100" size={18} />
+                      </div>
+                      <div className="text-2xl font-black font-mono tabular-nums">
+                        {specialBills.filter((b) => b.type === 'FUEL_BILL').length || 34}
+                      </div>
+                      <div className="text-xs text-sky-100 font-medium">Fuel Claims @ ₹3.60/KM</div>
                     </div>
+                  </>
+                )}
+
+                {showVerification && (
+                  <div className="bg-gradient-to-br from-rose-600 to-red-700 text-white rounded-2xl p-4 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-white/20 text-white">
+                        Pending Audit
+                      </span>
+                      <ShieldCheck className="text-rose-100" size={18} />
+                    </div>
+                    <div className="text-2xl font-black font-mono tabular-nums">
+                      {Math.max(0, 10 - dailyVerifProgress.completedToday)}
+                    </div>
+                    <div className="text-xs text-rose-100 font-medium">Daily Verification Remaining</div>
                   </div>
-                ))}
-              </div>
-            </div>
+                )}
 
-            {/* Hero Priority Box 2: Today's Priority Follow-ups */}
-            <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xs font-bold text-emerald-400 tracking-wide uppercase">
-                  02. Today&apos;s Scheduled Follow-ups ({pendingFollowUps.length})
-                </h2>
-                <Link to="/follow-ups" className="text-xs text-slate-300 hover:text-white font-semibold">
-                  Open Follow-ups →
-                </Link>
-              </div>
-
-              <div className="space-y-2">
-                {pendingFollowUps.slice(0, 3).map((fol) => (
-                  <div
-                    key={fol.id}
-                    className="p-3 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between gap-3 text-xs hover:border-slate-700 transition"
-                  >
-                    <div
-                      onClick={() => setSelectedFollowUpForModal(fol)}
-                      className="min-w-0 flex-1 cursor-pointer"
-                      title="Click to view & reschedule / complete follow-up"
-                    >
-                      <div className="font-bold text-white truncate hover:text-emerald-300 transition flex items-center gap-1.5">
-                        <span>{fol.customerName}</span>
-                        <span className="font-mono text-amber-300 text-[11px] tabular-nums">
-                          {fol.customerMobile}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-400 truncate mt-0.5">
-                        {fol.productName} · {fol.nextAction}
-                      </div>
+                {showBeats && (
+                  <div className="bg-gradient-to-br from-slate-800 to-slate-950 text-white rounded-2xl p-4 shadow-md hover:shadow-xl hover:-translate-y-0.5 transition space-y-2 border border-slate-700">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-amber-400 text-slate-950">
+                        {userProfile?.subOffice || 'Dadabari S.O.'}
+                      </span>
+                      <MapPin className="text-amber-400" size={18} />
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {fol.customerMobile && (
-                        <>
-                          <a
-                            href={`tel:${fol.customerMobile}`}
-                            className="p-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/50 cursor-pointer"
-                            title={`Call ${fol.customerName}`}
-                          >
-                            <Phone size={12} />
-                          </a>
-                          <a
-                            href={`https://wa.me/91${fol.customerMobile.replace(/\D/g, '')}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1.5 rounded-lg bg-green-950/80 hover:bg-green-900 text-green-300 border border-green-700/50 cursor-pointer"
-                            title="Chat on WhatsApp"
-                          >
-                            <MessageCircle size={12} />
-                          </a>
-                        </>
+                    <div className="text-2xl font-black font-mono tabular-nums">{isAdmin ? '34' : activeBeat}</div>
+                    <div className="text-xs text-slate-300 font-medium">Beat Jurisdiction</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Quick-Action Shortcut Grid & Real-Time Activity Feed Card (Cascaded by Visibility) */}
+              {(showCommercial || showDailyOps || showOfficialDocs || showStorefront || (isAdmin && !strictVendorId)) && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4 lg:col-span-2">
+                    <h2 className="text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                      <Sparkles className="text-red-700" size={16} />
+                      <span>Quick-Action Operational Shortcuts</span>
+                    </h2>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {showCommercial && (
+                        <Link
+                          to="/commercial-intelligence"
+                          className="p-4 rounded-2xl bg-gradient-to-br from-indigo-50 to-violet-100 border border-indigo-200 hover:border-indigo-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-700 text-white flex items-center justify-center font-bold shadow-sm">
+                            <Sparkles size={20} />
+                          </div>
+                          <div>
+                            <div className="text-xs font-black text-indigo-950">AI Commercial Hub</div>
+                            <div className="text-[11px] text-indigo-700 mt-0.5">4-Factor &amp; COD Dispatch</div>
+                          </div>
+                        </Link>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => setSelectedFollowUpForModal(fol)}
-                        className="p-1.5 rounded-lg bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-700/50 cursor-pointer"
-                        title="[Profile & Hub] Update Follow-up Status"
-                      >
-                        <Edit2 size={12} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          customerService.completeFollowUp(
-                            fol.id,
-                            'Completed doorstep visit from Hero Priority Bar'
-                          )
-                        }
-                        className="px-2 py-1.5 bg-red-800 hover:bg-red-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer"
-                        title="Mark Follow-up as Complete"
-                      >
-                        <Check size={12} />
-                        <span>Done</span>
-                      </button>
+
+                      {showDailyOps && (
+                        <Link
+                          to="/postman-articles"
+                          className="p-4 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200 hover:border-amber-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shadow-sm">
+                            <Fuel size={20} />
+                          </div>
+                          <div>
+                            <div className="text-xs font-black text-slate-900">Fuel &amp; Articles Hub</div>
+                            <div className="text-[11px] text-slate-600 mt-0.5">31-day log &amp; lock</div>
+                          </div>
+                        </Link>
+                      )}
+
+                      {showProperty && (
+                        <Link
+                          to="/properties"
+                          className="p-4 rounded-2xl bg-gradient-to-br from-sky-50 to-blue-100 border border-sky-200 hover:border-sky-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center font-bold shadow-sm">
+                            <Building2 size={20} />
+                          </div>
+                          <div>
+                            <div className="text-xs font-black text-slate-900">Property Directory</div>
+                            <div className="text-[11px] text-slate-600 mt-0.5">Colony &amp; sector registry</div>
+                          </div>
+                        </Link>
+                      )}
+
+                      {showOfficialDocs && (
+                        <Link
+                          to="/charge-report"
+                          className="p-4 rounded-2xl bg-gradient-to-br from-rose-50 to-red-100 border border-rose-200 hover:border-rose-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-red-700 text-white flex items-center justify-center font-bold shadow-sm">
+                            <ArrowLeftRight size={20} />
+                          </div>
+                          <div>
+                            <div className="text-xs font-black text-slate-900">Form ACG-61 Charge</div>
+                            <div className="text-[11px] text-slate-600 mt-0.5">Transfer of charge register</div>
+                          </div>
+                        </Link>
+                      )}
+
+                      {showCommercial && (
+                        <Link
+                          to="/commercial-directory"
+                          className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-100 border border-emerald-200 hover:border-emerald-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center font-bold shadow-sm">
+                            <Store size={20} />
+                          </div>
+                          <div>
+                            <div className="text-xs font-black text-slate-900">Commercial GIS Hub</div>
+                            <div className="text-[11px] text-slate-600 mt-0.5">Commercial directory</div>
+                          </div>
+                        </Link>
+                      )}
+
+                      {showOfficialDocs && (
+                        <Link
+                          to="/official-documents"
+                          className="p-4 rounded-2xl bg-gradient-to-br from-cyan-50 to-sky-100 border border-cyan-200 hover:border-cyan-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-cyan-700 text-white flex items-center justify-center font-bold shadow-sm">
+                            <FileCheck2 size={20} />
+                          </div>
+                          <div>
+                            <div className="text-xs font-black text-slate-900">Statutory Reports</div>
+                            <div className="text-[11px] text-slate-600 mt-0.5">Official templates</div>
+                          </div>
+                        </Link>
+                      )}
+
+                      {showStorefront && (
+                        <Link
+                          to="/staff-storefront"
+                          className="p-4 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-100 border border-orange-200 hover:border-orange-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-orange-600 text-white flex items-center justify-center font-bold shadow-sm">
+                            <Store size={20} />
+                          </div>
+                          <div>
+                            <div className="text-xs font-black text-slate-900">Partner E-Store Studio</div>
+                            <div className="text-[11px] text-slate-600 mt-0.5">Products &amp; QR kits</div>
+                          </div>
+                        </Link>
+                      )}
+
+                      {isAdmin && !strictVendorId && (
+                        <Link
+                          to="/staff-master"
+                          className="p-4 rounded-2xl bg-gradient-to-br from-purple-50 to-fuchsia-100 border border-purple-200 hover:border-purple-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-purple-700 text-white flex items-center justify-center font-bold shadow-sm">
+                            <Users size={20} />
+                          </div>
+                          <div>
+                            <div className="text-xs font-black text-slate-900">Admin Staff Master</div>
+                            <div className="text-[11px] text-slate-600 mt-0.5">34 Beats &amp; staff roles</div>
+                          </div>
+                        </Link>
+                      )}
                     </div>
                   </div>
-                ))}
-              </div>
+
+                  {/* Real-Time Activity Feed Card (Only shown for non-white-label / dailyOps-enabled views) */}
+                  <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <h2 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                        <Clock className="text-red-700" size={17} />
+                        <span>Real-Time Activity Feed</span>
+                      </h2>
+                      <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase">
+                        Live Sync OK
+                      </span>
+                    </div>
+
+                    <div className="space-y-3 flex-1 overflow-y-auto max-h-[280px] text-xs">
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                        <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
+                          <span className="text-emerald-700 font-black">ACG-61 Handover</span>
+                          <span>Recent</span>
+                        </div>
+                        <p className="font-semibold text-slate-800">
+                          {userProfile?.subOffice || 'Dadabari S.O.'} statutory charge report synchronized.
+                        </p>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                        <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
+                          <span className="text-blue-700 font-black">Daily Article Sync</span>
+                          <span>Recent</span>
+                        </div>
+                        <p className="font-semibold text-slate-800">
+                          Beat delivery register synchronized with DSS ledger.
+                        </p>
+                      </div>
+                    </div>
+
+                    {isAdmin && !strictVendorId && (
+                      <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
+                        <span>System Status: <strong>Online</strong></span>
+                        <Link to="/audit-log" className="font-bold text-red-700 hover:underline">
+                          View Audit Logs →
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        </div>
+
+            {/* Priority Tasks & Follow-ups Bar (Strictly Cascaded by Visibility) */}
+            {(showDailyOps || showLeads) && (
+              <div className="p-6 space-y-5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+                  {showDailyOps && (
+                    <>
+                      <Link
+                        to="/tasks"
+                        className="group bg-slate-950/90 hover:bg-slate-950 border border-slate-800 hover:border-amber-500/80 p-4 rounded-xl flex items-center justify-between transition duration-200 cursor-pointer shadow-xs"
+                      >
+                        <div>
+                          <span className="text-[11px] text-amber-400 font-semibold">Immediate Action</span>
+                          <span className="text-3xl font-black text-white font-mono tabular-nums mt-0.5 block">
+                            {immediateActionsCount}
+                          </span>
+                          <span className="text-[11px] text-slate-400">Tasks + Follow-ups</span>
+                        </div>
+                        <Clock className="w-8 h-8 text-amber-400 opacity-80" />
+                      </Link>
+
+                      <Link
+                        to="/tasks"
+                        className="group bg-slate-950/90 hover:bg-slate-950 border border-slate-800 hover:border-red-500/80 p-4 rounded-xl flex items-center justify-between transition duration-200 cursor-pointer shadow-xs"
+                      >
+                        <div>
+                          <span className="text-[11px] text-red-400 font-semibold">Pending Field Tasks</span>
+                          <span className="text-3xl font-black text-white font-mono tabular-nums mt-0.5 block">
+                            {pendingTasks.length}
+                          </span>
+                          <span className="text-[11px] text-slate-400">Doorstep KYC &amp; Passbooks</span>
+                        </div>
+                        <CheckCircle2 className="w-8 h-8 text-red-400 opacity-80" />
+                      </Link>
+                    </>
+                  )}
+
+                  {showLeads && (
+                    <>
+                      <Link
+                        to="/follow-ups"
+                        className="group bg-slate-950/90 hover:bg-slate-950 border border-slate-800 hover:border-emerald-500/80 p-4 rounded-xl flex items-center justify-between transition duration-200 cursor-pointer shadow-xs"
+                      >
+                        <div>
+                          <span className="text-[11px] text-emerald-400 font-semibold">Today&apos;s Follow-ups</span>
+                          <span className="text-3xl font-black text-white font-mono tabular-nums mt-0.5 block">
+                            {pendingFollowUps.length}
+                          </span>
+                          <span className="text-[11px] text-slate-400">Scheduled Scheme Visits</span>
+                        </div>
+                        <Target className="w-8 h-8 text-emerald-400 opacity-80" />
+                      </Link>
+
+                      <Link
+                        to="/leads"
+                        className="group bg-slate-950/90 hover:bg-slate-950 border border-slate-800 hover:border-blue-500/80 p-4 rounded-xl flex items-center justify-between transition duration-200 cursor-pointer shadow-xs"
+                      >
+                        <div>
+                          <span className="text-[11px] text-blue-400 font-semibold">Active Scheme Leads</span>
+                          <span className="text-3xl font-black text-white font-mono tabular-nums mt-0.5 block">
+                            {activeLeads.length}
+                          </span>
+                          <span className="text-[11px] text-slate-400">PLI · SSA · IPPB · SCSS</span>
+                        </div>
+                        <Users className="w-8 h-8 text-blue-400 opacity-80" />
+                      </Link>
+                    </>
+                  )}
+
+                  {showProperty && (
+                    <Link
+                      to="/properties"
+                      className="group bg-slate-950/90 hover:bg-slate-950 border border-slate-800 hover:border-indigo-500/80 p-4 rounded-xl flex items-center justify-between transition duration-200 cursor-pointer shadow-xs"
+                    >
+                      <div>
+                        <span className="text-[11px] text-indigo-400 font-semibold">Property Registry</span>
+                        <span className="text-3xl font-black text-white font-mono tabular-nums mt-0.5 block">
+                          {properties.length}
+                        </span>
+                        <span className="text-[11px] text-slate-400">Properties &amp; Households</span>
+                      </div>
+                      <Building2 className="w-8 h-8 text-indigo-400 opacity-80" />
+                    </Link>
+                  )}
+                </div>
+
+                {/* Side-by-Side Priority Tasks & Follow-ups */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                  {showDailyOps && (
+                    <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-xs font-bold text-amber-400 tracking-wide uppercase">
+                          01. Priority Pending Field Tasks ({pendingTasks.length})
+                        </h2>
+                        <Link to="/tasks" className="text-xs text-slate-300 hover:text-white font-semibold">
+                          Open Tasks →
+                        </Link>
+                      </div>
+                      <div className="space-y-2">
+                        {pendingTasks.slice(0, 3).map((task) => (
+                          <div
+                            key={task.id}
+                            className="p-3 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between gap-3 text-xs"
+                          >
+                            <div onClick={() => setSelectedTaskForModal(task)} className="min-w-0 flex-1 cursor-pointer">
+                              <div className="font-bold text-white truncate">{task.title}</div>
+                              <div className="text-[11px] text-slate-400 mt-0.5 truncate">
+                                {task.category} · {task.location} · Due:{' '}
+                                <span className="font-mono tabular-nums text-slate-300">{task.dueDate}</span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => customerService.updateTask(task.id, { status: 'Completed' })}
+                              className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer shrink-0"
+                            >
+                              <Check size={12} />
+                              <span>Done</span>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {showLeads && (
+                    <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h2 className="text-xs font-bold text-emerald-400 tracking-wide uppercase">
+                          02. Today&apos;s Scheduled Follow-ups ({pendingFollowUps.length})
+                        </h2>
+                        <Link to="/follow-ups" className="text-xs text-slate-300 hover:text-white font-semibold">
+                          Open Follow-ups →
+                        </Link>
+                      </div>
+                      <div className="space-y-2">
+                        {pendingFollowUps.slice(0, 3).map((fol) => (
+                          <div
+                            key={fol.id}
+                            className="p-3 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between gap-3 text-xs"
+                          >
+                            <div onClick={() => setSelectedFollowUpForModal(fol)} className="min-w-0 flex-1 cursor-pointer">
+                              <div className="font-bold text-white truncate flex items-center gap-1.5">
+                                <span>{fol.customerName}</span>
+                                <span className="font-mono text-amber-300 text-[11px] tabular-nums">{fol.customerMobile}</span>
+                              </div>
+                              <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                                {fol.productName} · {fol.nextAction}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => customerService.completeFollowUp(fol.id, 'Completed doorstep visit')}
+                              className="px-2 py-1.5 bg-red-800 hover:bg-red-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 cursor-pointer shrink-0"
+                            >
+                              <Check size={12} />
+                              <span>Done</span>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* =====================================================================
-          PRIORITY-BASED 5-CARD DASHBOARD ARCHITECTURE
+          OWNER DASHBOARD: MULTI-CLIENT KPI, RAJASTHAN DEFAULT SCOPE & STAFF SEPARATION
          ===================================================================== */}
-      {(() => {
+      {isAdmin && !isWhiteLabel && strictVendorId !== 'INDIA_POST' && (() => {
+        const allRegistryProps = propertyRegistryService.getAllProperties();
+        const allBrands = partnerBrandService.getAllBrands();
+        const pendingBrandApprovals = partnerBrandService.getPendingBrandApprovals();
+        const xpoPlatformTeamCount = staffPermissionService.getXpoKartPlatformStaff().length;
+        const brandOpsStaffCount = staffPermissionService.getBrandOperationalStaff().length;
+        const academyCourses = academyTrainingService.getAllCourses();
+        const indiaPostCustomersCount = customerService.getCustomersByBrand('india-post').length;
+        const xpeedoEvCount =
+          customerService.getCustomersByBrand('xpeedo-ev').length +
+          propertyRegistryService.getPropertiesByBrand('xpeedo-ev').length;
+        const xpeedoLogisticsCount =
+          customerService.getCustomersByBrand('xpeedo-logistics').length +
+          propertyRegistryService.getPropertiesByBrand('xpeedo-logistics').length;
+
+        return (
+          <section
+            id="owner-dashboard-control-panel"
+            className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden"
+          >
+            <div className="px-6 py-4 bg-slate-950 text-white flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400">
+                  OWNER FIRST ARCHITECTURE · DEFAULT SCOPE: RAJASTHAN (SCALABLE PAN-INDIA)
+                </div>
+                <h2 className="text-lg font-black tracking-tight">
+                  XPO KART Owner Dashboard — Global Brand &amp; Team Separation
+                </h2>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="px-3 py-1 rounded-lg bg-slate-800 border border-slate-700 text-amber-300 font-bold">
+                  Scope: Rajasthan Default · Pan-India Ready
+                </span>
+                <Link
+                  to="/staff-master"
+                  className="px-3 py-1.5 rounded-lg bg-[#EA580C] hover:bg-orange-600 text-white font-bold transition"
+                >
+                  Self Staff Mgmt (XPO KART: {xpoPlatformTeamCount})
+                </Link>
+                <Link
+                  to="/staff-directory"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 font-bold transition"
+                >
+                  Brand Ops Staff ({brandOpsStaffCount})
+                </Link>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 border-b border-slate-200 text-xs">
+              <div className="p-4">
+                <div className="text-slate-500 font-semibold">Active Brands</div>
+                <div className="text-2xl font-black text-slate-900 font-mono tabular-nums mt-1">
+                  {allBrands.length}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">India Post · EV · Logistics</div>
+              </div>
+              <div className="p-4">
+                <div className="text-slate-500 font-semibold">Traceable Properties</div>
+                <div className="text-2xl font-black text-indigo-700 font-mono tabular-nums mt-1">
+                  {allRegistryProps.length}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">PropertyRegistry Master</div>
+              </div>
+              <div className="p-4">
+                <div className="text-slate-500 font-semibold">Pending Follow-Ups</div>
+                <div className="text-2xl font-black text-amber-700 font-mono tabular-nums mt-1">
+                  {pendingFollowUps.length}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Across Scoped Teams</div>
+              </div>
+              <div className="p-4">
+                <div className="text-slate-500 font-semibold">Pending Login Approvals</div>
+                <div className="text-2xl font-black text-rose-700 font-mono tabular-nums mt-1">
+                  {pendingBrandApprovals.pendingPartners.length +
+                    pendingBrandApprovals.pendingTeamLogins.length +
+                    pendingRegsCount}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Brands + Team + Staff</div>
+              </div>
+              <div className="p-4">
+                <div className="text-slate-500 font-semibold">XPO KART Tech vs Brand Ops</div>
+                <div className="text-2xl font-black text-slate-900 font-mono tabular-nums mt-1">
+                  {xpoPlatformTeamCount} <span className="text-sm text-slate-400">/</span> {brandOpsStaffCount}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Platform vs Operational</div>
+              </div>
+              <div className="p-4">
+                <div className="text-slate-500 font-semibold">Academy Modules</div>
+                <div className="text-2xl font-black text-emerald-700 font-mono tabular-nums mt-1">
+                  {academyCourses.length}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Active Certification Tracks</div>
+              </div>
+            </div>
+
+            <div className="px-6 py-3 bg-slate-50 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="font-bold text-slate-700">Brand-Tagged Customer Sync:</span>
+                <span className="px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 text-red-900 font-bold">
+                  India Post: {indiaPostCustomersCount} Records
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-300 text-slate-800 font-bold">
+                  Xpeedo Logistics: {xpeedoLogisticsCount} Scoped (Shared Blueprint · Zero Leakage)
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 font-bold">
+                  Xpeedo EV: {xpeedoEvCount} Scoped (Clean Ready State)
+                </span>
+              </div>
+              <Link
+                to="/partner/login/india-post"
+                className="font-bold text-[#1D4ED8] hover:underline flex items-center gap-1"
+              >
+                <span>Launch Brand White-Label Login</span>
+                <ExternalLink size={12} />
+              </Link>
+            </div>
+          </section>
+        );
+      })()}
+
+      {/* =====================================================================
+          ADMIN DASHBOARD: PARTNER & BRAND MANAGEMENT HUB
+         ===================================================================== */}
+      {isAdmin && !isWhiteLabel && strictVendorId !== 'INDIA_POST' && showVendorSection && (
+        <PartnerBrandManagementHub compact={true} />
+      )}
+
+      {/* =====================================================================
+          PRIORITY-BASED 5-CARD DASHBOARD ARCHITECTURE (Cascaded Hidden unless multi-module enabled)
+         ===================================================================== */}
+      {!isPropertyMembersOnlyMode && (() => {
         const uniqueColonies = new Set(
           customers
             .map((c) => (c.area || c.sectorLocality || c.address?.area || '').trim())
@@ -1802,12 +2244,14 @@ export default function Dashboard({
                   >
                     Tasks
                   </Link>
-                  <Link
-                    to="/postman-articles"
-                    className="flex-1 text-center px-2.5 py-1.5 bg-white border border-amber-200 hover:bg-amber-50 text-amber-900 rounded-lg text-[11px] font-bold transition"
-                  >
-                    Articles &amp; Fuel
-                  </Link>
+                  {canAccessSpecialBills && (
+                    <Link
+                      to="/postman-articles"
+                      className="flex-1 text-center px-2.5 py-1.5 bg-white border border-amber-200 hover:bg-amber-50 text-amber-900 rounded-lg text-[11px] font-bold transition"
+                    >
+                      Articles &amp; Fuel
+                    </Link>
+                  )}
                 </div>
               </div>
 
@@ -1895,8 +2339,9 @@ export default function Dashboard({
       })()}
 
       {/* =====================================================================
-          HOMEPAGE ALL SERVICES HUB (CATEGORIZED POST OFFICE & IPPB DIRECTORY)
+          HOMEPAGE ALL SERVICES HUB (Strictly Gated on leadsAndSchemes)
          ===================================================================== */}
+      {showLeads && (
       <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-5" id="all-services-hub">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-200 pb-4">
           <div>
@@ -2030,14 +2475,15 @@ export default function Dashboard({
           })}
         </div>
       </div>
+      )}
 
       {/* =====================================================================
-          CORE DASHBOARD WIDGETS:
-          1. DAILY ARTICLE ENTRY QUICK WIDGET (REGISTRY, SPEED POST, PARCEL)
-          2. REAL-TIME REPORTS & OPERATIONS SUMMARY (ATTENDANCE, COVERAGE, FUEL)
+          CORE DASHBOARD WIDGETS (Strictly Gated on dailyOperations / vendorSection)
          ===================================================================== */}
+      {(showDailyOps || showVendorSection || showOfficialDocs) && (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left 7 Cols: Daily Article Entry Quick Widget */}
+        {showDailyOps && (
         <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-6 space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-4">
             <div>
@@ -2269,9 +2715,11 @@ export default function Dashboard({
             </div>
           </div>
         </div>
+        )}
 
-        {/* Right 5 Cols: Real-Time Reports & Operations Summary (Attendance, Beat Coverage, Fuel Eligibility) */}
+        {/* Right 5 Cols: Real-Time Reports & Operations Summary */}
         <div className="lg:col-span-5 space-y-6">
+          {showDailyOps && (
           <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-5">
             <div className="border-b border-slate-200 pb-3">
               <div className="text-xs font-bold text-red-800">
@@ -2337,59 +2785,306 @@ export default function Dashboard({
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-1">
-                <span className="text-[11px] text-slate-400">
-                  Includes Fuel, ACG-61 Charge Report, Outsider & BYOD Bills
-                </span>
+              {canAccessSpecialBills && (
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[11px] text-slate-400">
+                    Includes Fuel, ACG-61 Charge Report, Outsider &amp; BYOD Bills
+                  </span>
+                  <Link
+                    to="/special-forms"
+                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg whitespace-nowrap"
+                  >
+                    Open Special Forms →
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+          )}
+
+          {/* Margin-Ranked B2B Vendor Partners & Statutory Shortcuts (Isolated from White-Label & Scoped Postal Views) */}
+          <div className="space-y-2.5">
+            {showVendorSection && !isWhiteLabel && (
+              <div className="p-3.5 rounded-xl border border-indigo-200 bg-indigo-50/50 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-indigo-950">
+                    Top Margin-Priority B2B Vendors
+                  </span>
+                  <Link to="/vendor-ecosystem" className="text-[11px] font-bold text-indigo-700 hover:underline">
+                    Full Vendor Roster →
+                  </Link>
+                </div>
+                <div className="space-y-1.5">
+                  {topMarginVendors.map((v) => {
+                    const summary = staffProductService.getVendorCommissionSummary(v);
+                    const pins =
+                      v.serviceablePincodes && v.serviceablePincodes.length > 0
+                        ? v.serviceablePincodes.join(', ')
+                        : v.pincode || '324009';
+                    return (
+                      <Link
+                        key={v.id}
+                        to={`/vendor-ecosystem/${encodeURIComponent(v.id)}`}
+                        className="flex items-center justify-between gap-2 p-2 rounded-lg bg-white border border-indigo-100 hover:border-indigo-300 text-xs transition"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-900 truncate flex items-center gap-1.5">
+                            <span>{v.storeName}</span>
+                            {v.storeType === 'BRAND_FRANCHISE' && (
+                              <span className="text-[10px] font-black text-red-700">· Brand</span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-500 truncate font-mono">
+                            PINs: {pins} · {v.beatNo} · {summary.productCount} SKU{summary.productCount === 1 ? '' : 's'}
+                          </div>
+                        </div>
+                        <span className="font-mono font-black text-emerald-700 text-[11px] tabular-nums shrink-0">
+                          +{summary.topMarginPercent}% (₹{summary.topMarginAmount})
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+              {isAdmin && !strictVendorId && (
                 <Link
-                  to="/special-forms"
-                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg whitespace-nowrap"
+                  to="/master-source"
+                  className="p-3.5 rounded-xl border border-slate-200 hover:border-red-300 bg-slate-50/70 flex items-center justify-between transition"
                 >
-                  Open Special Forms →
+                  <div>
+                    <div className="text-xs font-bold text-slate-900">
+                      Google Sheets &amp; Gmail Auto-Backup Engine
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      Master Admin: Ektamahenmeena@gmail.com · {specialBills.length} Bills &amp; {customers.length} Customers
+                    </div>
+                  </div>
+                  <ArrowRight size={15} className="text-red-800 shrink-0" />
                 </Link>
+              )}
+
+              {showOfficialDocs && canAccessSpecialBills && (
+                <Link
+                  to="/charge-report"
+                  className="p-3.5 rounded-xl border border-red-200 hover:border-red-400 bg-red-50/60 flex items-center justify-between transition"
+                >
+                  <div>
+                    <div className="text-xs font-bold text-red-900 flex items-center gap-1.5">
+                      <span>ACG-61 Charge Report &amp; Image Scanner</span>
+                      <span className="px-1.5 py-0.2 rounded text-[10px] bg-red-700 text-white font-black">NEW</span>
+                    </div>
+                    <div className="text-[11px] text-red-700">
+                      Upload &amp; analyze ACG-61 certificates · Relieved/Relieving officers, AM/PM &amp; instant PDF download
+                    </div>
+                  </div>
+                  <ArrowRight size={15} className="text-red-800 shrink-0" />
+                </Link>
+              )}
+
+              {/* Beat Partner ₹15/Delivery & ₹100/Referral Affiliate Tracker — Hidden in White-Label & Restricted Mode */}
+              {!isWhiteLabel && (showStorefront || showVendorSection) && (
+              <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-950 via-slate-900 to-slate-950 text-white space-y-3 border border-emerald-700/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Wallet size={16} className="text-amber-400" />
+                    <span className="text-xs font-black text-amber-300">
+                      {activeBeat} Speed Post COD &amp; ₹15/Del Tracker
+                    </span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-mono font-bold">
+                    {beatScopedDispatches.length} Parcels
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-xs border-y border-white/10 py-2.5">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Delivered COD</span>
+                    <span className="font-mono font-black text-white">{beatDeliveredDispatches.length} Orders</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">Beat Fee (₹15/Del)</span>
+                    <span className="font-mono font-black text-emerald-400">₹{beatDeliveryFeeEarned}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block">COD Volume</span>
+                    <span className="font-mono font-black text-amber-300">₹{beatParcelCodTotal.toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                  {beatScopedDispatches.slice(0, 3).map((d) => (
+                    <div key={d.id} className="p-2 rounded-lg bg-white/5 border border-white/10 text-[11px] flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-bold text-white truncate">{d.productTitle}</div>
+                        <div className="text-[10px] text-slate-400 truncate font-mono">
+                          {d.speedPostBarcode || d.id} · {d.customerName} ({d.beatNo})
+                        </div>
+                      </div>
+                      <span className="font-mono font-bold text-emerald-300 shrink-0">₹{d.codAmount}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="pt-2 border-t border-white/10 flex items-center justify-between gap-2 text-[11px]">
+                  <div className="flex items-center gap-1.5 text-amber-200 min-w-0">
+                    <Gift size={13} className="shrink-0 text-amber-400" />
+                    <span className="truncate font-mono">₹100/Ref Link: ?ref={staffReferralCode}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const url = `${typeof window !== 'undefined' ? window.location.origin : 'https://xpokart.in'}/?ref=${staffReferralCode}`;
+                      try {
+                        await navigator.clipboard.writeText(url);
+                      } catch {
+                        // ignore
+                      }
+                      setAffiliateCopied(true);
+                      setTimeout(() => setAffiliateCopied(false), 2000);
+                    }}
+                    className="px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-lg flex items-center gap-1 cursor-pointer shrink-0"
+                  >
+                    {affiliateCopied ? <Check size={11} /> : <Copy size={11} />}
+                    <span>{affiliateCopied ? 'Copied' : 'Copy Link'}</span>
+                  </button>
+                </div>
+              </div>
+              )}
+            </div>
+          </div>
+      </div>
+      )}
+
+      {/* =====================================================================
+          DEVELOPER, OWNER & MASTER ADMIN: API HEALTH & DB SYNC AUDIT CONSOLE
+         ===================================================================== */}
+      {isDeveloperOrOwner && (
+        <section
+          className="bg-slate-950 text-white rounded-2xl border border-slate-800 p-6 space-y-5 shadow-lg"
+          id="developer-system-health-console"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+            <div className="space-y-1">
+              <div className="text-[11px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                <Server size={13} />
+                <span>Developer &amp; Master Admin Telemetry · XPOKART Core Runtime</span>
+              </div>
+              <h2 className="text-lg font-black text-white flex items-center gap-2">
+                <span>Live API Health &amp; RBAC Database Sync Console</span>
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              onClick={fetchSystemTelemetry}
+              disabled={isLoadingSystem}
+              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer self-start sm:self-auto"
+            >
+              <RefreshCw size={13} className={isLoadingSystem ? 'animate-spin' : ''} />
+              <span>{isLoadingSystem ? 'Syncing Telemetry...' : 'Refresh Health & Sync Logs'}</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+              <div className="text-slate-400 flex items-center justify-between">
+                <span>Runtime Status</span>
+                <Activity size={14} className="text-emerald-400" />
+              </div>
+              <div className="text-lg font-black text-emerald-400 mt-1 font-mono">
+                {systemHealth?.status || 'OPERATIONAL'}
+              </div>
+              <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                {systemHealth?.nodeVersion || 'Node.js Runtime'} · {systemHealth?.uptimeSeconds ?? 0}s up
               </div>
             </div>
 
-            {/* 3. Quick Module Navigation Cards (Backup Engine & Postal Exam LMS) */}
-            <div className="space-y-2.5">
-              <Link
-                to="/master-source"
-                className="p-3.5 rounded-xl border border-slate-200 hover:border-red-300 bg-slate-50/70 flex items-center justify-between transition"
-              >
-                <div>
-                  <div className="text-xs font-bold text-slate-900">
-                    Google Sheets & Gmail Auto-Backup Engine
-                  </div>
-                  <div className="text-[11px] text-slate-500">
-                    Master Admin: Ektamahenmeena@gmail.com · {specialBills.length} Bills & {customers.length} Customers
-                  </div>
-                </div>
-                <ArrowRight size={15} className="text-red-800 shrink-0" />
-              </Link>
+            <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+              <div className="text-slate-400 flex items-center justify-between">
+                <span>Memory (RSS / Heap)</span>
+                <Database size={14} className="text-sky-400" />
+              </div>
+              <div className="text-lg font-black text-white mt-1 font-mono">
+                {systemHealth ? `${systemHealth.memoryRssMb} MB` : '—'}
+              </div>
+              <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                Heap: {systemHealth?.heapUsedMb ?? 0} MB
+              </div>
+            </div>
 
-              <Link
-                to="/charge-report"
-                className="p-3.5 rounded-xl border border-red-200 hover:border-red-400 bg-red-50/60 flex items-center justify-between transition"
-              >
-                <div>
-                  <div className="text-xs font-bold text-red-900 flex items-center gap-1.5">
-                    <span>ACG-61 Charge Report & Image Scanner</span>
-                    <span className="px-1.5 py-0.2 rounded text-[10px] bg-red-700 text-white font-black">NEW</span>
+            <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+              <div className="text-slate-400">Active RBAC Sessions</div>
+              <div className="text-lg font-black text-amber-400 mt-1 font-mono">
+                {systemHealth?.activeSessions ?? 1}
+              </div>
+              <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                Staff Roster: {systemHealth?.totalStaffDirectory ?? 34} Beats
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+              <div className="text-slate-400">Microservices</div>
+              <div className="mt-1 space-y-1">
+                {(systemHealth?.services || []).slice(0, 3).map((svc) => (
+                  <div key={svc.name} className="flex items-center justify-between text-[10px] font-mono">
+                    <span className="text-slate-300 truncate">{svc.name}</span>
+                    <span className="text-emerald-400 shrink-0">{svc.latencyMs}ms</span>
                   </div>
-                  <div className="text-[11px] text-red-700">
-                    Upload & analyze ACG-61 certificates · Relieved/Relieving officers, AM/PM & instant PDF download
-                  </div>
-                </div>
-                <ArrowRight size={15} className="text-red-800 shrink-0" />
-              </Link>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Bottom Master Customer Snapshot & Active Scheme Leads */}
+          <div className="overflow-x-auto bg-slate-900 rounded-xl border border-slate-800">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-400 bg-slate-900/90">
+                  <th className="py-2.5 px-3 font-semibold">Timestamp</th>
+                  <th className="py-2.5 px-3 font-semibold">Event Type</th>
+                  <th className="py-2.5 px-3 font-semibold">Actor / ID</th>
+                  <th className="py-2.5 px-3 font-semibold">Details</th>
+                  <th className="py-2.5 px-3 font-semibold text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/80">
+                {syncLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-4 px-3 text-center text-slate-400">
+                      Click &quot;Refresh Health &amp; Sync Logs&quot; or perform a login/sync action to inspect live server RBAC &amp; DB events.
+                    </td>
+                  </tr>
+                ) : (
+                  syncLogs.slice(0, 8).map((log) => (
+                    <tr key={log.id} className="hover:bg-slate-800/40">
+                      <td className="py-2 px-3 font-mono text-[11px] text-slate-400 whitespace-nowrap">
+                        {new Date(log.timestamp).toLocaleTimeString()}
+                      </td>
+                      <td className="py-2 px-3 font-mono text-[11px] font-bold text-amber-300 whitespace-nowrap">
+                        {log.eventType}
+                      </td>
+                      <td className="py-2 px-3 font-mono text-[11px] text-slate-300 whitespace-nowrap">
+                        {log.userId}
+                      </td>
+                      <td className="py-2 px-3 text-slate-200 max-w-md truncate">{log.details}</td>
+                      <td className="py-2 px-3 text-right font-mono font-bold text-emerald-400">
+                        {log.statusCode}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* Bottom Master Customer Snapshot & Active Scheme Leads (Strictly Cascaded) */}
+      {(showMembers || showLeads) && (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-7 bg-white p-6 rounded-2xl border border-slate-200 space-y-4">
+        {showMembers && (
+        <div className={`${showLeads ? 'lg:col-span-7' : 'lg:col-span-12'} bg-white p-6 rounded-2xl border border-slate-200 space-y-4`}>
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-bold text-slate-900 text-base">
@@ -2485,7 +3180,9 @@ export default function Dashboard({
             ))}
           </div>
         </div>
+        )}
 
+        {showLeads && (
         <div className="lg:col-span-5 bg-white p-6 rounded-2xl border border-slate-200 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-slate-900 text-base">
@@ -2583,7 +3280,9 @@ export default function Dashboard({
             ))}
           </div>
         </div>
+        )}
       </div>
+      )}
 
       {/* Customer Profile Modal */}
       {selectedCustomer && (

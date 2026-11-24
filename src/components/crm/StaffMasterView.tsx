@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Users,
   Shield,
@@ -36,11 +37,13 @@ import {
   X,
 } from 'lucide-react';
 import {
+  MAX_OPERATIONAL_STAFF_COUNT,
   staffPermissionService,
   getDefaultColoniesForBeat,
   getDefaultFixedKmForBeat,
   DEFAULT_STAFF_SERVICE_MODULES,
   DEFAULT_STAFF_FALLBACK_PASSWORD,
+  BUSINESS_SERVICE_CATEGORIES,
 } from '../../services/staffPermissionService';
 import { fetchServerCsrfToken } from '../../services/authSecurityService';
 import StaffCsvImportModal from './StaffCsvImportModal';
@@ -67,6 +70,15 @@ const DESIGNATION_OPTIONS: DesignationType[] = [
   'SPM / Postmaster',
   'Sorting Assistant (SA)',
   'Mail Guard',
+  'District Manager (DM)',
+  'Category Manager',
+  'Circle Incharge',
+  'Division Incharge',
+  'District Incharge',
+  'Block Incharge',
+  'Office Incharge',
+  'Last-Mile Rider',
+  'Sales & Field Executive',
 ];
 
 const SERVICE_MODULE_LABELS: {
@@ -118,6 +130,11 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
   const currentUser = propUser !== undefined ? propUser : authUser || staffPermissionService.getActiveSession();
   const [profiles, setProfiles] = useState<StaffProfile[]>([]);
   const [directoryStaff, setDirectoryStaff] = useState<Staff[]>([]);
+  const coreStaffCount = useMemo(
+    () => staffPermissionService.getOperationalStaffFive().length,
+    [profiles, directoryStaff]
+  );
+  const isStaffCapReached = coreStaffCount >= MAX_OPERATIONAL_STAFF_COUNT;
   const [activeTab, setActiveTab] = useState<'directory' | 'service_matrix' | 'direct_entry'>('directory');
   const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
 
@@ -146,6 +163,10 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
   // Joining Office Details
   const [formCircle, setFormCircle] = useState('Rajasthan Circle');
   const [formDivision, setFormDivision] = useState('Kota Division');
+  const [formDistrict, setFormDistrict] = useState('Kota');
+  const [formBlock, setFormBlock] = useState('Kota West Block');
+  const [formAssignedCategories, setFormAssignedCategories] = useState<string[]>([]);
+  const [formPartnerOrganization, setFormPartnerOrganization] = useState('');
   const [formHeadOffice, setFormHeadOffice] = useState('Kota H.O.');
   const [formSubOffice, setFormSubOffice] = useState('Dadabari S.O.');
   const [formBranchOffice, setFormBranchOffice] = useState('');
@@ -367,6 +388,10 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
     setFormDesignation(staffOrProfile.designationType || 'Postman');
     setFormCircle(staffOrProfile.circle || 'Rajasthan Circle');
     setFormDivision(staffOrProfile.division || 'Kota Division');
+    setFormDistrict(staffOrProfile.district || (staffOrProfile.division || 'Kota').replace(/\s*Division/i, '').trim() || 'Kota');
+    setFormBlock(staffOrProfile.block || 'Kota West Block');
+    setFormAssignedCategories(staffOrProfile.assignedCategories || []);
+    setFormPartnerOrganization(staffOrProfile.partnerOrganization || '');
     setFormHeadOffice(staffOrProfile.headOffice || 'Kota H.O.');
     setFormSubOffice(staffOrProfile.subOffice || 'Dadabari S.O.');
     setFormBranchOffice(staffOrProfile.branchOffice || '');
@@ -413,6 +438,10 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
     setFormDesignation('Postman');
     setFormCircle('Rajasthan Circle');
     setFormDivision('Kota Division');
+    setFormDistrict('Kota');
+    setFormBlock('Kota West Block');
+    setFormAssignedCategories([]);
+    setFormPartnerOrganization('');
     setFormHeadOffice('Kota H.O.');
     setFormSubOffice('Dadabari S.O.');
     setFormBranchOffice('');
@@ -471,29 +500,44 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
       .map(c => c.trim())
       .filter(Boolean);
 
-    const { profile, staffRecord } = staffPermissionService.upsertStaffWithAutoOfficeAndBeat({
-      id: editingStaffId || undefined,
-      employeeId: formEmployeeId,
-      name: formName,
-      contact: formContact,
-      email: formEmail,
-      password: formPassword,
-      designationType: formDesignation,
-      circle: formCircle,
-      division: formDivision,
-      headOffice: formHeadOffice,
-      subOffice: formSubOffice,
-      branchOffice: formBranchOffice,
-      officePincode: formOfficePincode,
-      officeAddress: formOfficeAddress,
-      beat: formBeat,
-      deliveryOfficeMapping: formDeliveryMapping,
-      assignedColonies: coloniesList,
-      fixedKm: formFixedKm,
-      dailyEntryLimit: formDailyLimit,
-      approvalStatus: formApprovalStatus,
-      serviceModules: formServiceModules,
-    });
+    let savedResult: { profile: StaffProfile; staffRecord: Staff };
+    try {
+      savedResult = staffPermissionService.upsertStaffWithAutoOfficeAndBeat({
+        id: editingStaffId || undefined,
+        employeeId: formEmployeeId,
+        name: formName,
+        contact: formContact,
+        email: formEmail,
+        password: formPassword,
+        designationType: formDesignation,
+        circle: formCircle,
+        division: formDivision,
+        district: formDistrict,
+        block: formBlock,
+        assignedCategories: formAssignedCategories,
+        partnerOrganization: formPartnerOrganization,
+        headOffice: formHeadOffice,
+        subOffice: formSubOffice,
+        branchOffice: formBranchOffice,
+        officePincode: formOfficePincode,
+        officeAddress: formOfficeAddress,
+        beat: formBeat,
+        deliveryOfficeMapping: formDeliveryMapping,
+        assignedColonies: coloniesList,
+        fixedKm: formFixedKm,
+        dailyEntryLimit: formDailyLimit,
+        approvalStatus: formApprovalStatus,
+        serviceModules: formServiceModules,
+      });
+    } catch (err: any) {
+      showToast(
+        err?.message ||
+          `Operational staff cap reached (max ${MAX_OPERATIONAL_STAFF_COUNT} slots: Staff 1–Staff 5). Edit an existing staff profile instead.`
+      );
+      return;
+    }
+
+    const { profile, staffRecord } = savedResult;
 
     if (formPassword.trim() && isActualSuperAdmin) {
       void syncStaffPasswordToServer({
@@ -702,13 +746,32 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
             )}
 
             <button
+              type="button"
               onClick={() => {
+                if (isStaffCapReached) {
+                  showToast(
+                    `All ${MAX_OPERATIONAL_STAFF_COUNT} operational staff slots (Staff 1–Staff 5) are occupied. Click "Edit / Update Profile & Office" on any staff row below.`
+                  );
+                  return;
+                }
                 resetForm();
                 setActiveTab('direct_entry');
               }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-xl font-black text-xs shadow-lg transition-all cursor-pointer"
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs shadow-lg transition-all cursor-pointer ${
+                isStaffCapReached
+                  ? 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+                  : 'bg-amber-400 hover:bg-amber-300 text-slate-950'
+              }`}
+              title={
+                isStaffCapReached
+                  ? 'All 5 operational staff slots (Staff 1–Staff 5) are active'
+                  : 'Register or update operational staff'
+              }
             >
-              <Plus className="w-4 h-4" /> Direct Staff Registration / Update
+              <Plus className="w-4 h-4" />{' '}
+              {isStaffCapReached
+                ? `5/${MAX_OPERATIONAL_STAFF_COUNT} Staff Slots Active (Edit Below)`
+                : 'Direct Staff Registration / Update'}
             </button>
 
             <button
@@ -764,6 +827,27 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
             <Sparkles className="w-4 h-4" />
             {editingStaffId ? 'Update Staff & Office Mapping' : 'Direct Staff Registration Form'}
           </button>
+        </div>
+      </div>
+
+      {/* Ownership Model Delegation Banner */}
+      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs text-blue-950">
+        <div>
+          <strong>Agency Core Team &amp; Division Bootstrap:</strong> Master Admin manages Xpeedo Core Team &amp; Brand Owner onboarding. Internal brand staff logins, passwords, beats &amp; RBAC belong to each <strong>Brand Owner</strong> inside their Brand Portal.
+        </div>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <Link
+            to="/brand-portal/india-post?tab=IP_STAFF_ROLES"
+            className="px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-800 text-white font-semibold"
+          >
+            India Post Staff Portal
+          </Link>
+          <Link
+            to="/settings?tab=BRAND_LOGINS"
+            className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold"
+          >
+            Brand Owner Logins
+          </Link>
         </div>
       </div>
 
@@ -1195,6 +1279,68 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
                     className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900"
                   />
                 </div>
+
+                <div className="md:col-span-1 lg:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">District</label>
+                  <input
+                    type="text"
+                    value={formDistrict}
+                    onChange={e => setFormDistrict(e.target.value)}
+                    placeholder="Kota / Baran / Bundi / Jaipur"
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900"
+                  />
+                </div>
+
+                <div className="md:col-span-1 lg:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Block / Sub-Division</label>
+                  <input
+                    type="text"
+                    value={formBlock}
+                    onChange={e => setFormBlock(e.target.value)}
+                    placeholder="Kota West Block"
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900"
+                  />
+                </div>
+
+                <div className="md:col-span-1 lg:col-span-2">
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Partner / Business Unit (Optional)</label>
+                  <input
+                    type="text"
+                    value={formPartnerOrganization}
+                    onChange={e => setFormPartnerOrganization(e.target.value)}
+                    placeholder="e.g., XPEEDO EV / Logistics Partner"
+                    className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900"
+                  />
+                </div>
+
+                <div className="md:col-span-3 lg:col-span-6 bg-white/80 p-3.5 rounded-xl border border-blue-200">
+                  <div className="text-xs font-black text-slate-800 mb-2">
+                    Assigned Business Categories (Category Manager & Multi-Vertical Oversight)
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {BUSINESS_SERVICE_CATEGORIES.map(cat => {
+                      const active = formAssignedCategories.includes(cat);
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() =>
+                            setFormAssignedCategories(prev =>
+                              prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+                            )
+                          }
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
+                            active
+                              ? 'bg-indigo-700 text-white border-indigo-700'
+                              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1332,6 +1478,12 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
               </div>
             )}
 
+            {!editingStaffId && isStaffCapReached && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs font-semibold text-amber-900">
+                Operational staff limit reached ({coreStaffCount}/{MAX_OPERATIONAL_STAFF_COUNT}: Staff 1–Staff 5). Choose an existing staff member from the Staff Directory to update their profile, or allocate them across brands inside Brand Management.
+              </div>
+            )}
+
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
@@ -1342,7 +1494,12 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
               </button>
               <button
                 type="submit"
-                className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black shadow-lg flex items-center gap-2 cursor-pointer"
+                disabled={!editingStaffId && isStaffCapReached}
+                className={`px-6 py-2.5 rounded-xl text-xs font-black shadow-lg flex items-center gap-2 ${
+                  !editingStaffId && isStaffCapReached
+                    ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                    : 'bg-red-600 hover:bg-red-700 text-white cursor-pointer'
+                }`}
               >
                 <Save className="w-4 h-4" />
                 Save Staff Record & Auto-Sync Office + Beat Data

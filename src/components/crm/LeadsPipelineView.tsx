@@ -8,6 +8,7 @@ import CustomerProfileModal from '../customers/CustomerProfileModal';
 import DirectMessageModal from './DirectMessageModal';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import { staffPermissionService } from '../../services/staffPermissionService';
+import { kotaOsHierarchyService } from '../../services/kotaOsHierarchyService';
 
 export default function LeadsPipelineView({ initialCustomer }: { initialCustomer?: Customer | null }) {
   const { userProfile } = useAuth();
@@ -29,6 +30,13 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
   const [tablePage, setTablePage] = useState(1);
   const [kanbanColumnPages, setKanbanColumnPages] = useState<Record<string, number>>({});
   const LEADS_PAGE_SIZE = 5;
+  const [poolStageFilter, setPoolStageFilter] = useState<string>('ALL');
+  const [routingLead, setRoutingLead] = useState<Lead | null>(null);
+  const [routeTargetPool, setRouteTargetPool] = useState<NonNullable<Lead['poolStage']>>('Division Marketing Team');
+  const [routeTargetClusterId, setRouteTargetClusterId] = useState<string>('CLU-KOTA-WEST');
+  const [routeTargetAssignee, setRouteTargetAssignee] = useState<string>('');
+  const [routeReason, setRouteReason] = useState<string>('');
+  const clusters = React.useMemo(() => kotaOsHierarchyService.getClusters(), []);
 
   // New Lead Form State
   const [leadCustomerId, setLeadCustomerId] = useState('CUST-TEMP');
@@ -95,6 +103,12 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
       productName: prod?.name || leadProductCode,
       requirement: leadRequirement || `Interested in ${prod?.name}`,
       source: 'Direct Lead Inquiry',
+      sourceChannel: 'Counter Desk',
+      sourceStaffId: userProfile?.employeeId || userProfile?.id,
+      sourceStaffName: userProfile?.name,
+      poolStage: 'Central Division Lead Pool',
+      clusterId: userProfile?.clusterId || clusters[0]?.id,
+      clusterName: userProfile?.clusterName || clusters[0]?.name,
       leadScore: 80,
       priority: leadPriority,
       estimatedValue: leadEstimatedValue ? parseFloat(leadEstimatedValue) : undefined,
@@ -190,6 +204,10 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
 
   const visibleLeads = leads.filter(l => {
     if (!staffPermissionService.matchesUserBeatScope(userProfile, l)) return false;
+    if (poolStageFilter !== 'ALL') {
+      const ps = l.poolStage || 'Central Division Lead Pool';
+      if (ps !== poolStageFilter) return false;
+    }
     if (beatFilter !== 'ALL') {
       const b = String(l.beatNo || '2').replace(/^Beat\s*/i, '').trim();
       if (b !== beatFilter) return false;
@@ -290,6 +308,131 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
           </button>
         </div>
       </div>
+
+      {/* Division Lead Pool & Cluster Assignment Strip */}
+      <div className="bg-[#0A1628] text-white rounded-xl border border-slate-800 p-4 space-y-3 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-orange-400 font-bold">
+              KOTA DIVISION LEAD FLOW · SOURCE ATTRIBUTION &amp; CLUSTER ROUTING
+            </div>
+            <div className="font-bold text-slate-200 mt-0.5">
+              Lead Generated &rarr; Central Division Lead Pool &rarr; Division Marketing Team &rarr; Cluster Incharge &rarr; Assigned Office/Employee &rarr; Conversion
+            </div>
+          </div>
+          {visibleLeads[0] && (
+            <button
+              type="button"
+              onClick={() => {
+                setRoutingLead(visibleLeads[0]);
+                setRouteTargetClusterId(visibleLeads[0].clusterId || clusters[0]?.id || 'CLU-KOTA-WEST');
+                setRouteTargetAssignee(visibleLeads[0].assignedStaffName || '');
+              }}
+              className="px-3 py-1.5 bg-[#1D4ED8] hover:bg-blue-700 text-white rounded-lg font-bold cursor-pointer"
+            >
+              Route / Reassign Selected Lead
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {[
+            'ALL',
+            'Lead Generated',
+            'Central Division Lead Pool',
+            'Division Marketing Team',
+            'Cluster Incharge',
+            'Assigned Office/Employee',
+            'Follow-up',
+            'Converted',
+            'Lost',
+          ].map((ps) => (
+            <button
+              key={ps}
+              type="button"
+              onClick={() => setPoolStageFilter(ps)}
+              className={`px-2.5 py-1 rounded text-[11px] font-bold transition cursor-pointer ${
+                poolStageFilter === ps
+                  ? 'bg-[#EA580C] text-white'
+                  : 'bg-slate-900 text-slate-300 border border-slate-700 hover:bg-slate-800'
+              }`}
+            >
+              {ps === 'ALL' ? 'All Pool Stages' : ps}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {routingLead && (
+        <div className="bg-white rounded-xl border border-blue-200 p-4 shadow-sm space-y-3 text-xs">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <div className="font-black text-slate-900">
+              Route Lead {routingLead.id} ({routingLead.customerName}) · Source: {routingLead.sourceChannel || routingLead.source}
+            </div>
+            <button
+              type="button"
+              onClick={() => setRoutingLead(null)}
+              className="text-slate-500 hover:text-slate-800 cursor-pointer"
+            >
+              <X size={15} />
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+            <select
+              value={routeTargetPool}
+              onChange={(e) => setRouteTargetPool(e.target.value as any)}
+              className="px-2.5 py-2 border border-slate-300 rounded-lg bg-white font-semibold"
+            >
+              <option value="Central Division Lead Pool">Central Division Lead Pool</option>
+              <option value="Division Marketing Team">Division Marketing Team</option>
+              <option value="Cluster Incharge">Cluster Incharge</option>
+              <option value="Assigned Office/Employee">Assigned Office/Employee</option>
+              <option value="Follow-up">Follow-up</option>
+              <option value="Converted">Converted</option>
+              <option value="Lost">Lost</option>
+            </select>
+            <select
+              value={routeTargetClusterId}
+              onChange={(e) => setRouteTargetClusterId(e.target.value)}
+              className="px-2.5 py-2 border border-slate-300 rounded-lg bg-white font-semibold"
+            >
+              {clusters.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={routeTargetAssignee}
+              onChange={(e) => setRouteTargetAssignee(e.target.value)}
+              placeholder="Target Employee / Office"
+              className="px-2.5 py-2 border border-slate-300 rounded-lg"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const cl = clusters.find((c) => c.id === routeTargetClusterId);
+                const res = customerService.reassignLeadWithClusterGuard(
+                  routingLead.id,
+                  {
+                    nextPoolStage: routeTargetPool,
+                    nextClusterId: routeTargetClusterId,
+                    nextClusterName: cl?.name,
+                    assignedStaffName: routeTargetAssignee || routingLead.assignedStaffName,
+                    reason: routeReason || 'Division Lead Pool Routing',
+                  },
+                  userProfile
+                );
+                showToast(res.message);
+                if (res.success) setRoutingLead(null);
+              }}
+              className="px-3 py-2 bg-[#0A1628] hover:bg-slate-800 text-white rounded-lg font-bold cursor-pointer"
+            >
+              Apply Cluster-Guarded Route
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filter & Search Bar for Product Queries vs Service Requests */}
       <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">

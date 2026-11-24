@@ -246,8 +246,8 @@ export default function AICommercialIntelligenceHub() {
   // Build iframe-safe WhatsApp Pitch URL + automatically track lead in CRM
   const buildPitchWhatsappUrl = (customer: CustomerDemographicMatch, targetOverride?: 'RESIDENT' | '918769706002' | '919460020640'): string => {
     const staffName = matchingPlan.pincodeManagerName || 'Mahendra Kumar Meena';
-    const hindiMsg = `नमस्ते ${customer.customerName} जी! आपके क्षेत्र (${customer.sector}, ${customer.colony}, PIN ${customer.pincode}) के सत्यापित व्यापारिक पार्टनर का विशेष उत्पाद और India Post Speed Post COD / IPPB QR होम डिलीवरी उपलब्ध है। अधिक जानकारी या बुकिंग के लिए संपर्क करें — ${staffName} (${matchingPlan.beatNo}, Xpeedo Last Mile)`;
-    const englishMsg = `${customer.recommendedPitchMessage}\n\n— Delivered via Speed Post COD & IPPB QR by India Post Xpeedo Last Mile (${staffName}, ${matchingPlan.beatNo}, PIN ${customer.pincode})`;
+    const hindiMsg = `नमस्ते ${customer.customerName} जी! आपके क्षेत्र (${customer.sector}, ${customer.colony}, PIN ${customer.pincode}) के सत्यापित व्यापारिक पार्टनर का विशेष उत्पाद और India Post Speed Post COD / IPPB QR होम डिलीवरी उपलब्ध है। अधिक जानकारी या बुकिंग के लिए संपर्क करें — ${staffName} (${matchingPlan.beatNo}, XPOKART)`;
+    const englishMsg = `${customer.recommendedPitchMessage}\n\n— Delivered via Speed Post COD & IPPB QR by XPOKART · India Post (${staffName}, ${matchingPlan.beatNo}, PIN ${customer.pincode})`;
     const fullMsg = pitchLanguage === 'hi' ? hindiMsg : englishMsg;
     const cleanPhone =
       targetOverride && targetOverride !== 'RESIDENT'
@@ -1194,7 +1194,7 @@ export default function AICommercialIntelligenceHub() {
               <div className="space-y-1 text-[11px]">
                 <div>✓ Physical premise open and operational on {reverifyStore.beatNo || 'Beat Territory'}</div>
                 <div>✓ Verified trade line &amp; proprietor presence in person</div>
-                <div>✓ Confirms agreement for Xpeedo Last Mile doorstep delivery &amp; COD collection</div>
+                <div>✓ Confirms agreement for XPOKART doorstep Speed Post delivery &amp; COD collection</div>
               </div>
             </div>
 

@@ -1,5 +1,5 @@
 /**
- * Security & Password Hashing Utilities for Xpeedo Last Mile
+ * Security & Password Hashing Utilities for XPOKART — Sovereign B2B & E-Commerce Marketplace
  * Uses Web Crypto API (SHA-256 with cryptographic salt)
  * Ensures passwords are never stored in plaintext or exposed in API/listings.
  */
@@ -177,7 +177,7 @@ export function buildSecureWhatsAppShareUrl(options: SecureWhatsAppShareOptions)
     `📌 Sub-Office: Dadabari S.O. (PIN 324009)`,
     safeRef ? `🔗 Ref ID: ${safeRef}` : '',
     `🌐 Verified by: ${portalName}`,
-    'Doorstep Service Booking Available via Xpeedo Last Mile.',
+    'Doorstep Service Booking Available via XPOKART — Dadabari S.O. (PIN 324009).',
   ]
     .filter(Boolean)
     .join('\n');
@@ -292,7 +292,12 @@ export function getMaskedStaffProfile(
   post: string;
   personalInfo: StaffPersonalInfo;
 } {
-  const isMasterAdmin = viewerRole === 'MASTER_ADMIN' || viewerRole === 'ADMIN' || viewerRole === 'SUPER_ADMIN';
+  const isMasterAdmin =
+    viewerRole === 'OWNER' ||
+    viewerRole === 'DEVELOPER' ||
+    viewerRole === 'MASTER_ADMIN' ||
+    viewerRole === 'ADMIN' ||
+    viewerRole === 'SUPER_ADMIN';
 
   // बेस डेटा जो सबको दिखेगा
   const publicProfile = {

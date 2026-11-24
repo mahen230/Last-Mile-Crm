@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   UserCog, CheckCircle2, XCircle, Clock, ShieldCheck, 
   ArrowRight, Phone, Mail, MapPin, RefreshCw 
@@ -88,6 +89,28 @@ export default function ProfileApprovalsView() {
           >
             <RefreshCw size={15} />
           </button>
+        </div>
+      </div>
+
+      {/* Ownership Model Delegation Notice */}
+      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-blue-950">
+        <div>
+          <strong>Ownership Model:</strong> Internal brand staff profile changes, beats/office assignments, and credentials are managed directly by each{' '}
+          <strong>Brand Owner</strong> inside their Brand Portal.
+        </div>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <Link
+            to="/brand-portal/india-post?tab=IP_STAFF_ROLES"
+            className="px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-800 text-white font-semibold"
+          >
+            India Post Staff Portal
+          </Link>
+          <Link
+            to="/brand-portal"
+            className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold"
+          >
+            Brand Owner Portal
+          </Link>
         </div>
       </div>
 

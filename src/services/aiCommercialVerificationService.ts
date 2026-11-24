@@ -372,8 +372,8 @@ export class AICommercialVerificationService {
           recommendedPitchMessage = `Namaste ${c.name}, book doorstep verified services from ${store.storeName} (${store.fullAddress || store.colony}) through India Post Beat ${cleanBeat} partner.`;
         } else {
           if (isBusiness) score += 13;
-          matchReason = `${isBusiness ? 'Commercial / Trade buyer' : 'Bulk household account'} in Beat ${cleanBeat} matched for wholesale pricing & Xpeedo COD dispatch.`;
-          recommendedPitchMessage = `Namaste ${c.name}, access wholesale rates from ${store.storeName} with direct Xpeedo Last Mile logistics & Cash-on-Delivery by ${beatMeta.staffName}.`;
+          matchReason = `${isBusiness ? 'Commercial / Trade buyer' : 'Bulk household account'} in Beat ${cleanBeat} matched for wholesale pricing & XPOKART COD dispatch.`;
+          recommendedPitchMessage = `Namaste ${c.name}, access wholesale rates from ${store.storeName} with direct XPOKART — Sovereign B2B & E-Commerce logistics & Cash-on-Delivery by ${beatMeta.staffName}.`;
         }
 
         return {
@@ -536,7 +536,7 @@ export class AICommercialVerificationService {
         pincodeManagerId: 'STAFF-10310736',
         pincodeManagerName: 'Mohit Arvind',
         pincodeManagerContact: '9214056789',
-        serviceType: 'Xpeedo Local Parcel',
+        serviceType: 'XPOKART Local Parcel',
         status: 'COD_SETTLED',
         speedPostBarcode: 'SP-RJ-324009-B5-2219',
         codAmount: 1499,

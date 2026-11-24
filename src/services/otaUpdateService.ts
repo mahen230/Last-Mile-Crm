@@ -13,7 +13,7 @@ export interface VersionManifest {
 }
 
 export const CURRENT_CLIENT_BUILD: VersionManifest = {
-  appName: 'Xpeedo Last Mile (Dadabari S.O. • PIN 324009)',
+  appName: 'XPOKART — Sovereign B2B & E-Commerce Marketplace (Dadabari S.O. • PIN 324009)',
   appVersion: '2.4.0',
   buildNumber: 240,
   releaseDate: '2026-10-31',

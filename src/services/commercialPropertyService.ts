@@ -1,7 +1,12 @@
 import * as XLSX from 'xlsx';
 import {
+  BusinessServiceCategory,
   CommercialStoreCategory,
   CommercialStoreRecord,
+  ProductSourceType,
+  StaffProfile,
+  StoreEntityType,
+  StoreServiceabilityResult,
 } from '../types/models';
 import { COLONY_HIERARCHY_MAP } from '../data/colonyHierarchyData';
 import { UPDATED_STAFF_LIST } from '../data/updatedStaffData';
@@ -11,8 +16,790 @@ import {
 } from '../data/kotaCommercialCscData';
 import { customerService } from './customerService';
 import { verificationService } from './verificationService';
+import { featureVisibilityService } from './featureVisibilityService';
+import imgBrandQsrPizza from '../assets/images/brand_qsr_pizza_1794743632250.jpg';
+import imgBrandSupermarket from '../assets/images/brand_supermarket_mart_1794743632575.jpg';
+import imgBrandApparel from '../assets/images/brand_apparel_fashion_1794743634256.jpg';
+import imgBrandElectronics from '../assets/images/brand_electronics_hub_1794743634422.jpg';
+import imgBrandFootwear from '../assets/images/brand_footwear_sports_1794747058446.jpg';
+import imgBrandHomeGadgets from '../assets/images/brand_home_gadgets_1794747072023.jpg';
+import imgEvScooter from '../assets/images/ev_scooter_mobility_1794822882283.jpg';
+import imgBakeryDairy from '../assets/images/local_bakery_dairy_1794822884061.jpg';
 
 const STORAGE_KEY = 'xpeedo_commercial_stores_v1';
+
+export const KOTA_PINCODE_ZONES: Array<{ pincode: string; label: string; subOffice: string }> = [
+  { pincode: '324009', label: '324009 · Dadabari S.O. & Keshavpura', subOffice: 'Dadabari S.O.' },
+  { pincode: '324005', label: '324005 · Vigyan Nagar & Talwandi', subOffice: 'Talwandi S.O.' },
+  { pincode: '324007', label: '324007 · Mahaveer Nagar & City Mall', subOffice: 'Mahaveer Nagar S.O.' },
+  { pincode: '324001', label: '324001 · Nayapura & Kota Junction', subOffice: 'Kota H.O.' },
+  { pincode: '324008', label: '324008 · Kunadi & Thermal Area', subOffice: 'Kunadi S.O.' },
+];
+
+const buildSeedBrandStores = (): CommercialStoreRecord[] => {
+  const nowIso = new Date().toISOString();
+  const rawStores: CommercialStoreRecord[] = [
+    {
+      id: 'HOUSE-XPEEDO-XPOKART-324009',
+      storeName: 'XPEEDO & XPO KART Direct House Desk',
+      ownerName: 'Mahendra Kumar Meena & Ekta Meena (Company Direct)',
+      primaryPhone: '8769706002',
+      whatsappNumber: '918769706002',
+      latitude: 25.1462,
+      longitude: 75.8235,
+      photoUrl: imgEvScooter,
+      brandLogoUrl: imgEvScooter,
+      storeType: 'BRAND_FRANCHISE',
+      brandName: 'XPEEDO & XPO KART',
+      brandMonogram: 'XP',
+      brandAccentColor: '#991B1B',
+      brandCategoryTag: 'Company Direct House Catalog',
+      sourceOwnership: 'COMPANY_HOUSE',
+      linkedOfficeId: 'AUTO-OFF-1',
+      linkedOfficeName: 'Dadabari S.O.',
+      serviceCategory: 'Postal & Last-Mile Logistics',
+      fullAddress: 'XPEEDO House Operations Hub, Near Dadabari S.O., CAD Circle Road, Kota - 324009',
+      colony: 'Dadabari',
+      blockSector: 'Dadabari Circle',
+      pincode: '324009',
+      beatNo: 'Beat 2',
+      cleanBeatNo: '2',
+      category: 'Postal & Government Services',
+      serviceablePincodes: ['324009', '324005', '324007', '324001', '324008'],
+      serviceableBeats: ['All Beats'],
+      serviceableColonies: ['Dadabari', 'Keshavpura', 'Talwandi', 'Mahaveer Nagar', 'Vigyan Nagar'],
+      deliveryRadiusKm: 15,
+      dispatchCutoffTime: 'Same-Day Express Dispatch & Instant Digital Delivery',
+      operationYears: 6,
+      longevityBadge: '5+ Years Verified',
+      operationalStatus: 'OPERATIONAL',
+      rating: 4.9,
+      userRatingCount: 680,
+      longevityVerified: true,
+      source: 'crm_registry',
+      verificationStatus: 'Verified',
+      freshnessStatus: 'FRESH_ACTIVE',
+      isStorefrontEnabled: true,
+      listingTier: 'SPONSORED_PARTNER',
+      listedDate: nowIso,
+      lastCheckedDate: nowIso,
+      fieldVerifiedByStaffId: '50457421',
+      fieldVerifiedByStaffName: 'Mahendra Kumar Meena',
+      fieldVerifiedAt: nowIso,
+      ippbSettlementRef: 'IPPB-324009-XPEEDO-HOUSE',
+      syncedToPropertyMaster: true,
+      syncedToVerificationQueue: true,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+    {
+      id: 'BRAND-DOMINOS-324009',
+      storeName: "Domino's Pizza · Dadabari Circle Outlet",
+      ownerName: 'Jubilant FoodWorks Kota Partner',
+      primaryPhone: '8769706002',
+      whatsappNumber: '918769706002',
+      latitude: 25.1484,
+      longitude: 75.8246,
+      photoUrl: imgBrandQsrPizza,
+      brandLogoUrl: imgBrandQsrPizza,
+      storeType: 'BRAND_FRANCHISE',
+      brandName: "Domino's Pizza",
+      brandMonogram: 'DP',
+      brandAccentColor: '#006491',
+      brandCategoryTag: 'QSR & Express Food',
+      fullAddress: 'Plot 14, Dadabari Main Circle, Near Modi College Road, Kota - 324009',
+      colony: 'Dadabari',
+      blockSector: 'Dadabari Circle',
+      pincode: '324009',
+      beatNo: 'Beat 2',
+      cleanBeatNo: '2',
+      category: 'Retail',
+      serviceablePincodes: ['324009', '324005'],
+      serviceableBeats: ['All Beats'],
+      serviceableColonies: ['Dadabari', 'Keshavpura', 'Basant Vihar', 'Talwandi'],
+      deliveryRadiusKm: 4.5,
+      dispatchCutoffTime: '35 Min Express / Beat Dispatch',
+      operationYears: 8,
+      longevityBadge: '5+ Years Verified',
+      operationalStatus: 'OPERATIONAL',
+      rating: 4.5,
+      userRatingCount: 1420,
+      longevityVerified: true,
+      source: 'crm_registry',
+      verificationStatus: 'Verified',
+      freshnessStatus: 'FRESH_ACTIVE',
+      listedDate: nowIso,
+      lastCheckedDate: nowIso,
+      fieldVerifiedByStaffId: '50457421',
+      fieldVerifiedByStaffName: 'Mahendra Kumar Meena',
+      fieldVerifiedAt: nowIso,
+      ippbSettlementRef: 'IPPB-324009-BRAND-DOM01',
+      syncedToPropertyMaster: true,
+      syncedToVerificationQueue: true,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+    {
+      id: 'BRAND-RELIANCE-SMART-324009',
+      storeName: 'Reliance Smart Bazaar · Keshavpura Mart',
+      ownerName: 'Reliance Retail Kota Franchise Desk',
+      primaryPhone: '9460020640',
+      whatsappNumber: '919460020640',
+      latitude: 25.1452,
+      longitude: 75.8229,
+      photoUrl: imgBrandSupermarket,
+      brandLogoUrl: imgBrandSupermarket,
+      storeType: 'BRAND_FRANCHISE',
+      brandName: 'Reliance Smart Bazaar',
+      brandMonogram: 'RS',
+      brandAccentColor: '#1D4ED8',
+      brandCategoryTag: 'Supermarket & Daily Staples',
+      fullAddress: 'Sector 7 Arcade, Keshavpura Main Road, Dadabari S.O., Kota - 324009',
+      colony: 'Keshavpura',
+      blockSector: 'Sector 7',
+      pincode: '324009',
+      beatNo: 'Beat 2',
+      cleanBeatNo: '2',
+      category: 'Wholesale',
+      serviceablePincodes: ['324009', '324005', '324007'],
+      serviceableBeats: ['All Beats'],
+      serviceableColonies: ['Keshavpura', 'Dadabari', 'Basant Vihar', 'Mahaveer Nagar'],
+      deliveryRadiusKm: 6,
+      dispatchCutoffTime: 'Same-Day 6:00 PM Beat Van',
+      operationYears: 7,
+      longevityBadge: '5+ Years Verified',
+      operationalStatus: 'OPERATIONAL',
+      rating: 4.4,
+      userRatingCount: 2150,
+      longevityVerified: true,
+      source: 'crm_registry',
+      verificationStatus: 'Verified',
+      freshnessStatus: 'FRESH_ACTIVE',
+      listedDate: nowIso,
+      lastCheckedDate: nowIso,
+      fieldVerifiedByStaffId: '50457421',
+      fieldVerifiedByStaffName: 'Mahendra Kumar Meena',
+      fieldVerifiedAt: nowIso,
+      ippbSettlementRef: 'IPPB-324009-BRAND-RSB02',
+      syncedToPropertyMaster: true,
+      syncedToVerificationQueue: true,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+    {
+      id: 'BRAND-RELIANCE-DIGITAL-324005',
+      storeName: 'Reliance Digital · South Kota Tech Hub',
+      ownerName: 'Reliance Digital Retail Partner',
+      primaryPhone: '9214056789',
+      whatsappNumber: '919214056789',
+      latitude: 25.1438,
+      longitude: 75.8315,
+      photoUrl: imgBrandElectronics,
+      brandLogoUrl: imgBrandElectronics,
+      storeType: 'BRAND_FRANCHISE',
+      brandName: 'Reliance Digital',
+      brandMonogram: 'RD',
+      brandAccentColor: '#B91C1C',
+      brandCategoryTag: 'Electronics & Appliances',
+      fullAddress: 'Jhalawar Main Corridor, Dadabari-Talwandi Link Road, Kota - 324009',
+      colony: 'Basant Vihar',
+      blockSector: 'Jhalawar Corridor',
+      pincode: '324009',
+      beatNo: 'Beat 5',
+      cleanBeatNo: '5',
+      category: 'Retail',
+      serviceablePincodes: ['324009', '324005', '324007'],
+      serviceableBeats: ['All Beats'],
+      serviceableColonies: ['Basant Vihar', 'Dadabari', 'Talwandi', 'Vigyan Nagar'],
+      deliveryRadiusKm: 8,
+      dispatchCutoffTime: 'Same-Day Insured Speed Post COD',
+      operationYears: 6,
+      longevityBadge: '5+ Years Verified',
+      operationalStatus: 'OPERATIONAL',
+      rating: 4.6,
+      userRatingCount: 980,
+      longevityVerified: true,
+      source: 'crm_registry',
+      verificationStatus: 'Verified',
+      freshnessStatus: 'FRESH_ACTIVE',
+      listedDate: nowIso,
+      lastCheckedDate: nowIso,
+      fieldVerifiedByStaffId: '10310736',
+      fieldVerifiedByStaffName: 'Mohit Arvind',
+      fieldVerifiedAt: nowIso,
+      ippbSettlementRef: 'IPPB-324009-BRAND-RDL03',
+      syncedToPropertyMaster: true,
+      syncedToVerificationQueue: true,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+    {
+      id: 'BRAND-ALLEN-SOLLY-324009',
+      storeName: 'Allen Solly · Dadabari Apparel Studio',
+      ownerName: 'ABFRL Authorized Kota Franchise',
+      primaryPhone: '9829144510',
+      whatsappNumber: '919829144510',
+      latitude: 25.1588,
+      longitude: 75.8295,
+      photoUrl: imgBrandApparel,
+      brandLogoUrl: imgBrandApparel,
+      storeType: 'BRAND_FRANCHISE',
+      brandName: 'Allen Solly',
+      brandMonogram: 'AS',
+      brandAccentColor: '#0F172A',
+      brandCategoryTag: 'Branded Apparel & Menswear',
+      fullAddress: 'Showroom 4, Shastri Nagar Shopping Plaza, Dadabari S.O., Kota - 324009',
+      colony: 'Shastri Nagar',
+      blockSector: 'Main Plaza',
+      pincode: '324009',
+      beatNo: 'Beat 3',
+      cleanBeatNo: '3',
+      category: 'Retail',
+      serviceablePincodes: ['324009', '324005'],
+      serviceableBeats: ['All Beats'],
+      serviceableColonies: ['Shastri Nagar', 'Dadabari', 'Keshavpura'],
+      deliveryRadiusKm: 5,
+      dispatchCutoffTime: 'Same-Day 5:30 PM COD Parcel',
+      operationYears: 5,
+      longevityBadge: '5+ Years Verified',
+      operationalStatus: 'OPERATIONAL',
+      rating: 4.5,
+      userRatingCount: 615,
+      longevityVerified: true,
+      source: 'crm_registry',
+      verificationStatus: 'Verified',
+      freshnessStatus: 'FRESH_ACTIVE',
+      listedDate: nowIso,
+      lastCheckedDate: nowIso,
+      fieldVerifiedByStaffId: '50457421',
+      fieldVerifiedByStaffName: 'Mahendra Kumar Meena',
+      fieldVerifiedAt: nowIso,
+      ippbSettlementRef: 'IPPB-324009-BRAND-ASL04',
+      syncedToPropertyMaster: true,
+      syncedToVerificationQueue: true,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+    {
+      id: 'BRAND-KFC-324005',
+      storeName: 'KFC India · City Mall Kitchen Hub',
+      ownerName: 'Devyani International Kota Kitchen',
+      primaryPhone: '9829311005',
+      whatsappNumber: '919829311005',
+      latitude: 25.1384,
+      longitude: 75.8392,
+      photoUrl: imgBrandQsrPizza,
+      brandLogoUrl: imgBrandQsrPizza,
+      storeType: 'BRAND_FRANCHISE',
+      brandName: 'KFC India',
+      brandMonogram: 'KFC',
+      brandAccentColor: '#DC2626',
+      brandCategoryTag: 'QSR & Crispy Express',
+      fullAddress: 'Ground Level Food Court, City Mall, Jhalawar Road, Kota - 324005',
+      colony: 'Indraprastha Industrial Area',
+      blockSector: 'City Mall',
+      pincode: '324005',
+      beatNo: 'Beat 12',
+      cleanBeatNo: '12',
+      category: 'Retail',
+      serviceablePincodes: ['324005', '324007'],
+      serviceableBeats: ['All Beats'],
+      serviceableColonies: ['Talwandi', 'Vigyan Nagar', 'Mahaveer Nagar'],
+      deliveryRadiusKm: 4,
+      dispatchCutoffTime: '45 Min City Mall Express',
+      operationYears: 7,
+      longevityBadge: '5+ Years Verified',
+      operationalStatus: 'OPERATIONAL',
+      rating: 4.3,
+      userRatingCount: 1840,
+      longevityVerified: true,
+      source: 'crm_registry',
+      verificationStatus: 'Verified',
+      freshnessStatus: 'FRESH_ACTIVE',
+      listedDate: nowIso,
+      lastCheckedDate: nowIso,
+      fieldVerifiedByStaffId: '50457421',
+      fieldVerifiedByStaffName: 'Mahendra Kumar Meena',
+      fieldVerifiedAt: nowIso,
+      ippbSettlementRef: 'IPPB-324005-BRAND-KFC05',
+      syncedToPropertyMaster: true,
+      syncedToVerificationQueue: true,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+    {
+      id: 'BRAND-MCDONALDS-324001',
+      storeName: "McDonald's · Gumanpura High Street Drive",
+      ownerName: 'Connaught Plaza Kota Franchise',
+      primaryPhone: '9829311001',
+      whatsappNumber: '919829311001',
+      latitude: 25.1592,
+      longitude: 75.8441,
+      photoUrl: imgBrandQsrPizza,
+      brandLogoUrl: imgBrandQsrPizza,
+      storeType: 'BRAND_FRANCHISE',
+      brandName: "McDonald's",
+      brandMonogram: 'M',
+      brandAccentColor: '#D97706',
+      brandCategoryTag: 'QSR & Family Meals',
+      fullAddress: 'Aerodrome Circle Complex, Gumanpura, Kota - 324001',
+      colony: 'Gumanpura',
+      blockSector: 'Aerodrome Circle',
+      pincode: '324001',
+      beatNo: 'Beat 15',
+      cleanBeatNo: '15',
+      category: 'Retail',
+      serviceablePincodes: ['324001', '324005'],
+      serviceableBeats: ['All Beats'],
+      serviceableColonies: ['Gumanpura', 'Nayapura', 'Vigyan Nagar'],
+      deliveryRadiusKm: 4.5,
+      dispatchCutoffTime: '45 Min Express Dispatch',
+      operationYears: 9,
+      longevityBadge: '5+ Years Verified',
+      operationalStatus: 'OPERATIONAL',
+      rating: 4.4,
+      userRatingCount: 2430,
+      longevityVerified: true,
+      source: 'crm_registry',
+      verificationStatus: 'Verified',
+      freshnessStatus: 'FRESH_ACTIVE',
+      listedDate: nowIso,
+      lastCheckedDate: nowIso,
+      fieldVerifiedByStaffId: '50457421',
+      fieldVerifiedByStaffName: 'Mahendra Kumar Meena',
+      fieldVerifiedAt: nowIso,
+      ippbSettlementRef: 'IPPB-324001-BRAND-MCD06',
+      syncedToPropertyMaster: true,
+      syncedToVerificationQueue: true,
+      isStorefrontEnabled: true,
+      listingTier: 'ACTIVE_AFFILIATE',
+      marketingBudgetMonthly: 12000,
+      affiliateCommissionPercent: 18,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+    {
+      id: 'BRAND-VELOCITY-SPORTS-324009',
+      storeName: 'Velocity Pro Sports & Footwear · Kota Outlet',
+      ownerName: 'Velocity Retail India (Dadabari Partner)',
+      primaryPhone: '9829023456',
+      whatsappNumber: '919829023456',
+      latitude: 25.1472,
+      longitude: 75.8245,
+      photoUrl: imgBrandFootwear,
+      brandLogoUrl: imgBrandFootwear,
+      storeType: 'BRAND_FRANCHISE',
+      brandName: 'Velocity Sports & Footwear',
+      brandMonogram: 'VP',
+      brandAccentColor: '#EA580C',
+      brandCategoryTag: 'Footwear & Sports Accessories',
+      fullAddress: 'Plot 22, Dadabari Commercial Arcade, Near Modi College Circle, Kota - 324009',
+      colony: 'Dadabari',
+      blockSector: 'Commercial Arcade',
+      pincode: '324009',
+      beatNo: 'Beat 2',
+      cleanBeatNo: '2',
+      category: 'Retail',
+      serviceablePincodes: ['324009', '324005', '324007'],
+      serviceableBeats: ['All Beats'],
+      serviceableColonies: ['Dadabari', 'Keshavpura', 'Basant Vihar', 'Talwandi'],
+      deliveryRadiusKm: 6,
+      dispatchCutoffTime: 'Same-Day 5:30 PM Speed Post COD',
+      operationYears: 5,
+      longevityBadge: '5+ Years Verified',
+      operationalStatus: 'OPERATIONAL',
+      rating: 4.8,
+      userRatingCount: 840,
+      longevityVerified: true,
+      source: 'crm_registry',
+      verificationStatus: 'Verified',
+      freshnessStatus: 'FRESH_ACTIVE',
+      listedDate: nowIso,
+      lastCheckedDate: nowIso,
+      fieldVerifiedByStaffId: '50457421',
+      fieldVerifiedByStaffName: 'Mahendra Kumar Meena',
+      fieldVerifiedAt: nowIso,
+      ippbSettlementRef: 'IPPB-324009-BRAND-VEL07',
+      syncedToPropertyMaster: true,
+      syncedToVerificationQueue: true,
+      isStorefrontEnabled: true,
+      listingTier: 'SPONSORED_PARTNER',
+      marketingBudgetMonthly: 18000,
+      affiliateCommissionPercent: 23,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+    {
+      id: 'BRAND-SMART-LIFESTYLE-324009',
+      storeName: 'Smart Living Appliances & Gadgets · Dadabari Mart',
+      ownerName: 'Smart Lifestyle Retail Hub Kota',
+      primaryPhone: '9829034567',
+      whatsappNumber: '919829034567',
+      latitude: 25.1485,
+      longitude: 75.8218,
+      photoUrl: imgBrandHomeGadgets,
+      brandLogoUrl: imgBrandHomeGadgets,
+      storeType: 'BRAND_FRANCHISE',
+      brandName: 'Smart Living Appliances',
+      brandMonogram: 'SL',
+      brandAccentColor: '#0D9488',
+      brandCategoryTag: 'Home Appliances & Lifestyle Gadgets',
+      fullAddress: 'Shop 8-9, Shastri Market Complex, Dadabari S.O., Kota - 324009',
+      colony: 'Shastri Nagar',
+      blockSector: 'Market Complex',
+      pincode: '324009',
+      beatNo: 'Beat 3',
+      cleanBeatNo: '3',
+      category: 'Retail',
+      serviceablePincodes: ['324009', '324005', '324007'],
+      serviceableBeats: ['All Beats'],
+      serviceableColonies: ['Shastri Nagar', 'Dadabari', 'Keshavpura'],
+      deliveryRadiusKm: 6.5,
+      dispatchCutoffTime: 'Same-Day Insured Courier Delivery',
+      operationYears: 6,
+      longevityBadge: '5+ Years Verified',
+      operationalStatus: 'OPERATIONAL',
+      rating: 4.7,
+      userRatingCount: 1120,
+      longevityVerified: true,
+      source: 'crm_registry',
+      verificationStatus: 'Verified',
+      freshnessStatus: 'FRESH_ACTIVE',
+      listedDate: nowIso,
+      lastCheckedDate: nowIso,
+      fieldVerifiedByStaffId: '50457421',
+      fieldVerifiedByStaffName: 'Mahendra Kumar Meena',
+      fieldVerifiedAt: nowIso,
+      ippbSettlementRef: 'IPPB-324009-BRAND-SLA08',
+      syncedToPropertyMaster: true,
+      syncedToVerificationQueue: true,
+      isStorefrontEnabled: true,
+      listingTier: 'SPONSORED_PARTNER',
+      marketingBudgetMonthly: 22000,
+      affiliateCommissionPercent: 21,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+    {
+      id: 'BRAND-XPEEDO-EV-324009',
+      storeName: 'XPEEDO EV & Green Mobility · Regional Hub',
+      ownerName: 'XPEEDO EV Mobility Kota Desk',
+      primaryPhone: '9460020640',
+      whatsappNumber: '918769706002',
+      latitude: 25.1489,
+      longitude: 75.8235,
+      photoUrl: imgEvScooter,
+      brandLogoUrl: imgEvScooter,
+      storeType: 'BRAND_FRANCHISE',
+      brandName: 'XPEEDO EV',
+      brandMonogram: 'EV',
+      brandAccentColor: '#047857',
+      brandCategoryTag: 'EV Scooters, Batteries & Fast Chargers',
+      fullAddress: 'Plot 5, Dadabari S.O. Main Road, Near Keshavpura Crossing, Kota - 324009',
+      colony: 'Dadabari',
+      blockSector: 'Dadabari S.O. Hub',
+      pincode: '324009',
+      beatNo: 'Beat 2',
+      cleanBeatNo: '2',
+      category: 'Retail',
+      serviceablePincodes: ['324009', '324005', '324007'],
+      serviceableBeats: ['All Beats'],
+      serviceableColonies: ['Dadabari', 'Keshavpura', 'Basant Vihar', 'Talwandi'],
+      deliveryRadiusKm: 8,
+      dispatchCutoffTime: 'Same-Day Beat 2 Test-Ride & COD Dispatch',
+      operationYears: 5,
+      longevityBadge: '5+ Years Verified',
+      operationalStatus: 'OPERATIONAL',
+      rating: 4.9,
+      userRatingCount: 640,
+      longevityVerified: true,
+      source: 'crm_registry',
+      verificationStatus: 'Verified',
+      freshnessStatus: 'FRESH_ACTIVE',
+      listedDate: nowIso,
+      lastCheckedDate: nowIso,
+      fieldVerifiedByStaffId: '50457421',
+      fieldVerifiedByStaffName: 'Mahendra Kumar Meena',
+      fieldVerifiedAt: nowIso,
+      ippbSettlementRef: 'IPPB-324009-BRAND-XPEEDOEV',
+      syncedToPropertyMaster: true,
+      syncedToVerificationQueue: true,
+      isStorefrontEnabled: true,
+      listingTier: 'SPONSORED_PARTNER',
+      marketingBudgetMonthly: 25000,
+      affiliateCommissionPercent: 20,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+    {
+      id: 'BRAND-DADABARI-BAKERY-324009',
+      storeName: 'Dadabari Fresh Dairy, Artisanal Bakery & Laundry Hub',
+      ownerName: 'Dadabari Co-op Fresh & Events Partner',
+      primaryPhone: '9460020640',
+      whatsappNumber: '918769706002',
+      latitude: 25.1476,
+      longitude: 75.8221,
+      photoUrl: imgBakeryDairy,
+      brandLogoUrl: imgBakeryDairy,
+      storeType: 'LOCAL_MERCHANT',
+      brandName: 'Dadabari Fresh & Events',
+      brandMonogram: 'DF',
+      brandAccentColor: '#B45309',
+      brandCategoryTag: 'Dairies, Bakeries, Laundry & Event Kits',
+      fullAddress: 'Sector 3 Market, Keshavpura, Dadabari S.O., Kota - 324009',
+      colony: 'Keshavpura',
+      blockSector: 'Sector 3',
+      pincode: '324009',
+      beatNo: 'Beat 2',
+      cleanBeatNo: '2',
+      category: 'Retail',
+      serviceablePincodes: ['324009', '324005'],
+      serviceableBeats: ['All Beats'],
+      serviceableColonies: ['Dadabari', 'Keshavpura', 'Basant Vihar'],
+      deliveryRadiusKm: 5,
+      dispatchCutoffTime: 'Morning 7 AM & Evening 6 PM Beat Van',
+      operationYears: 6,
+      longevityBadge: '5+ Years Verified',
+      operationalStatus: 'OPERATIONAL',
+      rating: 4.8,
+      userRatingCount: 920,
+      longevityVerified: true,
+      source: 'crm_registry',
+      verificationStatus: 'Verified',
+      freshnessStatus: 'FRESH_ACTIVE',
+      listedDate: nowIso,
+      lastCheckedDate: nowIso,
+      fieldVerifiedByStaffId: '50457421',
+      fieldVerifiedByStaffName: 'Mahendra Kumar Meena',
+      fieldVerifiedAt: nowIso,
+      ippbSettlementRef: 'IPPB-324009-BRAND-BAKERY01',
+      syncedToPropertyMaster: true,
+      syncedToVerificationQueue: true,
+      isStorefrontEnabled: true,
+      listingTier: 'ACTIVE_AFFILIATE',
+      marketingBudgetMonthly: 14000,
+      affiliateCommissionPercent: 20,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+  ];
+  return rawStores.map((s) =>
+    s.storeType === 'BRAND_FRANCHISE'
+      ? { ...s, storeName: s.brandName || s.storeName.split('·')[0].trim() }
+      : s
+  );
+};
+
+const buildSeedCivicUtilities = (): CommercialStoreRecord[] => {
+  const nowIso = new Date().toISOString();
+  return [
+    {
+      id: 'CIVIC-POLICE-DADABARI',
+      storeName: 'Dadabari Police Station (Thana)',
+      ownerName: 'SHO Dadabari / Law Enforcement Desk',
+      primaryPhone: '07442500199',
+      whatsappNumber: '918769706002',
+      latitude: 25.1465,
+      longitude: 75.8238,
+      storeType: 'CIVIC_UTILITY',
+      category: 'Public Safety & Law Enforcement',
+      fullAddress: 'Dadabari Main Road, Near Dadabari Circle, Kota - 324009',
+      colony: 'Dadabari',
+      blockSector: 'Police Station Complex',
+      pincode: '324009',
+      beatNo: 'Beat 2',
+      cleanBeatNo: '2',
+      serviceablePincodes: ['324009', '324005'],
+      serviceableBeats: ['All Beats'],
+      serviceableColonies: ['Dadabari', 'Keshavpura', 'Basant Vihar'],
+      deliveryRadiusKm: 10,
+      dispatchCutoffTime: '24/7 Emergency Response',
+      operationYears: 25,
+      longevityBadge: '5+ Years Verified',
+      operationalStatus: 'OPERATIONAL',
+      rating: 4.6,
+      userRatingCount: 310,
+      longevityVerified: true,
+      source: 'crm_registry',
+      verificationStatus: 'Verified',
+      freshnessStatus: 'FRESH_ACTIVE',
+      listedDate: nowIso,
+      lastCheckedDate: nowIso,
+      fieldVerifiedByStaffId: '50457421',
+      fieldVerifiedByStaffName: 'Mahendra Kumar Meena',
+      fieldVerifiedAt: nowIso,
+      ippbSettlementRef: 'CIVIC-POL-324009',
+      syncedToPropertyMaster: true,
+      syncedToVerificationQueue: true,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+    {
+      id: 'CIVIC-POST-DADABARI-SO',
+      storeName: 'Dadabari Head Sub Post Office (S.O.)',
+      ownerName: 'Postmaster Dadabari S.O.',
+      primaryPhone: '07442500200',
+      whatsappNumber: '918769706002',
+      latitude: 25.1462,
+      longitude: 75.8235,
+      storeType: 'CIVIC_UTILITY',
+      category: 'Postal & Government Services',
+      fullAddress: 'Dadabari Main S.O. Building, Near Dadabari Circle, Kota - 324009',
+      colony: 'Dadabari',
+      blockSector: 'Postal Headquarters 324009',
+      pincode: '324009',
+      beatNo: 'Beat 2',
+      cleanBeatNo: '2',
+      serviceablePincodes: ['324009', '324005', '324007', '324001', '324008'],
+      serviceableBeats: ['All Beats'],
+      serviceableColonies: ['Dadabari', 'Keshavpura', 'Talwandi', 'Vigyan Nagar'],
+      deliveryRadiusKm: 15,
+      dispatchCutoffTime: 'Same-Day Post Office Dispatch (10 AM - 5 PM)',
+      operationYears: 40,
+      longevityBadge: '5+ Years Verified',
+      operationalStatus: 'OPERATIONAL',
+      rating: 4.8,
+      userRatingCount: 5400,
+      longevityVerified: true,
+      source: 'crm_registry',
+      verificationStatus: 'Verified',
+      freshnessStatus: 'FRESH_ACTIVE',
+      listedDate: nowIso,
+      lastCheckedDate: nowIso,
+      fieldVerifiedByStaffId: '50457421',
+      fieldVerifiedByStaffName: 'Mahendra Kumar Meena',
+      fieldVerifiedAt: nowIso,
+      ippbSettlementRef: 'IPPB-324009-DADABARI-SO',
+      syncedToPropertyMaster: true,
+      syncedToVerificationQueue: true,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+    {
+      id: 'CIVIC-LIC-DADABARI',
+      storeName: 'LIC Divisional Branch & Premium Point',
+      ownerName: 'Life Insurance Corporation of India',
+      primaryPhone: '07442321450',
+      whatsappNumber: '919829123456',
+      latitude: 25.1512,
+      longitude: 75.8211,
+      storeType: 'CIVIC_UTILITY',
+      category: 'Insurance & Financial Institutions',
+      fullAddress: 'LIC Branch Office, Dadabari Extension, Kota - 324009',
+      colony: 'Dadabari',
+      blockSector: 'Financial District',
+      pincode: '324009',
+      beatNo: 'Beat 2',
+      cleanBeatNo: '2',
+      serviceablePincodes: ['324009', '324005'],
+      serviceableBeats: ['All Beats'],
+      serviceableColonies: ['Dadabari', 'Keshavpura'],
+      deliveryRadiusKm: 10,
+      dispatchCutoffTime: '10 AM - 4 PM Working Hours',
+      operationYears: 20,
+      longevityBadge: '5+ Years Verified',
+      operationalStatus: 'OPERATIONAL',
+      rating: 4.4,
+      userRatingCount: 890,
+      longevityVerified: true,
+      source: 'crm_registry',
+      verificationStatus: 'Verified',
+      freshnessStatus: 'FRESH_ACTIVE',
+      listedDate: nowIso,
+      lastCheckedDate: nowIso,
+      fieldVerifiedByStaffId: '50457421',
+      fieldVerifiedByStaffName: 'Mahendra Kumar Meena',
+      fieldVerifiedAt: nowIso,
+      ippbSettlementRef: 'CIVIC-LIC-324009',
+      syncedToPropertyMaster: true,
+      syncedToVerificationQueue: true,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+    {
+      id: 'CIVIC-MARRIAGE-MAHAVEER',
+      storeName: 'Mahaveer Marriage Garden & Banquet Hall',
+      ownerName: 'Mahaveer Trust & Events Management',
+      primaryPhone: '9829054321',
+      whatsappNumber: '919829054321',
+      latitude: 25.1438,
+      longitude: 75.8315,
+      storeType: 'CIVIC_UTILITY',
+      category: 'Events & Hospitality Venues',
+      fullAddress: 'Keshavpura Bypass Road, Near Dadabari S.O., Kota - 324009',
+      colony: 'Keshavpura',
+      blockSector: 'Bypass Corridor',
+      pincode: '324009',
+      beatNo: 'Beat 4',
+      cleanBeatNo: '4',
+      serviceablePincodes: ['324009', '324005'],
+      serviceableBeats: ['All Beats'],
+      serviceableColonies: ['Keshavpura', 'Dadabari', 'Talwandi'],
+      deliveryRadiusKm: 12,
+      dispatchCutoffTime: 'Event Booking Open 24/7',
+      operationYears: 15,
+      longevityBadge: '5+ Years Verified',
+      operationalStatus: 'OPERATIONAL',
+      rating: 4.7,
+      userRatingCount: 1120,
+      longevityVerified: true,
+      source: 'crm_registry',
+      verificationStatus: 'Verified',
+      freshnessStatus: 'FRESH_ACTIVE',
+      listedDate: nowIso,
+      lastCheckedDate: nowIso,
+      fieldVerifiedByStaffId: '50457421',
+      fieldVerifiedByStaffName: 'Mahendra Kumar Meena',
+      fieldVerifiedAt: nowIso,
+      ippbSettlementRef: 'CIVIC-MRG-324009',
+      syncedToPropertyMaster: true,
+      syncedToVerificationQueue: true,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+    {
+      id: 'CIVIC-HOSPITAL-NEWLIFE',
+      storeName: 'New Life Hospital & Trauma Center',
+      ownerName: 'Dr. R. K. Sharma & Medical Board',
+      primaryPhone: '07442501122',
+      whatsappNumber: '919414011223',
+      latitude: 25.1455,
+      longitude: 75.8242,
+      storeType: 'CIVIC_UTILITY',
+      category: 'Healthcare & Education',
+      fullAddress: 'Sector 4, Keshavpura Main Road, Dadabari S.O., Kota - 324009',
+      colony: 'Keshavpura',
+      blockSector: 'Sector 4',
+      pincode: '324009',
+      beatNo: 'Beat 2',
+      cleanBeatNo: '2',
+      serviceablePincodes: ['324009', '324005'],
+      serviceableBeats: ['All Beats'],
+      serviceableColonies: ['Keshavpura', 'Dadabari'],
+      deliveryRadiusKm: 12,
+      dispatchCutoffTime: '24/7 Emergency & Pharmacy',
+      operationYears: 18,
+      longevityBadge: '5+ Years Verified',
+      operationalStatus: 'OPERATIONAL',
+      rating: 4.8,
+      userRatingCount: 2300,
+      longevityVerified: true,
+      source: 'crm_registry',
+      verificationStatus: 'Verified',
+      freshnessStatus: 'FRESH_ACTIVE',
+      listedDate: nowIso,
+      lastCheckedDate: nowIso,
+      fieldVerifiedByStaffId: '50457421',
+      fieldVerifiedByStaffName: 'Mahendra Kumar Meena',
+      fieldVerifiedAt: nowIso,
+      ippbSettlementRef: 'CIVIC-HOSP-324009',
+      syncedToPropertyMaster: true,
+      syncedToVerificationQueue: true,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    },
+  ];
+};
 
 export interface BeatTerritoryMeta {
   beatNo: string; // e.g. 'Beat 1'
@@ -178,14 +965,28 @@ class CommercialPropertyService {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          this.stores = parsed;
+          const seeds = [...buildSeedBrandStores(), ...buildSeedCivicUtilities()];
+          const byId = new Map<string, CommercialStoreRecord>(
+            parsed.map((s: CommercialStoreRecord) => [s.id, s])
+          );
+          let appended = false;
+          for (const item of seeds) {
+            if (!byId.has(item.id)) {
+              byId.set(item.id, item);
+              appended = true;
+            }
+          }
+          this.stores = Array.from(byId.values());
+          if (appended) {
+            this.saveToStorage();
+          }
           return;
         }
       }
     } catch (e) {
       console.warn('Failed to load commercial stores from storage:', e);
     }
-    this.stores = [];
+    this.stores = [...buildSeedBrandStores(), ...buildSeedCivicUtilities()];
     this.importExistingCrmBaselineRegistry();
   }
 
@@ -221,9 +1022,98 @@ class CommercialPropertyService {
     return [...this.stores];
   }
 
+  public getScopedStores(user?: StaffProfile | null): CommercialStoreRecord[] {
+    if (!user) return [];
+    const strictVendor = featureVisibilityService.isStrictlyScopedToVendor(user);
+    if (strictVendor === 'INDIA_POST') {
+      return [];
+    }
+    if (!featureVisibilityService.isFeatureVisible(user, 'commercialDirectory') && !featureVisibilityService.isFeatureVisible(user, 'vendorSection')) {
+      return [];
+    }
+    return [...this.stores];
+  }
+
   public getBeatMeta(beatNoOrClean: string): BeatTerritoryMeta {
     const clean = String(beatNoOrClean || '1').replace(/\D/g, '') || '1';
     return this.beatDirectory.find((b) => b.cleanBeatNo === clean) || this.beatDirectory[0];
+  }
+
+  /**
+   * PINCODE & BEAT AVAILABILITY ENGINE:
+   * Validates whether a store or brand franchise is operationally active and delivers to targetPincode / targetBeat.
+   */
+  public checkStoreServiceability(
+    store: CommercialStoreRecord,
+    targetPincode = '324009',
+    targetBeat?: string
+  ): StoreServiceabilityResult {
+    const cleanTargetPin = String(targetPincode || '324009').trim();
+    const serviceablePincodes =
+      store.serviceablePincodes && store.serviceablePincodes.length > 0
+        ? store.serviceablePincodes
+        : [store.pincode || '324009'];
+    const serviceableBeats =
+      store.serviceableBeats && store.serviceableBeats.length > 0
+        ? store.serviceableBeats
+        : store.storeType === 'BRAND_FRANCHISE'
+        ? ['All Beats']
+        : [store.beatNo || 'Beat 2', 'All Beats'];
+    const deliveryRadiusKm = store.deliveryRadiusKm ?? (store.storeType === 'BRAND_FRANCHISE' ? 5 : 3);
+    const operationalActive =
+      store.operationalStatus === 'OPERATIONAL' && store.freshnessStatus !== 'STALE_EXCLUDED';
+    const matchedPincode = !cleanTargetPin || cleanTargetPin === 'ALL' || serviceablePincodes.includes(cleanTargetPin);
+    const cleanTargetBeat = targetBeat && targetBeat !== 'ALL' ? targetBeat.trim() : '';
+    const matchedBeat =
+      !cleanTargetBeat ||
+      serviceableBeats.includes('All Beats') ||
+      serviceableBeats.some(
+        (b) => b.toLowerCase() === cleanTargetBeat.toLowerCase() || b.replace(/\D/g, '') === cleanTargetBeat.replace(/\D/g, '')
+      );
+
+    const isServiceable = operationalActive && matchedPincode && matchedBeat;
+    let reason = `Delivers to PIN ${cleanTargetPin}`;
+    if (!operationalActive) {
+      reason = 'Temporarily Closed / Stale Verification';
+    } else if (!matchedPincode) {
+      reason = `Out of Delivery Zone · Serves PIN ${serviceablePincodes.join(', ')}`;
+    } else if (!matchedBeat) {
+      reason = `Out of Beat Zone · Serves ${serviceableBeats.join(', ')}`;
+    } else if (cleanTargetBeat) {
+      reason = `Active in PIN ${cleanTargetPin} · ${cleanTargetBeat}`;
+    }
+
+    return {
+      isServiceable,
+      reason,
+      matchedPincode,
+      matchedBeat,
+      operationalActive,
+      serviceablePincodes,
+      serviceableBeats,
+      deliveryRadiusKm,
+    };
+  }
+
+  public updateStoreServiceability(
+    storeId: string,
+    patch: {
+      serviceablePincodes: string[];
+      serviceableBeats: string[];
+      deliveryRadiusKm?: number;
+      operationalStatus?: CommercialStoreRecord['operationalStatus'];
+      dispatchCutoffTime?: string;
+    }
+  ): boolean {
+    const cleanPins = Array.from(new Set(patch.serviceablePincodes.map((p) => p.trim()).filter(Boolean)));
+    const cleanBeats = Array.from(new Set(patch.serviceableBeats.map((b) => b.trim()).filter(Boolean)));
+    return this.updateStore(storeId, {
+      serviceablePincodes: cleanPins.length > 0 ? cleanPins : ['324009'],
+      serviceableBeats: cleanBeats.length > 0 ? cleanBeats : ['All Beats'],
+      deliveryRadiusKm: patch.deliveryRadiusKm,
+      operationalStatus: patch.operationalStatus,
+      dispatchCutoffTime: patch.dispatchCutoffTime,
+    });
   }
 
   /**
@@ -754,6 +1644,25 @@ class CommercialPropertyService {
     return true;
   }
 
+  public toggleStorefrontListing(id: string, explicitEnabled?: boolean): boolean {
+    const store = this.stores.find((s) => s.id === id);
+    if (!store) return false;
+    const targetState = explicitEnabled !== undefined ? explicitEnabled : store.isStorefrontEnabled === false ? true : false;
+    return this.updateStore(id, { isStorefrontEnabled: targetState });
+  }
+
+  public updateStoreMonetization(
+    id: string,
+    monetization: {
+      isStorefrontEnabled?: boolean;
+      listingTier?: 'SPONSORED_PARTNER' | 'ACTIVE_AFFILIATE' | 'STANDARD_LISTING';
+      marketingBudgetMonthly?: number;
+      affiliateCommissionPercent?: number;
+    }
+  ): boolean {
+    return this.updateStore(id, monetization);
+  }
+
   public deleteStore(id: string): boolean {
     const before = this.stores.length;
     this.stores = this.stores.filter((s) => s.id !== id);
@@ -874,6 +1783,153 @@ class CommercialPropertyService {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     }
+  }
+
+  public registerB2BVendorStore(input: {
+    storeName: string;
+    ownerName: string;
+    phone: string;
+    category: CommercialStoreCategory;
+    colony: string;
+    blockSector?: string;
+    pincode?: string;
+    beatNo: string;
+    fullAddress?: string;
+    storeType?: StoreEntityType;
+    brandName?: string;
+    brandLogoUrl?: string;
+    brandMonogram?: string;
+    brandAccentColor?: string;
+    brandCategoryTag?: string;
+    serviceablePincodes?: string[];
+    serviceableBeats?: string[];
+    deliveryRadiusKm?: number;
+    dispatchCutoffTime?: string;
+    sourceOwnership?: ProductSourceType;
+    linkedOfficeId?: string;
+    linkedOfficeName?: string;
+    serviceCategory?: BusinessServiceCategory | string;
+  }): { store: CommercialStoreRecord; beatMeta: BeatTerritoryMeta } {
+    const beatMeta = this.getBeatMeta(input.beatNo);
+    const center = getBeatCentroid(beatMeta.cleanBeatNo);
+    const nowIso = new Date().toISOString();
+    const digitsPhone = normalizePhone(input.phone) || beatMeta.staffContact;
+    const storePincode = input.pincode || beatMeta.pincode || '324009';
+    const serviceablePincodes =
+      input.serviceablePincodes && input.serviceablePincodes.length > 0
+        ? Array.from(new Set(input.serviceablePincodes))
+        : [storePincode];
+    const serviceableBeats =
+      input.serviceableBeats && input.serviceableBeats.length > 0
+        ? Array.from(new Set(input.serviceableBeats))
+        : input.storeType === 'BRAND_FRANCHISE'
+        ? ['All Beats']
+        : ['All Beats', beatMeta.beatNo];
+
+    const existing = this.stores.find(
+      (s) =>
+        s.storeName.trim().toLowerCase() === input.storeName.trim().toLowerCase() &&
+        s.cleanBeatNo === beatMeta.cleanBeatNo
+    );
+
+    if (existing) {
+      this.updateStore(existing.id, {
+        ownerName: input.ownerName || existing.ownerName,
+        primaryPhone: digitsPhone,
+        whatsappNumber: digitsPhone,
+        category: input.category,
+        colony: input.colony || existing.colony,
+        blockSector: input.blockSector || existing.blockSector,
+        pincode: storePincode,
+        fullAddress: input.fullAddress || existing.fullAddress,
+        storeType: input.storeType || existing.storeType,
+        brandName: input.brandName || existing.brandName,
+        brandLogoUrl: input.brandLogoUrl || existing.brandLogoUrl,
+        brandMonogram: input.brandMonogram || existing.brandMonogram,
+        brandAccentColor: input.brandAccentColor || existing.brandAccentColor,
+        brandCategoryTag: input.brandCategoryTag || existing.brandCategoryTag,
+        serviceablePincodes,
+        serviceableBeats,
+        deliveryRadiusKm: input.deliveryRadiusKm ?? existing.deliveryRadiusKm,
+        dispatchCutoffTime: input.dispatchCutoffTime || existing.dispatchCutoffTime,
+        sourceOwnership: input.sourceOwnership || existing.sourceOwnership || 'VENDOR_PARTNER',
+        linkedOfficeId: input.linkedOfficeId || existing.linkedOfficeId,
+        linkedOfficeName: input.linkedOfficeName || existing.linkedOfficeName || beatMeta.subOffice,
+        serviceCategory: input.serviceCategory || existing.serviceCategory,
+        operationalStatus: 'OPERATIONAL',
+        verificationStatus: 'Verified',
+        freshnessStatus: 'FRESH_ACTIVE',
+        lastCheckedDate: nowIso,
+        fieldVerifiedByStaffId: beatMeta.staffId,
+        fieldVerifiedByStaffName: beatMeta.staffName,
+        fieldVerifiedAt: nowIso,
+      });
+      const updated = this.stores.find((s) => s.id === existing.id)!;
+      return { store: updated, beatMeta };
+    }
+
+    const brandTag = input.sourceOwnership === 'COMPANY_HOUSE' ? 'HOUSE' : input.storeType === 'BRAND_FRANCHISE' ? 'BRAND' : 'VND';
+    const newStore: CommercialStoreRecord = {
+      id: `${brandTag}-${Date.now().toString(36).toUpperCase()}`,
+      storeName: input.storeName.trim(),
+      ownerName: input.ownerName.trim() || 'Local Partner',
+      primaryPhone: digitsPhone,
+      whatsappNumber: digitsPhone,
+      latitude: center.lat,
+      longitude: center.lng,
+      photoUrl: input.brandLogoUrl,
+      brandLogoUrl: input.brandLogoUrl,
+      storeType: input.storeType || 'LOCAL_MERCHANT',
+      brandName: input.brandName,
+      brandMonogram:
+        input.brandMonogram ||
+        (input.brandName || input.storeName)
+          .split(/\s+/)
+          .slice(0, 2)
+          .map((w) => w[0]?.toUpperCase() || '')
+          .join(''),
+      brandAccentColor: input.brandAccentColor || (input.storeType === 'BRAND_FRANCHISE' ? '#1D4ED8' : '#B91C1C'),
+      brandCategoryTag: input.brandCategoryTag || input.category,
+      serviceablePincodes,
+      serviceableBeats,
+      serviceableColonies: [input.colony || beatMeta.colonies[0] || 'Dadabari'],
+      deliveryRadiusKm: input.deliveryRadiusKm ?? (input.storeType === 'BRAND_FRANCHISE' ? 5 : 3),
+      dispatchCutoffTime: input.dispatchCutoffTime || 'Same-Day Speed Post COD',
+      sourceOwnership: input.sourceOwnership || 'VENDOR_PARTNER',
+      linkedOfficeId: input.linkedOfficeId,
+      linkedOfficeName: input.linkedOfficeName || beatMeta.subOffice,
+      serviceCategory: input.serviceCategory,
+      fullAddress:
+        input.fullAddress?.trim() ||
+        `${input.blockSector || 'Main Market'}, ${input.colony || beatMeta.colonies[0] || 'Dadabari'}, Kota - ${storePincode}`,
+      colony: input.colony || beatMeta.colonies[0] || 'Dadabari',
+      blockSector: input.blockSector || 'Main Market',
+      pincode: storePincode,
+      beatNo: beatMeta.beatNo,
+      cleanBeatNo: beatMeta.cleanBeatNo,
+      category: input.category,
+      operationYears: 4,
+      longevityBadge: '3–5 Years Verified',
+      operationalStatus: 'OPERATIONAL',
+      longevityVerified: true,
+      source: 'crm_registry',
+      verificationStatus: 'Verified',
+      freshnessStatus: 'FRESH_ACTIVE',
+      listedDate: nowIso,
+      lastCheckedDate: nowIso,
+      fieldVerifiedByStaffId: beatMeta.staffId,
+      fieldVerifiedByStaffName: beatMeta.staffName,
+      fieldVerifiedAt: nowIso,
+      syncedToPropertyMaster: true,
+      syncedToVerificationQueue: true,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    this.stores = [newStore, ...this.stores];
+    this.saveToStorage();
+    customerService.syncCommercialStoresToRegistry([newStore]);
+    return { store: newStore, beatMeta };
   }
 }
 

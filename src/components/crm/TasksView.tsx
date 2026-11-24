@@ -28,7 +28,8 @@ import {
 import { customerService } from '../../services/customerService';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import { staffPermissionService } from '../../services/staffPermissionService';
-import { Customer, Lead, FieldTask } from '../../types/models';
+import { locationSurveyService } from '../../services/locationSurveyService';
+import { Customer, Lead, FieldTask, HouseMasterRecord } from '../../types/models';
 import CustomerProfileModal from '../customers/CustomerProfileModal';
 
 type TaskItem = FieldTask;
@@ -75,11 +76,13 @@ export default function TasksView() {
   const [newTaskDueDate, setNewTaskDueDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [newTaskTargetStops, setNewTaskTargetStops] = useState<number>(5);
 
-  // Linkage Form States (Customer / Lead Selector)
-  const [linkTargetType, setLinkTargetType] = useState<'CUSTOMER' | 'LEAD' | 'NONE'>('NONE');
+  // Linkage Form States (Customer / Lead / House Master Selector)
+  const [linkTargetType, setLinkTargetType] = useState<'CUSTOMER' | 'LEAD' | 'HOUSE_MASTER' | 'NONE'>('NONE');
   const [linkSelectorSearch, setLinkSelectorSearch] = useState('');
   const [selectedCustomerToLink, setSelectedCustomerToLink] = useState<Customer | null>(null);
   const [selectedLeadToLink, setSelectedLeadToLink] = useState<Lead | null>(null);
+  const [selectedHouseToLink, setSelectedHouseToLink] = useState<HouseMasterRecord | null>(null);
+  const housesList = useMemo(() => locationSurveyService.getHouses(userProfile), [userProfile]);
 
   useEffect(() => {
     const syncData = () => {
@@ -388,6 +391,10 @@ export default function TasksView() {
       priority: newTaskPriority,
       dueDate: newTaskDueDate,
       householdsTarget: Math.max(1, Number(newTaskTargetStops) || 5),
+      houseId: linkTargetType === 'HOUSE_MASTER' ? selectedHouseToLink?.id : undefined,
+      streetId: linkTargetType === 'HOUSE_MASTER' ? selectedHouseToLink?.streetId : undefined,
+      colonyName: linkTargetType === 'HOUSE_MASTER' ? selectedHouseToLink?.colony : undefined,
+      floorUnit: linkTargetType === 'HOUSE_MASTER' ? selectedHouseToLink?.floorUnit : undefined,
       linkedCustomerId,
       linkedCustomerMasterId,
       linkedCustomerName,
@@ -403,6 +410,7 @@ export default function TasksView() {
     setNewTaskLocation('');
     setSelectedCustomerToLink(null);
     setSelectedLeadToLink(null);
+    setSelectedHouseToLink(null);
     setLinkTargetType('NONE');
     setLinkSelectorSearch('');
     setShowNewTaskModal(false);
@@ -422,11 +430,10 @@ export default function TasksView() {
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-xl font-bold text-slate-900">
-                    Field Operations & Daily Beat Coverage Tracker
+                    Field Operations &amp; Daily Beat Coverage Tracker
                   </h2>
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    LIVE TRACKING
+                  <span className="text-[11px] font-mono font-bold text-[#1D4ED8] uppercase tracking-wider">
+                    Beat &amp; House Master Linked
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
@@ -1310,6 +1317,7 @@ export default function TasksView() {
                     onClick={() => {
                       setLinkTargetType('LEAD');
                       setSelectedCustomerToLink(null);
+                      setSelectedHouseToLink(null);
                     }}
                     className={`px-2.5 py-1 rounded-lg transition flex items-center gap-1 ${
                       linkTargetType === 'LEAD'
@@ -1319,6 +1327,22 @@ export default function TasksView() {
                   >
                     <Target size={12} />
                     <span>Lead Schema</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLinkTargetType('HOUSE_MASTER');
+                      setSelectedCustomerToLink(null);
+                      setSelectedLeadToLink(null);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg transition flex items-center gap-1 ${
+                      linkTargetType === 'HOUSE_MASTER'
+                        ? 'bg-[#EA580C] text-white'
+                        : 'bg-white text-slate-600 border border-slate-200'
+                    }`}
+                  >
+                    <Home size={12} />
+                    <span>House Master</span>
                   </button>
                 </div>
 
@@ -1471,6 +1495,38 @@ export default function TasksView() {
                             </div>
                           ))}
                       </div>
+                    )}
+                  </div>
+                )}
+
+                {linkTargetType === 'HOUSE_MASTER' && (
+                  <div className="space-y-2 pt-1 border-t border-slate-200/60">
+                    {housesList.length === 0 ? (
+                      <div className="text-[11px] text-slate-500 p-2 bg-white rounded border border-slate-200">
+                        No House Master records registered yet. Add houses in Location Intelligence Hub.
+                      </div>
+                    ) : (
+                      <select
+                        value={selectedHouseToLink?.id || ''}
+                        onChange={(e) => {
+                          const found = housesList.find((h) => h.id === e.target.value) || null;
+                          setSelectedHouseToLink(found);
+                          if (found) {
+                            setNewTaskLocation(`${found.houseNumber} (${found.floorUnit || 'Ground'}), ${found.colony}, PIN ${found.pincode}`);
+                            if (found.beatNo) {
+                              setNewTaskBeat(found.beatNo.replace(/^Beat\s*/i, '').trim());
+                            }
+                          }
+                        }}
+                        className="w-full px-2.5 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold"
+                      >
+                        <option value="">-- Select House Master Record --</option>
+                        {housesList.map((h) => (
+                          <option key={h.id} value={h.id}>
+                            {h.id} · {h.houseNumber} ({h.floorUnit || 'Ground'}) · {h.colony} ({h.pincode})
+                          </option>
+                        ))}
+                      </select>
                     )}
                   </div>
                 )}

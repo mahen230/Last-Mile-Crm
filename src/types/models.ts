@@ -1,6 +1,137 @@
 import { Timestamp } from 'firebase/firestore';
 
-export type UserRole = 'MASTER_ADMIN' | 'SUPER_ADMIN' | 'ADMIN' | 'POSTMASTER' | 'POSTMAN' | 'STAFF' | 'BPM' | 'BO_STAFF' | 'SALES_SUPPORT' | 'VIEWER' | string;
+export type UserRole = 
+  | 'OWNER' 
+  | 'MASTER_ADMIN' 
+  | 'SUPER_ADMIN' 
+  | 'DEVELOPER' 
+  | 'ADMIN' 
+  | 'DIVISIONAL_HEAD'
+  | 'ASST_DIVISIONAL_ADMIN'
+  | 'SUBDIVISION_INCHARGE'
+  | 'CIRCLE_INCHARGE'
+  | 'DIVISION_INCHARGE'
+  | 'DISTRICT_INCHARGE'
+  | 'DISTRICT_MANAGER' 
+  | 'DISTRICT_OFFICE_STAFF'
+  | 'BLOCK_INCHARGE'
+  | 'OFFICE_INCHARGE'
+  | 'CLUSTER_INCHARGE'
+  | 'MARKETING_TEAM'
+  | 'LAST_MILE_SUPERVISOR'
+  | 'SALES_FIELD_STAFF'
+  | 'POSTMASTER' 
+  | 'ASST_POSTMASTER'
+  | 'SUB_POSTMASTER'
+  | 'POSTMAN' 
+  | 'MAIL_GUARD'
+  | 'MTS'
+  | 'GDS' 
+  | 'BPM' 
+  | 'ABPM'
+  | 'DEO'
+  | 'VENDOR'
+  | 'STAFF' 
+  | 'CUSTOMER' 
+  | 'BO_STAFF' 
+  | 'SALES_SUPPORT' 
+  | 'CATEGORY_MANAGER'
+  | 'VIEWER' 
+  | string;
+
+export type OfficialPostType =
+  | 'Divisional Head'
+  | 'Assistant Divisional Admin'
+  | 'Subdivision Incharge'
+  | 'Postmaster'
+  | 'Assistant Postmaster'
+  | 'Sub Postmaster'
+  | 'BPM'
+  | 'ABPM'
+  | 'Postman'
+  | 'Mail Guard'
+  | 'MTS'
+  | 'GDS'
+  | 'Last Mile Supervisor'
+  | 'Marketing Team'
+  | 'Cluster Incharge'
+  | 'Vendor'
+  | 'DEO'
+  | 'Master Admin'
+  | 'Developer'
+  | 'Owner';
+
+export type GranularPermissionAction =
+  | 'view'
+  | 'create'
+  | 'edit'
+  | 'update'
+  | 'assign'
+  | 'reassign'
+  | 'approve'
+  | 'reject'
+  | 'export'
+  | 'import'
+  | 'print'
+  | 'delete'
+  | 'configure';
+
+export const ALL_GRANULAR_ACTIONS: GranularPermissionAction[] = [
+  'view',
+  'create',
+  'edit',
+  'update',
+  'assign',
+  'reassign',
+  'approve',
+  'reject',
+  'export',
+  'import',
+  'print',
+  'delete',
+  'configure',
+];
+
+export type KotaModuleKey =
+  | 'orgHierarchy'
+  | 'locationIntelligence'
+  | 'houseMaster'
+  | 'customerMaster'
+  | 'doorstepSurveys'
+  | 'leadsPool'
+  | 'tasksAndBeats'
+  | 'vendorOperations'
+  | 'dataGovernance'
+  | 'adminControlCenter';
+
+export type GranularPermissionMatrix = Record<KotaModuleKey, Partial<Record<GranularPermissionAction, boolean>>>;
+
+export type BusinessServiceCategory =
+  | 'Postal & Last-Mile Logistics'
+  | 'Software, CRMs & AI SaaS'
+  | 'EV Mobility & Batteries'
+  | 'Travel, Tours & Fleet'
+  | 'Solar & Clean Energy'
+  | 'Banking, PLI & Insurance'
+  | 'Hyperlocal Retail & FMCG'
+  | 'Healthcare & Wellness'
+  | 'eMitra & Digital Services';
+
+export type OfficeVariantType =
+  | 'Head Post Office (H.O.)'
+  | 'Sub Post Office (S.O.)'
+  | 'Branch Post Office (B.O.)'
+  | 'EV Mobility Hub'
+  | 'Logistics Franchise'
+  | 'Hyperlocal Dark Store'
+  | 'SaaS & Digital Commerce Hub'
+  | 'District Operations Center'
+  | string;
+
+export type ProductSourceType = 'COMPANY_HOUSE' | 'VENDOR_PARTNER';
+
+export type ProductListingStatus = 'Active' | 'Draft' | 'Out of Stock' | 'Paused';
+
 export type VerificationStatus = 'Verified' | 'Pending Verification' | 'Conflict' | 'Unverified' | string;
 export type ApprovalStatus = 'Draft' | 'Pending' | 'Pending Approval' | 'Approved' | 'Rejected' | string;
 export type LivingStatus = 'Owner' | 'Tenant' | 'Family Member' | 'Vacant' | 'Other' | string;
@@ -16,7 +147,12 @@ export type ProductCategory =
   | 'Digital Banking & Aadhaar'
   | string;
 export type LeadStage = 
-  | 'New' 
+  | 'New'
+  | 'Lead Generated'
+  | 'Central Division Lead Pool'
+  | 'Division Marketing Team'
+  | 'Cluster Incharge'
+  | 'Assigned Office/Employee'
   | 'Contacted' 
   | 'Interested'
   | 'Follow-up'
@@ -316,6 +452,11 @@ export interface Customer {
   assignedStaffId?: string;
   assignedStaffName?: string;
   assignedStaffEmail?: string;
+  brandId?: string;
+  brandName?: string;
+  createdById?: string;
+  assignedToId?: string;
+  businessCategory?: string;
   createdAt: string;
   updatedAt?: string;
 }
@@ -360,6 +501,18 @@ export interface KotaPostOfficeEntry {
   coveragePercentage: number;
 }
 
+export interface LeadReassignmentLog {
+  id: string;
+  timestamp: string;
+  fromAssignee: string;
+  toAssignee: string;
+  fromClusterId?: string;
+  toClusterId?: string;
+  performedBy: string;
+  performedByRole: string;
+  reason?: string;
+}
+
 export interface Lead {
   id: string;
   customerId: string;
@@ -367,17 +520,27 @@ export interface Lead {
   customerMobile: string;
   customerAddress?: string;
   householdId?: string;
+  houseId?: string;
+  streetId?: string;
   productCode: string;
   productName: string;
   requirement: string;
   source: string;
+  sourceChannel?: 'Doorstep Survey' | 'Customer Portal' | 'Counter Desk' | 'Vendor Referral' | 'Marketing Campaign' | 'Direct Inquiry' | string;
+  sourceStaffId?: string;
+  sourceStaffName?: string;
+  sourceVendorId?: string;
   stage: LeadStage;
+  poolStage?: 'Lead Generated' | 'Central Division Lead Pool' | 'Division Marketing Team' | 'Cluster Incharge' | 'Assigned Office/Employee' | 'Follow-up' | 'Converted' | 'Lost';
   priority: 'Low' | 'Medium' | 'High' | 'Urgent';
   leadScore: number;
   assignedStaffName?: string;
   assignedStaffId?: string;
   assignedStaffEmail?: string;
   assignedStaffMobile?: string;
+  clusterId?: string;
+  clusterName?: string;
+  subdivisionId?: string;
   officeId?: string;
   postOfficeName?: string;
   pincode?: string;
@@ -387,6 +550,14 @@ export interface Lead {
   nextAction?: string;
   nextFollowUpDate?: string;
   notes?: string;
+  brandId?: string;
+  brandName?: string;
+  propertyId?: string;
+  propertyCode?: string;
+  createdById?: string;
+  assignedToId?: string;
+  businessCategory?: string;
+  reassignmentHistory?: LeadReassignmentLog[];
   createdAt: string;
   updatedAt: string;
 }
@@ -425,6 +596,13 @@ export interface FollowUp {
   beatNo?: string;
   remarks: string;
   outcome?: string;
+  brandId?: string;
+  brandName?: string;
+  propertyId?: string;
+  createdById?: string;
+  assignedToId?: string;
+  businessCategory?: string;
+  timelineNotes?: Array<{ timestamp: string; author: string; note: string }>;
   completedAt?: string;
   createdAt?: string;
 }
@@ -569,6 +747,36 @@ export interface PendingApproval {
 
 export type StaffStatus = 'Active on Duty' | 'In Office' | 'Supervising' | 'On Leave';
 
+export type IndiaPostDutyCategory =
+  | 'Delivery'
+  | 'Banking & IPPB'
+  | 'Counter & Booking'
+  | 'Field Survey & Leads'
+  | 'Supervisory & Division';
+
+export interface StaffPromotionRecord {
+  id: string;
+  staffId: string;
+  employeeId?: string;
+  staffName: string;
+  previousPost: string;
+  previousRole: string;
+  previousPostCategory: string;
+  previousOffice?: string;
+  previousBeat?: string;
+  newPost: string;
+  newRole: string;
+  newPostCategory: string;
+  newOffice?: string;
+  newBeat?: string;
+  newPincode?: string;
+  effectiveDate: string;
+  orderRef?: string;
+  notes?: string;
+  promotedBy: string;
+  changedAt: string;
+}
+
 export type DesignationType =
   | 'PA (Postal Assistant)'
   | 'Postman'
@@ -578,7 +786,70 @@ export type DesignationType =
   | 'SPM / Postmaster'
   | 'Sorting Assistant (SA)'
   | 'Mail Guard'
+  | 'District Manager (DM)'
+  | 'Category Manager'
+  | 'Circle Incharge'
+  | 'Division Incharge'
+  | 'District Incharge'
+  | 'Block Incharge'
+  | 'Office Incharge'
+  | 'Last-Mile Rider'
+  | 'Sales & Field Executive'
   | string;
+
+export type VendorSystemId =
+  | 'INDIA_POST'
+  | 'COMMERCIAL_PARTNERS'
+  | 'EV_MOBILITY'
+  | 'SAAS_DIGITAL'
+  | string;
+
+export type FeatureVisibilityKey =
+  | 'property'
+  | 'members'
+  | 'beats'
+  | 'locationIntelligence'
+  | 'dailyOperations'
+  | 'officialDocuments'
+  | 'leadsAndSchemes'
+  | 'dailyVerification'
+  | 'lms'
+  | 'communication'
+  | 'commercialDirectory'
+  | 'vendorSection'
+  | 'staffDirectory'
+  | 'storefront'
+  | 'aiAssistant'
+  | 'dataBackupCenter';
+
+export const DEFAULT_POSTMAN_GDS_VISIBLE_FEATURES: FeatureVisibilityKey[] = ['property', 'members'];
+
+export const ALL_FEATURE_VISIBILITY_KEYS: FeatureVisibilityKey[] = [
+  'property',
+  'members',
+  'beats',
+  'locationIntelligence',
+  'dailyOperations',
+  'officialDocuments',
+  'leadsAndSchemes',
+  'dailyVerification',
+  'lms',
+  'communication',
+  'commercialDirectory',
+  'vendorSection',
+  'staffDirectory',
+  'storefront',
+  'aiAssistant',
+  'dataBackupCenter',
+];
+
+export interface VendorAccessConfig {
+  assignedVendorId?: VendorSystemId;
+  allowedVendors?: VendorSystemId[];
+  whiteLabelMode?: boolean;
+  strictVendorIsolation?: boolean;
+  customWhiteLabelName?: string;
+}
 
 export interface ServiceModulePermissions {
   crmSection: boolean;                     // 1. CRM Section (Customer & Property Management)
@@ -607,7 +878,11 @@ export interface Staff {
   officeId?: string;
   postOfficeName?: string;
   circle: string;
+  region?: string;
   division: string;
+  subdivision?: string;
+  district?: string;
+  block?: string;
   headOffice: string;
   subOffice?: string;
   branchOffice?: string;
@@ -617,6 +892,28 @@ export interface Staff {
   postingType: 'Posted' | 'Attached';
   postedOfficeName: string;
   attachedOfficeName?: string;
+
+  // Separate Official Post, Designation, Office Posting, CRM Role & Granular Permissions
+  officialPost?: OfficialPostType | string;
+  designation?: string;
+  officePosting?: string;
+  crmRole?: string;
+  clusterId?: string;
+  clusterName?: string;
+  subdivisionId?: string;
+  granularPermissions?: Partial<GranularPermissionMatrix>;
+
+  // Regional & Multi-Business Ownership Metadata
+  assignedCategories?: string[];
+  partnerOrganization?: string;
+  isNonTerritoryAgent?: boolean;
+  staffScopeType?: 'XPOKART_PLATFORM' | 'BRAND_OPERATIONAL';
+  brandId?: string;
+  brandName?: string;
+  assignedBrands?: string[];
+  staffSlotNumber?: 1 | 2 | 3 | 4 | 5;
+  vendorScope?: VendorAccessConfig;
+  visibleFeaturesOverride?: Partial<Record<FeatureVisibilityKey, boolean>>;
 
   // Beat & Delivery Territory Mapping
   deliveryOfficeMapping?: string;
@@ -650,7 +947,14 @@ export interface DynamicOfficeRecord {
   officeId?: string;
   officeName: string;
   postOfficeName?: string;
-  officeType: 'H.O.' | 'S.O.' | 'B.O.' | 'HO' | 'SO' | 'BO';
+  officeType: 'H.O.' | 'S.O.' | 'B.O.' | 'HO' | 'SO' | 'BO' | 'EV Hub' | 'Logistics Franchise' | 'Hyperlocal Store' | 'EV_HUB' | 'LOGISTICS_FRANCHISE' | 'HYPERLOCAL_STORE' | string;
+  businessCategory?: 'Head Post Office (HO)' | 'Sub Post Office (SO)' | 'Branch Post Office (BO)' | 'EV Hub' | 'Logistics Franchise' | 'Hyperlocal Store' | string;
+  officeVariant?: OfficeVariantType;
+  businessSectionName?: string;
+  businessSectionCategory?: BusinessServiceCategory | string;
+  businessSectionLandmark?: string;
+  operationalRemarks?: string;
+  serviceCategories?: string[];
   circle: string;
   division: string;
   headOffice: string;
@@ -667,13 +971,150 @@ export interface DynamicOfficeRecord {
   coveragePercentage?: number;
   assignedStaffCount: number;
   staffCount: number;
+  realStaffCount?: number;
+  isVacant?: boolean;
   assignedStaffNames: string[];
   assignedStaffIds: string[];
+  assignedInchargeName?: string;
+  assignedDistrictIncharge?: string;
+  assignedBlockIncharge?: string;
   district?: string;
+  block?: string;
   subDivision?: string;
+  pincodeManager?: string;
+  pincodeManagerContact?: string;
+  beatStaffAssignments?: Record<string, string>;
+  boundPropertiesCount?: number;
+  stockSkusCount?: number;
+  brandId?: string;
+  brandName?: string;
   isAutoManaged?: boolean;
   updatedAt: string;
 }
+
+// ============================================================================
+// XPEEDO CRM / POSTMAN BOOK - MASTER ADMIN & OFFICE PERMISSION PROTOCOL
+// ============================================================================
+
+export interface OfficeMasterPermissionConfig {
+  authorizedRoles: ('OWNER' | 'MASTER_ADMIN' | 'DEVELOPER')[];
+  designatedAdmins: {
+    name: string;
+    role: string;
+    emailOrId: string;
+  }[];
+  accessPermissions: {
+    registerNewOffice: boolean;
+    modifyExistingOffice: boolean;
+    deleteOrArchiveOffice: boolean;
+    instantVerifyStaffData: boolean;
+    manageBeatAndPincodeMapping: boolean;
+  };
+}
+
+export const xpeedoMasterAdminOfficeConfig: OfficeMasterPermissionConfig = {
+  authorizedRoles: ['OWNER', 'MASTER_ADMIN', 'DEVELOPER'],
+  designatedAdmins: [
+    {
+      name: 'Mahendra Kumar Meena',
+      role: 'Owner & Founder',
+      emailOrId: 'OWNER_ROOT_01'
+    },
+    {
+      name: 'Ekta Meena',
+      role: 'Master Admin & Developer',
+      emailOrId: 'MASTER_ADMIN_EKTA_01'
+    }
+  ],
+  accessPermissions: {
+    registerNewOffice: true,      // Full permission to register new SO/HO/BO/Logistics Hub
+    modifyExistingOffice: true,   // Full permission to edit category, pincode, and linked properties
+    deleteOrArchiveOffice: true,  // Restricted strictly to Owner / Master Admin
+    instantVerifyStaffData: true, // Bypass queue and instantly verify staff entries
+    manageBeatAndPincodeMapping: true // 34-beat & Hadoti pincode assignment control
+  }
+};
+
+// ============================================================================
+// XPEEDO OS / LAST-MILE CRM: MASTER OFFICE AUDIT & RIDER DASHBOARD PROTOCOL
+// ============================================================================
+
+export interface MasterOfficeAndRiderAuditConfig {
+  systemVersion: string;
+  scope: string;
+  targetAudience: {
+    owners: string[];
+    masterAdmins: string[];
+  };
+  modules: {
+    officeDirectory: {
+      filterUpdate: 'All Post Offices -> All Offices (Unified Multi-Vertical)';
+      pincodeSearchBinding: boolean;
+      businessCategoryMapping: [
+        'Head Post Office (HO)',
+        'Sub Post Office (SO)',
+        'Branch Post Office (BO)',
+        'EV Hub',
+        'Logistics Franchise',
+        'Hyperlocal Store'
+      ];
+    };
+    internalAuditEngine: {
+      postmanAndGdsTracking: boolean;
+      lastMileRiderMetrics: boolean;
+      dailyDssReconciliation: boolean;
+      fuelAndByodVerification: boolean;
+    };
+    dashboardUx: {
+      roleBasedAccess: 'Master Admin & Owner Full Control';
+      instantVerificationBypass: boolean;
+      mobileResponsiveCards: boolean;
+    };
+  };
+}
+
+export const xpeedoMasterAuditProtocol: MasterOfficeAndRiderAuditConfig = {
+  systemVersion: 'v4.5-unified-audit',
+  scope: 'Hadoti Region Pincodes & Dadabari S.O. Division (324009)',
+  targetAudience: {
+    owners: ['Mahendra Kumar Meena'],
+    masterAdmins: ['Ekta Meena (Master Admin & Developer)']
+  },
+  modules: {
+    officeDirectory: {
+      filterUpdate: 'All Post Offices -> All Offices (Unified Multi-Vertical)',
+      pincodeSearchBinding: true,
+      businessCategoryMapping: [
+        'Head Post Office (HO)',
+        'Sub Post Office (SO)',
+        'Branch Post Office (BO)',
+        'EV Hub',
+        'Logistics Franchise',
+        'Hyperlocal Store'
+      ]
+    },
+    internalAuditEngine: {
+      postmanAndGdsTracking: true,
+      lastMileRiderMetrics: true,
+      dailyDssReconciliation: true,
+      fuelAndByodVerification: true
+    },
+    dashboardUx: {
+      roleBasedAccess: 'Master Admin & Owner Full Control',
+      instantVerificationBypass: true,
+      mobileResponsiveCards: true
+    }
+  }
+};
+
+// Execution Directive for Office & Staff Management UI
+export function executeUnifiedOfficeAndAuditUpgrade() {
+  console.info('[XPEEDO OS] Upgrading filter from "All Post Offices" to "All Offices" across all modules.');
+  console.info('[XPEEDO OS] Activating Pincode-wise business property grouping and stock mapping.');
+  console.info('[XPEEDO OS] Streamlining Postman, GDS, and Last-Mile Rider application & audit dashboard for Ekta Meena & Owner.');
+}
+
+executeUnifiedOfficeAndAuditUpgrade();
 
 export interface ColonyBeatMapping {
   id: string;
@@ -899,7 +1340,29 @@ export interface StaffProfile {
   postOfficeName?: string;
   // Detailed Joining Office & Territory Fields
   circle?: string;
+  region?: string;
   division?: string;
+  subdivision?: string;
+  subdivisionId?: string;
+  district?: string;
+  block?: string;
+  clusterId?: string;
+  clusterName?: string;
+  officialPost?: OfficialPostType | string;
+  officePosting?: string;
+  crmRole?: string;
+  granularPermissions?: Partial<GranularPermissionMatrix>;
+  assignedDistricts?: string[];
+  assignedBlocks?: string[];
+  assignedCategories?: string[];
+  partnerOrganization?: string;
+  isNonTerritoryAgent?: boolean;
+  staffScopeType?: 'XPOKART_PLATFORM' | 'BRAND_OPERATIONAL';
+  brandId?: string;
+  brandName?: string;
+  assignedBrands?: string[];
+  staffSlotNumber?: 1 | 2 | 3 | 4 | 5;
+  reportingManagerId?: string;
   headOffice?: string;
   subOffice?: string;
   branchOffice?: string;
@@ -912,11 +1375,16 @@ export interface StaffProfile {
   extraRemarks?: string;
   fixedKm?: number; // Fixed daily beat distance in KM (e.g. 18, 22, 25)
   permissions: StaffPermission;
+  vendorScope?: VendorAccessConfig;
+  visibleFeaturesOverride?: Partial<Record<FeatureVisibilityKey, boolean>>;
   entriesCreatedToday: number;
   lastEntryDate: string; // YYYY-MM-DD
   totalEntriesCount: number;
   status: 'Active' | 'Inactive' | 'Pending';
+  postCategory?: IndiaPostDutyCategory;
+  promotionHistory?: StaffPromotionRecord[];
   photoURL?: string;
+  updatedAt?: string;
 }
 
 export interface DailyArticleEntry {
@@ -1102,7 +1570,11 @@ export interface FieldTask {
   updatedAt?: string;
   completedAt?: string;
 
-  // Customer & Lead Direct Linkage
+  // Customer, House Master & Lead Direct Linkage
+  houseId?: string;
+  streetId?: string;
+  colonyName?: string;
+  floorUnit?: string;
   linkedCustomerId?: string;
   linkedCustomerMasterId?: string;
   linkedCustomerName?: string;
@@ -1111,14 +1583,36 @@ export interface FieldTask {
   linkedLeadId?: string;
   linkedLeadProduct?: string;
   linkedLeadStage?: string;
-  linkType?: 'CUSTOMER' | 'LEAD' | 'HOUSEHOLD' | 'NONE';
+  linkType?: 'CUSTOMER' | 'LEAD' | 'HOUSEHOLD' | 'HOUSE_MASTER' | 'NONE';
 }
 
 // Re-export Staff Privacy & RBAC Masking models
 export type { StaffMember, StaffPersonalInfo } from '../utils/securityUtils';
 export { getMaskedStaffProfile } from '../utils/securityUtils';
 
-export type CommercialStoreCategory = 'Retail' | 'Wholesale' | 'Services' | 'eMitra/CSC';
+export type CommercialStoreCategory =
+  | 'Retail'
+  | 'Wholesale'
+  | 'Services'
+  | 'eMitra/CSC'
+  | 'Public Safety & Law Enforcement'
+  | 'Postal & Government Services'
+  | 'Insurance & Financial Institutions'
+  | 'Events & Hospitality Venues'
+  | 'Healthcare & Education';
+
+export type StoreEntityType = 'LOCAL_MERCHANT' | 'BRAND_FRANCHISE' | 'CIVIC_UTILITY';
+
+export interface StoreServiceabilityResult {
+  isServiceable: boolean;
+  reason: string;
+  matchedPincode: boolean;
+  matchedBeat: boolean;
+  operationalActive: boolean;
+  serviceablePincodes: string[];
+  serviceableBeats: string[];
+  deliveryRadiusKm: number;
+}
 
 export interface CommercialPhotoAttribution {
   displayName: string;
@@ -1144,6 +1638,17 @@ export interface CommercialStoreRecord {
   beatNo: string; // e.g. 'Beat 1' .. 'Beat 34'
   cleanBeatNo: string; // '1' .. '34'
   category: CommercialStoreCategory;
+  storeType?: StoreEntityType;
+  brandName?: string;
+  brandLogoUrl?: string;
+  brandMonogram?: string;
+  brandAccentColor?: string;
+  brandCategoryTag?: string;
+  serviceablePincodes?: string[];
+  serviceableBeats?: string[];
+  serviceableColonies?: string[];
+  deliveryRadiusKm?: number;
+  dispatchCutoffTime?: string;
   rawTypes?: string[];
   operationYears: number;
   earliestVerifiedYear?: number;
@@ -1159,6 +1664,16 @@ export interface CommercialStoreRecord {
   createdAt: string;
   updatedAt: string;
 
+  // Affiliate & Marketing Budget Monetization Controls
+  isStorefrontEnabled?: boolean;
+  listingTier?: 'SPONSORED_PARTNER' | 'ACTIVE_AFFILIATE' | 'STANDARD_LISTING';
+  marketingBudgetMonthly?: number;
+  affiliateCommissionPercent?: number;
+  sourceOwnership?: ProductSourceType;
+  linkedOfficeId?: string;
+  linkedOfficeName?: string;
+  serviceCategory?: BusinessServiceCategory | string;
+
   // AI 4-Factor Verification & Freshness Fields
   fourFactorVerification?: FourFactorVerificationResult;
   lastCheckedDate?: string;
@@ -1167,6 +1682,7 @@ export interface CommercialStoreRecord {
   fieldVerifiedByStaffId?: string;
   fieldVerifiedByStaffName?: string;
   fieldVerifiedAt?: string;
+  ippbSettlementRef?: string;
 }
 
 export type FourFactorFreshnessStatus = 'FRESH_ACTIVE' | 'STALE_EXCLUDED' | 'NEEDS_FIELD_RECHECK';
@@ -1242,7 +1758,7 @@ export interface LogisticsDispatchOrder {
   pincodeManagerId: string;
   pincodeManagerName: string;
   pincodeManagerContact: string;
-  serviceType: 'Speed Post COD' | 'Xpeedo Local Parcel' | 'Doorstep Service Pickup';
+  serviceType: 'Speed Post COD' | 'XPOKART Local Parcel' | 'Xpeedo Local Parcel' | 'Doorstep Service Pickup';
   status: 'PENDING_PICKUP' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'COD_SETTLED' | 'CANCELLED';
   speedPostBarcode?: string;
   codAmount: number;
@@ -1272,7 +1788,24 @@ export interface StaffProductItem {
   pricingModel: ProductPricingModel;
   productType: ProductItemType;
   price: number;
+  wholesalePrice?: number;
+  mrpPrice?: number;
   commissionRate?: string;
+  sellingMarginAmount?: number;
+  sellingMarginPercent?: number;
+  codEligible?: boolean;
+  speedPostCharge?: number;
+  vendorName?: string;
+  vendorCategory?: 'Retail' | 'Wholesale' | 'Services' | 'eMitra/CSC' | 'Official India Post' | string;
+  storeType?: StoreEntityType;
+  brandName?: string;
+  brandLogoUrl?: string;
+  brandCategoryTag?: string;
+  serviceablePincodes?: string[];
+  serviceableBeats?: string[];
+  deliveryRadiusKm?: number;
+  beatManagerId?: string;
+  beatManagerName?: string;
   description: string;
   features: string[];
   thumbnailUrl: string;
@@ -1289,7 +1822,14 @@ export interface StaffProductItem {
   freshnessStatus?: FourFactorFreshnessStatus;
   lastCheckedDate?: string;
   commercialStoreId?: string;
-  logisticsServiceType?: 'Speed Post COD' | 'Xpeedo Local Parcel' | 'Doorstep Service Pickup';
+  ippbSettlementRef?: string;
+  logisticsServiceType?: 'Speed Post COD' | 'XPOKART Local Parcel' | 'Xpeedo Local Parcel' | 'Doorstep Service Pickup';
+  listingStatus?: ProductListingStatus;
+  stockQuantity?: number;
+  sourceOwnership?: ProductSourceType;
+  linkedOfficeId?: string;
+  linkedOfficeName?: string;
+  serviceCategory?: BusinessServiceCategory | string;
   createdAt: string;
   updatedAt: string;
 }
@@ -1305,5 +1845,449 @@ export interface StaffSalesRights {
   updatedBy?: string;
   updatedAt: string;
 }
+
+// ============================================================================
+// KOTA DIVISION OS: ORG HIERARCHY, LOCATION INTELLIGENCE, SURVEYS & BACKUP
+// ============================================================================
+
+export type OrgHierarchyLevel = 'CIRCLE' | 'REGION' | 'DIVISION' | 'SUBDIVISION' | 'HPO' | 'SO' | 'BO';
+
+export interface OrgHierarchyNode {
+  id: string;
+  code: string;
+  name: string;
+  level: OrgHierarchyLevel;
+  parentId?: string;
+  pincode?: string;
+  inchargeName?: string;
+  inchargePost?: OfficialPostType | string;
+  vendorId?: VendorSystemId;
+  status: 'ACTIVE' | 'CONFIGURABLE' | 'ARCHIVED';
+  updatedAt: string;
+}
+
+export interface ClusterMasterRecord {
+  id: string;
+  name: string;
+  division: string;
+  subdivisionId?: string;
+  inchargeStaffId?: string;
+  inchargeName?: string;
+  officeIds: string[];
+  pincodes: string[];
+  status: 'ACTIVE' | 'INACTIVE';
+  updatedAt: string;
+}
+
+export interface OfficialPostConfig {
+  id: string;
+  postTitle: OfficialPostType | string;
+  defaultRoleKey: UserRole;
+  defaultWorkspacePath: string;
+  hierarchyRank: number; // 1 = highest (Owner/Divisional Head) .. 10 = field/DEO
+  isPostalCadre: boolean;
+  defaultModuleMatrix: GranularPermissionMatrix;
+}
+
+export interface StreetMasterRecord {
+  id: string;
+  streetCode: string;
+  streetName: string;
+  streetNameHi?: string;
+  division: string;
+  subdivision?: string;
+  officeId?: string;
+  officeName?: string;
+  pincode: string;
+  locality: string;
+  colony: string;
+  sectorBlock: string;
+  beatNo?: string;
+  landmark?: string;
+  status: 'ACTIVE' | 'NEEDS_REVIEW';
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type DoorstepSurveyStatus =
+  | 'Assigned'
+  | 'In Progress'
+  | 'Submitted'
+  | 'Verification Pending'
+  | 'Verified'
+  | 'Rejected/Correction Required'
+  | 'Completed';
+
+export interface HouseMasterRecord {
+  id: string; // e.g. HSE-KOTA-0001
+  houseNumber: string;
+  buildingName?: string;
+  floorUnit?: string; // e.g. Ground Floor / Unit A / Shop 2
+  streetId: string;
+  streetName: string;
+  sectorBlock: string;
+  colony: string;
+  locality: string;
+  pincode: string;
+  officeId?: string;
+  officeName?: string;
+  subdivision?: string;
+  division: string;
+  beatNo?: string;
+  occupancyType: 'Residential' | 'Commercial' | 'Mixed' | 'Vacant' | 'Government';
+  headResidentName?: string;
+  linkedCustomerIds: string[];
+  propertyId?: string; // Shared ID with Property Master
+  latitude?: number;
+  longitude?: number;
+  consentCaptured: boolean;
+  consentTimestamp?: string;
+  consentRecordedBy?: string;
+  surveyStatus: DoorstepSurveyStatus | 'Unvisited';
+  lastSurveyId?: string;
+  lastVerifiedAt?: string;
+  lastVerifiedBy?: string;
+  remarks?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DoorstepSurveyRecord {
+  id: string;
+  houseId: string;
+  houseDisplayAddress: string;
+  streetId?: string;
+  colony: string;
+  pincode: string;
+  officeName?: string;
+  beatNo?: string;
+  assignedStaffId: string;
+  assignedStaffName: string;
+  supervisorId?: string;
+  status: DoorstepSurveyStatus;
+  isDraft: boolean;
+  consentCaptured: boolean;
+  consentNote?: string;
+  gpsStatus: 'CAPTURED' | 'DENIED' | 'UNAVAILABLE' | 'NOT_REQUESTED';
+  latitude?: number;
+  longitude?: number;
+  gpsAccuracyMeters?: number;
+  residentName?: string;
+  residentMobile?: string;
+  householdMembersCount?: number;
+  occupancyVerified?: 'Occupied' | 'Vacant' | 'Rented' | 'Commercial' | 'Shifted';
+  interestedProducts?: string[];
+  fieldNotes: string;
+  correctionRemarks?: string;
+  verifiedBy?: string;
+  verifiedAt?: string;
+  submittedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DataExportHistoryRecord {
+  id: string;
+  timestamp: string;
+  performedBy: string;
+  userRole: string;
+  dataset: string;
+  format: 'CSV_UTF8_BOM' | 'XLSX' | 'JSON_BACKUP';
+  recordCount: number;
+  filtersApplied: string;
+  fileName: string;
+}
+
+export interface DataImportConflictItem {
+  rowIndex: number;
+  entityType: 'HouseMaster' | 'StreetMaster' | 'CustomerMaster';
+  identifier: string;
+  reason: 'ALREADY_VERIFIED_PROTECTED' | 'DUPLICATE_IN_FILE' | 'DUPLICATE_EXISTING' | 'VALIDATION_ERROR';
+  existingSummary?: string;
+  incomingSummary: string;
+  resolution: 'BLOCKED_VERIFIED' | 'SKIPPED' | 'QUEUED_FOR_REVIEW' | 'INVALID';
+}
+
+export interface DataImportValidationReport {
+  id: string;
+  fileName: string;
+  entityType: 'HouseMaster' | 'StreetMaster' | 'CustomerMaster';
+  totalRows: number;
+  validReadyCount: number;
+  blockedVerifiedCount: number;
+  duplicateCount: number;
+  errorCount: number;
+  conflicts: DataImportConflictItem[];
+  analyzedAt: string;
+}
+
+export interface SystemBackupBundle {
+  schemaVersion: string;
+  platform: 'KOTA_DIVISION_OS';
+  createdAt: string;
+  createdBy: string;
+  checksumSha256Like: string;
+  entityCounts: Record<string, number>;
+  payload: Record<string, unknown>;
+}
+
+// ============================================================================
+// PARTNER, BRAND & STORE MANAGEMENT + ISOLATED SCOPED WORKSPACE MODELS
+// ============================================================================
+
+export type PartnerLifecycleStatus = 'Active' | 'Pending' | 'Suspended';
+
+export type PartnerOwnershipType = 'BRAND_LINKED' | 'DIRECT';
+
+export type PartnerEntityType = 'BRAND' | 'DIRECT_STORE' | 'LOCAL_PARTNER';
+
+export type PartnerTeamRole =
+  | 'PARTNER_OWNER'
+  | 'STORE_MANAGER'
+  | 'SALES_EXECUTIVE'
+  | 'CRM_OPERATOR'
+  | 'SUPPORT_DESK';
+
+export type PartnerTeamMemberStatus = 'Active' | 'Pending' | 'Deactivated';
+
+export interface PartnerTeamPermissions {
+  canManageTeam: boolean;
+  canManageStores: boolean;
+  canCreateCrm: boolean;
+  canEditCrm: boolean;
+  canDeleteCrm: boolean;
+}
+
+export interface Brand {
+  id: string;
+  slug: string;
+  name: string;
+  category: string;
+  tagline?: string;
+  logoUrl?: string;
+  logoPresetId?: string;
+  themePresetName?: string;
+  monogram: string;
+  accentColor: string;
+  roleInSystem?: string;
+  coreProductsServices?: string;
+  storeBeatHubScope?: string;
+  marketingGrowthReturn?: string;
+  ownerName: string;
+  ownerPhone: string;
+  ownerEmail?: string;
+  status: PartnerLifecycleStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Store {
+  id: string;
+  code: string;
+  name: string;
+  ownershipType: PartnerOwnershipType;
+  brandId?: string;
+  partnerAccountId: string;
+  pincode: string;
+  beatNo?: string;
+  city?: string;
+  address: string;
+  managerName?: string;
+  managerPhone?: string;
+  status: PartnerLifecycleStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PartnerAccount {
+  id: string;
+  partnerSlug: string;
+  partnerType: PartnerEntityType;
+  brandId?: string;
+  directStoreId?: string;
+  displayName: string;
+  category: string;
+  tagline?: string;
+  monogram: string;
+  logoUrl?: string;
+  logoPresetId?: string;
+  themePresetName?: string;
+  accentColor: string;
+  roleInSystem?: string;
+  coreProductsServices?: string;
+  storeBeatHubScope?: string;
+  marketingGrowthReturn?: string;
+  ownerName: string;
+  ownerEmail: string;
+  ownerPhone: string;
+  pincode: string;
+  status: PartnerLifecycleStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PartnerTeamMember {
+  id: string;
+  partnerId: string;
+  brandId?: string;
+  assignedStoreIds: string[];
+  name: string;
+  email: string;
+  phone: string;
+  role: PartnerTeamRole;
+  permissions: PartnerTeamPermissions;
+  isNonTerritoryAgent?: boolean;
+  assignedCategories?: string[];
+  assignedBeatOrPin?: string;
+  passwordHash?: string;
+  status: PartnerTeamMemberStatus;
+  requestedNote?: string;
+  requestedViaPortal?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SanitizedPartnerTeamMember = Omit<PartnerTeamMember, 'passwordHash'>;
+
+export type StoreCrmStage =
+  | 'New'
+  | 'In Follow-Up'
+  | 'Qualified'
+  | 'Converted'
+  | 'Closed';
+
+export interface StoreCrmRecord {
+  id: string;
+  partnerId: string;
+  brandId?: string;
+  storeId: string;
+  customerName: string;
+  customerPhone: string;
+  pincode: string;
+  serviceOrProduct: string;
+  stage: StoreCrmStage;
+  assignedMemberId?: string;
+  assignedMemberName?: string;
+  notes: string;
+  createdByMemberId: string;
+  createdByName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PartnerAuthSession {
+  partnerId: string;
+  partnerSlug: string;
+  brandId?: string;
+  memberId: string;
+  memberName: string;
+  memberRole: PartnerTeamRole;
+  assignedStoreIds: string[];
+  permissions: PartnerTeamPermissions;
+  signedInAt: string;
+  sessionToken?: string;
+  deviceFingerprint?: string;
+}
+
+export interface AcademyCourse {
+  id: string;
+  title: string;
+  departmentOrVertical: string;
+  targetRole: string;
+  description: string;
+  lessonsCount: number;
+  durationMinutes: number;
+  isMandatory: boolean;
+  passingScorePct: number;
+  updatedAt: string;
+}
+
+export interface AcademyProgress {
+  id: string;
+  courseId: string;
+  staffOrAgentId: string;
+  staffName: string;
+  status: 'In Progress' | 'Completed' | 'Failed' | 'Pending';
+  progressPct: number;
+  scoreObtained?: number;
+  certificateIssued: boolean;
+  updatedAt: string;
+}
+
+export interface PropertyRecord {
+  id: string;
+  propertyCode: string;
+  clientId: string;
+  brandId?: string;
+  brandName?: string;
+  propertyType: 'Residential' | 'Commercial' | 'Mixed' | 'Flat';
+  beatOrPin: string;
+  officeId: string;
+  addressLine: string;
+  landmark: string;
+  geoOrTraceTag: string;
+  occupancyStatus: 'Owner Occupied' | 'Rented / Tenant' | 'Mixed Use' | 'Vacant' | string;
+  linkedUnitNotes?: string;
+  linkedCustomerIds: string[];
+  linkedLeadIds: string[];
+  createdById?: string;
+  assignedToId?: string;
+  businessCategory?: string;
+  updatedAt: string;
+}
+
+export interface BrandVerificationInquiry {
+  id: string;
+  partnerId: string;
+  brandId?: string;
+  brandName: string;
+  customerName: string;
+  customerPhone: string;
+  propertyId?: string;
+  propertyCode?: string;
+  beatOrPin: string;
+  inquiryTopic: string;
+  category?: string;
+  details: string;
+  status: 'New Inquiry' | 'Verification Pending' | 'Verified' | 'Completed';
+  assignedMemberId?: string;
+  assignedMemberName?: string;
+  createdByMemberId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BrandFollowUpTask {
+  id: string;
+  partnerId: string;
+  brandId?: string;
+  customerName: string;
+  customerPhone: string;
+  propertyId?: string;
+  propertyCode?: string;
+  category?: string;
+  priority: 'Normal' | 'High' | 'Urgent';
+  nextAction: string;
+  dueDate: string;
+  status: 'Pending' | 'Completed';
+  assignedMemberId?: string;
+  assignedMemberName?: string;
+  createdByMemberId: string;
+  timelineNotes: Array<{ timestamp: string; author: string; note: string }>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BrandRbacRoleConfig {
+  partnerId: string;
+  role: PartnerTeamRole;
+  permissions: PartnerTeamPermissions;
+  allowNonTerritoryCategoryAgents: boolean;
+  updatedAt: string;
+}
+
+
+
 
 

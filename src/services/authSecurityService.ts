@@ -1,4 +1,5 @@
 // src/services/authSecurityService.ts
+import { safeStorage } from '../utils/safeStorage';
 
 export interface UserSession {
   userId: string;
@@ -14,19 +15,14 @@ const SESSION_CHANNEL_NAME = 'postal_crm_session_channel';
 let cachedFingerprint: string | null = null;
 
 export function getBrowserProfileId(): string {
-  if (typeof localStorage === 'undefined') return 'server-env';
-  let id = localStorage.getItem(BROWSER_PROFILE_KEY);
+  let id = safeStorage.getItem(BROWSER_PROFILE_KEY);
   if (!id) {
     const rand =
       typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
     id = `BP-${rand}`;
-    try {
-      localStorage.setItem(BROWSER_PROFILE_KEY, id);
-    } catch {
-      // ignore storage quota errors
-    }
+    safeStorage.setItem(BROWSER_PROFILE_KEY, id);
   }
   return id;
 }
@@ -106,8 +102,7 @@ export async function verifyAndEnforceSingleSession(
     return false;
   }
 
-  const storedSessionJson =
-    typeof localStorage !== 'undefined' ? localStorage.getItem(`secure_session_${userId}`) : null;
+  const storedSessionJson = safeStorage.getItem(`secure_session_${userId}`);
   if (!storedSessionJson) {
     return false;
   }
@@ -181,11 +176,9 @@ export async function createNewSecureSession(
     userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Unknown Device',
   };
 
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem(`secure_session_${userId}`, JSON.stringify(session));
-    localStorage.setItem('active_user_token', token);
-    localStorage.setItem('active_session_userId', userId);
-  }
+  safeStorage.setItem(`secure_session_${userId}`, JSON.stringify(session));
+  safeStorage.setItem('active_user_token', token);
+  safeStorage.setItem('active_session_userId', userId);
 
   // Non-blocking best-effort server session bind with short timeout
   if (typeof fetch !== 'undefined') {
@@ -232,11 +225,11 @@ export async function createNewSecureSession(
 }
 
 export function getActiveSessionToken(): string | null {
-  return typeof localStorage !== 'undefined' ? localStorage.getItem('active_user_token') : null;
+  return safeStorage.getItem('active_user_token');
 }
 
 export function getActiveSessionUserId(): string | null {
-  return typeof localStorage !== 'undefined' ? localStorage.getItem('active_session_userId') : null;
+  return safeStorage.getItem('active_session_userId');
 }
 
 export async function validateAndEnforceSingleSession(
@@ -250,12 +243,11 @@ export async function validateAndEnforceSingleSession(
 }
 
 export function clearUserSession(userId: string): void {
-  if (typeof localStorage === 'undefined') return;
   if (userId) {
-    localStorage.removeItem(`secure_session_${userId}`);
+    safeStorage.removeItem(`secure_session_${userId}`);
   }
-  localStorage.removeItem('active_user_token');
-  localStorage.removeItem('active_session_userId');
+  safeStorage.removeItem('active_user_token');
+  safeStorage.removeItem('active_session_userId');
 }
 
 export function subscribeToSessionInvalidation(

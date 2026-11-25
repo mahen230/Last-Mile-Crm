@@ -19,7 +19,7 @@ import {
 import { brandOwnerService } from '../services/brandOwnerService';
 import { partnerBrandService } from '../services/partnerBrandService';
 
-type HomeLoginRole = 'admin' | 'brand' | 'partner' | 'developer' | 'staff';
+type HomeLoginRole = 'admin' | 'brand' | 'partner' | 'developer';
 
 const ROLE_OPTIONS: Array<{
   value: HomeLoginRole;
@@ -43,13 +43,8 @@ const ROLE_OPTIONS: Array<{
   },
   {
     value: 'developer',
-    label: 'Developer — Master Admin & Editor',
-    summary: 'Master control console, RBAC policies, visibility switches, and partner audits.',
-  },
-  {
-    value: 'staff',
-    label: 'Staff — Operational Staff (Staff 1–Staff 5)',
-    summary: 'Beat-scoped field delivery, daily verification, properties, and scheme pipelines.',
+    label: 'Developer — Xpeedo Services Diagnostics & Master Editor',
+    summary: 'Master control console, RBAC policies, visibility switches, and system audits.',
   },
 ];
 
@@ -397,8 +392,7 @@ export default function XpeedoHomeLoginPage() {
                     <option value="admin">Admin — Company / Platform Owner</option>
                     <option value="brand">Brand — Brand Workspace Owner</option>
                     <option value="partner">Partner — Partner Brand Workspace</option>
-                    <option value="developer">Developer — Master Admin &amp; Editor</option>
-                    <option value="staff">Staff — Operational Staff (Staff 1–Staff 5)</option>
+                    <option value="developer">Developer — Xpeedo Services Diagnostics &amp; Master Editor</option>
                   </select>
                 </div>
 

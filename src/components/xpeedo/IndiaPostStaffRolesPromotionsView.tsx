@@ -16,7 +16,6 @@ import {
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import {
   DEFAULT_STAFF_FALLBACK_PASSWORD,
-  MAX_OPERATIONAL_STAFF_COUNT,
   staffPermissionService,
 } from '../../services/staffPermissionService';
 import { exportCsvWithBom, xpeedoOpsService } from '../../services/xpeedoOpsService';
@@ -146,8 +145,7 @@ export default function IndiaPostStaffRolesPromotionsView({
     });
   }, [tick]);
 
-  const coreStaffCount = staffPermissionService.getOperationalStaffFive().length;
-  const isCoreStaffCapReached = coreStaffCount >= MAX_OPERATIONAL_STAFF_COUNT;
+  const totalPostalStaffCount = indiaPostStaff.length;
 
   const offices = useMemo(() => {
     return staffPermissionService
@@ -360,8 +358,7 @@ export default function IndiaPostStaffRolesPromotionsView({
     } catch (err: any) {
       showToast(
         'err',
-        err?.message ||
-          `Operational staff limit reached (max ${MAX_OPERATIONAL_STAFF_COUNT} slots: Staff 1–Staff 5).`
+        err?.message || 'Could not save India Post staff login.'
       );
       return;
     }
@@ -404,25 +401,12 @@ export default function IndiaPostStaffRolesPromotionsView({
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <button
             type="button"
-            disabled={isCoreStaffCapReached}
-            title={
-              isCoreStaffCapReached
-                ? `All ${MAX_OPERATIONAL_STAFF_COUNT} operational staff slots (Staff 1–Staff 5) are occupied`
-                : 'Add postal operational staff'
-            }
+            title={`Add postal operational staff (${totalPostalStaffCount} active)`}
             onClick={() => setShowCreateModal(true)}
-            className={`px-3.5 py-2 rounded-lg font-semibold inline-flex items-center gap-1.5 ${
-              isCoreStaffCapReached
-                ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                : 'bg-red-800 hover:bg-red-900 text-white cursor-pointer'
-            }`}
+            className="px-3.5 py-2 rounded-lg font-semibold inline-flex items-center gap-1.5 bg-red-800 hover:bg-red-900 text-white cursor-pointer whitespace-nowrap"
           >
             <Plus size={14} />
-            <span>
-              {isCoreStaffCapReached
-                ? `5/${MAX_OPERATIONAL_STAFF_COUNT} Staff Slots Active`
-                : 'Add Postal Staff Login'}
-            </span>
+            <span>Add Postal Staff Login</span>
           </button>
           <button
             type="button"
@@ -1068,12 +1052,6 @@ export default function IndiaPostStaffRolesPromotionsView({
                 <X size={16} />
               </button>
             </div>
-
-            {isCoreStaffCapReached && (
-              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-semibold text-amber-900">
-                All {MAX_OPERATIONAL_STAFF_COUNT} operational staff slots (Staff 1–Staff 5) are currently filled. Allocate an existing staff slot across brands or edit an existing staff record below.
-              </div>
-            )}
 
             <form onSubmit={handleCreateIndiaPostStaff} className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">

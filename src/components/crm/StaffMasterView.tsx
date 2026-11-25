@@ -37,7 +37,6 @@ import {
   X,
 } from 'lucide-react';
 import {
-  MAX_OPERATIONAL_STAFF_COUNT,
   staffPermissionService,
   getDefaultColoniesForBeat,
   getDefaultFixedKmForBeat,
@@ -130,11 +129,6 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
   const currentUser = propUser !== undefined ? propUser : authUser || staffPermissionService.getActiveSession();
   const [profiles, setProfiles] = useState<StaffProfile[]>([]);
   const [directoryStaff, setDirectoryStaff] = useState<Staff[]>([]);
-  const coreStaffCount = useMemo(
-    () => staffPermissionService.getOperationalStaffFive().length,
-    [profiles, directoryStaff]
-  );
-  const isStaffCapReached = coreStaffCount >= MAX_OPERATIONAL_STAFF_COUNT;
   const [activeTab, setActiveTab] = useState<'directory' | 'service_matrix' | 'direct_entry'>('directory');
   const [isCsvImportOpen, setIsCsvImportOpen] = useState(false);
 
@@ -530,10 +524,7 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
         serviceModules: formServiceModules,
       });
     } catch (err: any) {
-      showToast(
-        err?.message ||
-          `Operational staff cap reached (max ${MAX_OPERATIONAL_STAFF_COUNT} slots: Staff 1–Staff 5). Edit an existing staff profile instead.`
-      );
+      showToast(err?.message || 'Could not save staff profile.');
       return;
     }
 
@@ -748,30 +739,14 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
             <button
               type="button"
               onClick={() => {
-                if (isStaffCapReached) {
-                  showToast(
-                    `All ${MAX_OPERATIONAL_STAFF_COUNT} operational staff slots (Staff 1–Staff 5) are occupied. Click "Edit / Update Profile & Office" on any staff row below.`
-                  );
-                  return;
-                }
                 resetForm();
                 setActiveTab('direct_entry');
               }}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs shadow-lg transition-all cursor-pointer ${
-                isStaffCapReached
-                  ? 'bg-slate-200 text-slate-600 hover:bg-slate-300'
-                  : 'bg-amber-400 hover:bg-amber-300 text-slate-950'
-              }`}
-              title={
-                isStaffCapReached
-                  ? 'All 5 operational staff slots (Staff 1–Staff 5) are active'
-                  : 'Register or update operational staff'
-              }
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs shadow-lg transition-all cursor-pointer bg-amber-400 hover:bg-amber-300 text-slate-950 whitespace-nowrap"
+              title="Register or update operational staff"
             >
-              <Plus className="w-4 h-4" />{' '}
-              {isStaffCapReached
-                ? `5/${MAX_OPERATIONAL_STAFF_COUNT} Staff Slots Active (Edit Below)`
-                : 'Direct Staff Registration / Update'}
+              <Plus className="w-4 h-4" />
+              <span>Direct Staff Registration / Update</span>
             </button>
 
             <button
@@ -837,7 +812,7 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           <Link
-            to="/brand-portal/india-post?tab=IP_STAFF_ROLES"
+            to="/brand-portal/india-post?tab=PROMOTION_MASTER"
             className="px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-800 text-white font-semibold"
           >
             India Post Staff Portal
@@ -1478,12 +1453,6 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
               </div>
             )}
 
-            {!editingStaffId && isStaffCapReached && (
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs font-semibold text-amber-900">
-                Operational staff limit reached ({coreStaffCount}/{MAX_OPERATIONAL_STAFF_COUNT}: Staff 1–Staff 5). Choose an existing staff member from the Staff Directory to update their profile, or allocate them across brands inside Brand Management.
-              </div>
-            )}
-
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
@@ -1494,12 +1463,7 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
               </button>
               <button
                 type="submit"
-                disabled={!editingStaffId && isStaffCapReached}
-                className={`px-6 py-2.5 rounded-xl text-xs font-black shadow-lg flex items-center gap-2 ${
-                  !editingStaffId && isStaffCapReached
-                    ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                    : 'bg-red-600 hover:bg-red-700 text-white cursor-pointer'
-                }`}
+                className="px-6 py-2.5 rounded-xl text-xs font-black shadow-lg flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white cursor-pointer"
               >
                 <Save className="w-4 h-4" />
                 Save Staff Record & Auto-Sync Office + Beat Data

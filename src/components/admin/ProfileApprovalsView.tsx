@@ -100,7 +100,7 @@ export default function ProfileApprovalsView() {
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           <Link
-            to="/brand-portal/india-post?tab=IP_STAFF_ROLES"
+            to="/brand-portal/india-post?tab=PROMOTION_MASTER"
             className="px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-800 text-white font-semibold"
           >
             India Post Staff Portal

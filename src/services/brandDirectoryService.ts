@@ -1,5 +1,6 @@
 import { staffProductService } from './staffProductService';
 import { getPincodeHub } from './pincodeOperationsService';
+import { brandOwnerService } from './brandOwnerService';
 
 import imgBrandApparel from '../assets/images/brand_apparel_fashion_1794743634256.jpg';
 import imgBrandElectronics from '../assets/images/brand_electronics_hub_1794743634422.jpg';
@@ -45,6 +46,72 @@ export interface OfficialBrandStore {
 }
 
 export const OFFICIAL_BRAND_STORES: OfficialBrandStore[] = [
+  {
+    slug: 'india-post',
+    brandName: 'Department of Post',
+    shortTagline: 'National Postal, Speed Post COD, Sovereign Savings Schemes & Citizen Services',
+    categoryLabel: 'Postal, Banking & Citizen Hub',
+    coverImage: imgDigitalDocs,
+    accentGradient: 'from-red-950 via-rose-900 to-slate-950',
+    trustAssurance: '100% Sovereign Government of India Assurance',
+    deliveryGuarantee: 'National Speed Post Network & Doorstep Delivery',
+    featuredCategories: ['Speed Post & Booking', 'National Savings & PLI', 'Citizen & IPPB Services'],
+  },
+  {
+    slug: 'xpokart',
+    brandName: 'XPOKART Store',
+    shortTagline: 'Centralized E-Commerce Storefront, Brand Electronics, Fashion & Instant COD',
+    categoryLabel: 'E-Commerce Storefront System',
+    coverImage: imgBrandSupermarket,
+    accentGradient: 'from-blue-950 via-indigo-900 to-slate-950',
+    trustAssurance: 'Verified Merchant Network & 48-Hour Return Guarantee',
+    deliveryGuarantee: 'Regional Hub Tamper-Proof Speed Post COD',
+    featuredCategories: ['Electronics & Smart Tech', 'Menswear & Fashion', 'Daily Kirana & Essentials'],
+  },
+  {
+    slug: 'xpeedo-ev',
+    brandName: 'XPEEDO EV',
+    shortTagline: 'Electric Scooters, 60V LiFePO4 Batteries & 10A Auto-Cut Fast Chargers',
+    categoryLabel: 'EV Mobility & Batteries',
+    coverImage: imgEvScooter,
+    accentGradient: 'from-emerald-950 via-teal-900 to-slate-950',
+    trustAssurance: 'Authorized Regional EV Center',
+    deliveryGuarantee: 'Test Ride & Insured Delivery',
+    featuredCategories: ['Electric Scooters', 'Lithium Batteries', 'Chargers & Gear'],
+  },
+  {
+    slug: 'drop-dash',
+    brandName: 'Drop Dash',
+    shortTagline: 'Hyperlocal 30-Min Micro-Fulfillment & On-Demand Parcel Drops',
+    categoryLabel: 'Express Parcel & Courier',
+    coverImage: imgBrandElectronics,
+    accentGradient: 'from-slate-950 via-cyan-950 to-slate-900',
+    trustAssurance: 'Live GPS Courier Tracking · Instant Dispatch',
+    deliveryGuarantee: '30-Minute Priority Express Dispatch',
+    featuredCategories: ['Express Parcels', 'On-Demand Courier', 'Store Pickups'],
+  },
+  {
+    slug: 'shop-deck',
+    brandName: 'Shop Deck',
+    shortTagline: 'Omnichannel Retail SaaS, POS Billing Systems & Real-Time Inventory Control',
+    categoryLabel: 'Retail Merchandising & SaaS',
+    coverImage: imgDigitalDocs,
+    accentGradient: 'from-purple-950 via-violet-900 to-slate-950',
+    trustAssurance: 'Cloud Inventory Verified · Automatic Sync',
+    deliveryGuarantee: 'Instant SaaS Setup & On-Site Hardware Delivery',
+    featuredCategories: ['Cloud POS Billing', 'Barcode Scanners & Hardware', 'Inventory Suites'],
+  },
+  {
+    slug: 'xpeedo-logistics',
+    brandName: 'Xpeedo Logistics',
+    shortTagline: 'Cross-Docking, Inter-Hub Freight, B2B Bulk Transport & Fulfillment Warehousing',
+    categoryLabel: 'Regional Freight & Hub Logistics',
+    coverImage: imgBrandHomeGadgets,
+    accentGradient: 'from-amber-950 via-yellow-950 to-slate-950',
+    trustAssurance: 'Insured Cargo Transit · Multi-Hub Fleet',
+    deliveryGuarantee: 'Scheduled B2B Linehaul Transit',
+    featuredCategories: ['Inter-Hub Cargo', 'Cross-Dock Transit', 'Fulfillment Storage'],
+  },
   {
     slug: 'dominos-pizza',
     brandName: "Domino's Pizza",
@@ -169,6 +236,237 @@ export const OFFICIAL_BRAND_STORES: OfficialBrandStore[] = [
 ];
 
 const BASE_UNIFIED_BRAND_PRODUCTS: UnifiedBrandProduct[] = [
+  // Department of Post (Official Sovereign Products & Services)
+  {
+    id: 'brand-ip-01',
+    sku: 'BRAND-IP-SPEEDPOST-50',
+    title: 'Speed Post Domestic Parcel Booking & Real-Time Tracking',
+    brandSlug: 'india-post',
+    brandName: 'Department of Post',
+    categoryGroup: 'Speed Post & Booking',
+    mrpPrice: 65,
+    retailPrice: 50,
+    imageSrc: imgDigitalDocs,
+    description: 'Guaranteed time-bound domestic express delivery with online barcode tracking and SMS delivery intimations.',
+    badgeTag: 'Sovereign Service',
+  },
+  {
+    id: 'brand-ip-02',
+    sku: 'BRAND-IP-SSA-250',
+    title: 'Sukanya Samriddhi Yojana (SSA) Deposit Passbook Package',
+    brandSlug: 'india-post',
+    brandName: 'Department of Post',
+    categoryGroup: 'National Savings & PLI',
+    mrpPrice: 250,
+    retailPrice: 250,
+    imageSrc: imgDigitalDocs,
+    description: 'Highest government small savings interest rate of 8.2% p.a. with Triple Tax Exemption (EEE) for girl children.',
+    badgeTag: '8.2% Tax Free',
+  },
+  {
+    id: 'brand-ip-03',
+    sku: 'BRAND-IP-PPF-500',
+    title: 'Public Provident Fund (PPF) 15-Year Account Package',
+    brandSlug: 'india-post',
+    brandName: 'Department of Post',
+    categoryGroup: 'National Savings & PLI',
+    mrpPrice: 500,
+    retailPrice: 500,
+    imageSrc: imgDigitalDocs,
+    description: 'Central Government sovereign wealth instrument at 7.1% p.a. compounding with Section 80C tax deductions.',
+    badgeTag: 'Sovereign Guarantee',
+  },
+  {
+    id: 'brand-ip-04',
+    sku: 'BRAND-IP-PLI-1000',
+    title: 'Postal Life Insurance (PLI) Santosh Endowment Policy',
+    brandSlug: 'india-post',
+    brandName: 'Department of Post',
+    categoryGroup: 'National Savings & PLI',
+    mrpPrice: 1200,
+    retailPrice: 1000,
+    imageSrc: imgDigitalDocs,
+    description: 'Oldest sovereign life insurer in India providing maximum bonus rate and lowest premium for government & professionals.',
+    badgeTag: 'Highest Bonus Rate',
+  },
+  {
+    id: 'brand-ip-05',
+    sku: 'BRAND-IP-IPPB-150',
+    title: 'India Post Payments Bank (IPPB) Digital Account + Doorstep Biometric Card',
+    brandSlug: 'india-post',
+    brandName: 'Department of Post',
+    categoryGroup: 'Citizen & IPPB Services',
+    mrpPrice: 200,
+    retailPrice: 150,
+    imageSrc: imgDigitalDocs,
+    description: 'Instant paperless Aadhaar-based biometric account opening with zero minimum balance and doorstep AEPS cash withdrawal.',
+    badgeTag: 'Doorstep Banking',
+  },
+  {
+    id: 'brand-ip-06',
+    sku: 'BRAND-IP-PHILATELY-399',
+    title: 'National Philately Commemorative Stamp Collector Set',
+    brandSlug: 'india-post',
+    brandName: 'Department of Post',
+    categoryGroup: 'Speed Post & Booking',
+    mrpPrice: 550,
+    retailPrice: 399,
+    imageSrc: imgDigitalDocs,
+    description: 'Exclusive archival collection of India Post commemorative postage stamps and First Day Covers in protective casing.',
+    badgeTag: 'Collector Heritage',
+  },
+
+  // XPOKART Store (Dedicated Pure E-Commerce Retail Catalog)
+  {
+    id: 'brand-xpk-01',
+    sku: 'BRAND-XPK-TV4K-24999',
+    title: 'XPOKART 43" Ultra HD 4K Smart Bezel-less LED TV',
+    brandSlug: 'xpokart',
+    brandName: 'XPOKART Store',
+    categoryGroup: 'Electronics & Smart Tech',
+    mrpPrice: 32999,
+    retailPrice: 24999,
+    imageSrc: imgBrandElectronics,
+    description: 'Crystal 4K HDR display with Dolby Atmos Audio, quad-core processor and preloaded streaming apps with warranty.',
+    badgeTag: 'Storefront Pick',
+  },
+  {
+    id: 'brand-xpk-02',
+    sku: 'BRAND-XPK-BUDS-1299',
+    title: 'XPOKART SoundPro True Wireless Quad-Mic Earbuds',
+    brandSlug: 'xpokart',
+    brandName: 'XPOKART Store',
+    categoryGroup: 'Electronics & Smart Tech',
+    mrpPrice: 2499,
+    retailPrice: 1299,
+    imageSrc: imgBrandElectronics,
+    description: '40-Hour total playtime, active environment noise cancellation, low-latency gaming mode and IPX5 water resistance.',
+    badgeTag: 'Best Seller',
+  },
+  {
+    id: 'brand-xpk-03',
+    sku: 'BRAND-XPK-POLO-899',
+    title: 'XPOKART Essential Bio-Washed Pique Polo Shirt',
+    brandSlug: 'xpokart',
+    brandName: 'XPOKART Store',
+    categoryGroup: 'Menswear & Fashion',
+    mrpPrice: 1499,
+    retailPrice: 899,
+    imageSrc: imgBrandApparel,
+    description: '100% Super-combed cotton polo shirt with ribbed collar, reinforced seams, and breathable all-day comfort.',
+    badgeTag: '48-Hr Exchange',
+  },
+  {
+    id: 'brand-xpk-04',
+    sku: 'BRAND-XPK-RATION-1499',
+    title: 'XPOKART Monthly Super-Saver Kirana & Ration Hamper (15kg)',
+    brandSlug: 'xpokart',
+    brandName: 'XPOKART Store',
+    categoryGroup: 'Daily Kirana & Essentials',
+    mrpPrice: 1999,
+    retailPrice: 1499,
+    imageSrc: imgBrandSupermarket,
+    description: 'Chakki fresh atta (5kg), premium basmati rice (5kg), cold-pressed mustard oil (1L), and assorted daily pulses.',
+    badgeTag: 'Pincode Hub Fresh',
+  },
+  {
+    id: 'brand-xpk-05',
+    sku: 'BRAND-XPK-AIRFRYER-3499',
+    title: 'XPOKART 4.5L Touchscreen Digital Hot Air Fryer',
+    brandSlug: 'xpokart',
+    brandName: 'XPOKART Store',
+    categoryGroup: 'Electronics & Smart Tech',
+    mrpPrice: 4999,
+    retailPrice: 3499,
+    imageSrc: imgBrandHomeGadgets,
+    description: 'Rapid 360-degree air circulation technology for 90% less oil frying, digital presets and non-stick dishwasher basket.',
+    badgeTag: 'Kitchen Tech',
+  },
+
+  // Drop Dash (Express Parcel & Micro-Fulfillment)
+  {
+    id: 'brand-dd-01',
+    sku: 'BRAND-DD-COURIER-99',
+    title: 'Drop Dash Priority 30-Minute City Courier Pickup',
+    brandSlug: 'drop-dash',
+    brandName: 'Drop Dash',
+    categoryGroup: 'Express Parcels',
+    mrpPrice: 149,
+    retailPrice: 99,
+    imageSrc: imgBrandElectronics,
+    description: 'Instant doorstep rider dispatch within 15 minutes. Live GPS tracking from pickup to delivery for up to 5kg packages.',
+    badgeTag: '30-Min SLA',
+  },
+  {
+    id: 'brand-dd-02',
+    sku: 'BRAND-DD-MICROBOX-199',
+    title: 'Drop Dash Temperature-Insulated Micro-Fulfillment Box',
+    brandSlug: 'drop-dash',
+    brandName: 'Drop Dash',
+    categoryGroup: 'Store Pickups',
+    mrpPrice: 299,
+    retailPrice: 199,
+    imageSrc: imgBrandSupermarket,
+    description: 'Sealed cold-chain parcel box with tamper-evident security seal for medical samples, diagnostics, and perishables.',
+    badgeTag: 'Insulated Dispatch',
+  },
+
+  // Shop Deck (Retail Merchandising & POS SaaS)
+  {
+    id: 'brand-sd-01',
+    sku: 'BRAND-SD-POS-4999',
+    title: 'Shop Deck Omnichannel Cloud POS Billing Suite (1-Yr Subscription)',
+    brandSlug: 'shop-deck',
+    brandName: 'Shop Deck',
+    categoryGroup: 'Cloud POS Billing',
+    mrpPrice: 7999,
+    retailPrice: 4999,
+    imageSrc: imgDigitalDocs,
+    description: 'Unlimited barcode inventory management, GST e-invoicing, WhatsApp automated bill delivery & daily reconciliation.',
+    badgeTag: 'SaaS Software',
+  },
+  {
+    id: 'brand-sd-02',
+    sku: 'BRAND-SD-PRINTER-2499',
+    title: 'Shop Deck 80mm High-Speed Bluetooth Thermal Receipt Printer',
+    brandSlug: 'shop-deck',
+    brandName: 'Shop Deck',
+    categoryGroup: 'Barcode Scanners & Hardware',
+    mrpPrice: 3499,
+    retailPrice: 2499,
+    imageSrc: imgBrandElectronics,
+    description: '260mm/sec ultra-fast thermal receipt printing with auto-cutter, USB, Ethernet and Bluetooth multi-device sync.',
+    badgeTag: 'Heavy Duty',
+  },
+
+  // Xpeedo Logistics (Regional Freight & Cross-Dock Hubs)
+  {
+    id: 'brand-xl-01',
+    sku: 'BRAND-XL-LINEHAUL-2999',
+    title: 'Xpeedo Regional Inter-Hub Freight Linehaul Transit (Per Pallet)',
+    brandSlug: 'xpeedo-logistics',
+    brandName: 'Xpeedo Logistics',
+    categoryGroup: 'Inter-Hub Cargo',
+    mrpPrice: 3999,
+    retailPrice: 2999,
+    imageSrc: imgBrandHomeGadgets,
+    description: 'Scheduled cross-dock linehaul trucking between division hubs with electronic waybill and geo-fenced security seal.',
+    badgeTag: 'Bulk Cargo',
+  },
+  {
+    id: 'brand-xl-02',
+    sku: 'BRAND-XL-STORAGE-1999',
+    title: 'Xpeedo Modular Fulfillment Bay Storage (100 Sq. Ft. / Month)',
+    brandSlug: 'xpeedo-logistics',
+    brandName: 'Xpeedo Logistics',
+    categoryGroup: 'Fulfillment Storage',
+    mrpPrice: 2800,
+    retailPrice: 1999,
+    imageSrc: imgBrandHomeGadgets,
+    description: 'Secure, CCTV-monitored pallet racking bay inside regional fulfillment center with pick-and-pack API integration.',
+    badgeTag: 'Warehouse Hub',
+  },
+
   // Domino's Pizza (Consolidated)
   {
     id: 'brand-dom-01',
@@ -673,16 +971,41 @@ const BASE_UNIFIED_BRAND_PRODUCTS: UnifiedBrandProduct[] = [
 ];
 
 export function resolveBrandSlug(brandName?: string): string {
-  const lower = (brandName || '').toLowerCase();
+  const lower = (brandName || '').toLowerCase().trim();
+  if (lower.includes('post') || lower.includes('dak') || lower.includes('inpost') || lower.includes('department of post')) {
+    return 'india-post';
+  }
+  if (lower.includes('xpokart store') || lower === 'xpokart') {
+    return 'xpokart';
+  }
+  if (lower.includes('xpeedo ev') || lower === 'xpeedo-ev' || lower.includes('scooter') || lower.includes('battery')) {
+    return 'xpeedo-ev';
+  }
+  if (lower.includes('drop dash') || lower === 'drop-dash' || lower.includes('courier')) {
+    return 'drop-dash';
+  }
+  if (lower.includes('shop deck') || lower === 'shop-deck' || lower.includes('pos billing')) {
+    return 'shop-deck';
+  }
+  if (lower.includes('logistics') || lower === 'xpeedo-logistics' || lower.includes('freight')) {
+    return 'xpeedo-logistics';
+  }
   if (lower.includes('domino')) return 'dominos-pizza';
   if (lower.includes('reliance')) return 'reliance-digital';
   if (lower.includes('allen') || lower.includes('solly')) return 'allen-solly';
   if (lower.includes('levi')) return 'levis';
   if (lower.includes('fabindia')) return 'fabindia';
-  if (lower.includes('xpeedo')) return 'xpeedo-ev';
   if (lower.includes('velocity')) return 'velocity-sports';
   if (lower.includes('smart living')) return 'smart-living';
-  if (lower.includes('software') || lower.includes('whatsapp') || lower.includes('tally') || lower.includes('ai video') || lower.includes('lovable') || lower.includes('n8n') || lower.includes('crm')) {
+  if (
+    lower.includes('software') ||
+    lower.includes('whatsapp') ||
+    lower.includes('tally') ||
+    lower.includes('ai video') ||
+    lower.includes('lovable') ||
+    lower.includes('n8n') ||
+    lower.includes('crm')
+  ) {
     return 'software-saas-hub';
   }
   if (lower.includes('dairy') || lower.includes('bakery') || lower.includes('laundry')) {
@@ -692,9 +1015,27 @@ export function resolveBrandSlug(brandName?: string): string {
 }
 
 export function getOfficialBrandBySlug(slug?: string): OfficialBrandStore {
-  return (
-    OFFICIAL_BRAND_STORES.find((b) => b.slug === slug) || OFFICIAL_BRAND_STORES[0]
-  );
+  const norm = (slug || '').trim().toLowerCase();
+  const directMatch = OFFICIAL_BRAND_STORES.find((b) => b.slug.toLowerCase() === norm);
+  if (directMatch) return directMatch;
+
+  // Dynamically query brandOwnerService for newly added or customized brand profiles
+  const dynamicProfile = brandOwnerService.getBrandProfileBySlugOrKey(norm);
+  if (dynamicProfile) {
+    return {
+      slug: dynamicProfile.partnerSlug,
+      brandName: dynamicProfile.brandName,
+      shortTagline: dynamicProfile.tagline || `${dynamicProfile.brandName} Official Brand Workspace & Store`,
+      categoryLabel: dynamicProfile.category || 'Official Brand Workspace',
+      coverImage: imgDigitalDocs,
+      accentGradient: 'from-slate-950 via-slate-900 to-slate-950',
+      trustAssurance: `Authorized ${dynamicProfile.brandName} Portal · ${dynamicProfile.uniqueCode}`,
+      deliveryGuarantee: 'Speed Post COD & Regional Delivery Hub',
+      featuredCategories: ['Featured Catalog', 'Services & Solutions', 'Official Packages'],
+    };
+  }
+
+  return OFFICIAL_BRAND_STORES[0];
 }
 
 /**

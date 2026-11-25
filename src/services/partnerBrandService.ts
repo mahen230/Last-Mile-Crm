@@ -25,7 +25,7 @@ import {
 import { customerService } from './customerService';
 import { brandOwnerService } from './brandOwnerService';
 
-import { MAX_OPERATIONAL_STAFF_COUNT, staffPermissionService } from './staffPermissionService';
+import { staffPermissionService } from './staffPermissionService';
 
 function normalizeMobile10(raw: string): string {
   const digits = (raw || '').replace(/\D/g, '');
@@ -274,6 +274,59 @@ class PartnerBrandService {
 
   constructor() {
     this.ensureCoreStrategicPartnersOnInit();
+    this.migrateXpokartNonOwnerTeamMembers();
+  }
+
+  private migrateXpokartNonOwnerTeamMembers(): void {
+    try {
+      const accounts = this.getAllPartnerAccounts();
+      const xpokartAccount = accounts.find(
+        (a) => a.partnerSlug.toLowerCase() === 'xpokart' || a.displayName.toLowerCase() === 'xpokart'
+      );
+      if (!xpokartAccount) return;
+
+      const indiaPostAccount = accounts.find((a) => a.partnerSlug.toLowerCase() === 'india-post');
+      const allTeam = readJson<PartnerTeamMember[]>(TEAM_KEY, []);
+      let changed = false;
+      const cleanedTeam: PartnerTeamMember[] = [];
+
+      for (const m of allTeam) {
+        if (m.partnerId === xpokartAccount.id && m.role !== 'PARTNER_OWNER') {
+          changed = true;
+          // Ensure staff member is recorded inside unified India Post directory preserving beat/PIN/role
+          if (m.email && !m.email.endsWith('@partner.local')) {
+            const matchedDir = staffPermissionService.findStaffProfileByIdentifier(m.email || m.phone);
+            if (matchedDir) {
+              staffPermissionService.reassignStaffBrand(matchedDir.id, 'india-post', 'India Post');
+            }
+          }
+          if (indiaPostAccount) {
+            const existsInIndiaPost = allTeam.some(
+              (other) =>
+                other.partnerId === indiaPostAccount.id &&
+                ((m.email && other.email.toLowerCase() === m.email.toLowerCase()) ||
+                  (m.phone && normalizeMobile10(other.phone) === normalizeMobile10(m.phone)))
+            );
+            if (!existsInIndiaPost) {
+              cleanedTeam.push({
+                ...m,
+                partnerId: indiaPostAccount.id,
+                brandId: indiaPostAccount.brandId || m.brandId,
+                updatedAt: new Date().toISOString(),
+              });
+            }
+          }
+          continue;
+        }
+        cleanedTeam.push(m);
+      }
+
+      if (changed) {
+        writeJson(TEAM_KEY, cleanedTeam);
+      }
+    } catch {
+      // ignore migration error on restricted storage
+    }
   }
 
   private ensureCoreStrategicPartnersOnInit(): void {
@@ -417,9 +470,10 @@ class PartnerBrandService {
         (partner.directStoreId ? s.id === partner.directStoreId : false)
     );
 
-    const allTeam = readJson<PartnerTeamMember[]>(TEAM_KEY, []).filter(
-      (m) => m.partnerId === partner.id
-    );
+    const isXpokartPartner = partner.partnerSlug.toLowerCase() === 'xpokart';
+    const allTeam = isXpokartPartner
+      ? []
+      : readJson<PartnerTeamMember[]>(TEAM_KEY, []).filter((m) => m.partnerId === partner.id);
     const teamMembers = allTeam.filter((m) => m.status !== 'Pending').map(sanitizeMember);
     const pendingRequests = allTeam.filter((m) => m.status === 'Pending').map(sanitizeMember);
 
@@ -1500,6 +1554,9 @@ class PartnerBrandService {
   }
 
   public getScopedTeamMembers(session: PartnerAuthSession): SanitizedPartnerTeamMember[] {
+    if ((session.partnerSlug || '').trim().toLowerCase() === 'xpokart') {
+      return [];
+    }
     const seen = new Set<string>();
     const result: SanitizedPartnerTeamMember[] = [];
     for (const m of readJson<PartnerTeamMember[]>(TEAM_KEY, [])) {
@@ -1657,6 +1714,9 @@ class PartnerBrandService {
 
     const partner = this.getPartnerById(partnerId);
     if (!partner) return null;
+    if (partner.partnerSlug.toLowerCase() === 'xpokart' && input.role !== 'PARTNER_OWNER') {
+      return null;
+    }
 
     const cleanEmail = input.email.trim().toLowerCase();
     const cleanPhone = input.phone.replace(/\D/g, '').slice(-10);
@@ -1672,20 +1732,8 @@ class PartnerBrandService {
       return sanitizeMember(duplicate);
     }
 
-    if (input.role !== 'PARTNER_OWNER') {
-      const nonOwnerMembers = allExisting.filter(
-        (m) => m.partnerId === partnerId && m.role !== 'PARTNER_OWNER'
-      );
-      const staffFive = staffPermissionService.getOperationalStaffFive();
-      const matchesCoreStaff = staffFive.some(
-        (s) =>
-          (cleanEmail && s.email.toLowerCase() === cleanEmail) ||
-          (cleanPhone.length === 10 && normalizeMobile10(s.contact || '') === cleanPhone)
-      );
-      if (!matchesCoreStaff && nonOwnerMembers.length >= MAX_OPERATIONAL_STAFF_COUNT) {
-        return null;
-      }
-    }
+    // Unified roster allows onboarding operational staff across non-XPOKART partner brands without an artificial 5-slot cap
+    void staffPermissionService;
 
     const now = new Date().toISOString();
     const rbacCfg = this.getBrandRbacConfig(partnerId, input.role);

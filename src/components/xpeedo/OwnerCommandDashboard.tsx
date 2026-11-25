@@ -222,7 +222,7 @@ export default function OwnerCommandDashboard() {
               </span>
               <span className="text-xs font-semibold text-emerald-700">Active Pilot</span>
             </div>
-            <h2 className="text-lg font-bold text-slate-900">India Post — Kota Division</h2>
+            <h2 className="text-lg font-bold text-slate-900">Department of Post — Kota Division</h2>
             <p className="text-xs text-slate-600 leading-relaxed">
               Circle-to-BO postal hierarchy, 10-level geographic registry, CRM, SRM SLA ticketing,
               beats, attendance, and statutory documents strictly isolated from commercial records.

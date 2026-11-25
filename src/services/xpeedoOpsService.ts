@@ -27,6 +27,7 @@ import {
   WorkReportPeriod,
   WorkflowExecutionLog,
   WorkspaceClient,
+  MultiTierApprovalStage,
 } from '../types/xpeedoOps';
 
 const STORAGE_KEY = 'xpeedo_it_ops_state_v1';
@@ -351,83 +352,188 @@ const SEEDED_CLIENTS: WorkspaceClient[] = [
   },
 ];
 
-const SEEDED_EV_DEPARTMENTS: OpsDepartment[] = [
+export const STANDARD_7_DEPARTMENT_BLUEPRINTS: Array<{
+  name: string;
+  codeSuffix: string;
+  description: string;
+  defaultHead: string;
+}> = [
   {
-    id: 'dept-ev-ops',
-    workspaceId: 'XPEEDO_EV',
-    clientId: 'client-xpeedo-ev',
     name: 'Operations',
-    code: 'EV-OPS',
-    headName: 'Unassigned (Configure Head)',
-    description: 'Fleet deployment, charging readiness, dispatch coordination, and SLA tracking.',
-    isActive: true,
-    createdAt: '2026-01-01T00:00:00.000Z',
+    codeSuffix: 'OPS',
+    description: 'Fleet deployment, route logistics, SLA tracking, beat delivery, and field coordination.',
+    defaultHead: 'Unassigned (Configure Head)',
   },
   {
-    id: 'dept-ev-sales',
-    workspaceId: 'XPEEDO_EV',
-    clientId: 'client-xpeedo-ev',
     name: 'Sales',
-    code: 'EV-SLS',
-    headName: 'Unassigned (Configure Head)',
-    description: 'B2B fleet partnership onboarding, institutional contracts, and enterprise account growth.',
-    isActive: true,
-    createdAt: '2026-01-01T00:00:00.000Z',
+    codeSuffix: 'SLS',
+    description: 'B2B partnerships, merchant onboarding, commercial contracts, and revenue expansion.',
+    defaultHead: 'Unassigned (Configure Head)',
   },
   {
-    id: 'dept-ev-mkt',
-    workspaceId: 'XPEEDO_EV',
-    clientId: 'client-xpeedo-ev',
     name: 'Marketing',
-    code: 'EV-MKT',
-    headName: 'Unassigned (Configure Head)',
-    description: 'Field campaigns, B2B outreach collateral, and partner visibility programs.',
-    isActive: true,
-    createdAt: '2026-01-01T00:00:00.000Z',
+    codeSuffix: 'MKT',
+    description: 'Campaign execution, branding, partner collateral, awareness drives, and communications.',
+    defaultHead: 'Unassigned (Configure Head)',
   },
   {
-    id: 'dept-ev-tech',
-    workspaceId: 'XPEEDO_EV',
-    clientId: 'client-xpeedo-ev',
     name: 'Technology',
-    code: 'EV-TECH',
-    headName: 'Unassigned (Configure Head)',
-    description: 'Telematics integrations, software automations, internal tooling, and QA engineering.',
-    isActive: true,
-    createdAt: '2026-01-01T00:00:00.000Z',
+    codeSuffix: 'TECH',
+    description: 'IT automation, telematics, CRM integrations, internal tooling, system stability, and QA.',
+    defaultHead: 'Unassigned (Configure Head)',
   },
   {
-    id: 'dept-ev-support',
-    workspaceId: 'XPEEDO_EV',
-    clientId: 'client-xpeedo-ev',
     name: 'Customer Support',
-    code: 'EV-SUP',
-    headName: 'Unassigned (Configure Head)',
-    description: 'Client issue resolution, maintenance scheduling, and service ticket escalation.',
-    isActive: true,
-    createdAt: '2026-01-01T00:00:00.000Z',
+    codeSuffix: 'SUP',
+    description: 'Customer inquiries, dispute resolution, ticketing, helpdesk escalations, and satisfaction monitoring.',
+    defaultHead: 'Unassigned (Configure Head)',
   },
   {
-    id: 'dept-ev-admin',
-    workspaceId: 'XPEEDO_EV',
-    clientId: 'client-xpeedo-ev',
     name: 'Administration',
-    code: 'EV-ADM',
-    headName: 'Unassigned (Configure Head)',
-    description: 'Vendor compliance, HR onboarding, attendance governance, and office administration.',
-    isActive: true,
-    createdAt: '2026-01-01T00:00:00.000Z',
+    codeSuffix: 'ADM',
+    description: 'Human resources, vendor compliance, policy enforcement, office assets, and statutory attendance.',
+    defaultHead: 'Unassigned (Configure Head)',
   },
   {
-    id: 'dept-ev-fin',
-    workspaceId: 'XPEEDO_EV',
-    clientId: 'client-xpeedo-ev',
     name: 'Finance',
-    code: 'EV-FIN',
-    headName: 'Unassigned (Configure Head)',
-    description: 'Operational budgets, expense reconciliation, vendor payouts, and billing approvals.',
+    codeSuffix: 'FIN',
+    description: 'Billing reconciliation, operating budgets, invoice settlements, revenue collection, and audit records.',
+    defaultHead: 'Unassigned (Configure Head)',
+  },
+];
+
+export function buildStandardDepartmentsForWorkspace(
+  workspaceId: string,
+  clientId: string,
+  codePrefix: string
+): OpsDepartment[] {
+  const cleanWs = (workspaceId || 'GLOBAL').trim();
+  const cleanPrefix = (codePrefix || cleanWs).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'DEPT';
+  return STANDARD_7_DEPARTMENT_BLUEPRINTS.map((bp) => ({
+    id: `dept-${cleanWs.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${bp.codeSuffix.toLowerCase()}`,
+    workspaceId: cleanWs,
+    clientId,
+    name: bp.name,
+    code: `${cleanPrefix}-${bp.codeSuffix}`,
+    headName: bp.defaultHead,
+    description: bp.description,
     isActive: true,
     createdAt: '2026-01-01T00:00:00.000Z',
+  }));
+}
+
+// Pre-seeded standard 7-department matrices for all core workspaces
+const SEEDED_STANDARD_DEPARTMENTS: OpsDepartment[] = [
+  ...buildStandardDepartmentsForWorkspace('GLOBAL', 'client-xpeedo-global', 'XPD'),
+  ...buildStandardDepartmentsForWorkspace('XPEEDO_EV', 'client-xpeedo-ev', 'EV'),
+  ...buildStandardDepartmentsForWorkspace('INDIA_POST', 'client-india-post', 'INPOST'),
+  ...buildStandardDepartmentsForWorkspace('XPOKART', 'client-xpokart', 'XPO'),
+  ...buildStandardDepartmentsForWorkspace('DROP_DASH', 'client-drop-dash', 'DRP'),
+  ...buildStandardDepartmentsForWorkspace('SHOP_DECK', 'client-shop-deck', 'SHP'),
+];
+
+export const SEEDED_WORK_REPORTS: WorkReport[] = [
+  {
+    id: 'WRP-SEED-01',
+    workspaceId: 'INDIA_POST',
+    clientId: 'client-india-post',
+    departmentId: 'dept-india-post-ops',
+    employeeId: '50457421',
+    employeeName: 'Mahendra Kumar Meena',
+    periodType: 'Daily',
+    reportDate: '2026-11-23',
+    hoursLogged: 8,
+    tasksCompletedCount: 14,
+    summary: 'Completed 14 doorstep delivery verifications across Dadabari Beat 2 and updated ACG-61 fuel log.',
+    approvalStage: 'PENDING_TL',
+    approvalHistory: [
+      {
+        stage: 'PENDING_TL',
+        decision: 'Submitted',
+        actor: 'Mahendra Kumar Meena',
+        actorRole: 'FIELD_AGENT',
+        note: 'Daily report submitted to Team Leader queue.',
+        timestamp: '2026-11-23T14:30:00.000Z',
+      },
+    ],
+    createdAt: '2026-11-23T14:30:00.000Z',
+    updatedAt: '2026-11-23T14:30:00.000Z',
+  },
+  {
+    id: 'WRP-SEED-02',
+    workspaceId: 'XPEEDO_EV',
+    clientId: 'client-xpeedo-ev',
+    departmentId: 'dept-xpeedo-ev-tech',
+    employeeId: 'STAFF-TECH-01',
+    employeeName: 'Rohan Joshi',
+    periodType: 'Weekly',
+    reportDate: '2026-11-22',
+    hoursLogged: 40,
+    tasksCompletedCount: 8,
+    summary: 'Completed CAN-bus telematics firmware sync for 25 Kota fleet e-bikes. Zero communication drops.',
+    approvalStage: 'PENDING_PM',
+    approvalHistory: [
+      {
+        stage: 'PENDING_TL',
+        decision: 'Submitted',
+        actor: 'Rohan Joshi',
+        actorRole: 'FIELD_AGENT',
+        note: 'Weekly technical report submitted.',
+        timestamp: '2026-11-22T17:00:00.000Z',
+      },
+      {
+        stage: 'PENDING_PM',
+        decision: 'Approved (Tier-1)',
+        actor: 'Pooja Verma (Team Leader)',
+        actorRole: 'TEAM_LEADER',
+        note: 'Firmware verification confirmed on test bench.',
+        timestamp: '2026-11-22T18:15:00.000Z',
+      },
+    ],
+    createdAt: '2026-11-22T17:00:00.000Z',
+    updatedAt: '2026-11-22T18:15:00.000Z',
+  },
+  {
+    id: 'WRP-SEED-03',
+    workspaceId: 'XPOKART',
+    clientId: 'client-xpokart',
+    departmentId: 'dept-xpokart-sls',
+    employeeId: 'STAFF-SLS-02',
+    employeeName: 'Pooja Verma',
+    periodType: 'Monthly',
+    reportDate: '2026-11-21',
+    hoursLogged: 160,
+    tasksCompletedCount: 32,
+    summary: 'Onboarded 12 new wholesale kirana merchants with Speed Post COD integration in Dadabari & Vigyan Nagar.',
+    approvalStage: 'PENDING_OWNER',
+    approvalHistory: [
+      {
+        stage: 'PENDING_TL',
+        decision: 'Submitted',
+        actor: 'Pooja Verma',
+        actorRole: 'FIELD_AGENT',
+        note: 'Monthly sales and partner onboarding report.',
+        timestamp: '2026-11-21T18:00:00.000Z',
+      },
+      {
+        stage: 'PENDING_PM',
+        decision: 'Approved (Tier-1)',
+        actor: 'Vikram Singh Hada',
+        actorRole: 'TEAM_LEADER',
+        note: 'Verified all 12 merchant GST and address documents.',
+        timestamp: '2026-11-21T19:00:00.000Z',
+      },
+      {
+        stage: 'PENDING_OWNER',
+        decision: 'Approved (Tier-2)',
+        actor: 'Rajesh Sharma (Project Manager)',
+        actorRole: 'PROJECT_MANAGER',
+        note: 'Approved for final Brand Owner review and performance incentive release.',
+        timestamp: '2026-11-22T10:00:00.000Z',
+      },
+    ],
+    createdAt: '2026-11-21T18:00:00.000Z',
+    updatedAt: '2026-11-22T10:00:00.000Z',
   },
 ];
 
@@ -500,10 +606,10 @@ function makeDefaultState(): XpeedoOpsStoreState {
     simulatedRbacRole: null,
     simulatedClientId: null,
     clients: [...SEEDED_CLIENTS],
-    departments: [...SEEDED_EV_DEPARTMENTS],
+    departments: [...SEEDED_STANDARD_DEPARTMENTS],
     projects: [],
     tasks: [],
-    workReports: [],
+    workReports: [...SEEDED_WORK_REPORTS],
     srmTickets: [],
     indiaPostAttendance: [],
     workflows: [...SEEDED_WORKFLOWS],
@@ -581,9 +687,33 @@ class XpeedoOpsService {
 
       const existingDepts = Array.isArray(parsed.departments) ? parsed.departments : [];
       const mergedDepts = [...existingDepts];
-      SEEDED_EV_DEPARTMENTS.forEach((d) => {
-        if (!mergedDepts.some((ex) => ex.id === d.id)) {
+      SEEDED_STANDARD_DEPARTMENTS.forEach((d) => {
+        const alreadyExists = mergedDepts.some(
+          (ex) =>
+            ex.id === d.id ||
+            (ex.workspaceId === d.workspaceId && ex.name.toLowerCase().trim() === d.name.toLowerCase().trim())
+        );
+        if (!alreadyExists) {
           mergedDepts.push(d);
+        }
+      });
+
+      // Strict department deduplication
+      const dedupedDepts: OpsDepartment[] = [];
+      const seenDeptKeys = new Set<string>();
+      for (const d of mergedDepts) {
+        const key = `${(d.workspaceId || 'GLOBAL').toUpperCase()}::${(d.name || '').toLowerCase().trim()}`;
+        if (!seenDeptKeys.has(key)) {
+          seenDeptKeys.add(key);
+          dedupedDepts.push(d);
+        }
+      }
+
+      const existingReports = Array.isArray(parsed.workReports) ? parsed.workReports : [];
+      const mergedReports = [...existingReports];
+      SEEDED_WORK_REPORTS.forEach((r) => {
+        if (!mergedReports.some((ex) => ex.id === r.id)) {
+          mergedReports.push(r);
         }
       });
 
@@ -591,7 +721,8 @@ class XpeedoOpsService {
         ...fallback,
         ...parsed,
         clients: mergedClients,
-        departments: mergedDepts,
+        departments: dedupedDepts,
+        workReports: mergedReports,
         workflows:
           Array.isArray(parsed.workflows) && parsed.workflows.length > 0
             ? parsed.workflows
@@ -1039,13 +1170,70 @@ class XpeedoOpsService {
   }
 
   // --------------------------------------------------------------------------
-  // DEPARTMENTS (CONFIGURABLE PER WORKSPACE / CLIENT)
+  // DEPARTMENTS (CONFIGURABLE PER WORKSPACE / CLIENT WITH 7-DEPT BLUEPRINT)
   // --------------------------------------------------------------------------
 
+  public dedupeDepartments(): void {
+    const seen = new Set<string>();
+    const deduped: OpsDepartment[] = [];
+    for (const d of this.state.departments) {
+      const key = `${(d.workspaceId || 'GLOBAL').toUpperCase()}::${(d.name || '').toLowerCase().trim()}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        deduped.push(d);
+      }
+    }
+    this.state.departments = deduped;
+  }
+
+  public ensureStandardDepartmentsForWorkspace(
+    workspaceId: string,
+    clientId?: string,
+    codePrefix?: string
+  ): OpsDepartment[] {
+    const cleanWs = (workspaceId || 'GLOBAL').trim().toUpperCase();
+    const effectiveClientId = clientId || `client-${cleanWs.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+    const cleanPrefix = (codePrefix || cleanWs).replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'DEPT';
+
+    let addedAny = false;
+    STANDARD_7_DEPARTMENT_BLUEPRINTS.forEach((bp) => {
+      const exists = this.state.departments.some(
+        (d) =>
+          d.workspaceId.toUpperCase() === cleanWs &&
+          d.name.trim().toLowerCase() === bp.name.trim().toLowerCase()
+      );
+      if (!exists) {
+        const newDept: OpsDepartment = {
+          id: `dept-${cleanWs.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${bp.codeSuffix.toLowerCase()}`,
+          workspaceId: cleanWs,
+          clientId: effectiveClientId,
+          name: bp.name,
+          code: `${cleanPrefix}-${bp.codeSuffix}`,
+          headName: bp.defaultHead,
+          description: bp.description,
+          isActive: true,
+          createdAt: nowIso(),
+        };
+        this.state.departments.push(newDept);
+        addedAny = true;
+      }
+    });
+
+    if (addedAny) {
+      this.dedupeDepartments();
+      this.saveAndNotify();
+    }
+
+    return this.state.departments.filter((d) => d.workspaceId.toUpperCase() === cleanWs);
+  }
+
   public getDepartments(workspaceFilter?: string, clientId?: string): OpsDepartment[] {
+    if (workspaceFilter && workspaceFilter !== 'ALL') {
+      this.ensureStandardDepartmentsForWorkspace(workspaceFilter, clientId);
+    }
     return this.state.departments.filter((d) => {
       if (clientId && d.clientId !== clientId) return false;
-      if (workspaceFilter && workspaceFilter !== 'ALL' && d.workspaceId !== workspaceFilter) {
+      if (workspaceFilter && workspaceFilter !== 'ALL' && d.workspaceId.toUpperCase() !== workspaceFilter.toUpperCase()) {
         return false;
       }
       return true;
@@ -1057,18 +1245,24 @@ class XpeedoOpsService {
     actorName: string,
     actorRole: string
   ): OpsDepartment {
+    const cleanWs = (input.workspaceId || 'GLOBAL').trim().toUpperCase();
     const existingIdx = input.id
       ? this.state.departments.findIndex((d) => d.id === input.id)
-      : -1;
+      : this.state.departments.findIndex(
+          (d) =>
+            d.workspaceId.toUpperCase() === cleanWs &&
+            d.name.toLowerCase().trim() === input.name.toLowerCase().trim()
+        );
     const saved: OpsDepartment =
       existingIdx >= 0
-        ? { ...this.state.departments[existingIdx], ...input }
-        : { ...input, id: genId('DEPT'), createdAt: nowIso() };
+        ? { ...this.state.departments[existingIdx], ...input, workspaceId: cleanWs }
+        : { ...input, workspaceId: cleanWs, id: genId('DEPT'), createdAt: nowIso() };
     if (existingIdx >= 0) {
       this.state.departments[existingIdx] = saved;
     } else {
       this.state.departments = [saved, ...this.state.departments];
     }
+    this.dedupeDepartments();
     this.recordActivity({
       actor: actorName,
       actorRole,
@@ -1077,7 +1271,7 @@ class XpeedoOpsService {
       entityType: 'Department',
       entityId: saved.id,
       action: existingIdx >= 0 ? 'UPDATE_DEPARTMENT' : 'CREATE_DEPARTMENT',
-      summary: `${saved.name} (${saved.code})`,
+      summary: `${saved.name} (${saved.code}) · Head: ${saved.headName}`,
     });
     this.saveAndNotify();
     return saved;
@@ -1349,7 +1543,18 @@ class XpeedoOpsService {
 
   public getWorkReports(workspaceFilter?: string): WorkReport[] {
     if (!workspaceFilter || workspaceFilter === 'ALL') return this.state.workReports;
-    return this.state.workReports.filter((w) => w.workspaceId === workspaceFilter);
+    return this.state.workReports.filter(
+      (w) => w.workspaceId.toUpperCase() === workspaceFilter.toUpperCase()
+    );
+  }
+
+  public getWorkReportsForWorkspace(
+    workspaceId: string,
+    stageFilter?: MultiTierApprovalStage | 'ALL'
+  ): WorkReport[] {
+    const list = this.getWorkReports(workspaceId);
+    if (!stageFilter || stageFilter === 'ALL') return list;
+    return list.filter((r) => r.approvalStage === stageFilter);
   }
 
   public submitWorkReport(

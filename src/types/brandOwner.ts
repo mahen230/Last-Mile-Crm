@@ -8,11 +8,21 @@ export type BrandOnboardingSource =
 
 export type BrandPortalSubMenuKey =
   | 'OVERVIEW'
+  | 'DEPARTMENTS_APPROVALS'
   | 'OFFICES_STORES'
   | 'STAFF'
+  | 'MASTER_ROLE'
+  | 'PROMOTION_MASTER'
   | 'CUSTOMERS'
+  | 'PROPERTIES'
+  | 'LEADS'
+  | 'MASTER_SEARCH'
   | 'OPERATIONS_TASKS'
-  | 'REPORTS_EXPORTS';
+  | 'REPORTS_EXPORTS'
+  | 'AUDIT_HEALTH'
+  | 'XPO_PRODUCTS'
+  | 'XPO_CUSTOMER_PORTAL'
+  | 'XPO_STOREFRONT';
 
 export interface BrandSubMenuDefinition {
   key: BrandPortalSubMenuKey;
@@ -20,21 +30,21 @@ export interface BrandSubMenuDefinition {
   shortDesc: string;
 }
 
+export const XPOKART_ECOMMERCE_SUBMENUS: BrandPortalSubMenuKey[] = [
+  'OVERVIEW',
+  'XPO_PRODUCTS',
+  'XPO_CUSTOMER_PORTAL',
+  'XPO_STOREFRONT',
+  'CUSTOMERS',
+  'REPORTS_EXPORTS',
+  'AUDIT_HEALTH',
+];
+
 export const ALL_BRAND_PORTAL_SUBMENUS: BrandSubMenuDefinition[] = [
   {
     key: 'OVERVIEW',
     label: 'Dashboard',
-    shortDesc: 'Brand KPIs, active status & quick operational links',
-  },
-  {
-    key: 'OFFICES_STORES',
-    label: 'Offices / Stores',
-    shortDesc: 'Manage brand offices, hubs, or retail stores',
-  },
-  {
-    key: 'STAFF',
-    label: 'Team & Role Access (RBAC)',
-    shortDesc: 'Manage brand-scoped team members, logins & RBAC roles',
+    shortDesc: 'Executive KPIs, operational metrics & quick actions',
   },
   {
     key: 'CUSTOMERS',
@@ -42,14 +52,59 @@ export const ALL_BRAND_PORTAL_SUBMENUS: BrandSubMenuDefinition[] = [
     shortDesc: 'Brand-isolated customer registry & directory',
   },
   {
+    key: 'PROPERTIES',
+    label: 'Properties',
+    shortDesc: '10-level property, commercial & household records',
+  },
+  {
+    key: 'LEADS',
+    label: 'Leads & Schemes',
+    shortDesc: 'Multi-stage leads, schemes & conversion pipeline',
+  },
+  {
+    key: 'MASTER_SEARCH',
+    label: 'Master Search Console',
+    shortDesc: 'Unified multi-level search, inspection & quick actions',
+  },
+  {
     key: 'OPERATIONS_TASKS',
-    label: 'Operations / Tasks',
-    shortDesc: 'Sector workflows, projects, SRM tickets & daily tasks',
+    label: 'Operations & Tasks',
+    shortDesc: 'Follow-ups, verifications, inquiries & task queues',
+  },
+  {
+    key: 'DEPARTMENTS_APPROVALS',
+    label: 'Departments & Approvals',
+    shortDesc: 'Functional departments & multi-tier approval workflow',
+  },
+  {
+    key: 'OFFICES_STORES',
+    label: 'Office Master',
+    shortDesc: 'Canonical offices, branches, divisions, PINs & beats',
+  },
+  {
+    key: 'STAFF',
+    label: 'Master Staff',
+    shortDesc: 'Unified operational staff directory & beat assignments',
+  },
+  {
+    key: 'MASTER_ROLE',
+    label: 'Master Role',
+    shortDesc: 'Centralized RBAC permission matrix & scope boundaries',
+  },
+  {
+    key: 'PROMOTION_MASTER',
+    label: 'Promotion Master',
+    shortDesc: 'Role upgrade, office/beat transfer & immutable audit sync',
   },
   {
     key: 'REPORTS_EXPORTS',
     label: 'Reports & Exports',
     shortDesc: 'UTF-8 BOM CSV exports scoped strictly to this brand',
+  },
+  {
+    key: 'AUDIT_HEALTH',
+    label: 'Brand Audit Log & Health',
+    shortDesc: 'Immutable audit trail, change diffs & health inspection',
   },
 ];
 
@@ -165,15 +220,12 @@ export type BrandCustomerSectionKey =
 
 export type IndiaPostConsolidatedSectionKey =
   | 'IP_HIERARCHY'
-  | 'IP_OFFICES'
-  | 'IP_BEATS'
-  | 'IP_PROPERTIES'
-  | 'IP_STAFF_ROLES'
-  | 'IP_SRM'
-  | 'IP_CRM_SCHEMES'
+  | 'IP_GEO_QUALITY'
   | 'IP_STATUTORY_DOCS'
   | 'IP_DAILY_OPS'
-  | 'IP_LMS_STOREFRONT';
+  | 'IP_SRM'
+  | 'IP_LMS_STOREFRONT'
+  | 'IP_NOTIFICATIONS';
 
 export interface BrandSectionMeta<K extends string = string> {
   key: K;

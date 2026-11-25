@@ -15,6 +15,10 @@ import {
   Minus,
   Trash2,
   Package,
+  Lock,
+  UserPlus,
+  Copy,
+  Check,
 } from 'lucide-react';
 import {
   OFFICIAL_BRAND_STORES,
@@ -51,6 +55,7 @@ export default function BrandStorePage() {
   );
   const [isDetecting, setIsDetecting] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [activeMainTab, setActiveMainTab] = useState<'PRODUCTS' | 'SERVICES' | 'PORTFOLIO' | 'CONFIG'>('PRODUCTS');
   const [cartItems, setCartItems] = useState<SharedCartItem[]>(() =>
     cartRecoveryService.getSharedCart<SharedCartItem>()
   );
@@ -81,10 +86,282 @@ export default function BrandStorePage() {
     setSelectedCategory('ALL');
   }, [brandSlug]);
 
+  const [copiedStoreUrl, setCopiedStoreUrl] = useState(false);
+
   const { brand, hub, productsByCategory, allProducts } = useMemo(
-    () => getConsolidatedProductsForBrand(brandSlug || 'dominos-pizza', activePincode),
+    () => getConsolidatedProductsForBrand(brandSlug || 'india-post', activePincode),
     [brandSlug, activePincode]
   );
+
+  const brandContent = useMemo(() => {
+    const slug = brand.slug;
+    if (slug === 'india-post') {
+      return {
+        services: [
+          {
+            title: 'Speed Post & Domestic Express Parcel',
+            desc: 'Time-bound express parcel and letter delivery with live SMS tracking, barcode scan intimations, and verified doorstep delivery.',
+            sla: 'Same Day / 24 Hours',
+            slaColor: 'text-red-700',
+          },
+          {
+            title: 'IPPB Doorstep Banking & AEPS',
+            desc: 'Aadhaar-based biometric cash withdrawal, DBT subsidies, digital savings account opening & QR payments directly at citizen doorstep.',
+            sla: 'Instant on Beat Visit',
+            slaColor: 'text-amber-700',
+          },
+          {
+            title: 'National Small Savings Schemes & PLI',
+            desc: 'Sovereign-backed Sukanya Samriddhi Yojana (8.2%), PPF, NSC, KVP, and Postal Life Insurance with highest declared bonus rates.',
+            sla: 'Same-Day Passbook Issuance',
+            slaColor: 'text-emerald-700',
+          },
+        ],
+        portfolio: [
+          {
+            tag: 'Circle Operations',
+            title: 'Dadabari 324009 HPO Beat Digitization',
+            desc: 'Successfully digitized all 34 beat territories across Kota Division with sequence-wise GIS mapping and 99.8% first-attempt delivery compliance.',
+          },
+          {
+            tag: 'Statutory Compliance',
+            title: 'Zero-Variance ACG-61 Cash Reconciliation',
+            desc: 'Automated treasury accounting and daily postman cash drop reconciliation eliminating physical registers and manual voucher audits.',
+          },
+          {
+            tag: 'Citizen Coverage',
+            title: '14,000+ Mapped Households & LMS Academy',
+            desc: 'Comprehensive 10-level geo records mapped for Doorstep Citizen Services paired with official bilingual Postman/MTS exam syllabus training.',
+          },
+        ],
+      };
+    }
+
+    if (slug === 'xpokart') {
+      return {
+        services: [
+          {
+            title: 'Centralized Speed Post COD Dispatch',
+            desc: 'Multi-merchant regional order fulfillment and express tamper-proof parcel dispatch with cash-on-delivery at flat ₹15 beat fee.',
+            sla: '120 Min Express Dispatch',
+            slaColor: 'text-blue-700',
+          },
+          {
+            title: '48-Hour Size & Quality Exchange',
+            desc: 'Zero-friction product replacement picked up directly from recipient doorstep by assigned beat staff with instant barcode exchange.',
+            sla: '48-Hour Doorstep Return',
+            slaColor: 'text-purple-700',
+          },
+          {
+            title: 'Verified Local Merchant Onboarding',
+            desc: 'Instant catalog digitization, dynamic stock syncing, and WhatsApp order alert concierge for city retailers and showroom distributors.',
+            sla: '24-Hour Catalog Go-Live',
+            slaColor: 'text-emerald-700',
+          },
+        ],
+        portfolio: [
+          {
+            tag: 'Storefront Scale',
+            title: '1,500+ Local Merchant SKUs Digitized',
+            desc: 'Multi-category retail catalog across 4K smart TVs, audio gear, apparel, groceries, and home tech with real-time stock availability.',
+          },
+          {
+            tag: 'Conversion Engine',
+            title: '98.4% COD Order Fulfillment Rate',
+            desc: 'Automated cart recovery and WhatsApp order confirmation resulting in near-zero order rejection across 13 regional PIN hubs.',
+          },
+          {
+            tag: 'Beat Logistics',
+            title: 'Flat ₹15 Last-Mile Beat Delivery Model',
+            desc: 'Pioneered transparent beat delivery economics powering both merchant margins and verified beat courier earnings.',
+          },
+        ],
+      };
+    }
+
+    if (slug === 'xpeedo-ev') {
+      return {
+        services: [
+          {
+            title: 'Doorstep Electric Scooter Test Rides',
+            desc: 'Certified EV technician brings selected 60V electric mobility models directly to customer residence for test rides and specs consultation.',
+            sla: '60 Min Booking Window',
+            slaColor: 'text-emerald-700',
+          },
+          {
+            title: '60V LiFePO4 Battery Diagnostics & Swap',
+            desc: 'Smart battery health telemetry, diagnostic cycle measurement, cell balancing, and quick battery swap for registered fleets.',
+            sla: '5 Min Swap Turnaround',
+            slaColor: 'text-teal-700',
+          },
+          {
+            title: '10A Auto-Cut Fast Charger Diagnostics',
+            desc: 'Preventive electrical maintenance, spike protection check, and warranty replacement for commercial home and hub chargers.',
+            sla: 'Same Day Replacement',
+            slaColor: 'text-blue-700',
+          },
+        ],
+        portfolio: [
+          {
+            tag: 'Green Fleet',
+            title: '250+ Commercial Delivery Scooters Active',
+            desc: 'Deployed robust electric scooters across city delivery routes, eliminating 80+ metric tons of carbon emissions annually.',
+          },
+          {
+            tag: 'Fleet Telemetry',
+            title: '99.4% Fleet Battery Uptime',
+            desc: 'Real-time telemetry and preventative maintenance protocols across 4.2 lakh kilometers with zero on-road battery thermal incidents.',
+          },
+        ],
+      };
+    }
+
+    if (slug === 'drop-dash') {
+      return {
+        services: [
+          {
+            title: '30-Minute Priority Express Dispatch',
+            desc: 'Instant point-to-point courier for urgent documents, medicines, keys, and retail purchases with live GPS tracking.',
+            sla: '15 Min Pickup SLA',
+            slaColor: 'text-cyan-700',
+          },
+          {
+            title: 'Insulated Cold-Chain Micro-Fulfillment',
+            desc: 'Temperature-controlled insulated containers for diagnostic pathology samples, fresh gourmet meals, and perishables.',
+            sla: '30 Min Express Delivery',
+            slaColor: 'text-blue-700',
+          },
+          {
+            title: 'Inter-Outlet Retail Stock Transfers',
+            desc: 'Scheduled mid-day and evening inventory balancing between showroom locations and local warehouse stock points.',
+            sla: 'Scheduled Intra-City Routes',
+            slaColor: 'text-slate-700',
+          },
+        ],
+        portfolio: [
+          {
+            tag: 'Rapid Courier',
+            title: '12,000+ Intra-City Parcels Delivered',
+            desc: 'Maintained 22-minute average doorstep delivery turnaround across Kota 324009 with zero parcel loss record.',
+          },
+          {
+            tag: 'Medical Supply',
+            title: '100% Diagnostic Cold-Chain Compliance',
+            desc: 'Partnered with regional diagnostic laboratories for tamper-evident, temperature-monitored specimen transfers.',
+          },
+        ],
+      };
+    }
+
+    if (slug === 'shop-deck') {
+      return {
+        services: [
+          {
+            title: 'Omnichannel Cloud POS Deployment',
+            desc: 'Next-gen counter billing setup with Bluetooth barcode scanners, thermal receipt printers, and offline checkout support.',
+            sla: '24-Hour Store Setup',
+            slaColor: 'text-purple-700',
+          },
+          {
+            title: 'Real-Time Inventory & Tally Sync',
+            desc: 'Automated multi-branch catalog sync connecting in-store barcode sales, XPOKART orders, and accounting ledgers.',
+            sla: 'Instant Webhook Sync',
+            slaColor: 'text-indigo-700',
+          },
+          {
+            title: 'Automated WhatsApp Invoicing & Loyalty',
+            desc: 'GST-compliant digital invoices, payment links, and customer loyalty points delivered instantly to customer WhatsApp.',
+            sla: 'Instant on Bill Tender',
+            slaColor: 'text-violet-700',
+          },
+        ],
+        portfolio: [
+          {
+            tag: 'SaaS Modernization',
+            title: '85+ Retail Outlets Migrated to Cloud POS',
+            desc: 'Successfully replaced chaotic physical counter bahi-khatas with real-time digital billing and inventory tracking.',
+          },
+          {
+            tag: 'Checkout Efficiency',
+            title: '3.5x Faster Counter Checkout Time',
+            desc: 'Reduced counter billing wait times from 4.5 minutes to 45 seconds per shopper with 1-click barcode lookups.',
+          },
+        ],
+      };
+    }
+
+    if (slug === 'xpeedo-logistics') {
+      return {
+        services: [
+          {
+            title: 'Inter-Hub Regional Linehaul Freight',
+            desc: 'Scheduled containerized trucking connecting central sorting facilities, divisional post offices, and distribution depots.',
+            sla: 'Daily Scheduled Departure',
+            slaColor: 'text-amber-700',
+          },
+          {
+            title: 'Modular B2B Pallet Storage Bays',
+            desc: 'CCTV-monitored, fire-protected 100 sq. ft. modular racking bays inside central fulfillment hubs with barcode pallet IDs.',
+            sla: '24/7 Access & Surveillance',
+            slaColor: 'text-yellow-700',
+          },
+          {
+            title: 'Cross-Dock Sorting & Beat Sequencing',
+            desc: 'High-speed automated barcode de-stuffing, dimensional weighing, and delivery-beat sequenced bag dispatch.',
+            sla: '45 Min Turnaround',
+            slaColor: 'text-emerald-700',
+          },
+        ],
+        portfolio: [
+          {
+            tag: 'Logistics Network',
+            title: '45 Daily Inter-District Linehaul Routes',
+            desc: 'Achieved 99.7% on-time transit arrival reliability across Western Rajasthan and Madhya Pradesh transit lanes.',
+          },
+          {
+            tag: 'Transit Security',
+            title: 'Zero-Damage High-Value Cargo Protocol',
+            desc: 'Triple-sealed containerization with electronic geo-fence seal tracking delivering 100% loss-free cargo record.',
+          },
+        ],
+      };
+    }
+
+    return {
+      services: [
+        {
+          title: 'Speed Post COD Dispatch',
+          desc: `Insured tamper-proof parcels dispatched directly from ${hub.officeName} with door-to-door cash on delivery.`,
+          sla: `${hub.slaMinutes} Minutes SLA`,
+          slaColor: 'text-emerald-700',
+        },
+        {
+          title: 'WhatsApp Brand Concierge',
+          desc: `Direct support, product inquiries and order tracking via WhatsApp beat manager ${hub.beatManager}.`,
+          sla: 'Available 24/7',
+          slaColor: 'text-blue-700',
+        },
+        {
+          title: '48-Hour Size & Quality Exchange',
+          desc: 'Hassle-free return or exchange picked up directly from your doorstep by your local beat postman.',
+          sla: 'Zero Return Fee',
+          slaColor: 'text-purple-700',
+        },
+      ],
+      portfolio: [
+        {
+          tag: 'Authorized Partner',
+          title: `${brand.brandName} Regional Fulfillment`,
+          desc: `Official partner store operating under ${hub.officeName} jurisdiction with guaranteed genuine merchandise.`,
+        },
+        {
+          tag: 'COD Reconciliation',
+          title: 'Automated Treasury Settlement',
+          desc: `100% daily cash-on-delivery reconciliation matched with India Post treasury records and ACG-61 statutory documentation.`,
+        },
+      ],
+    };
+  }, [brand.slug, brand.brandName, hub]);
 
   const categoryKeys = useMemo(() => Object.keys(productsByCategory), [productsByCategory]);
 
@@ -257,7 +534,19 @@ export default function BrandStorePage() {
               <span>Storefront</span>
             </button>
             <div className="text-sm sm:text-base font-black tracking-tight text-slate-900 whitespace-nowrap shrink-0">
-              XPOKART <span className="text-red-700">Official Brands</span>
+              {brand.slug === 'india-post' ? (
+                <>
+                  Department of Post <span className="text-red-700">Official Hub</span>
+                </>
+              ) : brand.slug === 'xpokart' ? (
+                <>
+                  XPOKART <span className="text-blue-700">Official Store</span>
+                </>
+              ) : (
+                <>
+                  {brand.brandName} <span className="text-red-700">Store</span>
+                </>
+              )}
             </div>
           </div>
 
@@ -310,6 +599,23 @@ export default function BrandStorePage() {
                 {totalCartCount}
               </span>
             </button>
+
+            <div className="hidden sm:flex items-center gap-1.5 ml-2 pl-2 border-l border-slate-200">
+              <Link
+                to="/login"
+                className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition flex items-center gap-1"
+              >
+                <Lock size={13} />
+                <span>Login</span>
+              </Link>
+              <Link
+                to="/register"
+                className="px-3 py-2 rounded-xl bg-red-700 hover:bg-red-600 text-white text-xs font-bold transition flex items-center gap-1"
+              >
+                <UserPlus size={13} />
+                <span>Register</span>
+              </Link>
+            </div>
           </div>
         </div>
       </header>
@@ -347,6 +653,32 @@ export default function BrandStorePage() {
               >
                 {b.brandName}
               </Link>
+            );
+          })}
+        </div>
+
+        {/* Brand Workspace Main Section Tabs (Products, Services, Portfolio, Store Config) */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          {[
+            { key: 'PRODUCTS', label: 'Products & Catalog' },
+            { key: 'SERVICES', label: 'Services & SLA' },
+            { key: 'PORTFOLIO', label: 'Portfolio & Showcase' },
+            { key: 'CONFIG', label: 'Storefront & Brand Config' },
+          ].map((tab) => {
+            const active = activeMainTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveMainTab(tab.key as any)}
+                className={`px-4 py-2 rounded-xl text-xs font-black transition cursor-pointer whitespace-nowrap ${
+                  active
+                    ? 'bg-red-700 text-white shadow-xs'
+                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                {tab.label}
+              </button>
             );
           })}
         </div>
@@ -395,7 +727,7 @@ export default function BrandStorePage() {
                 </span>
                 <a
                   href={`https://api.whatsapp.com/send?phone=${hub.whatsappPhone}&text=${encodeURIComponent(
-                    `Namaste XPOKART Support Desk (PIN ${hub.pincode}), I want assistance ordering from the ${brand.brandName} Official Store.`
+                    `Namaste ${brand.brandName} Concierge Desk (PIN ${hub.pincode}), I want assistance with ${brand.brandName} services and catalog.`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -428,7 +760,111 @@ export default function BrandStorePage() {
           </div>
         </section>
 
-        {/* Category Filter Tabs inside Brand Store */}
+        {activeMainTab === 'SERVICES' && (
+          <div className="bg-white rounded-3xl border border-slate-200 p-8 space-y-6">
+            <div>
+              <h2 className="text-xl font-black text-slate-900">{brand.brandName} · Services &amp; SLA</h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Authorized regional service offerings and guaranteed turnaround time (SLA) under PIN {hub.pincode}.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {brandContent.services.map((srv, idx) => (
+                <div key={idx} className="p-6 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="text-sm font-bold text-slate-900">{srv.title}</div>
+                    <p className="text-xs text-slate-600 leading-relaxed">{srv.desc}</p>
+                  </div>
+                  <div className={`text-xs font-mono font-bold pt-2 border-t border-slate-200 ${srv.slaColor}`}>
+                    SLA: {srv.sla}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeMainTab === 'PORTFOLIO' && (
+          <div className="bg-white rounded-3xl border border-slate-200 p-8 space-y-6">
+            <div>
+              <h2 className="text-xl font-black text-slate-900">{brand.brandName} · Portfolio &amp; Showcase</h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Recent case studies, completed deliveries, and operational volume metrics across {hub.division}.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {brandContent.portfolio.map((item, idx) => (
+                <div key={idx} className="p-6 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="text-[11px] font-mono text-amber-700 font-bold uppercase">{item.tag}</div>
+                  <h3 className="text-sm font-bold text-slate-900">{item.title}</h3>
+                  <p className="text-xs text-slate-600 leading-relaxed">{item.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeMainTab === 'CONFIG' && (
+          <div className="bg-white rounded-3xl border border-slate-200 p-8 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-black text-slate-900">{brand.brandName} · Storefront &amp; Brand Config</h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Deterministic store link, regional delivery hub routing, and tenant isolation parameters.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const url = `${window.location.origin}/brand/${brand.slug}`;
+                  navigator.clipboard.writeText(url);
+                  setCopiedStoreUrl(true);
+                  setTimeout(() => setCopiedStoreUrl(false), 2000);
+                }}
+                className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-xs whitespace-nowrap self-start sm:self-auto"
+              >
+                {copiedStoreUrl ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                <span>{copiedStoreUrl ? 'Store Link Copied!' : 'Copy Brand Store Link'}</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-slate-500">Unique Brand URL</div>
+                <div className="font-mono font-bold text-blue-700 text-xs mt-1 truncate">
+                  /brand/{brand.slug}
+                </div>
+              </div>
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-slate-500">Brand Name &amp; Category</div>
+                <div className="font-bold text-slate-900 text-sm mt-1">{brand.brandName}</div>
+                <div className="text-[11px] text-slate-500">{brand.categoryLabel}</div>
+              </div>
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-slate-500">Trust Assurance</div>
+                <div className="font-bold text-slate-900 text-sm mt-1">{brand.trustAssurance}</div>
+              </div>
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-slate-500">Delivery Guarantee</div>
+                <div className="font-bold text-slate-900 text-sm mt-1">{brand.deliveryGuarantee}</div>
+              </div>
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-slate-500">Assigned Regional Hub</div>
+                <div className="font-bold text-slate-900 text-sm mt-1">{hub.officeName} (PIN {hub.pincode})</div>
+                <div className="text-[11px] text-slate-500">{hub.division}</div>
+              </div>
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-slate-500">Local Stocking Partner</div>
+                <div className="font-bold text-emerald-800 text-sm mt-1">{hub.localStockingPartner}</div>
+                <div className="text-[11px] text-slate-500">Manager: {hub.beatManager}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeMainTab === 'PRODUCTS' && (
+          <>
+            {/* Category Filter Tabs inside Brand Store */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 overflow-x-auto pb-1">
             <button
@@ -548,7 +984,7 @@ export default function BrandStorePage() {
                         </button>
                         <a
                           href={`https://api.whatsapp.com/send?phone=${hub.whatsappPhone}&text=${encodeURIComponent(
-                            `Namaste XPOKART Desk (PIN ${hub.pincode}), 1-Click Order for *${item.title}* (${item.sku}) @ ₹${item.retailPrice} via ${hub.localStockingPartner}.`
+                            `Namaste ${brand.brandName} Desk (PIN ${hub.pincode}), 1-Click Order for *${item.title}* (${item.sku}) @ ₹${item.retailPrice} via ${hub.localStockingPartner}.`
                           )}`}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -565,6 +1001,8 @@ export default function BrandStorePage() {
             </section>
           ))}
         </div>
+          </>
+        )}
       </main>
 
       {/* Centralized Speed Post COD Checkout Drawer */}

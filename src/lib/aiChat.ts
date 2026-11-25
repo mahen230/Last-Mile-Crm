@@ -1,20 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
-
-// In Vite environment, safely access client env vars
-const apiKey =
-  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GEMINI_API_KEY) ||
-  (typeof process !== 'undefined' && (process.env?.GEMINI_API_KEY || process.env?.API_KEY)) ||
-  '';
-
-let aiClient: GoogleGenAI | null = null;
-if (apiKey) {
-  try {
-    aiClient = new GoogleGenAI({ apiKey });
-  } catch (err) {
-    console.warn('GoogleGenAI initialization skipped:', err);
-  }
-}
-
 export interface AIChatAction {
   type: 'NAVIGATE' | 'OPEN_ADD_CUSTOMER' | 'SEARCH_RECORD' | 'NONE';
   targetPath?: string;
@@ -100,33 +83,21 @@ export async function processChat(prompt: string, context: string): Promise<AICh
     };
   }
 
-  // 2. Try Gemini Model via @google/genai SDK if key configured
-  if (aiClient) {
-    try {
-      const response = await aiClient.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: `You are the India Post CRM & Operations Assistant for XPOKART (Dadabari S.O., PIN 324009).
-Current System Context:
-${context}
-
-User Query: "${prompt}"
-
-Provide a concise, helpful answer (2-3 sentences max).
-If the user asks to navigate to a page, open a form, or search for a customer/lead, specify the intent clearly.
-Pages available:
-- /dashboard (Postal Operations Dashboard)
-- /customers (Master Customer Directory)
-- /leads (Scheme & Product Leads Pipeline)
-- /staff-master (Staff Directory & Office Master)
-- /tasks (Field Operations & Beat Tasks)
-- /beats (Beat Coverage & Territory Management)`
-      });
-
-      const text = response.text || 'I have processed your operational request.';
-      return { message: text };
-    } catch (apiErr) {
-      console.warn('Gemini API call fallback to deterministic agent:', apiErr);
+  // 2. Try Server-Side Gemini API Proxy
+  try {
+    const res = await fetch('/api/ai/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, context }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success && data.message) {
+        return { message: data.message };
+      }
     }
+  } catch (apiErr) {
+    console.warn('Server AI Chat proxy fallback to deterministic agent:', apiErr);
   }
 
   // 3. Fallback intelligent response based on keywords

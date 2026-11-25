@@ -13,6 +13,7 @@ import {
   MapPin,
   Plus,
   Route,
+  Search,
   ShieldCheck,
   Store,
   Ticket,
@@ -47,9 +48,11 @@ const IndiaPostStorefrontView = lazy(() => import('../crm/IndiaPostStorefrontVie
 const DailyVerificationView = lazy(() => import('../postman/DailyVerificationView'));
 const DoorstepSurveyWorkflowView = lazy(() => import('../postman/DoorstepSurveyWorkflowView'));
 const PostmanAllDayArticlesOverview = lazy(() => import('../postman/PostmanAllDayArticlesOverview'));
+const IndiaPostMasterSearchAndInspectionView = lazy(() => import('./IndiaPostMasterSearchAndInspectionView'));
 
 export type IndiaPostTab =
   | 'OVERVIEW'
+  | 'SEARCH_VIEW'
   | 'HIERARCHY'
   | 'OFFICES_MASTER'
   | 'BEATS_MATRIX'
@@ -65,6 +68,7 @@ export type IndiaPostTab =
 
 const VALID_TABS: Set<string> = new Set([
   'OVERVIEW',
+  'SEARCH_VIEW',
   'HIERARCHY',
   'OFFICES_MASTER',
   'BEATS_MATRIX',
@@ -322,6 +326,7 @@ export default function IndiaPostCommandWorkspace({
 
   const TABS: Array<{ key: IndiaPostTab; label: string }> = [
     { key: 'OVERVIEW', label: 'Dynamic Dashboard' },
+    { key: 'SEARCH_VIEW', label: 'Master Search & View' },
     { key: 'HIERARCHY', label: 'Org Hierarchy' },
     { key: 'OFFICES_MASTER', label: `Offices Master (${offices.length})` },
     { key: 'BEATS_MATRIX', label: `Beats & PIN (${CONSOLIDATED_BEAT_MATRIX.length})` },
@@ -339,26 +344,42 @@ export default function IndiaPostCommandWorkspace({
   return (
     <div className="space-y-6" id="india-post-command-workspace">
       {/* Header */}
-      <div className="bg-slate-900 text-white rounded-xl border border-slate-800 p-6 space-y-4">
+      <div className="bg-gradient-to-r from-red-950 via-slate-900 to-red-950 text-white rounded-2xl border border-red-900/60 p-6 space-y-4 shadow-xl">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <div className="text-xs font-mono text-blue-400 uppercase tracking-wide">
-              Client #1 · India Post Management System · Kota Division, Rajasthan Pilot
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-black uppercase tracking-wider text-[10px]">
+                BRD-INPOST-01
+              </span>
+              <span className="font-mono text-amber-300 uppercase tracking-wide font-semibold">
+                Department of Post · Kota Division, Rajasthan Pilot
+              </span>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight mt-1">
-              India Post — Kota Division Operations Center
+            <h1 className="text-2xl font-black tracking-tight mt-1.5">
+              Department of Post — Unified Operations &amp; Master Command Center
             </h1>
             <p className="text-xs text-slate-300 mt-1 max-w-2xl">
-              Strictly isolated postal operations workspace: Central Admin → Circle → Region →
-              Division → HPO → SO → BO hierarchy, Office Master, 34+ Beats, Staff Roles &amp;
-              Promotions, 10-level property registry, CRM schemes, SRM SLA ticketing, statutory bills, and LMS.
+              Single operational source of truth: Circle → Region → Division → HPO → SO → BO hierarchy,
+              Office Master, Kota Division &amp; Rajasthan Beat Tree, Staff Roles &amp; Promotions, 10-level property registry, CRM schemes, B2B accounts, SRM SLA ticketing, statutory bills, and LMS.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <button
               type="button"
+              onClick={() => setActiveTab(activeTab === 'SEARCH_VIEW' ? 'OVERVIEW' : 'SEARCH_VIEW')}
+              className={`px-3.5 py-2 rounded-lg font-black flex items-center gap-1.5 cursor-pointer transition shadow-sm ${
+                activeTab === 'SEARCH_VIEW'
+                  ? 'bg-white text-red-950'
+                  : 'bg-amber-400 hover:bg-amber-300 text-slate-950'
+              }`}
+            >
+              <Search size={14} />
+              <span>{activeTab === 'SEARCH_VIEW' ? 'Exit Search Mode' : 'Master Search & View Mode'}</span>
+            </button>
+            <button
+              type="button"
               onClick={() => setActiveTab('OFFICES_MASTER')}
-              className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 font-semibold flex items-center gap-1 cursor-pointer"
+              className="px-3 py-2 rounded-lg bg-slate-800/90 hover:bg-slate-700 border border-red-900/50 font-semibold flex items-center gap-1 cursor-pointer"
             >
               <Building size={13} />
               <span>Office Master</span>
@@ -369,7 +390,7 @@ export default function IndiaPostCommandWorkspace({
                 setActiveTab('GEO_PROPERTY');
                 setGeoSubMode('LOCATION_INTEL');
               }}
-              className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 font-semibold flex items-center gap-1 cursor-pointer"
+              className="px-3 py-2 rounded-lg bg-slate-800/90 hover:bg-slate-700 border border-red-900/50 font-semibold flex items-center gap-1 cursor-pointer"
             >
               <MapPin size={13} />
               <span>11-Level Geo Hub</span>
@@ -377,7 +398,7 @@ export default function IndiaPostCommandWorkspace({
             <button
               type="button"
               onClick={() => setActiveTab('BEATS_MATRIX')}
-              className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 font-semibold flex items-center gap-1 cursor-pointer"
+              className="px-3 py-2 rounded-lg bg-red-800 hover:bg-red-700 border border-red-700 font-semibold flex items-center gap-1 cursor-pointer"
             >
               <Route size={13} />
               <span>Beat Console</span>
@@ -386,7 +407,7 @@ export default function IndiaPostCommandWorkspace({
         </div>
 
         {/* Sub-Tabs */}
-        <div className="flex flex-wrap gap-1.5 pt-3 border-t border-slate-800">
+        <div className="flex flex-wrap gap-1.5 pt-3 border-t border-red-900/40">
           {TABS.map((t) => (
             <button
               key={t.key}
@@ -394,8 +415,10 @@ export default function IndiaPostCommandWorkspace({
               onClick={() => setActiveTab(t.key)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
                 activeTab === t.key
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
+                  ? t.key === 'SEARCH_VIEW'
+                    ? 'bg-amber-400 text-slate-950 font-black'
+                    : 'bg-red-700 text-white shadow-xs'
+                  : 'bg-slate-900/70 text-slate-300 hover:bg-slate-800 hover:text-white border border-red-950/60'
               }`}
             >
               {t.label}
@@ -411,9 +434,43 @@ export default function IndiaPostCommandWorkspace({
         </div>
       )}
 
+      {/* TAB: MASTER SEARCH & INSPECTION VIEW */}
+      {activeTab === 'SEARCH_VIEW' && (
+        <Suspense fallback={<ModuleFallback />}>
+          <IndiaPostMasterSearchAndInspectionView />
+        </Suspense>
+      )}
+
       {/* TAB 1: DYNAMIC OVERVIEW */}
       {activeTab === 'OVERVIEW' && (
         <div className="space-y-6">
+          <div className="bg-gradient-to-r from-red-50 via-amber-50/70 to-white border border-red-200 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="p-3 rounded-xl bg-red-800 text-amber-300 shadow-xs shrink-0">
+                <Search size={20} />
+              </div>
+              <div>
+                <div className="text-[11px] font-mono font-bold text-red-800 uppercase">
+                  Master Brand Owner Search &amp; View Mode
+                </div>
+                <h2 className="text-base font-black text-slate-900">
+                  Deep Multi-Level Search Across Managed Beat Tree, {postalStaff.length} Staff, {properties.length} Properties &amp; B2B Network
+                </h2>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Drill down Office → Beat → Role → Staff, or PIN → Colony → Beat → Citizen/Property, plus Postal Schemes &amp; Revenue Agents.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab('SEARCH_VIEW')}
+              className="px-4 py-2.5 rounded-xl bg-red-800 hover:bg-red-900 text-white font-bold text-xs flex items-center gap-2 cursor-pointer shrink-0 shadow-xs"
+            >
+              <Search size={14} className="text-amber-300" />
+              <span>Launch Search &amp; View Mode</span>
+            </button>
+          </div>
+
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <div className="bg-white rounded-xl border border-slate-200 p-4">
               <div className="text-xs text-slate-500">Postal Offices</div>
@@ -1326,7 +1383,7 @@ export default function IndiaPostCommandWorkspace({
       {activeTab === 'REPORTS' && (
         <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
           <div>
-            <h2 className="text-sm font-bold text-slate-900">India Post Kota Division Exports (UTF-8 BOM)</h2>
+            <h2 className="text-sm font-bold text-slate-900">Department of Post Operational Exports (UTF-8 BOM)</h2>
             <p className="text-xs text-slate-500">
               Cleanly isolated postal datasets ready for Excel or departmental review.
             </p>

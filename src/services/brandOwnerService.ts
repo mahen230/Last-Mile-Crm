@@ -1,6 +1,7 @@
 import {
   ALL_BRAND_PORTAL_SUBMENUS,
   ALL_BRAND_STAFF_SECTIONS,
+  XPOKART_ECOMMERCE_SUBMENUS,
   BrandMemberPermissions,
   BrandMemberRbacOverride,
   BrandOnboardingSource,
@@ -22,7 +23,7 @@ import { hashPasswordSync, sanitizeUserInput, verifyPasswordSync } from '../util
 import { xpeedoOpsService } from './xpeedoOpsService';
 import { partnerBrandService, slugifyPartnerName } from './partnerBrandService';
 import { customerService } from './customerService';
-import { MAX_OPERATIONAL_STAFF_COUNT, staffPermissionService } from './staffPermissionService';
+import { staffPermissionService } from './staffPermissionService';
 import {
   Customer,
   DynamicOfficeRecord,
@@ -169,10 +170,10 @@ const SEEDED_BRAND_PROFILES: BrandOwnerProfile[] = [
     activeSessionToken: null,
     activeSessionDevice: null,
     activeSessionAt: null,
-    subMenuItems: [...DEFAULT_SUBMENUS],
+    subMenuItems: [...XPOKART_ECOMMERCE_SUBMENUS],
     accentColor: '#1D4ED8',
-    category: 'B2B Commerce & Hyperlocal Fulfillment',
-    tagline: 'Merchant Catalog, Stores & B2B Orders',
+    category: 'E-Commerce Storefront & Catalog',
+    tagline: 'Storefront Catalog, Cart, Checkout & Customer Orders',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   },
@@ -353,9 +354,85 @@ class BrandOwnerService {
         modified = true;
       }
     });
+
+    // Enforce XPOKART pure e-commerce submenus and ensure active operational brands expose CRM + Territory & Team menus
+    const requiredOperationalSubmenus: BrandPortalSubMenuKey[] = [
+      'PROPERTIES',
+      'LEADS',
+      'MASTER_SEARCH',
+      'MASTER_ROLE',
+      'PROMOTION_MASTER',
+    ];
+    for (let i = 0; i < merged.length; i++) {
+      const p = merged[i];
+      const isXpokartBrand =
+        p.partnerSlug.toLowerCase() === 'xpokart' || p.workspaceKey.toUpperCase() === 'XPOKART';
+      if (isXpokartBrand) {
+        const expected = [...XPOKART_ECOMMERCE_SUBMENUS];
+        const currentStr = JSON.stringify(p.subMenuItems || []);
+        const expectedStr = JSON.stringify(expected);
+        if (currentStr !== expectedStr) {
+          merged[i] = {
+            ...p,
+            subMenuItems: expected,
+            category: 'E-Commerce Storefront & Catalog',
+            tagline: 'Storefront Catalog, Cart, Checkout & Customer Orders',
+          };
+          modified = true;
+        }
+      } else {
+        const curMenus = Array.isArray(p.subMenuItems) ? [...p.subMenuItems] : [...DEFAULT_SUBMENUS];
+        let added = false;
+        requiredOperationalSubmenus.forEach((reqKey) => {
+          if (!curMenus.includes(reqKey)) {
+            curMenus.push(reqKey);
+            added = true;
+          }
+        });
+        if (added) {
+          merged[i] = { ...p, subMenuItems: curMenus };
+          modified = true;
+        }
+      }
+    }
+
     this.profiles = merged;
     if (modified) {
       writeJson(PROFILES_STORAGE_KEY, this.profiles);
+    }
+    this.migrateXpokartMemberRbacToIndiaPost();
+  }
+
+  private migrateXpokartMemberRbacToIndiaPost(): void {
+    try {
+      const map = this.readMemberRbacMap();
+      let changed = false;
+      const nextMap: Record<string, BrandMemberRbacOverride> = {};
+      Object.entries(map).forEach(([k, val]) => {
+        if (
+          k.startsWith('bp-xpokart::') ||
+          val.brandProfileId === 'bp-xpokart' ||
+          (val.partnerSlug || '').toLowerCase() === 'xpokart'
+        ) {
+          changed = true;
+          const targetKey = `bp-india-post::${val.memberId}`;
+          if (!map[targetKey] && !nextMap[targetKey]) {
+            nextMap[targetKey] = {
+              ...val,
+              brandProfileId: 'bp-india-post',
+              partnerSlug: 'india-post',
+              updatedAt: nowIso(),
+            };
+          }
+        } else {
+          nextMap[k] = val;
+        }
+      });
+      if (changed) {
+        this.writeMemberRbacMap(nextMap);
+      }
+    } catch {
+      // ignore storage migration errors
     }
   }
 
@@ -1835,14 +1912,19 @@ class BrandOwnerService {
       });
     });
 
-    // 4. Operational Staff (excluding platform-wide super-admins)
+    // 4. Operational Staff (excluding platform-wide super-admins; XPOKART staff always route to India Post)
     staffPermissionService.getBrandOperationalStaff().forEach((s) => {
       const currentWs =
         this.normalizeBrandToWorkspaceKey(s.brandId || s.partnerOrganization) || 'UNASSIGNED';
       const staffOfficeLabel =
         s.postOfficeName || s.postedOfficeName || s.subOrBranchOffice || s.subOffice || '';
+      const rawBrandOrWs =
+        (s.brandId || '').toLowerCase().includes('xpokart') ||
+        (s.partnerOrganization || '').toLowerCase().includes('xpokart')
+          ? 'INDIA_POST'
+          : s.brandId || s.partnerOrganization;
       const classified = this.classifyRecordSector({
-        explicitBrandOrWs: s.brandId || s.partnerOrganization,
+        explicitBrandOrWs: rawBrandOrWs,
         textBlob: `${s.partnerOrganization || ''} ${s.role} ${s.designation || ''} ${s.division || ''} ${staffOfficeLabel}`,
       });
       records.push({
@@ -1851,9 +1933,9 @@ class BrandOwnerService {
         title: s.name,
         subtitle: `${s.designation || s.role} · ${staffOfficeLabel || s.division || 'Staff'}`,
         currentWorkspaceKey: currentWs,
-        recommendedWorkspaceKey: classified.workspaceKey,
-        needsTransfer: currentWs !== classified.workspaceKey,
-        reason: classified.reason,
+        recommendedWorkspaceKey: classified.workspaceKey === 'XPOKART' ? 'INDIA_POST' : classified.workspaceKey,
+        needsTransfer: currentWs !== (classified.workspaceKey === 'XPOKART' ? 'INDIA_POST' : classified.workspaceKey),
+        reason: classified.workspaceKey === 'XPOKART' ? 'Transfer operational staff out of XPOKART E-Commerce into India Post' : classified.reason,
       });
     });
 
@@ -2047,7 +2129,9 @@ class BrandOwnerService {
 
   private isPlatformTier1Profile(staff: StaffProfile): boolean {
     const roleUpper = String(staff.role || '').toUpperCase();
-    if (staff.staffScopeType === 'XPOKART_PLATFORM') return true;
+    if (staff.staffScopeType === 'XPOKART_PLATFORM' || staff.staffScopeType === 'XPEEDO_SERVICES') {
+      return true;
+    }
     return (
       roleUpper === 'MASTER_ADMIN' ||
       roleUpper === 'OWNER' ||
@@ -2065,6 +2149,9 @@ class BrandOwnerService {
 
     const targetSlug = profile.partnerSlug.toLowerCase();
     const targetWs = profile.workspaceKey.toLowerCase();
+    if (targetSlug === 'xpokart' || targetWs === 'xpokart') {
+      return false;
+    }
     const targetName = profile.brandName.toLowerCase();
 
     if (Array.isArray(staff.assignedBrands) && staff.assignedBrands.length > 0) {
@@ -2784,6 +2871,9 @@ class BrandOwnerService {
           p.workspaceKey.toLowerCase() === (brandProfileIdOrSlug || '').toLowerCase()
       );
     if (!profile) return [];
+    if (profile.partnerSlug.toLowerCase() === 'xpokart' || profile.workspaceKey === 'XPOKART') {
+      return [];
+    }
 
     const allStaff = staffPermissionService.getAllStaffProfiles();
     const scoped = allStaff.filter((s) => this.isStaffMemberInBrand(profile, s));
@@ -2827,6 +2917,12 @@ class BrandOwnerService {
     if (!profile) {
       return { success: false, error: 'Brand profile not found.' };
     }
+    if (profile.partnerSlug.toLowerCase() === 'xpokart' || profile.workspaceKey === 'XPOKART') {
+      return {
+        success: false,
+        error: 'XPOKART operates strictly as an E-Commerce Storefront without operational staff. Add staff under India Post (BRD-INPOST-01).',
+      };
+    }
     if (profile.status !== 'ACTIVE') {
       return { success: false, error: `Cannot add staff while ${profile.brandName} is ${profile.status}.` };
     }
@@ -2849,20 +2945,6 @@ class BrandOwnerService {
     }
 
     const cleanEmpInput = (input.employeeId || '').trim().toUpperCase();
-    const existingFive = staffPermissionService.getOperationalStaffFive();
-    const matchingExistingSlot = existingFive.find(
-      (s) =>
-        (cleanEmpInput && (s.employeeId || '').toUpperCase() === cleanEmpInput) ||
-        (input.email && s.email.toLowerCase() === input.email.trim().toLowerCase()) ||
-        (cleanPhone && normalizeIndianMobile(s.contact || '') === cleanPhone)
-    );
-
-    if (!matchingExistingSlot && existingFive.length >= MAX_OPERATIONAL_STAFF_COUNT) {
-      return {
-        success: false,
-        error: `Operational staff limit reached (max ${MAX_OPERATIONAL_STAFF_COUNT}: Staff 1–Staff 5). Allocate an existing Staff 1–5 slot in Staff Management instead.`,
-      };
-    }
 
     const safeRole: UserRole = (requestedRoleUpper || 'STAFF') as UserRole;
     const empId =
@@ -3153,8 +3235,15 @@ class BrandOwnerService {
     if (!profile) {
       return { success: false, error: 'Brand profile not found.' };
     }
+    if (profile.partnerSlug.toLowerCase() === 'xpokart' || profile.workspaceKey === 'XPOKART') {
+      return {
+        success: false,
+        error: 'XPOKART operates strictly as an E-Commerce Storefront without staff allocations.',
+      };
+    }
     const staff = staffPermissionService
-      .getOperationalStaffFive()
+      .getAllStaffProfiles()
+      .filter((s) => !staffPermissionService.isSuperAdmin(s))
       .find(
         (s) =>
           s.id.toLowerCase() === staffIdOrEmail.toLowerCase() ||
@@ -3162,7 +3251,7 @@ class BrandOwnerService {
           (s.employeeId || '').toLowerCase() === staffIdOrEmail.toLowerCase()
       );
     if (!staff) {
-      return { success: false, error: 'Operational staff member not found among Staff 1–Staff 5.' };
+      return { success: false, error: 'Operational staff member not found in Master Staff roster.' };
     }
 
     const currentBrands = (staff.assignedBrands || [staff.brandId || 'india-post']).map((b) =>
@@ -3185,7 +3274,7 @@ class BrandOwnerService {
       entityType: 'BrandMemberRBAC',
       entityId: staff.id,
       action: 'ALLOCATE_STAFF_TO_BRAND',
-      summary: `Allocated Staff Slot ${staff.staffSlotNumber || ''} (${staff.name}) to ${profile.brandName}`,
+      summary: `Allocated ${staff.name} (${staff.employeeId || staff.id}) to ${profile.brandName}`,
     });
     this.notify();
     return { success: true };
@@ -3207,7 +3296,8 @@ class BrandOwnerService {
       return { success: false, error: 'Brand profile not found.' };
     }
     const staff = staffPermissionService
-      .getOperationalStaffFive()
+      .getAllStaffProfiles()
+      .filter((s) => !staffPermissionService.isSuperAdmin(s))
       .find(
         (s) =>
           s.id.toLowerCase() === staffIdOrEmail.toLowerCase() ||
@@ -3215,7 +3305,7 @@ class BrandOwnerService {
           (s.employeeId || '').toLowerCase() === staffIdOrEmail.toLowerCase()
       );
     if (!staff) {
-      return { success: false, error: 'Operational staff member not found among Staff 1–Staff 5.' };
+      return { success: false, error: 'Operational staff member not found in Master Staff roster.' };
     }
 
     const targetSlug = profile.partnerSlug.toLowerCase();
@@ -3235,10 +3325,277 @@ class BrandOwnerService {
       entityType: 'BrandMemberRBAC',
       entityId: staff.id,
       action: 'UNALLOCATE_STAFF_FROM_BRAND',
-      summary: `Removed Staff Slot ${staff.staffSlotNumber || ''} (${staff.name}) from ${profile.brandName}`,
+      summary: `Removed ${staff.name} (${staff.employeeId || staff.id}) from ${profile.brandName}`,
     });
     this.notify();
     return { success: true };
+  }
+
+  public upsertManagedBeatAndAudit(input: {
+    officeId?: string;
+    postOfficeName: string;
+    officeType?: 'HO' | 'SO' | 'BO';
+    division?: string;
+    circle?: string;
+    parentOffice?: string;
+    pincode: string;
+    beatNo: string;
+    beatTitle?: string;
+    fixedKm?: number;
+    colonies?: string[];
+    assignedStaffId?: string;
+    actorName?: string;
+  }) {
+    const actor = input.actorName || 'India Post Division Admin';
+    const record = staffPermissionService.upsertManagedBeat({
+      ...input,
+      actorName: actor,
+    });
+
+    customerService.logAudit(
+      'MANAGED_BEAT_UPSERTED',
+      'Beat',
+      record.id,
+      `Beat ${record.beatNo} (${record.postOfficeName})`,
+      `PIN ${record.pincode} · Staff: ${record.assignedPostman} · Colonies (${record.colonies.length}): ${record.colonies.slice(0, 6).join(', ')}`
+    );
+
+    xpeedoOpsService.logExternalActivity({
+      actor,
+      actorRole: 'CLIENT_ADMIN',
+      workspaceId: 'INDIA_POST',
+      entityType: 'ManagedBeat',
+      entityId: record.id,
+      action: 'UPSERT_PINCODE_BEAT',
+      summary: `PIN ${record.pincode} · ${record.postOfficeName} · Beat ${record.beatNo} assigned to ${record.assignedPostman} (${record.colonies.length} colonies)`,
+    });
+
+    this.notify();
+    return record;
+  }
+
+  public reassignBeatPostmanAndAudit(input: {
+    officeId: string;
+    postOfficeName: string;
+    officeType?: 'HO' | 'SO' | 'BO';
+    pincode: string;
+    beatNo: string;
+    newStaffId: string;
+    colonies?: string[];
+    actorName?: string;
+  }): {
+    success: boolean;
+    message?: string;
+    error?: string;
+  } {
+    const actor = input.actorName || 'India Post Division Admin';
+    const res = staffPermissionService.reassignBeatPostman({
+      ...input,
+      actorName: actor,
+    });
+    if (!res.success || !res.record || !res.newStaff) {
+      return { success: false, error: res.error || 'Failed to reassign beat staff.' };
+    }
+
+    const beatLabel = `Beat ${res.record.beatNo}`;
+    xpeedoOpsService.syncTaskAndSrmOnStaffRoleChange({
+      staffName: res.newStaff.name,
+      previousBeat: res.newStaff.beat,
+      nextBeat: beatLabel,
+      nextOffice: res.record.postOfficeName,
+      nextPost: res.newStaff.designationType || res.newStaff.role,
+      nextPostCategory: res.newStaff.postCategory || 'Delivery',
+      actorName: actor,
+    });
+
+    customerService.logAudit(
+      'BEAT_STAFF_REASSIGNED',
+      'Beat',
+      res.record.id,
+      `${beatLabel} (${res.record.postOfficeName} · PIN ${res.record.pincode})`,
+      `Reassigned by ${actor}: ${res.previousPostman || 'Unassigned'} -> ${res.newStaff.name} (${res.newStaff.employeeId || res.newStaff.id})`
+    );
+
+    xpeedoOpsService.logExternalActivity({
+      actor,
+      actorRole: 'CLIENT_ADMIN',
+      workspaceId: 'INDIA_POST',
+      entityType: 'ManagedBeat',
+      entityId: res.record.id,
+      action: 'REASSIGN_BEAT_POSTMAN',
+      summary: `${res.record.postOfficeName} (${res.record.pincode}) ${beatLabel}: ${res.previousPostman} -> ${res.newStaff.name}`,
+    });
+
+    this.notify();
+    return {
+      success: true,
+      message: `${beatLabel} (${res.record.postOfficeName}) assigned to ${res.newStaff.name} and logged in audit_logs.`,
+    };
+  }
+
+  /**
+   * Unified Promotion Master Orchestrator:
+   * Atomically updates Master Staff profile, Master Role RBAC override, Task/SRM routing,
+   * and writes complete before/after audit records to both xpeedoOpsService activity log & customerService audit_logs.
+   */
+  public executeTerritoryPromotionAndAudit(payload: {
+    brandProfileId: string;
+    staffIdOrEmail: string;
+    newDesignationType: string;
+    newRole: UserRole;
+    newPostCategory: IndiaPostDutyCategory;
+    newSubOffice: string;
+    newPincode: string;
+    newBeat: string;
+    newAssignedBeats?: string[];
+    effectiveDate: string;
+    orderRef?: string;
+    reason: string;
+    rolePresetKey?: string;
+    permissionsPatch?: Partial<BrandMemberPermissions>;
+    actorName: string;
+    actorRole: string;
+  }): {
+    success: boolean;
+    message?: string;
+    error?: string;
+    profile?: StaffProfile;
+  } {
+    const profile =
+      this.profiles.find((p) => p.id === payload.brandProfileId) ||
+      this.profiles.find(
+        (p) =>
+          p.partnerSlug.toLowerCase() === payload.brandProfileId.toLowerCase() ||
+          p.workspaceKey.toLowerCase() === payload.brandProfileId.toLowerCase()
+      );
+    if (!profile) {
+      return { success: false, error: 'Brand profile not found for promotion workflow.' };
+    }
+    if (profile.partnerSlug.toLowerCase() === 'xpokart' || profile.workspaceKey === 'XPOKART') {
+      return {
+        success: false,
+        error: 'Promotions are disabled in XPOKART. Execute staff promotions in India Post or Xpeedo Services.',
+      };
+    }
+
+    const existingStaff = staffPermissionService.findStaffProfileByIdentifier(payload.staffIdOrEmail);
+    if (!existingStaff) {
+      return { success: false, error: 'Selected staff member not found in Master Staff directory.' };
+    }
+
+    const oldSnapshot = {
+      role: existingStaff.role,
+      designation: existingStaff.designationType || existingStaff.designation || existingStaff.role,
+      postCategory: existingStaff.postCategory || 'Delivery',
+      office: existingStaff.subOffice || existingStaff.assignedOffice || 'Dadabari S.O.',
+      pincode: existingStaff.officePincode || '324009',
+      beat: existingStaff.beat || 'Beat 1',
+    };
+
+    const promoResult = staffPermissionService.promoteOrChangeStaffRole(
+      existingStaff.id,
+      {
+        newDesignationType: payload.newDesignationType,
+        newRole: payload.newRole,
+        newPostCategory: payload.newPostCategory,
+        newSubOffice: payload.newSubOffice,
+        newPincode: payload.newPincode,
+        newBeat: payload.newBeat,
+        effectiveDate: payload.effectiveDate || new Date().toISOString().split('T')[0],
+        orderRef: payload.orderRef,
+        notes: payload.reason,
+        permissionsPatch: {
+          canViewAllRecords: payload.permissionsPatch?.canViewAllBrandCustomers,
+          canCreateCustomer: payload.permissionsPatch?.canCreateCustomerOrLead,
+          canEditCustomer: payload.permissionsPatch?.canEditCustomer,
+          canExportData: payload.permissionsPatch?.canExportReports,
+        },
+      },
+      payload.actorName
+    );
+
+    if (!promoResult.success || !promoResult.profile) {
+      return { success: false, error: promoResult.error || 'Unable to execute promotion in Master Staff.' };
+    }
+
+    const updatedStaff = promoResult.profile;
+    const basePerms = this.deriveDefaultBrandPermissions(updatedStaff);
+    const mergedPerms: BrandMemberPermissions = {
+      ...basePerms,
+      ...(payload.permissionsPatch || {}),
+      allowedSections:
+        payload.permissionsPatch?.allowedSections?.length
+          ? Array.from(new Set(payload.permissionsPatch.allowedSections))
+          : basePerms.allowedSections,
+    };
+
+    // Sync Master Role RBAC override map atomically
+    const map = this.readMemberRbacMap();
+    map[this.rbacKey(profile.id, updatedStaff.id)] = {
+      memberId: updatedStaff.id,
+      brandProfileId: profile.id,
+      partnerSlug: profile.partnerSlug,
+      rolePresetKey: payload.rolePresetKey,
+      staffRole: payload.newRole,
+      designation: payload.newDesignationType,
+      postCategory: payload.newPostCategory,
+      assignedOffice: payload.newSubOffice,
+      beat: payload.newBeat,
+      status: updatedStaff.status || 'Active',
+      permissions: mergedPerms,
+      updatedBy: payload.actorName,
+      updatedAt: nowIso(),
+    };
+    this.writeMemberRbacMap(map);
+
+    if (profile.workspaceKey === 'INDIA_POST') {
+      xpeedoOpsService.syncTaskAndSrmOnStaffRoleChange({
+        staffName: updatedStaff.name,
+        previousBeat: oldSnapshot.beat,
+        nextBeat: payload.newBeat,
+        nextOffice: payload.newSubOffice,
+        nextPost: payload.newDesignationType,
+        nextPostCategory: payload.newPostCategory,
+        actorName: payload.actorName,
+      });
+    }
+
+    const diffSummary = [
+      `Actor: ${payload.actorName} (${payload.actorRole})`,
+      `Effective: ${payload.effectiveDate}`,
+      `Role/Post: ${oldSnapshot.designation} (${oldSnapshot.role}) -> ${payload.newDesignationType} (${payload.newRole})`,
+      `Office/PIN: ${oldSnapshot.office} (${oldSnapshot.pincode}) -> ${payload.newSubOffice} (${payload.newPincode})`,
+      `Beat: ${oldSnapshot.beat} -> ${payload.newBeat}`,
+      `Reason: ${payload.reason}`,
+      payload.orderRef ? `Order Ref: ${payload.orderRef}` : null,
+    ]
+      .filter(Boolean)
+      .join(' | ');
+
+    xpeedoOpsService.logExternalActivity({
+      actor: payload.actorName,
+      actorRole: payload.actorRole,
+      workspaceId: profile.workspaceKey,
+      entityType: 'PromotionMaster',
+      entityId: updatedStaff.id,
+      action: 'PROMOTION_MASTER_EXECUTE',
+      summary: `${updatedStaff.name}: ${diffSummary}`,
+    });
+
+    customerService.logAudit(
+      'STAFF_PROMOTION_EXECUTED',
+      'Staff',
+      updatedStaff.id,
+      updatedStaff.name,
+      diffSummary
+    );
+
+    this.notify();
+    return {
+      success: true,
+      profile: updatedStaff,
+      message: `${updatedStaff.name} updated to ${payload.newDesignationType} (${payload.newSubOffice} · ${payload.newBeat}) and synchronized across Master Staff, Master Role & audit_logs.`,
+    };
   }
 }
 

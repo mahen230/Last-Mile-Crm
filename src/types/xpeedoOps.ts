@@ -206,7 +206,7 @@ export type MultiTierApprovalStage =
 
 export interface ApprovalAuditStep {
   stage: MultiTierApprovalStage;
-  decision: 'Submitted' | 'Approved' | 'Rejected';
+  decision: 'Submitted' | 'Approved' | 'Rejected' | string;
   actor: string;
   actorRole: string;
   note?: string;

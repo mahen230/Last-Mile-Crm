@@ -749,7 +749,7 @@ export default function BrandProfilesAndSectorRoutingView({
                   <span>Database-to-Sector Routing &amp; Master Admin Reassignment</span>
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Automatically route India Post Kota Division, Xpeedo EV, Xpokart, Drop Dash, and Shop Deck records to their isolated workspaces, or reassign any record manually.
+                  Automatically route Department of Post, Xpeedo EV, Xpokart, Drop Dash, and Shop Deck records to their isolated workspaces, or reassign any record manually.
                 </p>
               </div>
               <button

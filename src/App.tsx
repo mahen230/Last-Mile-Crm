@@ -67,6 +67,7 @@ const VendorProductEcosystemHub = lazy(() => import('./components/crm/VendorProd
 const DynamicProductPageView = lazy(() => import('./components/common/DynamicProductPageView'));
 const PrivateDevConsole = lazy(() => import('./pages/PrivateDevConsole'));
 const BrandStorePage = lazy(() => import('./pages/BrandStorePage'));
+const CustomerRegisterPage = lazy(() => import('./pages/CustomerRegisterPage'));
 const B2BPartnerPortalPage = lazy(() => import('./pages/B2BPartnerPortalPage'));
 const LocationIntelligenceHub = lazy(() => import('./components/crm/LocationIntelligenceHub'));
 const DoorstepSurveyWorkflowView = lazy(() => import('./components/postman/DoorstepSurveyWorkflowView'));
@@ -372,6 +373,14 @@ function AuthenticatedApp() {
     return <DormantRetailRedirect />;
   }
 
+  if (location.pathname === '/register') {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-slate-950 p-8 text-center text-sm font-bold text-slate-300">Loading Customer Registration...</div>}>
+        <CustomerRegisterPage />
+      </Suspense>
+    );
+  }
+
   if (location.pathname === '/b2b-partner') {
     return (
       <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-sm font-bold text-slate-700">Loading XPOKART B2B Partner Portal...</div>}>
@@ -381,9 +390,6 @@ function AuthenticatedApp() {
   }
 
   if (location.pathname.startsWith('/brand')) {
-    if (!retailActive) {
-      return <DormantRetailRedirect />;
-    }
     return (
       <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-sm font-bold text-slate-700">Loading Official Brand Store...</div>}>
         <Routes>

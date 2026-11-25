@@ -907,7 +907,7 @@ export interface Staff {
   assignedCategories?: string[];
   partnerOrganization?: string;
   isNonTerritoryAgent?: boolean;
-  staffScopeType?: 'XPOKART_PLATFORM' | 'BRAND_OPERATIONAL';
+  staffScopeType?: 'XPOKART_PLATFORM' | 'XPEEDO_SERVICES' | 'BRAND_OPERATIONAL';
   brandId?: string;
   brandName?: string;
   assignedBrands?: string[];
@@ -1357,7 +1357,7 @@ export interface StaffProfile {
   assignedCategories?: string[];
   partnerOrganization?: string;
   isNonTerritoryAgent?: boolean;
-  staffScopeType?: 'XPOKART_PLATFORM' | 'BRAND_OPERATIONAL';
+  staffScopeType?: 'XPOKART_PLATFORM' | 'XPEEDO_SERVICES' | 'BRAND_OPERATIONAL';
   brandId?: string;
   brandName?: string;
   assignedBrands?: string[];

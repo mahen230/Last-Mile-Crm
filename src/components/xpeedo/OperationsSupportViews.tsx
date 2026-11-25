@@ -1186,7 +1186,7 @@ export function ReportsCenterView() {
       action: exportWorkReports,
     },
     {
-      title: 'India Post Kota Division SRM SLA Log',
+      title: 'Department of Post SRM SLA Log',
       count: srmTickets.length,
       desc: 'Office, PIN, Beat, SLA hours, escalation & resolution history',
       action: exportSrm,

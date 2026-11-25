@@ -738,12 +738,12 @@ export default function Dashboard({
                 <p className="text-xs text-slate-300 max-w-2xl">
                   {strictVendorId === 'INDIA_POST' || isWhiteLabel
                     ? 'Scoped Postal Operations Desk: manage offices, beats, properties, members, daily articles, and statutory documents within your assigned postal jurisdiction.'
-                    : 'Dadabari S.O. • Kota Division, Rajasthan Circle • PIN 324009 (34 Active Beats). Centralized jurisdictional command: review staff registrations, monitor API health & DB sync logs, manage vendor monetization, and audit Beat Speed Post COD settlements.'}
+                    : 'Rajasthan Circle · Kota Division Operations Desk. Centralized jurisdictional command: review staff registrations, monitor API health & DB sync logs, manage vendor monetization, and audit Beat Speed Post COD settlements.'}
                 </p>
                 <div className="text-xs text-red-200 flex flex-wrap items-center gap-2 pt-1 font-mono">
-                  <span>Colonies: 25 Master</span>
+                  <span>Division: Kota Postal Circle</span>
                   <span>·</span>
-                  <span>Beats: 34 Active</span>
+                  <span>Managed Beat Tree: Active</span>
                   {!isWhiteLabel && strictVendorId !== 'INDIA_POST' && (
                     <>
                       <span>·</span>
@@ -980,7 +980,7 @@ export default function Dashboard({
                 <div className="text-[11px] text-indigo-300 font-bold uppercase tracking-wider">Master Directory</div>
                 <div className="text-2xl font-black text-white font-mono tabular-nums mt-1 flex items-center gap-2">
                   <span>{customers.length}</span>
-                  <span className="text-[10px] text-indigo-200 font-normal">Properties · 34 Beats</span>
+                  <span className="text-[10px] text-indigo-200 font-normal">Properties · Beat Tree</span>
                 </div>
               </Link>
             </div>
@@ -1004,8 +1004,8 @@ export default function Dashboard({
                   </span>
                 </h1>
                 <p className="text-xs text-red-100 max-w-2xl">
-                  {userProfile?.subOffice || 'Dadabari S.O.'} (PIN {userProfile?.officePincode || '324009'} ·{' '}
-                  {userProfile?.division || 'Kota Division'}). Focused departmental view displaying only your enabled operational sections for {activeBeat}.
+                  {userProfile?.subOffice || 'Kota Division Office'} ·{' '}
+                  {userProfile?.division || 'Kota Division'}. Focused departmental view displaying only your enabled operational sections for {activeBeat}.
                 </p>
                 <div className="text-xs text-red-200 flex flex-wrap items-center gap-2 pt-1 font-mono">
                   <span>Jurisdiction: {activeBeat}</span>
@@ -1656,7 +1656,7 @@ export default function Dashboard({
                           </div>
                           <div>
                             <div className="text-xs font-black text-slate-900">Admin Staff Master</div>
-                            <div className="text-[11px] text-slate-600 mt-0.5">34 Beats &amp; staff roles</div>
+                            <div className="text-[11px] text-slate-600 mt-0.5">Beats &amp; staff roles</div>
                           </div>
                         </Link>
                       )}
@@ -2050,7 +2050,7 @@ export default function Dashboard({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
               <div className="text-[11px] font-black uppercase tracking-wider text-red-800">
-                  Operational Priority Architecture · {isAdmin ? 'All 34 Beats Overview' : `${activeBeat} Scoped Workspace`}
+                  Operational Priority Architecture · {isAdmin ? 'Division Beat Tree Overview' : `${activeBeat} Scoped Workspace`}
                 </div>
                 <h2 className="text-lg font-black text-slate-900">
                   5-Module Field Command &amp; Citizen Services

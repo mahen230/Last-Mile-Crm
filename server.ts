@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import express, { type Request, type Response, type NextFunction } from 'express';
+import { GoogleGenAI } from '@google/genai';
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = '0.0.0.0';
@@ -1989,6 +1990,65 @@ async function startServer(): Promise<void> {
     } catch (err) {
       console.error('[Place Photo Proxy Error]:', err);
       res.status(502).json({ success: false, error: 'PHOTO_PROXY_ERROR' });
+    }
+  });
+
+  // Server-side Gemini AI Chat Proxy Endpoint
+  app.post('/api/ai/chat', async (req: Request, res: Response) => {
+    try {
+      const { prompt, context } = req.body || {};
+      const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
+      if (!apiKey) {
+        res.status(503).json({ success: false, error: 'GEMINI_API_KEY_NOT_CONFIGURED', message: 'Gemini API key is not configured on the server.' });
+        return;
+      }
+      const aiClient = new GoogleGenAI({ apiKey });
+      const response = await aiClient.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: `You are the India Post CRM & Operations Assistant for XPOKART (Dadabari S.O., PIN 324009).
+Current System Context:
+${context || ''}
+
+User Query: "${prompt || ''}"
+
+Provide a concise, helpful answer (2-3 sentences max).
+If the user asks to navigate to a page, open a form, or search for a customer/lead, specify the intent clearly.
+Pages available:
+- /dashboard (Postal Operations Dashboard)
+- /customers (Master Customer Directory)
+- /leads (Scheme & Product Leads Pipeline)
+- /staff-master (Staff Directory & Office Master)
+- /tasks (Field Operations & Beat Tasks)
+- /beats (Beat Coverage & Territory Management)`
+      });
+      res.json({ success: true, message: response.text || 'I have processed your operational request.' });
+    } catch (err: any) {
+      console.error('[Server AI Chat Error]:', err);
+      res.status(500).json({ success: false, error: 'AI_CHAT_FAILED', message: err?.message || 'Failed to process AI chat on server.' });
+    }
+  });
+
+  // Server-side Gemini AI Address Verification Proxy Endpoint
+  app.post('/api/ai/verify-address', async (req: Request, res: Response) => {
+    try {
+      const { prompt } = req.body || {};
+      const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
+      if (!apiKey) {
+        res.status(503).json({ success: false, error: 'GEMINI_API_KEY_NOT_CONFIGURED' });
+        return;
+      }
+      const aiClient = new GoogleGenAI({ apiKey });
+      const response = await aiClient.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt || '',
+        config: {
+          responseMimeType: 'application/json',
+        },
+      });
+      res.json({ success: true, text: response.text || '{}' });
+    } catch (err: any) {
+      console.error('[Server AI Address Verify Error]:', err);
+      res.status(500).json({ success: false, error: 'AI_VERIFY_FAILED', message: err?.message || '' });
     }
   });
 

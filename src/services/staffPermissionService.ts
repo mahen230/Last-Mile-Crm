@@ -69,7 +69,101 @@ const DIRECTORY_STORAGE_KEY = 'master_source_staff_directory_v3';
 const COLONY_MAP_STORAGE_KEY = 'master_source_colony_beat_mappings_v4';
 const CUSTOM_OFFICE_STORAGE_KEY = 'master_source_custom_offices_v3';
 const ARCHIVED_OFFICE_STORAGE_KEY = 'master_source_archived_offices_v1';
+const MANAGED_BEATS_STORAGE_KEY = 'postman_crm_managed_beats_v1';
 const ACTIVE_SESSION_KEY = 'master_source_active_staff_session';
+
+export interface ManagedBeatOverrideRecord {
+  id: string;
+  compositeKey: string;
+  officeId: string;
+  postOfficeName: string;
+  officeType: 'HO' | 'SO' | 'BO';
+  division: string;
+  circle: string;
+  parentOffice: string;
+  pincode: string;
+  beatNo: string;
+  beatTitle: string;
+  fixedKm: number;
+  assignedStaffId?: string;
+  assignedPostman: string;
+  employeeId: string;
+  contact: string;
+  colonies: string[];
+  sectors?: string[];
+  landmarks?: string[];
+  updatedAt: string;
+  updatedBy?: string;
+}
+
+const TALWANDI_EXT_SEED_STAFF: Staff[] = [
+  {
+    id: 'STAFF-CSI-10449214',
+    employeeId: 'CSI-10449214',
+    name: 'Rajesh Kumar Nagar',
+    role: 'POSTMAN',
+    designationType: 'Postman',
+    beat: 'Beat 14',
+    assignedBeat: 'Beat 14',
+    assignedBeats: ['Beat 14'],
+    contact: '9414281400',
+    email: 'rajesh.nagar@indiapost.gov.in',
+    officeId: 'TALWANDI_SO',
+    circle: 'Rajasthan Circle',
+    division: 'Kota Division',
+    district: 'Kota',
+    headOffice: 'Kota H.O.',
+    subOffice: 'Talwandi S.O.',
+    subOrBranchOffice: 'Talwandi S.O.',
+    postedOfficeName: 'Talwandi S.O.',
+    postingType: 'Posted',
+    officePincode: '324005',
+    officeAddress: 'Talwandi Sub-Post Office (PIP Hub), Talwandi Sector B, Kota - 324005',
+    deliveryOfficeMapping: 'Talwandi S.O. (324005) / Kota H.O.',
+    assignedColonies: ['Jawahar Nagar', 'Talwandi Coaching Hub', 'Vigyan Nagar Link'],
+    activeAccountsOpened: 112,
+    doorstepVisits: 1450,
+    rating: '4.9/5.0',
+    status: 'Active on Duty',
+    brandId: 'india-post',
+    brandName: 'India Post',
+    partnerOrganization: 'India Post',
+    assignedBrands: ['india-post'],
+  },
+  {
+    id: 'STAFF-CSI-10449215',
+    employeeId: 'CSI-10449215',
+    name: 'Hemant Singh Chouhan',
+    role: 'POSTMAN',
+    designationType: 'Postman',
+    beat: 'Beat PIP-1',
+    assignedBeat: 'Beat PIP-1',
+    assignedBeats: ['Beat PIP-1'],
+    contact: '9829088501',
+    email: 'hemant.chouhan@indiapost.gov.in',
+    officeId: 'TALWANDI_SO',
+    circle: 'Rajasthan Circle',
+    division: 'Kota Division',
+    district: 'Kota',
+    headOffice: 'Kota H.O.',
+    subOffice: 'Talwandi S.O.',
+    subOrBranchOffice: 'Talwandi S.O.',
+    postedOfficeName: 'Talwandi S.O.',
+    postingType: 'Posted',
+    officePincode: '324005',
+    officeAddress: 'Talwandi Sub-Post Office (PIP Hub), Talwandi Sector B, Kota - 324005',
+    deliveryOfficeMapping: 'Talwandi S.O. (324005) / Kota H.O.',
+    assignedColonies: ['Talwandi Sector A', 'Talwandi Sector B', 'Talwandi Sector C', 'Commerce Zone'],
+    activeAccountsOpened: 98,
+    doorstepVisits: 1290,
+    rating: '4.9/5.0',
+    status: 'Active on Duty',
+    brandId: 'india-post',
+    brandName: 'India Post',
+    partnerOrganization: 'India Post',
+    assignedBrands: ['india-post'],
+  },
+];
 
 export const DEFAULT_ADMIN_SERVICE_MODULES: ServiceModulePermissions = {
   crmSection: true,
@@ -586,23 +680,27 @@ const INITIAL_PROFILES: StaffProfile[] = [
   {
     id: 'STAFF-OWNER-01',
     employeeId: 'OWNER-01',
-    name: 'XPOKART Sovereign Owner',
+    name: 'Xpeedo Services Sovereign Owner',
     email: 'owner@xpokart.in',
     password: hashPasswordSync('Owner@123'),
     hasCustomPassword: true,
     role: 'OWNER',
     designationType: 'Marketplace Owner & Director',
+    staffScopeType: 'XPEEDO_SERVICES',
+    brandId: 'xpeedo-services',
+    brandName: 'Xpeedo Services',
+    partnerOrganization: 'Xpeedo Services',
     contact: '9460020640',
     beat: 'All Beats',
     assignedBeats: ['All Beats'],
-    assignedOffice: 'Dadabari S.O. Executive Command (324009)',
+    assignedOffice: 'Xpeedo Services Executive Command (324009)',
     circle: 'Rajasthan Circle',
     division: 'All Divisions',
     headOffice: 'Kota H.O.',
     subOffice: 'All Offices',
     branchOffice: '',
     officePincode: '324009',
-    officeAddress: 'XPOKART Executive Command, Dadabari S.O., Kota Division - 324009',
+    officeAddress: 'Xpeedo Services Executive Command, Dadabari S.O., Kota Division - 324009',
     deliveryOfficeMapping: 'All Divisions / All Sub-Offices / All Beats',
     assignedColonies: ['All Colonies'],
     fixedKm: 0,
@@ -624,17 +722,21 @@ const INITIAL_PROFILES: StaffProfile[] = [
     hasCustomPassword: true,
     role: 'DEVELOPER',
     designationType: 'Lead Systems Architect & Developer',
+    staffScopeType: 'XPEEDO_SERVICES',
+    brandId: 'xpeedo-services',
+    brandName: 'Xpeedo Services',
+    partnerOrganization: 'Xpeedo Services',
     contact: '9414170563',
     beat: 'All Beats',
     assignedBeats: ['All Beats'],
-    assignedOffice: 'XPOKART Cloud & Dadabari S.O. Gateway (324009)',
+    assignedOffice: 'Xpeedo Services Engineering Gateway (324009)',
     circle: 'Rajasthan Circle',
     division: 'All Divisions',
     headOffice: 'Kota H.O.',
     subOffice: 'All Offices',
     branchOffice: '',
     officePincode: '324009',
-    officeAddress: 'XPOKART Engineering Lab, Dadabari S.O., Kota Division - 324009',
+    officeAddress: 'Xpeedo Services Engineering Lab, Dadabari S.O., Kota Division - 324009',
     deliveryOfficeMapping: 'All Divisions / All Sub-Offices / All Beats',
     assignedColonies: ['All Colonies'],
     fixedKm: 0,
@@ -828,7 +930,7 @@ const INITIAL_PROFILES: StaffProfile[] = [
     assignedBrands: ['india-post'],
     brandId: 'india-post',
     partnerOrganization: 'India Post',
-    name: 'Vikram Singh Hada (SPM Engg College SO)',
+    name: 'Vikram Singh Hada',
     email: 'vikram.hada@indiapost.gov.in',
     password: hashPasswordSync(DEFAULT_STAFF_FALLBACK_PASSWORD),
     hasCustomPassword: false,
@@ -836,7 +938,7 @@ const INITIAL_PROFILES: StaffProfile[] = [
     designationType: 'SPM / Postmaster',
     contact: '9414188210',
     beat: 'Beat EC-1',
-    assignedBeats: ['Beat EC-1', 'Beat EC-2'],
+    assignedBeats: ['Beat EC-1'],
     assignedOffice: 'Engineering College S.O. (324010)',
     officeId: 'ENG_COLLEGE_SO',
     postOfficeName: 'Engineering College S.O.',
@@ -853,7 +955,7 @@ const INITIAL_PROFILES: StaffProfile[] = [
     permissions: {
       ...DEFAULT_STAFF_PERMISSION,
       dailyEntryLimit: 60,
-      allowedBeats: ['Beat EC-1', 'Beat EC-2'],
+      allowedBeats: ['Beat EC-1'],
       allowedOffices: ['Engineering College S.O.'],
       allowedColonies: ['RTU Campus', 'Srinathpuram Sector A & B', 'Akelgarh', 'Talwandi Sector 1-4'],
     },
@@ -869,6 +971,7 @@ class StaffPermissionService {
   private directoryStaff: Staff[] = [];
   private colonyBeatMappings: ColonyBeatMapping[] = [];
   private customOffices: DynamicOfficeRecord[] = [];
+  private managedBeatOverrides: ManagedBeatOverrideRecord[] = [];
   private listeners: (() => void)[] = [];
   private isNotifying: boolean = false;
   private cachedAutoOffices: DynamicOfficeRecord[] | null = null;
@@ -879,8 +982,96 @@ class StaffPermissionService {
     this.loadAll();
   }
 
+  private getConsolidatedMatrixStaffSeeds(): Staff[] {
+    const seeds: Staff[] = [];
+    for (const entry of CONSOLIDATED_BEAT_MATRIX) {
+      const contact10 = (entry.assignedPostmanContact || '').replace(/\D/g, '').slice(-10);
+      const isVikram =
+        contact10 === '9414188210' ||
+        entry.staffId === 'STAFF-ENG-01' ||
+        entry.assignedPostmanName.toLowerCase().includes('vikram singh hada');
+      const staffId = isVikram
+        ? 'STAFF-EC-SPM-01'
+        : entry.staffId || `STAFF-${entry.id}`;
+      const empId = isVikram
+        ? 'CSI-10448901'
+        : staffId.replace(/^STAFF-/, '');
+      const desig = isVikram
+        ? 'SPM / Postmaster'
+        : (entry.staffRole || '').toUpperCase().includes('GDS')
+        ? 'GDS (BPM / ABPM / Dak Sevak)'
+        : 'Postman';
+      const meta = resolveOfficeMetadata(entry.deliveryOffice || entry.officeName, '', entry.pincode);
+      seeds.push({
+        id: staffId,
+        employeeId: empId,
+        name: isVikram ? 'Vikram Singh Hada' : entry.assignedPostmanName,
+        role: isVikram ? 'POSTMASTER' : entry.staffRole || 'POSTMAN',
+        designationType: desig,
+        beat: entry.beatNumber,
+        assignedBeat: entry.beatNumber,
+        assignedBeats: [entry.beatNumber],
+        contact: entry.assignedPostmanContact || '9414000000',
+        email: isVikram
+          ? 'vikram.hada@indiapost.gov.in'
+          : empId === '50457421' || contact10 === '8769706002'
+          ? 'mahen.comtech@gmail.com'
+          : `${entry.assignedPostmanName.toLowerCase().replace(/[^a-z0-9]/g, '.').replace(/\.+/g, '.')}@indiapost.gov.in`,
+        officeId: meta.officeId,
+        circle: 'Rajasthan Circle',
+        division: entry.division || 'Kota Division',
+        district: 'Kota',
+        headOffice: entry.headOffice || 'Kota H.O.',
+        subOffice: entry.deliveryOffice || entry.officeName || 'Dadabari S.O.',
+        subOrBranchOffice: entry.deliveryOffice || entry.officeName || 'Dadabari S.O.',
+        postedOfficeName: entry.deliveryOffice || entry.officeName || 'Dadabari S.O.',
+        postingType: 'Posted',
+        officePincode: entry.pincode || meta.pincode || '324009',
+        officeAddress: `${meta.postOfficeName}, ${meta.division} (${entry.pincode || meta.pincode || '324009'})`,
+        deliveryOfficeMapping: `${entry.deliveryOffice || entry.officeName} (${entry.pincode}) / ${entry.headOffice || 'Kota H.O.'}`,
+        assignedColonies: entry.colonies || [],
+        activeAccountsOpened: 64,
+        doorstepVisits: 840,
+        rating: '4.9/5.0',
+        status: 'Active on Duty',
+        brandId: 'india-post',
+        brandName: 'India Post',
+        partnerOrganization: 'India Post',
+        assignedBrands: ['india-post'],
+      });
+    }
+    return seeds;
+  }
+
+  private getAllSeedDirectoryStaff(): Staff[] {
+    const merged: Staff[] = [];
+    const seenKeys = new Set<string>();
+    const addUnique = (raw: Staff) => {
+      const enriched = this.enrichDirectoryStaff(raw);
+      const idKey = (enriched.id || '').toUpperCase();
+      const empKey = (enriched.employeeId || '').toUpperCase();
+      const phone10 = (enriched.contact || '').replace(/\D/g, '').slice(-10);
+      const isDuplicate =
+        (idKey && seenKeys.has(`ID:${idKey}`)) ||
+        (empKey && seenKeys.has(`EMP:${empKey}`)) ||
+        (phone10.length === 10 && seenKeys.has(`PH:${phone10}`));
+      if (isDuplicate) return;
+      if (idKey) seenKeys.add(`ID:${idKey}`);
+      if (empKey) seenKeys.add(`EMP:${empKey}`);
+      if (phone10.length === 10) seenKeys.add(`PH:${phone10}`);
+      merged.push(enriched);
+    };
+
+    // Priority: all 46 CONSOLIDATED_BEAT_MATRIX staff, then UPDATED_STAFF_LIST (includes 14 BO staff), then Talwandi SO ext staff
+    for (const s of this.getConsolidatedMatrixStaffSeeds()) addUnique(s);
+    for (const s of UPDATED_STAFF_LIST) addUnique(s);
+    for (const s of TALWANDI_EXT_SEED_STAFF) addUnique(s);
+    return merged;
+  }
+
   private loadAll() {
-    // 1. Load Directory Staff & reconcile UPDATED_STAFF_LIST so new/updated seed employees always get login access
+    // 1. Load Directory Staff & reconcile all canonical seeds (CONSOLIDATED_BEAT_MATRIX 46 + UPDATED_STAFF_LIST + Talwandi SO)
+    const canonicalSeeds = this.getAllSeedDirectoryStaff();
     try {
       const storedDir = localStorage.getItem(DIRECTORY_STORAGE_KEY);
       if (storedDir) {
@@ -888,14 +1079,17 @@ class StaffPermissionService {
         this.directoryStaff = Array.isArray(parsedDir) ? parsedDir : [];
         let dirChanged = false;
 
-        for (const seedStaff of UPDATED_STAFF_LIST) {
-          const enrichedSeed = this.enrichDirectoryStaff(seedStaff);
-          const seedEmpId = (enrichedSeed.employeeId || seedStaff.id.replace(/^STAFF-/, '')).toUpperCase();
-          const idx = this.directoryStaff.findIndex(
-            s =>
-              s.id.toUpperCase() === seedStaff.id.toUpperCase() ||
-              (s.employeeId && s.employeeId.toUpperCase() === seedEmpId)
-          );
+        for (const enrichedSeed of canonicalSeeds) {
+          const seedEmpId = (enrichedSeed.employeeId || enrichedSeed.id.replace(/^STAFF-/, '')).toUpperCase();
+          const seedPhone10 = (enrichedSeed.contact || '').replace(/\D/g, '').slice(-10);
+          const idx = this.directoryStaff.findIndex(s => {
+            const sPhone10 = (s.contact || '').replace(/\D/g, '').slice(-10);
+            return (
+              s.id.toUpperCase() === enrichedSeed.id.toUpperCase() ||
+              (s.employeeId && s.employeeId.toUpperCase() === seedEmpId) ||
+              (seedPhone10.length === 10 && sPhone10 === seedPhone10)
+            );
+          });
           if (idx === -1) {
             this.directoryStaff.push(enrichedSeed);
             dirChanged = true;
@@ -903,16 +1097,69 @@ class StaffPermissionService {
             const cur = this.directoryStaff[idx];
             const needsEmailSync = !cur.email || cur.email === 'N/A' || (seedEmpId === '50457421' && cur.email !== 'mahen.comtech@gmail.com');
             const needsEmpIdSync = !cur.employeeId;
-            if (needsEmailSync || needsEmpIdSync) {
+            const needsOfficeSync = !cur.officePincode || !cur.subOffice;
+            if (needsEmailSync || needsEmpIdSync || needsOfficeSync) {
               this.directoryStaff[idx] = {
                 ...cur,
                 employeeId: cur.employeeId || enrichedSeed.employeeId,
                 email: needsEmailSync ? enrichedSeed.email : cur.email,
                 contact: cur.contact || enrichedSeed.contact,
                 beat: cur.beat || enrichedSeed.beat,
+                subOffice: cur.subOffice || enrichedSeed.subOffice,
+                officePincode: cur.officePincode || enrichedSeed.officePincode,
+                officeId: cur.officeId || enrichedSeed.officeId,
               };
               dirChanged = true;
             }
+          }
+        }
+
+        // Remove any legacy duplicate Vikram Singh Hada record if STAFF-ENG-01 was previously seeded separately
+        const vikramCount = this.directoryStaff.filter(
+          s => (s.contact || '').replace(/\D/g, '').slice(-10) === '9414188210'
+        ).length;
+        if (vikramCount > 1) {
+          let keptOne = false;
+          this.directoryStaff = this.directoryStaff.filter(s => {
+            if ((s.contact || '').replace(/\D/g, '').slice(-10) === '9414188210') {
+              if (!keptOne && (s.id === 'STAFF-EC-SPM-01' || s.employeeId === 'CSI-10448901')) {
+                keptOne = true;
+                return true;
+              }
+              return false;
+            }
+            return true;
+          });
+          dirChanged = true;
+        }
+
+        // Transfer any operational directory staff previously linked to XPOKART into India Post
+        for (let i = 0; i < this.directoryStaff.length; i++) {
+          const cur = this.directoryStaff[i];
+          const bNorm = (cur.brandId || '').trim().toLowerCase();
+          const orgNorm = (cur.partnerOrganization || '').trim().toLowerCase();
+          const hasXpokartBrand = (cur.assignedBrands || []).some((b) =>
+            ['xpokart', 'brd-xpkrt-01'].includes(b.trim().toLowerCase())
+          );
+          if (
+            bNorm === 'xpokart' ||
+            bNorm === 'brd-xpkrt-01' ||
+            orgNorm.includes('xpokart') ||
+            hasXpokartBrand
+          ) {
+            const cleanedAssigned = (cur.assignedBrands || [])
+              .map((b) => b.trim().toLowerCase().replace(/_/g, '-'))
+              .filter((b) => b && b !== 'xpokart' && b !== 'brd-xpkrt-01');
+            if (!cleanedAssigned.includes('india-post')) cleanedAssigned.unshift('india-post');
+            this.directoryStaff[i] = {
+              ...cur,
+              brandId: 'india-post',
+              brandName: 'India Post',
+              partnerOrganization: 'India Post',
+              staffScopeType: 'BRAND_OPERATIONAL',
+              assignedBrands: cleanedAssigned,
+            };
+            dirChanged = true;
           }
         }
 
@@ -920,11 +1167,24 @@ class StaffPermissionService {
           this.saveDirectoryStaff(false);
         }
       } else {
-        this.directoryStaff = UPDATED_STAFF_LIST.map(s => this.enrichDirectoryStaff(s));
+        this.directoryStaff = canonicalSeeds;
         this.saveDirectoryStaff(false);
       }
     } catch (e) {
-      this.directoryStaff = UPDATED_STAFF_LIST.map(s => this.enrichDirectoryStaff(s));
+      this.directoryStaff = canonicalSeeds;
+    }
+
+    // 1b. Load Managed Beat Overrides
+    try {
+      const storedManagedBeats = localStorage.getItem(MANAGED_BEATS_STORAGE_KEY);
+      if (storedManagedBeats) {
+        const parsed = JSON.parse(storedManagedBeats);
+        this.managedBeatOverrides = Array.isArray(parsed) ? parsed : [];
+      } else {
+        this.managedBeatOverrides = [];
+      }
+    } catch {
+      this.managedBeatOverrides = [];
     }
 
     // 2. Load Colony-Beat Mappings
@@ -1097,9 +1357,10 @@ class StaffPermissionService {
         }
       }
 
-      // Normalize, deduplicate by email/employeeId, and strictly cap non-governance operational staff to MAX_OPERATIONAL_STAFF_COUNT (5)
+      // Normalize, deduplicate by email/employeeId/contact, and hydrate ALL canonical India Post operational staff (no 5-staff cap)
       const today = new Date().toISOString().split('T')[0];
       const seenKeys = new Set<string>();
+      const seenPhones = new Set<string>();
       const governanceList: StaffProfile[] = [];
       const operationalList: StaffProfile[] = [];
 
@@ -1111,42 +1372,98 @@ class StaffPermissionService {
         ['CSI-10448901', 5],
       ]);
 
+      // Hydrate any canonical directory staff missing from this.profiles (all 46 matrix + 14 BO + 2 Talwandi)
+      for (const dirStaff of this.directoryStaff) {
+        if (this.isElevatedOrSyntheticStaffRecord(dirStaff)) continue;
+        const gen = this.createProfileFromDirectoryStaff(dirStaff);
+        const genPhone = (gen.contact || '').replace(/\D/g, '').slice(-10);
+        const existingMatch = this.profiles.find(p => {
+          const pPhone = (p.contact || '').replace(/\D/g, '').slice(-10);
+          return (
+            p.email.toLowerCase() === gen.email.toLowerCase() ||
+            (gen.employeeId && (p.employeeId || '').toUpperCase() === gen.employeeId.toUpperCase()) ||
+            p.id.toUpperCase() === gen.id.toUpperCase() ||
+            (genPhone.length === 10 && pPhone === genPhone)
+          );
+        });
+        if (!existingMatch) {
+          this.profiles.push(gen);
+        }
+      }
+
       for (const rawP of this.profiles) {
         const normP = this.normalizeProfile(rawP);
         if (normP.lastEntryDate !== today) {
           normP.entriesCreatedToday = 0;
           normP.lastEntryDate = today;
         }
-        const key = (normP.email || normP.employeeId || normP.id).toLowerCase();
-        if (seenKeys.has(key)) continue;
+        // Clean legacy Vikram Singh Hada display suffix while keeping single canonical ID
+        if (normP.id === 'STAFF-EC-SPM-01' || normP.employeeId === 'CSI-10448901') {
+          normP.name = 'Vikram Singh Hada';
+        }
+        const key = (normP.employeeId || normP.email || normP.id).toLowerCase();
+        const phone10 = (normP.contact || '').replace(/\D/g, '').slice(-10);
+        if (seenKeys.has(key) || (phone10.length === 10 && seenPhones.has(phone10) && !this.isGovernanceProfileRecord(normP))) {
+          continue;
+        }
         seenKeys.add(key);
+        if (normP.email) seenKeys.add(normP.email.toLowerCase());
+        if (phone10.length === 10 && !this.isGovernanceProfileRecord(normP)) seenPhones.add(phone10);
 
         if (this.isGovernanceProfileRecord(normP)) {
-          governanceList.push(normP);
+          governanceList.push({
+            ...normP,
+            staffScopeType: 'XPEEDO_SERVICES',
+            brandId: 'xpeedo-services',
+            brandName: 'Xpeedo Services',
+            partnerOrganization: 'Xpeedo Services',
+          });
         } else {
           const slotFromSeed = canonicalIdsOrder.get((normP.employeeId || '').toUpperCase());
-          const assignedBrands = normP.assignedBrands?.length
-            ? Array.from(new Set(normP.assignedBrands.map(b => b.trim().toLowerCase()).filter(Boolean)))
-            : [((normP.brandId || 'india-post').trim().toLowerCase())];
+          const rawAssigned = normP.assignedBrands?.length
+            ? normP.assignedBrands.map(b => b.trim().toLowerCase().replace(/_/g, '-')).filter(Boolean)
+            : [((normP.brandId || 'india-post').trim().toLowerCase().replace(/_/g, '-'))];
+          const cleanedAssigned = Array.from(
+            new Set(
+              rawAssigned
+                .map(b => (b === 'xpokart' || b === 'brd-xpkrt-01' ? 'india-post' : b))
+                .filter(Boolean)
+            )
+          );
+          if (cleanedAssigned.length === 0) cleanedAssigned.push('india-post');
+          const rawPrimaryBrand = (normP.brandId || '').trim().toLowerCase().replace(/_/g, '-');
+          const safeBrandId =
+            !rawPrimaryBrand || rawPrimaryBrand === 'xpokart' || rawPrimaryBrand === 'brd-xpkrt-01'
+              ? cleanedAssigned[0] || 'india-post'
+              : rawPrimaryBrand;
+          const safeOrg =
+            (normP.partnerOrganization || '').toLowerCase().includes('xpokart')
+              ? 'India Post'
+              : normP.partnerOrganization || (safeBrandId === 'india-post' ? 'India Post' : normP.partnerOrganization);
           operationalList.push({
             ...normP,
             staffSlotNumber: (normP.staffSlotNumber || slotFromSeed) as StaffProfile['staffSlotNumber'],
-            assignedBrands,
-            brandId: normP.brandId || assignedBrands[0] || 'india-post',
+            assignedBrands: cleanedAssigned,
+            brandId: safeBrandId,
+            partnerOrganization: safeOrg,
+            staffScopeType: 'BRAND_OPERATIONAL',
           });
         }
       }
 
-      // Prioritize the canonical 5 slots first and strictly slice to MAX_OPERATIONAL_STAFF_COUNT
-      operationalList.sort((a, b) => (a.staffSlotNumber || 99) - (b.staffSlotNumber || 99));
-      const cappedOperational = operationalList.slice(0, MAX_OPERATIONAL_STAFF_COUNT).map((p, idx) => ({
+      // Keep top 5 priority quick-slots ordered first, preserving ALL canonical operational staff (no slice cap)
+      operationalList.sort((a, b) => (a.staffSlotNumber || 999) - (b.staffSlotNumber || 999));
+      const allOperational = operationalList.map((p, idx) => ({
         ...p,
-        staffSlotNumber: ((p.staffSlotNumber && p.staffSlotNumber >= 1 && p.staffSlotNumber <= 5
-          ? p.staffSlotNumber
-          : idx + 1) as 1 | 2 | 3 | 4 | 5),
+        staffSlotNumber:
+          p.staffSlotNumber && p.staffSlotNumber >= 1 && p.staffSlotNumber <= 5
+            ? p.staffSlotNumber
+            : idx < 5
+            ? ((idx + 1) as 1 | 2 | 3 | 4 | 5)
+            : undefined,
       }));
 
-      this.profiles = [...governanceList, ...cappedOperational];
+      this.profiles = [...governanceList, ...allOperational];
       this.saveProfiles(false);
     } catch (e) {
       console.warn('Error loading staff profiles:', e);
@@ -1160,45 +1477,76 @@ class StaffPermissionService {
       s.id === 'STAFF-50457421' ||
       s.contact === '8769706002' ||
       s.name.toLowerCase().includes('mahendra kumar meena');
+    const isVikramHada =
+      s.employeeId === 'CSI-10448901' ||
+      s.id === 'STAFF-EC-SPM-01' ||
+      s.id === 'STAFF-ENG-01' ||
+      (s.contact || '').replace(/\D/g, '').slice(-10) === '9414188210';
     const email = isMahendraBeat2
       ? 'mahen.comtech@gmail.com'
+      : isVikramHada
+      ? 'vikram.hada@indiapost.gov.in'
       : s.email && s.email !== 'N/A'
       ? s.email.toLowerCase()
-      : `${s.name.toLowerCase().replace(/[^a-z0-9]/g, '.')}@indiapost.gov.in`;
-    const isGds = (s.role || '').toUpperCase().includes('GDS');
+      : `${s.name.toLowerCase().replace(/[^a-z0-9]/g, '.').replace(/\.+/g, '.')}@indiapost.gov.in`;
+    const roleUpper = (s.role || '').toUpperCase();
+    const derivedRole: UserRole = isVikramHada
+      ? 'POSTMASTER'
+      : roleUpper.includes('GDS')
+      ? 'GDS'
+      : roleUpper === 'BPM'
+      ? 'BPM'
+      : roleUpper === 'ABPM'
+      ? 'ABPM'
+      : 'POSTMAN';
+    const subOff = s.subOffice || s.subOrBranchOffice || 'Dadabari S.O.';
+    const pin = s.officePincode || '324009';
+    const meta = resolveOfficeMetadata(subOff, s.branchOffice, pin);
+    const beatVal = isMahendraBeat2 ? 'Beat 2' : s.beat || 'Beat 1';
 
     return {
-      id: s.id,
-      employeeId: s.employeeId || s.id.replace(/^STAFF-/, ''),
-      name: s.name,
+      id: isVikramHada ? 'STAFF-EC-SPM-01' : s.id,
+      employeeId: isVikramHada ? 'CSI-10448901' : s.employeeId || s.id.replace(/^STAFF-/, ''),
+      name: isVikramHada ? 'Vikram Singh Hada' : s.name,
       email,
       password: hashPasswordSync(DEFAULT_STAFF_FALLBACK_PASSWORD),
       hasCustomPassword: false,
       mustChangePassword: false,
-      role: isGds ? 'GDS' : 'POSTMAN',
-      designationType: isMahendraBeat2 ? 'Postman' : s.designationType || normalizeDesignation(s.role),
+      role: derivedRole,
+      designationType: isMahendraBeat2
+        ? 'Postman'
+        : isVikramHada
+        ? 'SPM / Postmaster'
+        : s.designationType || normalizeDesignation(s.role),
+      postCategory: isVikramHada
+        ? 'Supervisory & Division'
+        : this.deriveIndiaPostDutyCategory(s.designationType || s.role || derivedRole),
       contact: s.contact,
-      beat: isMahendraBeat2 ? 'Beat 2' : s.beat,
-      assignedBeats: isMahendraBeat2 ? ['Beat 2'] : s.assignedBeats || [s.beat],
-      assignedOffice: `${s.subOffice || s.subOrBranchOffice || 'Dadabari S.O.'} (${s.officePincode || '324009'})`,
+      beat: beatVal,
+      assignedBeats: isMahendraBeat2 ? ['Beat 2'] : s.assignedBeats || [beatVal],
+      officeId: s.officeId || meta.officeId,
+      postOfficeName: s.postOfficeName || meta.postOfficeName,
+      assignedOffice: `${subOff} (${pin})`,
       circle: s.circle || 'Rajasthan Circle',
       division: s.division || 'Kota Division',
       headOffice: s.headOffice || 'Kota H.O.',
-      subOffice: s.subOffice || s.subOrBranchOffice || 'Dadabari S.O.',
+      subOffice: subOff,
       branchOffice: s.branchOffice || '',
-      officePincode: s.officePincode || '324009',
-      officeAddress:
-        s.officeAddress ||
-        'Dadabari Sub-Post Office, Near CAD Circle, Dadabari Extension, Kota, Rajasthan - 324009',
-      deliveryOfficeMapping: s.deliveryOfficeMapping || 'Dadabari S.O. (324009) / Kota H.O.',
-      assignedColonies: s.assignedColonies || getDefaultColoniesForBeat(s.beat),
-      fixedKm: isMahendraBeat2 ? 30 : getDefaultFixedKmForBeat(s.beat),
+      officePincode: pin,
+      officeAddress: s.officeAddress || `${meta.postOfficeName}, ${meta.division} (${pin})`,
+      deliveryOfficeMapping: s.deliveryOfficeMapping || `${subOff} (${pin}) / ${s.headOffice || 'Kota H.O.'}`,
+      assignedColonies: s.assignedColonies?.length ? s.assignedColonies : getDefaultColoniesForBeat(beatVal),
+      fixedKm: isMahendraBeat2 ? 30 : getDefaultFixedKmForBeat(beatVal),
+      brandId: s.brandId && s.brandId !== 'xpokart' ? s.brandId : 'india-post',
+      partnerOrganization: s.partnerOrganization && !s.partnerOrganization.toLowerCase().includes('xpokart') ? s.partnerOrganization : 'India Post',
+      assignedBrands: s.assignedBrands?.length ? s.assignedBrands.filter(b => b !== 'xpokart') : ['india-post'],
+      staffScopeType: 'BRAND_OPERATIONAL',
       permissions: {
         ...DEFAULT_STAFF_PERMISSION,
         canCreateCustomer: true,
         canEditCustomer: true,
         canDeleteCustomer: false,
-        canViewAllRecords: false,
+        canViewAllRecords: isVikramHada,
         canAssignStaff: false,
         canAccessSettings: false,
         serviceModules: isMahendraBeat2
@@ -1213,9 +1561,9 @@ class StaffPermissionService {
               contentSharingDispatchSection: false,
             }
           : { ...DEFAULT_STAFF_SERVICE_MODULES },
-        allowedBeats: [isMahendraBeat2 ? 'Beat 2' : s.beat],
-        allowedOffices: [s.subOffice || s.subOrBranchOffice || 'Dadabari S.O.'],
-        allowedColonies: s.assignedColonies || getDefaultColoniesForBeat(s.beat),
+        allowedBeats: [beatVal],
+        allowedOffices: [subOff],
+        allowedColonies: s.assignedColonies?.length ? s.assignedColonies : getDefaultColoniesForBeat(beatVal),
       },
       entriesCreatedToday: 0,
       lastEntryDate: new Date().toISOString().split('T')[0],
@@ -1345,12 +1693,25 @@ class StaffPermissionService {
       name: isMaster
         ? 'Ekta Meena'
         : isOwner
-        ? p.name || 'XPOKART Sovereign Owner'
+        ? !p.name || p.name === 'XPOKART Sovereign Owner'
+          ? 'Xpeedo Services Sovereign Owner'
+          : p.name
         : isDev
         ? p.name || 'Lead Systems Developer'
         : isMahendraBeat2
         ? 'Mahendra Kumar Meena'
         : p.name,
+      staffScopeType: isElevated ? 'XPEEDO_SERVICES' : 'BRAND_OPERATIONAL',
+      brandId: isElevated
+        ? 'xpeedo-services'
+        : (p.brandId || '').toLowerCase().includes('xpokart')
+        ? 'india-post'
+        : p.brandId || 'india-post',
+      partnerOrganization: isElevated
+        ? 'Xpeedo Services'
+        : (p.partnerOrganization || '').toLowerCase().includes('xpokart')
+        ? 'India Post'
+        : p.partnerOrganization,
       contact: isMaster ? '8279275805' : p.contact,
       employeeId: isMaster
         ? 'MASTER-ADMIN-01'
@@ -2374,7 +2735,7 @@ class StaffPermissionService {
       input.district?.trim() ||
       (input.division ? input.division.replace(/\s*Division/i, '').trim() : 'Kota');
 
-    // 2. Enforce strict 5-operational-staff limit before creating any net-new operational profile
+    // Locate existing profile if present; allow unrestricted onboarding across India Post / unified roster
     const existingProfIdx = this.profiles.findIndex(
       p =>
         p.email.toLowerCase() === generatedEmail ||
@@ -2385,15 +2746,7 @@ class StaffPermissionService {
       ['OWNER', 'MASTER_ADMIN', 'DEVELOPER', 'SUPER_ADMIN'].includes((input.role || '').toUpperCase()) ||
       generatedEmail === 'owner@xpokart.in' ||
       generatedEmail === 'dev@xpokart.in';
-
-    if (existingProfIdx < 0 && !isGovernanceTarget) {
-      const operationalCount = this.profiles.filter(p => !this.isGovernanceProfileRecord(p)).length;
-      if (operationalCount >= MAX_OPERATIONAL_STAFF_COUNT) {
-        throw new Error(
-          `Operational staff limit reached (strictly ${MAX_OPERATIONAL_STAFF_COUNT} slots: Staff 1–Staff 5). Edit or allocate one of the existing 5 Staff profiles instead.`
-        );
-      }
-    }
+    void isGovernanceTarget;
 
     // 1. Update or Insert into Directory Staff
     const existingStaffIdx = this.directoryStaff.findIndex(
@@ -3122,8 +3475,222 @@ class StaffPermissionService {
     return { circles, divisions, districts, subDivisions, headOffices, subOffices, branchOffices, pincodes, beats };
   }
 
+  public getManagedBeatOverrides(): ManagedBeatOverrideRecord[] {
+    return [...this.managedBeatOverrides];
+  }
+
+  private saveManagedBeats(notify = true) {
+    try {
+      localStorage.setItem(MANAGED_BEATS_STORAGE_KEY, JSON.stringify(this.managedBeatOverrides));
+    } catch (e) {
+      console.warn('Error saving managed beat overrides:', e);
+    }
+    if (notify) this.notifyListeners();
+  }
+
+  public upsertManagedBeat(input: {
+    officeId?: string;
+    postOfficeName: string;
+    officeType?: 'HO' | 'SO' | 'BO';
+    division?: string;
+    circle?: string;
+    parentOffice?: string;
+    pincode: string;
+    beatNo: string;
+    beatTitle?: string;
+    fixedKm?: number;
+    colonies?: string[];
+    assignedStaffId?: string;
+    actorName?: string;
+  }): ManagedBeatOverrideRecord {
+    const cleanPin = (input.pincode || '324009').trim();
+    const meta = resolveOfficeMetadata(input.postOfficeName, '', cleanPin);
+    const resolvedOfficeId = input.officeId || meta.officeId;
+    const rawBeat = (input.beatNo || '1').replace(/^Beat\s+/i, '').trim();
+    const beatLabel = `Beat ${rawBeat}`;
+    const compositeKey = `${resolvedOfficeId.toUpperCase()}::${rawBeat.toUpperCase()}`;
+
+    let assignedStaff: StaffProfile | undefined;
+    if (input.assignedStaffId) {
+      const targetKey = input.assignedStaffId.trim().toLowerCase();
+      assignedStaff = this.profiles.find(
+        p =>
+          p.id.toLowerCase() === targetKey ||
+          (p.employeeId || '').toLowerCase() === targetKey ||
+          p.email.toLowerCase() === targetKey
+      );
+    }
+
+    const cleanColonies = Array.from(
+      new Set((input.colonies || []).map(c => c.trim()).filter(Boolean))
+    );
+
+    const record: ManagedBeatOverrideRecord = {
+      id: `MBEAT-${resolvedOfficeId}-${rawBeat.replace(/[^a-z0-9]/gi, '').toUpperCase()}`,
+      compositeKey,
+      officeId: resolvedOfficeId,
+      postOfficeName: input.postOfficeName.trim() || meta.postOfficeName,
+      officeType: input.officeType || meta.officeType,
+      division: input.division || meta.division || 'Kota Division',
+      circle: input.circle || meta.circle || 'Rajasthan Circle',
+      parentOffice: input.parentOffice || meta.parentOfficeName,
+      pincode: cleanPin,
+      beatNo: rawBeat,
+      beatTitle: input.beatTitle?.trim() || `${beatLabel} — ${input.postOfficeName.trim() || meta.postOfficeName}`,
+      fixedKm: input.fixedKm && input.fixedKm > 0 ? input.fixedKm : 18,
+      assignedStaffId: assignedStaff?.id,
+      assignedPostman: assignedStaff?.name || 'Unassigned / Relief Charge',
+      employeeId: assignedStaff?.employeeId || 'RELIEF',
+      contact: assignedStaff?.contact || '9414000000',
+      colonies: cleanColonies,
+      updatedAt: new Date().toISOString(),
+      updatedBy: input.actorName || 'Division Admin',
+    };
+
+    const existingIdx = this.managedBeatOverrides.findIndex(
+      m => m.compositeKey === compositeKey || m.id === record.id
+    );
+    if (existingIdx >= 0) {
+      this.managedBeatOverrides[existingIdx] = record;
+    } else {
+      this.managedBeatOverrides.push(record);
+    }
+
+    // Sync assigned Master Staff profile & directory record cleanly
+    if (assignedStaff) {
+      const pIdx = this.profiles.findIndex(p => p.id === assignedStaff!.id);
+      if (pIdx >= 0) {
+        const prev = this.profiles[pIdx];
+        const nextBeats = Array.from(new Set([...(prev.assignedBeats || []), beatLabel]));
+        const nextCols = cleanColonies.length ? Array.from(new Set([...(prev.assignedColonies || []), ...cleanColonies])) : prev.assignedColonies;
+        this.profiles[pIdx] = {
+          ...prev,
+          beat: beatLabel,
+          assignedBeats: nextBeats,
+          officeId: resolvedOfficeId,
+          subOffice: record.postOfficeName,
+          postOfficeName: record.postOfficeName,
+          assignedOffice: `${record.postOfficeName} (${cleanPin})`,
+          officePincode: cleanPin,
+          assignedColonies: nextCols,
+          permissions: {
+            ...prev.permissions,
+            allowedBeats: Array.from(new Set([...(prev.permissions?.allowedBeats || []), beatLabel])),
+            allowedOffices: Array.from(new Set([...(prev.permissions?.allowedOffices || []), record.postOfficeName])),
+            allowedColonies: nextCols,
+          },
+          updatedAt: new Date().toISOString(),
+        };
+      }
+      const dIdx = this.directoryStaff.findIndex(
+        d => d.id === assignedStaff!.id || (assignedStaff!.employeeId && d.employeeId === assignedStaff!.employeeId)
+      );
+      if (dIdx >= 0) {
+        this.directoryStaff[dIdx] = {
+          ...this.directoryStaff[dIdx],
+          beat: beatLabel,
+          assignedBeat: beatLabel,
+          assignedBeats: Array.from(new Set([...(this.directoryStaff[dIdx].assignedBeats || []), beatLabel])),
+          officeId: resolvedOfficeId,
+          subOffice: record.postOfficeName,
+          subOrBranchOffice: record.postOfficeName,
+          postedOfficeName: record.postOfficeName,
+          officePincode: cleanPin,
+          assignedColonies: cleanColonies.length ? cleanColonies : this.directoryStaff[dIdx].assignedColonies,
+        };
+      }
+      this.saveDirectoryStaff(false);
+      this.saveProfiles(false);
+    }
+
+    // Sync colonies into colonyBeatMappings
+    cleanColonies.forEach(colonyName => {
+      this.upsertColonyBeatMapping({
+        colonyName,
+        beatNumber: beatLabel,
+        assignedBeatNumber: beatLabel,
+        sectorNumber: 'All Sectors',
+        pincode: cleanPin,
+        subOrHoOffice: record.postOfficeName,
+        assignedPostmanName: record.assignedPostman,
+        assignedPostmanContact: record.contact,
+      });
+    });
+
+    this.saveManagedBeats(true);
+    return record;
+  }
+
+  public reassignBeatPostman(input: {
+    officeId: string;
+    postOfficeName: string;
+    officeType?: 'HO' | 'SO' | 'BO';
+    pincode: string;
+    beatNo: string;
+    newStaffId: string;
+    colonies?: string[];
+    actorName?: string;
+  }): {
+    success: boolean;
+    record?: ManagedBeatOverrideRecord;
+    previousPostman?: string;
+    newStaff?: StaffProfile;
+    error?: string;
+  } {
+    const cleanPin = (input.pincode || '324009').trim();
+    const meta = resolveOfficeMetadata(input.postOfficeName, '', cleanPin);
+    const resolvedOfficeId = input.officeId || meta.officeId;
+    const rawBeat = (input.beatNo || '').replace(/^Beat\s+/i, '').trim();
+    if (!rawBeat) {
+      return { success: false, error: 'Invalid Beat number for reassignment.' };
+    }
+    const targetKey = input.newStaffId.trim().toLowerCase();
+    const staff = this.profiles.find(
+      p =>
+        p.id.toLowerCase() === targetKey ||
+        (p.employeeId || '').toLowerCase() === targetKey ||
+        p.email.toLowerCase() === targetKey
+    );
+    if (!staff) {
+      return { success: false, error: 'Selected Master Staff profile not found.' };
+    }
+
+    const compositeKey = `${resolvedOfficeId.toUpperCase()}::${rawBeat.toUpperCase()}`;
+    const prevOverride = this.managedBeatOverrides.find(m => m.compositeKey === compositeKey);
+    const prevMatrix = CONSOLIDATED_BEAT_MATRIX.find(
+      m =>
+        m.beatNumber.replace(/^Beat\s+/i, '').trim().toUpperCase() === rawBeat.toUpperCase() &&
+        m.pincode === cleanPin
+    );
+    const previousPostman = prevOverride?.assignedPostman || prevMatrix?.assignedPostmanName || 'Previous Assignee';
+
+    const record = this.upsertManagedBeat({
+      officeId: resolvedOfficeId,
+      postOfficeName: input.postOfficeName || meta.postOfficeName,
+      officeType: input.officeType || meta.officeType,
+      division: meta.division || 'Kota Division',
+      circle: meta.circle || 'Rajasthan Circle',
+      parentOffice: meta.parentOfficeName,
+      pincode: cleanPin,
+      beatNo: rawBeat,
+      beatTitle: prevOverride?.beatTitle,
+      fixedKm: prevOverride?.fixedKm || 18,
+      colonies: input.colonies && input.colonies.length > 0 ? input.colonies : prevOverride?.colonies || prevMatrix?.colonies || [],
+      assignedStaffId: staff.id,
+      actorName: input.actorName,
+    });
+
+    return {
+      success: true,
+      record,
+      previousPostman,
+      newStaff: staff,
+    };
+  }
+
   public getDynamicBeatsSummary(): {
     beatNumber: string;
+    officeId: string;
     officeName: string;
     pincode: string;
     colonies: string[];
@@ -3133,6 +3700,7 @@ class StaffPermissionService {
       string,
       {
         beatNumber: string;
+        officeId: string;
         officeName: string;
         pincode: string;
         colonies: string[];
@@ -3140,37 +3708,91 @@ class StaffPermissionService {
       }
     >();
 
+    // Seed with CONSOLIDATED_BEAT_MATRIX first keyed strictly by officeId::beatNo
+    for (const entry of CONSOLIDATED_BEAT_MATRIX) {
+      const meta = resolveOfficeMetadata(entry.deliveryOffice || entry.officeName, '', entry.pincode);
+      const rawNo = entry.beatNumber.replace(/^Beat\s+/i, '').trim();
+      const mapKey = `${meta.officeId}::${rawNo.toLowerCase()}`;
+      const matchedStaff = this.profiles.filter(p => {
+        if (this.isGovernanceProfileRecord(p)) return false;
+        const pMeta = resolveOfficeMetadata(p.subOffice || p.assignedOffice, p.branchOffice, p.officePincode);
+        const pBeat = (p.beat || '').replace(/^Beat\s+/i, '').trim().toLowerCase();
+        return pMeta.officeId === meta.officeId && pBeat === rawNo.toLowerCase();
+      });
+      beatMap.set(mapKey, {
+        beatNumber: entry.beatNumber,
+        officeId: meta.officeId,
+        officeName: entry.deliveryOffice || entry.officeName,
+        pincode: entry.pincode,
+        colonies: [...(entry.colonies || [])],
+        assignedStaff: matchedStaff,
+      });
+    }
+
+    // Apply managedBeatOverrides
+    for (const mb of this.managedBeatOverrides) {
+      const rawNo = mb.beatNo.replace(/^Beat\s+/i, '').trim();
+      const mapKey = `${mb.officeId}::${rawNo.toLowerCase()}`;
+      const assignedProf = mb.assignedStaffId
+        ? this.profiles.filter(p => p.id === mb.assignedStaffId)
+        : [];
+      const existing = beatMap.get(mapKey);
+      if (!existing) {
+        beatMap.set(mapKey, {
+          beatNumber: `Beat ${rawNo}`,
+          officeId: mb.officeId,
+          officeName: mb.postOfficeName,
+          pincode: mb.pincode,
+          colonies: [...(mb.colonies || [])],
+          assignedStaff: assignedProf,
+        });
+      } else {
+        if (mb.colonies.length > 0) existing.colonies = [...new Set([...existing.colonies, ...mb.colonies])];
+        if (assignedProf.length > 0) existing.assignedStaff = assignedProf;
+      }
+    }
+
     for (const p of this.profiles) {
+      if (this.isGovernanceProfileRecord(p)) continue;
+      const meta = resolveOfficeMetadata(p.postOfficeName || p.branchOffice || p.subOffice || p.assignedOffice, p.branchOffice, p.officePincode);
       const beatKey = (p.beat || 'Beat 2').trim();
-      const existing = beatMap.get(beatKey.toLowerCase());
+      const rawNo = beatKey.replace(/^Beat\s+/i, '').trim();
+      if (!rawNo || rawNo.toLowerCase() === 'all beats') continue;
+      const mapKey = `${meta.officeId}::${rawNo.toLowerCase()}`;
+      const existing = beatMap.get(mapKey);
       const cols = p.assignedColonies || getDefaultColoniesForBeat(beatKey);
       if (!existing) {
-        beatMap.set(beatKey.toLowerCase(), {
+        beatMap.set(mapKey, {
           beatNumber: beatKey.startsWith('Beat') ? beatKey : `Beat ${beatKey}`,
-          officeName: p.subOffice || 'Dadabari S.O.',
-          pincode: p.officePincode || '324009',
+          officeId: meta.officeId,
+          officeName: meta.postOfficeName,
+          pincode: p.officePincode || meta.pincode || '324009',
           colonies: [...new Set(cols)],
           assignedStaff: [p],
         });
       } else {
         existing.colonies = [...new Set([...existing.colonies, ...cols])];
-        if (!existing.assignedStaff.some(st => st.email === p.email)) {
+        if (!existing.assignedStaff.some(st => st.email === p.email || st.id === p.id)) {
           existing.assignedStaff.push(p);
         }
       }
     }
 
     for (const m of this.colonyBeatMappings) {
+      const meta = resolveOfficeMetadata(m.subOrHoOffice || 'Dadabari S.O.', m.branchOffice, m.pincode);
       const beatKey = (m.beatNumber || m.assignedBeatNumber || 'Beat 2').trim();
-      const existing = beatMap.get(beatKey.toLowerCase());
+      const rawNo = beatKey.replace(/^Beat\s+/i, '').trim();
+      const mapKey = `${meta.officeId}::${rawNo.toLowerCase()}`;
+      const existing = beatMap.get(mapKey);
       const label = m.sectorNumber && m.sectorNumber !== 'All Sectors'
         ? `${m.colonyName} (${m.sectorNumber})`
         : m.colonyName;
       if (!existing) {
-        beatMap.set(beatKey.toLowerCase(), {
+        beatMap.set(mapKey, {
           beatNumber: beatKey.startsWith('Beat') ? beatKey : `Beat ${beatKey}`,
-          officeName: m.subOrHoOffice || 'Dadabari S.O.',
-          pincode: m.pincode || '324009',
+          officeId: meta.officeId,
+          officeName: meta.postOfficeName,
+          pincode: m.pincode || meta.pincode || '324009',
           colonies: [label],
           assignedStaff: [],
         });
@@ -3463,7 +4085,13 @@ class StaffPermissionService {
   public findStaffProfileByIdentifier(identifier: string): StaffProfile | null {
     const raw = (identifier || '').trim();
     if (!raw) return null;
-    const norm = raw.toLowerCase();
+    const rawNorm = raw.toLowerCase();
+    const norm =
+      rawNorm === 'owner@xpeedo.in'
+        ? 'owner@xpokart.in'
+        : rawNorm === 'dev@xpeedo.in'
+        ? 'dev@xpokart.in'
+        : rawNorm;
     const cleanId = norm.replace(/^(staff-|csi-|gds-|emp-)/i, '').trim();
     const cleanDigits = raw.replace(/\D/g, '');
     const phone10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : '';
@@ -3540,15 +4168,11 @@ class StaffPermissionService {
 
     const matchedDir = resolveDirMatch();
     if (matchedDir) {
-      const operationalCount = this.profiles.filter(p => !this.isGovernanceProfileRecord(p)).length;
-      if (operationalCount < MAX_OPERATIONAL_STAFF_COUNT) {
-        const created = this.createProfileFromDirectoryStaff(matchedDir);
-        created.staffSlotNumber = (operationalCount + 1) as 1 | 2 | 3 | 4 | 5;
-        created.assignedBrands = [((matchedDir.brandId || 'india-post').toLowerCase())];
-        this.profiles.push(created);
-        this.saveProfiles(false);
-        return created;
-      }
+      const created = this.createProfileFromDirectoryStaff(matchedDir);
+      created.assignedBrands = [((matchedDir.brandId || 'india-post').toLowerCase())];
+      this.profiles.push(created);
+      this.saveProfiles(false);
+      return created;
     }
 
     return null;
@@ -3774,8 +4398,7 @@ class StaffPermissionService {
       }
     }
 
-    // 2. Ensure existing profiles (up to MAX_OPERATIONAL_STAFF_COUNT) have active login passwords
-    let operationalCount = this.profiles.filter(p => !this.isGovernanceProfileRecord(p)).length;
+    // 2. Ensure ALL directory staff profiles have active login passwords and India Post scope
     for (const dirStaff of this.directoryStaff) {
       const generated = this.createProfileFromDirectoryStaff(dirStaff);
       const existingIdx = this.profiles.findIndex(
@@ -3785,13 +4408,9 @@ class StaffPermissionService {
           p.id.toUpperCase() === generated.id.toUpperCase()
       );
       if (existingIdx === -1) {
-        if (operationalCount < MAX_OPERATIONAL_STAFF_COUNT) {
-          generated.staffSlotNumber = (operationalCount + 1) as 1 | 2 | 3 | 4 | 5;
-          generated.assignedBrands = [((dirStaff.brandId || 'india-post').toLowerCase())];
-          this.profiles.push(generated);
-          operationalCount += 1;
-          activatedCount += 1;
-        }
+        generated.assignedBrands = [((dirStaff.brandId || 'india-post').toLowerCase())];
+        this.profiles.push(generated);
+        activatedCount += 1;
       } else {
         const existing = this.profiles[existingIdx];
         if (resetExistingToDefault && !this.isSuperAdmin(existing)) {
@@ -4030,14 +4649,8 @@ class StaffPermissionService {
     if (index >= 0) {
       this.profiles[index] = { ...this.profiles[index], ...normProfile };
     } else {
-      if (!this.isGovernanceProfileRecord(normProfile)) {
-        const opCount = this.profiles.filter(p => !this.isGovernanceProfileRecord(p)).length;
-        if (opCount >= MAX_OPERATIONAL_STAFF_COUNT) {
-          throw new Error(
-            `Operational staff limit reached (strictly ${MAX_OPERATIONAL_STAFF_COUNT} slots: Staff 1–Staff 5).`
-          );
-        }
-        normProfile.staffSlotNumber = (opCount + 1) as 1 | 2 | 3 | 4 | 5;
+      if (!this.isGovernanceProfileRecord(normProfile) && !normProfile.assignedBrands?.length) {
+        normProfile.assignedBrands = [normProfile.brandId || 'india-post'];
       }
       this.profiles.unshift(normProfile);
     }
@@ -4133,9 +4746,10 @@ class StaffPermissionService {
     );
   }
 
-  public getXpoKartPlatformStaff(): StaffProfile[] {
+  public getXpeedoServicesGovernanceStaff(): StaffProfile[] {
     return this.profiles.filter(
       (p) =>
+        p.staffScopeType === 'XPEEDO_SERVICES' ||
         p.staffScopeType === 'XPOKART_PLATFORM' ||
         this.isSuperAdmin(p) ||
         ['OWNER', 'MASTER_ADMIN', 'DEVELOPER', 'SUPER_ADMIN', 'ADMIN'].includes(
@@ -4144,12 +4758,23 @@ class StaffPermissionService {
     );
   }
 
+  public getXpoKartPlatformStaff(): StaffProfile[] {
+    return this.getXpeedoServicesGovernanceStaff();
+  }
+
   public getBrandOperationalStaff(brandId?: string): Staff[] {
+    const normFilter = (brandId || '').trim().toLowerCase().replace(/_/g, '-');
+    if (normFilter === 'xpokart' || normFilter === 'brd-xpkrt-01') {
+      return [];
+    }
     return this.directoryStaff.filter((s) => {
-      if (s.staffScopeType === 'XPOKART_PLATFORM') return false;
+      if (s.staffScopeType === 'XPOKART_PLATFORM' || s.staffScopeType === 'XPEEDO_SERVICES') {
+        return false;
+      }
       if (this.isElevatedOrSyntheticStaffRecord(s)) return false;
-      if (!brandId) return true;
-      return (s.brandId || 'india-post') === brandId;
+      if (!normFilter) return true;
+      const sBrand = (s.brandId || 'india-post').trim().toLowerCase().replace(/_/g, '-');
+      return sBrand === normFilter;
     });
   }
 
@@ -4607,13 +5232,18 @@ class StaffPermissionService {
     const target = (brandSlugOrKey || '').trim().toLowerCase();
     if (!target) return [];
     const targetSlug = target.replace(/_/g, '-');
-    return this.getOperationalStaffFive().filter(p => {
-      const assigned = (p.assignedBrands || []).map(b => b.trim().toLowerCase().replace(/_/g, '-'));
-      if (assigned.includes(targetSlug)) return true;
-      const primary = (p.brandId || '').trim().toLowerCase().replace(/_/g, '-');
-      if (primary === targetSlug) return true;
-      return targetSlug === 'india-post' && assigned.length === 0 && !primary;
-    });
+    if (targetSlug === 'xpokart' || targetSlug === 'brd-xpkrt-01') {
+      return [];
+    }
+    return this.profiles
+      .filter(p => !this.isGovernanceProfileRecord(p))
+      .filter(p => {
+        const assigned = (p.assignedBrands || []).map(b => b.trim().toLowerCase().replace(/_/g, '-'));
+        if (assigned.includes(targetSlug)) return true;
+        const primary = (p.brandId || '').trim().toLowerCase().replace(/_/g, '-');
+        if (primary === targetSlug) return true;
+        return targetSlug === 'india-post' && assigned.length === 0 && !primary;
+      });
   }
 
   public setStaffBrandAllocations(
@@ -4635,16 +5265,25 @@ class StaffPermissionService {
       new Set(
         brandSlugs
           .map(s => s.trim().toLowerCase().replace(/_/g, '-'))
-          .filter(Boolean)
+          .filter(s => s && s !== 'xpokart' && s !== 'brd-xpkrt-01')
       )
     );
+    if (cleanSlugs.length === 0) {
+      cleanSlugs.push('india-post');
+    }
     const primarySlug = cleanSlugs[0] || this.profiles[pIdx].brandId || 'india-post';
+    const safeBrandName =
+      primaryBrandName && !primaryBrandName.toLowerCase().includes('xpokart')
+        ? primaryBrandName
+        : primarySlug === 'india-post'
+        ? 'India Post'
+        : this.profiles[pIdx].partnerOrganization;
 
     this.profiles[pIdx] = {
       ...this.profiles[pIdx],
       assignedBrands: cleanSlugs,
       brandId: primarySlug,
-      partnerOrganization: primaryBrandName || this.profiles[pIdx].partnerOrganization,
+      partnerOrganization: safeBrandName,
       updatedAt: new Date().toISOString(),
     };
 
@@ -4659,7 +5298,7 @@ class StaffPermissionService {
         ...this.directoryStaff[dIdx],
         assignedBrands: cleanSlugs,
         brandId: primarySlug,
-        partnerOrganization: primaryBrandName || this.directoryStaff[dIdx].partnerOrganization,
+        partnerOrganization: safeBrandName,
       };
       this.saveDirectoryStaff(false);
     }
@@ -4675,7 +5314,13 @@ class StaffPermissionService {
   ): boolean {
     const key = (staffIdOrEmail || '').trim().toLowerCase();
     if (!key) return false;
-    const normSlug = brandId.trim().toLowerCase().replace(/_/g, '-');
+    const rawSlug = brandId.trim().toLowerCase().replace(/_/g, '-');
+    // XPOKART operates strictly as E-Commerce without staff; redirect operational staff allocations to India Post
+    const normSlug = rawSlug === 'xpokart' || rawSlug === 'brd-xpkrt-01' ? 'india-post' : rawSlug;
+    const safeOrg =
+      normSlug === 'india-post' && partnerOrganization.toLowerCase().includes('xpokart')
+        ? 'India Post'
+        : partnerOrganization;
     let updated = false;
 
     const pIdx = this.profiles.findIndex(
@@ -4685,15 +5330,15 @@ class StaffPermissionService {
         (p.employeeId || '').toLowerCase() === key
     );
     if (pIdx >= 0) {
-      const existingAssigned = (this.profiles[pIdx].assignedBrands || []).map(b =>
-        b.trim().toLowerCase().replace(/_/g, '-')
-      );
+      const existingAssigned = (this.profiles[pIdx].assignedBrands || [])
+        .map(b => b.trim().toLowerCase().replace(/_/g, '-'))
+        .filter(b => b && b !== 'xpokart' && b !== 'brd-xpkrt-01');
       const nextAssigned = Array.from(new Set([...existingAssigned, normSlug]));
       this.profiles[pIdx] = {
         ...this.profiles[pIdx],
         brandId: normSlug,
         assignedBrands: nextAssigned,
-        partnerOrganization,
+        partnerOrganization: safeOrg,
       };
       updated = true;
     }
@@ -4705,15 +5350,15 @@ class StaffPermissionService {
         (d.employeeId || '').toLowerCase() === key
     );
     if (dIdx >= 0) {
-      const existingAssigned = (this.directoryStaff[dIdx].assignedBrands || []).map(b =>
-        b.trim().toLowerCase().replace(/_/g, '-')
-      );
+      const existingAssigned = (this.directoryStaff[dIdx].assignedBrands || [])
+        .map(b => b.trim().toLowerCase().replace(/_/g, '-'))
+        .filter(b => b && b !== 'xpokart' && b !== 'brd-xpkrt-01');
       const nextAssigned = Array.from(new Set([...existingAssigned, normSlug]));
       this.directoryStaff[dIdx] = {
         ...this.directoryStaff[dIdx],
         brandId: normSlug,
         assignedBrands: nextAssigned,
-        partnerOrganization,
+        partnerOrganization: safeOrg,
       };
       updated = true;
     }

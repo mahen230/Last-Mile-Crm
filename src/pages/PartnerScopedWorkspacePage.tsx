@@ -12,13 +12,17 @@ import {
   Download,
   Edit2,
   ExternalLink,
+  FolderKanban,
+  Layers,
   LayoutDashboard,
   LogOut,
   MapPin,
   Menu,
   Package,
   Plus,
+  Route,
   Search,
+  Shield,
   ShieldCheck,
   Store as StoreIcon,
   TrendingUp,
@@ -30,7 +34,6 @@ import {
   AcademyCourse,
   AcademyProgress,
   BrandFollowUpTask,
-  BrandRbacRoleConfig,
   BrandVerificationInquiry,
   Customer,
   Lead,
@@ -56,19 +59,17 @@ import { academyTrainingService } from '../services/academyTrainingService';
 import { featureVisibilityService } from '../services/featureVisibilityService';
 import { notificationService, SystemNotification } from '../services/notificationService';
 import { POSTAL_PRODUCTS } from '../data/productsData';
+import { CONSOLIDATED_BEAT_MATRIX } from '../data/consolidatedBeatMatrix';
 import { buildBrandPortalNav } from '../data/navigationHierarchy';
 import {
   PartnerBrandLogo,
   resolveBrandTheme,
 } from '../components/common/PartnerBrandLogo';
 import { useAuth } from '../components/auth/FirebaseAuthProvider';
-import {
-  MAX_OPERATIONAL_STAFF_COUNT,
-  staffPermissionService,
-} from '../services/staffPermissionService';
+import { staffPermissionService } from '../services/staffPermissionService';
+import { brandOwnerService } from '../services/brandOwnerService';
 import { kotaOsHierarchyService } from '../services/kotaOsHierarchyService';
 import { xpeedoOpsService } from '../services/xpeedoOpsService';
-import IndiaPostStaffRolesPromotionsView from '../components/xpeedo/IndiaPostStaffRolesPromotionsView';
 import ThreeLevelSidebar from '../components/navigation/ThreeLevelSidebar';
 import BrandStaffManagementPanel from '../components/xpeedo/BrandStaffManagementPanel';
 
@@ -85,6 +86,13 @@ const IndiaPostStorefrontView = lazy(() => import('../components/crm/IndiaPostSt
 const DailyVerificationView = lazy(() => import('../components/postman/DailyVerificationView'));
 const DoorstepSurveyWorkflowView = lazy(() => import('../components/postman/DoorstepSurveyWorkflowView'));
 const PostmanAllDayArticlesOverview = lazy(() => import('../components/postman/PostmanAllDayArticlesOverview'));
+const IndiaPostMasterSearchAndInspectionView = lazy(
+  () => import('../components/xpeedo/IndiaPostMasterSearchAndInspectionView')
+);
+const TerritoryMasterRoleView = lazy(() => import('../components/xpeedo/TerritoryMasterRoleView'));
+const TerritoryPromotionMasterView = lazy(
+  () => import('../components/xpeedo/TerritoryPromotionMasterView')
+);
 
 function EmbeddedModuleLoading() {
   return (
@@ -100,21 +108,23 @@ type WorkspaceTab =
   | 'LEADS'
   | 'FOLLOW_UPS'
   | 'PROPERTIES'
+  | 'MASTER_SEARCH'
   | 'VERIFICATION'
+  | 'DEPARTMENTS_APPROVALS'
   | 'STORES'
   | 'RBAC_TEAM'
+  | 'MASTER_ROLE'
+  | 'PROMOTION_MASTER'
   | 'PRODUCTS'
   | 'ACADEMY'
   | 'NOTIFICATIONS'
   | 'IP_HIERARCHY'
-  | 'IP_OFFICES'
-  | 'IP_BEATS'
-  | 'IP_PROPERTIES'
-  | 'IP_STAFF_ROLES'
+  | 'IP_GEO_QUALITY'
   | 'IP_SRM'
   | 'IP_STATUTORY_DOCS'
   | 'IP_DAILY_OPS'
-  | 'IP_LMS_STOREFRONT';
+  | 'IP_LMS_STOREFRONT'
+  | 'IP_NOTIFICATIONS';
 
 const VALID_WORKSPACE_TABS = new Set<string>([
   'DASHBOARD',
@@ -122,22 +132,59 @@ const VALID_WORKSPACE_TABS = new Set<string>([
   'LEADS',
   'FOLLOW_UPS',
   'PROPERTIES',
+  'MASTER_SEARCH',
   'VERIFICATION',
+  'DEPARTMENTS_APPROVALS',
   'STORES',
   'RBAC_TEAM',
+  'MASTER_ROLE',
+  'PROMOTION_MASTER',
   'PRODUCTS',
   'ACADEMY',
   'NOTIFICATIONS',
   'IP_HIERARCHY',
-  'IP_OFFICES',
-  'IP_BEATS',
-  'IP_PROPERTIES',
-  'IP_STAFF_ROLES',
+  'IP_GEO_QUALITY',
   'IP_SRM',
   'IP_STATUTORY_DOCS',
   'IP_DAILY_OPS',
   'IP_LMS_STOREFRONT',
+  'IP_NOTIFICATIONS',
 ]);
+
+const XPOKART_ALLOWED_TABS = new Set<WorkspaceTab>([
+  'DASHBOARD',
+  'PRODUCTS',
+  'CUSTOMERS',
+  'LEADS',
+  'FOLLOW_UPS',
+  'NOTIFICATIONS',
+]);
+
+function resolveLegacyPartnerTab(
+  rawTab: string,
+  rawSub?: string | null
+): { tab: WorkspaceTab; sub?: string } | null {
+  const t = (rawTab || '').trim().toUpperCase();
+  const s = (rawSub || '').trim().toUpperCase();
+  if (!t) return null;
+
+  if (t === 'IP_MASTER_SEARCH') return { tab: 'MASTER_SEARCH' };
+  if (t === 'IP_OFFICES') return { tab: 'STORES', sub: 'OFFICES' };
+  if (t === 'IP_BEATS') return { tab: 'STORES', sub: 'BEATS' };
+  if (t === 'IP_STAFF_ROLES') return { tab: 'PROMOTION_MASTER' };
+  if (t === 'IP_CRM_SCHEMES') return { tab: 'LEADS' };
+  if (t === 'IP_PROPERTIES') {
+    if (s === 'LOCATION_INTEL' || s === 'DATA_QUALITY' || s === 'ADDRESS') {
+      return { tab: 'IP_GEO_QUALITY', sub: s };
+    }
+    return { tab: 'PROPERTIES' };
+  }
+
+  if (VALID_WORKSPACE_TABS.has(t)) {
+    return { tab: t as WorkspaceTab, sub: s || undefined };
+  }
+  return null;
+}
 
 interface BrandCatalogItem {
   id: string;
@@ -240,7 +287,6 @@ export default function PartnerScopedWorkspacePage() {
   const [brandFollowUps, setBrandFollowUps] = useState<BrandFollowUpTask[]>([]);
   const [brandProperties, setBrandProperties] = useState<PropertyRecord[]>([]);
   const [verifications, setVerifications] = useState<BrandVerificationInquiry[]>([]);
-  const [rbacConfigs, setRbacConfigs] = useState<BrandRbacRoleConfig[]>([]);
   const [academyCourses, setAcademyCourses] = useState<AcademyCourse[]>([]);
   const [academyProgress, setAcademyProgress] = useState<AcademyProgress[]>([]);
   const [notifications, setNotifications] = useState<SystemNotification[]>([]);
@@ -249,29 +295,46 @@ export default function PartnerScopedWorkspacePage() {
   const [retailActive, setRetailActive] = useState<boolean>(() =>
     featureVisibilityService.isRetailServicesActive()
   );
-  const [operationalStaffCount, setOperationalStaffCount] = useState<number>(() =>
-    staffPermissionService.getOperationalStaffFive().length
-  );
 
-  const initialTabFromUrl = (searchParams.get('tab') || '').toUpperCase();
+  const resolvedInitialTab = resolveLegacyPartnerTab(
+    searchParams.get('tab') || '',
+    searchParams.get('sub')
+  );
   const [activeTab, setActiveTabState] = useState<WorkspaceTab>(
-    VALID_WORKSPACE_TABS.has(initialTabFromUrl)
-      ? (initialTabFromUrl as WorkspaceTab)
-      : 'DASHBOARD'
+    resolvedInitialTab?.tab || 'DASHBOARD'
   );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [ipGeoMode, setIpGeoMode] = useState<'FAMILY_HUB' | 'LOCATION_INTEL' | 'DATA_QUALITY' | 'ADDRESS'>('FAMILY_HUB');
+  const [officeMasterMode, setOfficeMasterMode] = useState<'OFFICES' | 'BEATS'>(
+    resolvedInitialTab?.sub === 'BEATS' ? 'BEATS' : 'OFFICES'
+  );
+  const [ipGeoMode, setIpGeoMode] = useState<'LOCATION_INTEL' | 'DATA_QUALITY' | 'ADDRESS'>(
+    resolvedInitialTab?.sub === 'DATA_QUALITY' || resolvedInitialTab?.sub === 'ADDRESS'
+      ? (resolvedInitialTab.sub as 'DATA_QUALITY' | 'ADDRESS')
+      : 'LOCATION_INTEL'
+  );
   const [ipDocsMode, setIpDocsMode] = useState<'DOCS_HUB' | 'ACG61' | 'ARTICLES'>('DOCS_HUB');
   const [ipDailyMode, setIpDailyMode] = useState<'VERIFICATION' | 'SURVEY'>('VERIFICATION');
   const [ipLmsMode, setIpLmsMode] = useState<'LMS' | 'STOREFRONT'>('LMS');
+  const [promoSelectedStaffId, setPromoSelectedStaffId] = useState<string>('');
+  const [opsVersion, setOpsVersion] = useState(0);
+  const [newDeptName, setNewDeptName] = useState('');
+  const [newDeptHead, setNewDeptHead] = useState('');
+  const [divNotifTitle, setDivNotifTitle] = useState('');
+  const [divNotifMessage, setDivNotifMessage] = useState('');
+  const [divNotifBeat, setDivNotifBeat] = useState('ALL');
+  const [staffSearch, setStaffSearch] = useState('');
+  const [staffRoleFilter, setStaffRoleFilter] = useState<string>('ALL');
+  const [staffStatusFilter, setStaffStatusFilter] = useState<'ALL' | 'Active' | 'Deactivated'>('ALL');
+  const [staffBeatFilter, setStaffBeatFilter] = useState<string>('ALL');
 
   const applySubModeForTab = (tab: WorkspaceTab, sub?: string | null) => {
     const cleanSub = (sub || '').toUpperCase();
     if (!cleanSub) return;
-    if (
-      tab === 'IP_PROPERTIES' &&
-      (cleanSub === 'FAMILY_HUB' ||
-        cleanSub === 'LOCATION_INTEL' ||
+    if (tab === 'STORES' && (cleanSub === 'OFFICES' || cleanSub === 'BEATS')) {
+      setOfficeMasterMode(cleanSub);
+    } else if (
+      tab === 'IP_GEO_QUALITY' &&
+      (cleanSub === 'LOCATION_INTEL' ||
         cleanSub === 'DATA_QUALITY' ||
         cleanSub === 'ADDRESS')
     ) {
@@ -313,14 +376,16 @@ export default function PartnerScopedWorkspacePage() {
   };
 
   useEffect(() => {
-    const t = (searchParams.get('tab') || '').toUpperCase();
-    const s = searchParams.get('sub');
-    if (VALID_WORKSPACE_TABS.has(t)) {
-      if (t !== activeTab) {
-        setActiveTabState(t as WorkspaceTab);
+    const resolved = resolveLegacyPartnerTab(
+      searchParams.get('tab') || '',
+      searchParams.get('sub')
+    );
+    if (resolved) {
+      if (resolved.tab !== activeTab) {
+        setActiveTabState(resolved.tab);
       }
-      if (s) {
-        applySubModeForTab(t as WorkspaceTab, s);
+      if (resolved.sub) {
+        applySubModeForTab(resolved.tab, resolved.sub);
       }
     }
   }, [searchParams, activeTab, retailActive]);
@@ -515,7 +580,6 @@ export default function PartnerScopedWorkspacePage() {
     setCrmRecords(partnerBrandService.getScopedCrmRecords(active));
     setBrandFollowUps(partnerBrandService.getScopedBrandFollowUps(active));
     setVerifications(partnerBrandService.getScopedVerifications(active));
-    setRbacConfigs(partnerBrandService.getBrandRbacConfigs(active.partnerId));
 
     // Strictly brand-scoped Customers & Leads (Zero cross-brand leakage!)
     const allBrandCustomers = customerService.getCustomersByBrand(publicInfo.partnerSlug);
@@ -589,9 +653,8 @@ export default function PartnerScopedWorkspacePage() {
     const unsub6 = featureVisibilityService.subscribe(() => {
       setRetailActive(featureVisibilityService.isRetailServicesActive());
     });
-    const unsub7 = staffPermissionService.subscribe(() => {
-      setOperationalStaffCount(staffPermissionService.getOperationalStaffFive().length);
-    });
+    const unsub8 = brandOwnerService.subscribe(() => setOpsVersion((v) => v + 1));
+    const unsub9 = xpeedoOpsService.subscribe(() => setOpsVersion((v) => v + 1));
     return () => {
       unsub1();
       unsub2();
@@ -599,7 +662,8 @@ export default function PartnerScopedWorkspacePage() {
       unsub4();
       unsub5();
       unsub6();
-      unsub7();
+      unsub8();
+      unsub9();
     };
   }, [partnerSlug]);
 
@@ -733,6 +797,50 @@ export default function PartnerScopedWorkspacePage() {
   const theme = resolveBrandTheme(branding.accentColor);
   const accent = theme.accentColor;
   const isIndiaPost = branding.partnerSlug.toLowerCase() === 'india-post';
+  const isXpokart = branding.partnerSlug.toLowerCase() === 'xpokart';
+  const brandOwnerProfile = useMemo(() => {
+    void opsVersion;
+    return brandOwnerService.getBrandProfileBySlugOrKey(branding.partnerSlug);
+  }, [branding.partnerSlug, opsVersion]);
+  const opsWorkspaceKey =
+    brandOwnerProfile?.workspaceKey ||
+    (isIndiaPost ? 'INDIA_POST' : branding.partnerSlug.toUpperCase().replace(/-/g, '_'));
+  const scopedDepartments = useMemo(() => {
+    void opsVersion;
+    return xpeedoOpsService.getDepartments(opsWorkspaceKey);
+  }, [opsWorkspaceKey, opsVersion]);
+  const scopedWorkReports = useMemo(() => {
+    void opsVersion;
+    return xpeedoOpsService.getWorkReports(opsWorkspaceKey);
+  }, [opsWorkspaceKey, opsVersion]);
+  const filteredRosterMembers = useMemo(() => {
+    const q = staffSearch.trim().toLowerCase();
+    return rosterMembers.filter((m) => {
+      if (staffRoleFilter !== 'ALL' && m.role !== staffRoleFilter) return false;
+      if (staffStatusFilter !== 'ALL' && m.status !== staffStatusFilter) return false;
+      if (
+        staffBeatFilter !== 'ALL' &&
+        (m.assignedBeatOrPin || '').toLowerCase() !== staffBeatFilter.toLowerCase()
+      ) {
+        return false;
+      }
+      if (!q) return true;
+      return (
+        m.name.toLowerCase().includes(q) ||
+        m.email.toLowerCase().includes(q) ||
+        (m.phone || '').includes(q) ||
+        (m.assignedBeatOrPin || '').toLowerCase().includes(q) ||
+        ROLE_LABELS[m.role].toLowerCase().includes(q)
+      );
+    });
+  }, [rosterMembers, staffSearch, staffRoleFilter, staffStatusFilter, staffBeatFilter]);
+  const distinctTeamBeats = useMemo(
+    () =>
+      Array.from(
+        new Set(rosterMembers.map((m) => m.assignedBeatOrPin).filter(Boolean) as string[])
+      ).sort(),
+    [rosterMembers]
+  );
 
   const handleSignOut = () => {
     partnerBrandService.signOutPartnerSession();
@@ -1156,31 +1264,35 @@ export default function PartnerScopedWorkspacePage() {
   };
 
   const effectiveTab: WorkspaceTab =
-    (!isIndiaPost && activeTab.startsWith('IP_')) || (!retailActive && activeTab === 'PRODUCTS')
+    isXpokart && !XPOKART_ALLOWED_TABS.has(activeTab)
+      ? 'DASHBOARD'
+      : (!isIndiaPost && activeTab.startsWith('IP_')) || (!retailActive && activeTab === 'PRODUCTS')
       ? 'DASHBOARD'
       : activeTab;
 
   const TAB_LABELS: Record<WorkspaceTab, string> = {
     DASHBOARD: 'Dashboard',
-    CUSTOMERS: 'Customers',
-    LEADS: 'New Leads',
-    FOLLOW_UPS: 'Follow-Ups',
+    CUSTOMERS: isXpokart ? 'Store Buyers' : 'Customers',
+    LEADS: isXpokart ? 'Checkout & Order Leads' : 'Leads & Schemes',
+    FOLLOW_UPS: isXpokart ? 'Order Follow-Ups' : 'Follow-Ups',
     PROPERTIES: 'Properties',
+    MASTER_SEARCH: 'Master Search Console',
     VERIFICATION: 'Verification & Inquiries',
-    STORES: 'Offices / Stores',
-    RBAC_TEAM: 'Staff Management & RBAC',
+    DEPARTMENTS_APPROVALS: 'Departments & Approvals',
+    STORES: 'Office Master',
+    RBAC_TEAM: 'Master Staff',
+    MASTER_ROLE: 'Master Role',
+    PROMOTION_MASTER: 'Promotion Master',
     PRODUCTS: 'Products & Storefront',
     ACADEMY: 'Skill & Academy',
-    NOTIFICATIONS: 'Notifications',
-    IP_HIERARCHY: 'Org Hierarchy Tree',
-    IP_OFFICES: 'Offices Master',
-    IP_BEATS: 'Delivery Beats & PIN',
-    IP_PROPERTIES: '10-Level Property & Geo',
-    IP_STAFF_ROLES: 'Staff Roles & Promotions',
+    NOTIFICATIONS: isXpokart ? 'Store Alerts' : 'Notifications',
+    IP_HIERARCHY: 'Divisional Hierarchy',
+    IP_GEO_QUALITY: 'Geo Mapping & Data Quality',
     IP_SRM: 'SRM & Escalations',
     IP_STATUTORY_DOCS: 'Statutory Docs & ACG-61',
-    IP_DAILY_OPS: 'Daily Verification & Surveys',
+    IP_DAILY_OPS: 'Daily Ops & Surveys',
     IP_LMS_STOREFRONT: retailActive ? 'Postal LMS & Storefront' : 'Postal Departmental LMS',
+    IP_NOTIFICATIONS: 'Divisional Notifications',
   };
 
   const activeSectionLabel = TAB_LABELS[effectiveTab] || 'Dashboard';
@@ -1191,11 +1303,13 @@ export default function PartnerScopedWorkspacePage() {
   );
   const indiaPostSrmTickets = useMemo(
     () => (isIndiaPost ? xpeedoOpsService.getSrmTickets() : []),
-    [isIndiaPost]
+    [isIndiaPost, opsVersion]
   );
 
   const currentSubModeKey =
-    effectiveTab === 'IP_PROPERTIES'
+    effectiveTab === 'STORES'
+      ? officeMasterMode
+      : effectiveTab === 'IP_GEO_QUALITY'
       ? ipGeoMode
       : effectiveTab === 'IP_STATUTORY_DOCS'
       ? ipDocsMode
@@ -1208,13 +1322,16 @@ export default function PartnerScopedWorkspacePage() {
   const partnerPortalNavGroups = buildBrandPortalNav({
     mode: 'PARTNER',
     brandName: branding.displayName,
+    partnerSlug: branding.partnerSlug,
     isIndiaPost,
+    isXpokart,
     retailServicesActive: retailActive,
     counts: {
       customers: brandCustomers.length + crmRecords.length,
       leads: brandLeads.length,
       followUps: followUpCounts.overdue + followUpCounts.dueToday || undefined,
       verifications: verifications.length || undefined,
+      departments: scopedDepartments.length || undefined,
       properties: brandProperties.length,
       stores: stores.length,
       team: rosterMembers.length,
@@ -1223,8 +1340,6 @@ export default function PartnerScopedWorkspacePage() {
       notifications: unreadNotifCount || undefined,
     },
   });
-
-  const isCoreStaffCapReached = operationalStaffCount >= MAX_OPERATIONAL_STAFF_COUNT;
 
   const sidebarNavContent = (
     <ThreeLevelSidebar
@@ -1469,46 +1584,111 @@ export default function PartnerScopedWorkspacePage() {
             </div>
 
             {/* Scoped KPI Summary Bar */}
-            <div className="bg-white rounded-2xl border border-slate-200 grid grid-cols-2 lg:grid-cols-6 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 text-xs">
-              <div className="p-4">
-                <div className="text-slate-500 font-medium">Scoped Customers</div>
-                <div className="text-2xl font-bold text-slate-900 font-mono tabular-nums mt-1">
-                  {brandCustomers.length + crmRecords.length}
+            {isXpokart ? (
+              <div className="bg-white rounded-2xl border border-slate-200 grid grid-cols-2 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 text-xs">
+                <div className="p-4">
+                  <div className="text-slate-500 font-medium">Catalog SKUs</div>
+                  <div className="text-2xl font-bold text-slate-900 font-mono tabular-nums mt-1">
+                    {customCatalog.length}
+                  </div>
+                </div>
+                <div className="p-4">
+                  <div className="text-slate-500 font-medium">Store Buyers</div>
+                  <div className="text-2xl font-bold text-slate-900 font-mono tabular-nums mt-1">
+                    {brandCustomers.length + crmRecords.length}
+                  </div>
+                </div>
+                <div className="p-4">
+                  <div className="text-slate-500 font-medium">Checkout Orders</div>
+                  <div className="text-2xl font-bold text-slate-900 font-mono tabular-nums mt-1">
+                    {brandLeads.length}
+                  </div>
+                </div>
+                <div className="p-4">
+                  <div className="text-slate-500 font-medium">Order Follow-Ups</div>
+                  <div className="text-2xl font-bold text-amber-700 font-mono tabular-nums mt-1">
+                    {followUpCounts.dueToday + followUpCounts.overdue}
+                  </div>
+                </div>
+                <div className="p-4">
+                  <div className="text-slate-500 font-medium">Store Alerts</div>
+                  <div className="text-2xl font-bold text-blue-700 font-mono tabular-nums mt-1">
+                    {unreadNotifCount}
+                  </div>
                 </div>
               </div>
-              <div className="p-4">
-                <div className="text-slate-500 font-medium">Brand Leads</div>
-                <div className="text-2xl font-bold text-slate-900 font-mono tabular-nums mt-1">
-                  {brandLeads.length}
+            ) : (
+              <div className="bg-white rounded-2xl border border-slate-200 grid grid-cols-2 lg:grid-cols-6 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 text-xs">
+                <div className="p-4">
+                  <div className="text-slate-500 font-medium">Scoped Customers</div>
+                  <div className="text-2xl font-bold text-slate-900 font-mono tabular-nums mt-1">
+                    {brandCustomers.length + crmRecords.length}
+                  </div>
+                </div>
+                <div className="p-4">
+                  <div className="text-slate-500 font-medium">Brand Leads</div>
+                  <div className="text-2xl font-bold text-slate-900 font-mono tabular-nums mt-1">
+                    {brandLeads.length}
+                  </div>
+                </div>
+                <div className="p-4">
+                  <div className="text-slate-500 font-medium">Follow-Ups Due/Overdue</div>
+                  <div className="text-2xl font-bold text-amber-700 font-mono tabular-nums mt-1">
+                    {followUpCounts.dueToday + followUpCounts.overdue}
+                  </div>
+                </div>
+                <div className="p-4">
+                  <div className="text-slate-500 font-medium">Traceable Properties</div>
+                  <div className="text-2xl font-bold text-slate-900 font-mono tabular-nums mt-1">
+                    {brandProperties.length}
+                  </div>
+                </div>
+                <div className="p-4">
+                  <div className="text-slate-500 font-medium">Office Master</div>
+                  <div className="text-2xl font-bold text-slate-900 font-mono tabular-nums mt-1">
+                    {stores.length}
+                  </div>
+                </div>
+                <div className="p-4">
+                  <div className="text-slate-500 font-medium">Master Staff</div>
+                  <div className="text-2xl font-bold text-emerald-700 font-mono tabular-nums mt-1">
+                    {activeMembers.length}
+                  </div>
                 </div>
               </div>
-              <div className="p-4">
-                <div className="text-slate-500 font-medium">Follow-Ups Due/Overdue</div>
-                <div className="text-2xl font-bold text-amber-700 font-mono tabular-nums mt-1">
-                  {followUpCounts.dueToday + followUpCounts.overdue}
-                </div>
-              </div>
-              <div className="p-4">
-                <div className="text-slate-500 font-medium">Traceable Properties</div>
-                <div className="text-2xl font-bold text-slate-900 font-mono tabular-nums mt-1">
-                  {brandProperties.length}
-                </div>
-              </div>
-              <div className="p-4">
-                <div className="text-slate-500 font-medium">Stores / Hubs</div>
-                <div className="text-2xl font-bold text-slate-900 font-mono tabular-nums mt-1">
-                  {stores.length}
-                </div>
-              </div>
-              <div className="p-4">
-                <div className="text-slate-500 font-medium">Active Team</div>
-                <div className="text-2xl font-bold text-emerald-700 font-mono tabular-nums mt-1">
-                  {activeMembers.length}
-                </div>
-              </div>
-            </div>
+            )}
 
-            {!isIndiaPost && brandCustomers.length === 0 && brandProperties.length === 0 && (
+            {isXpokart && (
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
+                <div>
+                  <div className="font-extrabold text-sm text-slate-900">
+                    XPOKART E-Commerce Store System
+                  </div>
+                  <p className="text-slate-600 mt-0.5">
+                    Dedicated storefront workspace for catalog SKUs, customer checkout leads, and store orders. Operational staff and postal territory modules belong to India Post &amp; Xpeedo Services.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('PRODUCTS')}
+                    className="px-3.5 py-2 rounded-lg text-white font-semibold cursor-pointer whitespace-nowrap"
+                    style={{ backgroundColor: accent }}
+                  >
+                    Manage Store Catalog
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('LEADS')}
+                    className="px-3.5 py-2 rounded-lg bg-slate-900 text-white font-semibold cursor-pointer whitespace-nowrap"
+                  >
+                    Checkout &amp; Order Leads
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!isIndiaPost && !isXpokart && brandCustomers.length === 0 && brandProperties.length === 0 && (
               <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-8 text-center space-y-3">
                 <div className="font-extrabold text-base text-slate-900">
                   Clean Ready Brand Workspace · Zero Leaked India Post Records
@@ -1823,6 +2003,31 @@ export default function PartnerScopedWorkspacePage() {
                 </table>
               </div>
             )}
+
+            {isIndiaPost && (
+              <div className="p-5 border-t border-slate-200 bg-slate-50/60 space-y-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Postal Products &amp; Sovereign Schemes Reference ({POSTAL_PRODUCTS.length})
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Active savings, IPPB, PLI &amp; postal schemes feeding this unified Leads Pipeline.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 text-xs">
+                  {POSTAL_PRODUCTS.slice(0, 9).map((p) => (
+                    <div key={p.id} className="p-3 rounded-lg border border-slate-200 bg-white">
+                      <div className="flex items-center justify-between font-mono text-[11px]">
+                        <span className="font-bold text-red-800">{p.code}</span>
+                        <span className="text-slate-600">{p.interestRateOrBonus}</span>
+                      </div>
+                      <div className="font-semibold text-slate-900 mt-1">{p.name}</div>
+                      <div className="text-[11px] text-slate-500">{p.category}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         )}
 
@@ -1947,96 +2152,111 @@ export default function PartnerScopedWorkspacePage() {
         )}
 
         {/* ====================================================================
-            TAB 5: TRACEABLE PROPERTY REGISTRY
+            TAB 5: PROPERTIES (UNIFIED UNDER CRM & OPERATIONS, ZERO DUPLICATION)
            ==================================================================== */}
-        {effectiveTab === 'PROPERTIES' && (
-          <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <MapPin size={16} />
-                  <span>Traceable Property Registry ({brandProperties.length})</span>
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Unique Property Code, Residential / Commercial / Mixed / Flat classification, Beat/PIN &amp; Geo Tagging.
-                </p>
-              </div>
-              {canCreateCrm && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPropEditingId(null);
-                    setPropCode('');
-                    setPropAddress('');
-                    setPropLandmark('');
-                    setPropGeoTag('');
-                    setPropUnitNotes('');
-                    setShowPropertyModal(true);
-                  }}
-                  className="px-3.5 py-1.5 rounded-lg text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
-                  style={{ backgroundColor: accent }}
-                >
-                  <Plus size={14} />
-                  <span>Register Property</span>
-                </button>
-              )}
-            </div>
-
-            {brandProperties.length === 0 ? (
-              <div className="p-10 text-center text-xs text-slate-500">
-                No traceable properties registered under {branding.displayName} yet.
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-200 text-xs">
-                {brandProperties.map((prop) => (
-                  <div
-                    key={prop.id}
-                    className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/70"
+        {!isXpokart && effectiveTab === 'PROPERTIES' && (
+          isIndiaPost ? (
+            <Suspense fallback={<EmbeddedModuleLoading />}>
+              <UnifiedPropertyFamilyHub indiaPostOwnerAccess />
+            </Suspense>
+          ) : (
+            <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <MapPin size={16} />
+                    <span>Traceable Property Registry ({brandProperties.length})</span>
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Unique Property Code, Residential / Commercial / Mixed / Flat classification, Beat/PIN &amp; Geo Tagging.
+                  </p>
+                </div>
+                {canCreateCrm && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPropEditingId(null);
+                      setPropCode('');
+                      setPropAddress('');
+                      setPropLandmark('');
+                      setPropGeoTag('');
+                      setPropUnitNotes('');
+                      setShowPropertyModal(true);
+                    }}
+                    className="px-3.5 py-1.5 rounded-lg text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+                    style={{ backgroundColor: accent }}
                   >
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono font-bold text-slate-900">
-                          {prop.propertyCode}
-                        </span>
-                        <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 font-semibold text-[11px]">
-                          {prop.propertyType}
-                        </span>
-                        <span className="text-slate-500 font-mono text-[11px]">
-                          PIN/Beat: {prop.beatOrPin} · Office/Hub: {prop.officeId}
-                        </span>
+                    <Plus size={14} />
+                    <span>Register Property</span>
+                  </button>
+                )}
+              </div>
+
+              {brandProperties.length === 0 ? (
+                <div className="p-10 text-center text-xs text-slate-500">
+                  No traceable properties registered under {branding.displayName} yet.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-200 text-xs">
+                  {brandProperties.map((prop) => (
+                    <div
+                      key={prop.id}
+                      className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/70"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono font-bold text-slate-900">
+                            {prop.propertyCode}
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 font-semibold text-[11px]">
+                            {prop.propertyType}
+                          </span>
+                          <span className="text-slate-500 font-mono text-[11px]">
+                            PIN/Beat: {prop.beatOrPin} · Office/Hub: {prop.officeId}
+                          </span>
+                        </div>
+                        <div className="font-semibold text-slate-800">{prop.addressLine}</div>
+                        <div className="text-[11px] text-slate-500">
+                          Occupancy: {prop.occupancyStatus}
+                          {prop.landmark ? ` · Landmark: ${prop.landmark}` : ''}
+                          {prop.geoOrTraceTag ? ` · Tag: ${prop.geoOrTraceTag}` : ''}
+                        </div>
+                        {prop.linkedUnitNotes && (
+                          <div className="text-[11px] text-slate-600">{prop.linkedUnitNotes}</div>
+                        )}
                       </div>
-                      <div className="font-semibold text-slate-800">{prop.addressLine}</div>
-                      <div className="text-[11px] text-slate-500">
-                        Occupancy: {prop.occupancyStatus}
-                        {prop.landmark ? ` · Landmark: ${prop.landmark}` : ''}
-                        {prop.geoOrTraceTag ? ` · Tag: ${prop.geoOrTraceTag}` : ''}
-                      </div>
-                      {prop.linkedUnitNotes && (
-                        <div className="text-[11px] text-slate-600">{prop.linkedUnitNotes}</div>
+
+                      {canEditCrm && (
+                        <button
+                          type="button"
+                          onClick={() => openEditProperty(prop)}
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg font-semibold inline-flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+                        >
+                          <Edit2 size={12} />
+                          <span>Edit</span>
+                        </button>
                       )}
                     </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )
+        )}
 
-                    {canEditCrm && (
-                      <button
-                        type="button"
-                        onClick={() => openEditProperty(prop)}
-                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg font-semibold inline-flex items-center gap-1 cursor-pointer self-start sm:self-auto"
-                      >
-                        <Edit2 size={12} />
-                        <span>Edit</span>
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
+        {/* ====================================================================
+            TAB 5B: MASTER SEARCH CONSOLE (CRM & OPERATIONS)
+           ==================================================================== */}
+        {!isXpokart && effectiveTab === 'MASTER_SEARCH' && (
+          <Suspense fallback={<EmbeddedModuleLoading />}>
+            <IndiaPostMasterSearchAndInspectionView />
+          </Suspense>
         )}
 
         {/* ====================================================================
             TAB 6: VERIFICATION & CUSTOMER INQUIRIES
            ==================================================================== */}
-        {effectiveTab === 'VERIFICATION' && (
+        {!isXpokart && effectiveTab === 'VERIFICATION' && (
           <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -2109,95 +2329,279 @@ export default function PartnerScopedWorkspacePage() {
         )}
 
         {/* ====================================================================
-            TAB 7: ASSIGNED STORES / OFFICES / HUBS
+            TAB 6B: DEPARTMENTS & APPROVALS (CRM & OPERATIONS)
            ==================================================================== */}
-        {effectiveTab === 'STORES' && (
-          <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-base font-bold text-slate-900">
-                  Offices / Stores / Hubs ({stores.length})
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Strictly filtered to {branding.displayName} scope ({hierarchyBlueprint.defaultStateScope}).
-                </p>
-              </div>
-              {session.memberRole === 'PARTNER_OWNER' && session.brandId && (
-                <button
-                  type="button"
-                  onClick={() => setShowAddStoreModal(true)}
-                  className="px-3.5 py-1.5 rounded-lg text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
-                  style={{ backgroundColor: accent }}
+        {!isXpokart && effectiveTab === 'DEPARTMENTS_APPROVALS' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            <div className="lg:col-span-5 bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Layers size={16} className="text-blue-600" />
+                <span>Departments ({scopedDepartments.length})</span>
+              </h2>
+              {canManageTeam && (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!newDeptName.trim()) return;
+                    xpeedoOpsService.upsertDepartment(
+                      {
+                        workspaceId: opsWorkspaceKey,
+                        clientId: `client-${branding.partnerSlug}`,
+                        name: newDeptName.trim(),
+                        code: `${branding.monogram}-${Date.now().toString(36).slice(-3).toUpperCase()}`,
+                        headName: newDeptHead.trim() || session.memberName,
+                        description: `Managed department inside ${branding.displayName}`,
+                        isActive: true,
+                      },
+                      session.memberName,
+                      'CLIENT_ADMIN'
+                    );
+                    setNoticeMsg(`Saved department "${newDeptName.trim()}".`);
+                    setNewDeptName('');
+                    setNewDeptHead('');
+                  }}
+                  className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs"
                 >
-                  <Plus size={14} />
-                  <span>Add Linked Hub / Store</span>
-                </button>
+                  <input
+                    required
+                    value={newDeptName}
+                    onChange={(e) => setNewDeptName(e.target.value)}
+                    placeholder="Department Name *"
+                    className="px-3 py-2 border border-slate-300 rounded-lg"
+                  />
+                  <input
+                    value={newDeptHead}
+                    onChange={(e) => setNewDeptHead(e.target.value)}
+                    placeholder="Dept Head"
+                    className="px-3 py-2 border border-slate-300 rounded-lg"
+                  />
+                  <button
+                    type="submit"
+                    className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-semibold cursor-pointer"
+                  >
+                    Add Dept
+                  </button>
+                </form>
               )}
+              <div className="divide-y divide-slate-100 text-xs max-h-80 overflow-y-auto">
+                {scopedDepartments.length === 0 ? (
+                  <p className="text-slate-500 py-6 text-center">No departments configured yet.</p>
+                ) : (
+                  scopedDepartments.map((d) => (
+                    <div key={d.id} className="py-2.5 flex items-center justify-between gap-2">
+                      <div>
+                        <div className="font-semibold text-slate-900">{d.name}</div>
+                        <div className="text-[11px] text-slate-500">Head: {d.headName}</div>
+                      </div>
+                      <span className="font-mono text-[11px] text-slate-600">{d.code}</span>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
 
-            {stores.length === 0 ? (
-              <div className="p-10 text-center text-xs text-slate-500">
-                No offices or stores linked in your scope yet.
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-200 text-xs">
-                {stores.map((st) => (
-                  <div
-                    key={st.id}
-                    className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/70"
-                  >
-                    <div className="space-y-1 min-w-0">
-                      <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                        <Building2 size={15} className="text-slate-500 shrink-0" />
-                        <span>{st.name}</span>
-                        <span className="font-mono text-xs font-normal text-slate-500">
-                          · {st.code}
-                        </span>
+            <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <FolderKanban size={16} className="text-emerald-700" />
+                <span>Work Reports &amp; Operational Approvals ({scopedWorkReports.length})</span>
+              </h2>
+              {scopedWorkReports.length === 0 ? (
+                <p className="text-xs text-slate-500 py-6 text-center">
+                  No pending work report approvals in {branding.displayName}.
+                </p>
+              ) : (
+                <div className="divide-y divide-slate-100 text-xs max-h-80 overflow-y-auto">
+                  {scopedWorkReports.map((wr) => (
+                    <div key={wr.id} className="py-3 flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="font-semibold text-slate-900">{wr.summary}</div>
+                        <div className="text-[11px] text-slate-500">
+                          {wr.submittedByName} · Stage: <strong className="font-mono">{wr.approvalStage}</strong>
+                        </div>
                       </div>
-                      <div className="text-slate-600">
-                        PIN <span className="font-mono font-semibold">{st.pincode}</span>
-                        {st.beatNo ? ` · ${st.beatNo}` : ''} · {st.address}
-                      </div>
-                      <div className="text-[11px] text-slate-500">
-                        Manager: {st.managerName || 'Not assigned'}
-                        {st.managerPhone ? ` · ${st.managerPhone}` : ''} · Status:{' '}
-                        <span
-                          className={`font-semibold ${
-                            st.status === 'Active' ? 'text-emerald-700' : 'text-amber-700'
-                          }`}
-                        >
-                          {st.status}
-                        </span>
-                      </div>
+                      {canManageTeam &&
+                        wr.approvalStage !== 'OWNER_APPROVED' &&
+                        wr.approvalStage !== 'REJECTED' && (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                xpeedoOpsService.advanceWorkReportApproval(
+                                  wr.id,
+                                  session.memberName,
+                                  'CLIENT_ADMIN'
+                                );
+                                setNoticeMsg(`Approved work report ${wr.id}.`);
+                              }}
+                              className="px-2.5 py-1 rounded bg-emerald-700 hover:bg-emerald-800 text-white font-semibold cursor-pointer"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                xpeedoOpsService.rejectWorkReport(
+                                  wr.id,
+                                  'Returned for review from Workspace',
+                                  session.memberName,
+                                  'CLIENT_ADMIN'
+                                );
+                                setNoticeMsg(`Returned work report ${wr.id}.`);
+                              }}
+                              className="px-2.5 py-1 rounded border border-slate-300 text-slate-700 font-semibold cursor-pointer"
+                            >
+                              Return
+                            </button>
+                          </div>
+                        )}
                     </div>
-
-                    {canManageStores && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingStore(st);
-                          setEditStoreManager(st.managerName || '');
-                          setEditStorePhone(st.managerPhone || '');
-                          setEditStoreAddress(st.address);
-                          setEditStoreStatus(st.status);
-                        }}
-                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg font-semibold inline-flex items-center gap-1 cursor-pointer self-start sm:self-auto"
-                      >
-                        <Edit2 size={12} />
-                        <span>Edit</span>
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {/* ====================================================================
-            TAB 8: TEAM & EMBEDDED BRAND RBAC ACCESS CONTROL
+            TERRITORY & TEAM MODULE 1: OFFICE MASTER (OFFICES & BEATS MATRIX)
            ==================================================================== */}
-        {effectiveTab === 'RBAC_TEAM' && (
+        {!isXpokart && effectiveTab === 'STORES' && (
+          <div className="space-y-4">
+            {isIndiaPost && (
+              <div className="bg-white border border-slate-200 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTabAndSub('STORES', 'OFFICES')}
+                    className={`px-3.5 py-1.5 rounded-lg font-semibold cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                      officeMasterMode === 'OFFICES'
+                        ? 'bg-red-800 text-white'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Building2 size={14} />
+                    <span>Offices &amp; Branches Registry ({stores.length})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTabAndSub('STORES', 'BEATS')}
+                    className={`px-3.5 py-1.5 rounded-lg font-semibold cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+                      officeMasterMode === 'BEATS'
+                        ? 'bg-red-800 text-white'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    <Route size={14} />
+                    <span>Beats &amp; PIN Matrix ({CONSOLIDATED_BEAT_MATRIX.length} Beats)</span>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('RBAC_TEAM')}
+                  className="px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 font-semibold text-slate-700 cursor-pointer whitespace-nowrap"
+                >
+                  Master Staff →
+                </button>
+              </div>
+            )}
+
+            {isIndiaPost && officeMasterMode === 'OFFICES' ? (
+              <Suspense fallback={<EmbeddedModuleLoading />}>
+                <OfficeMasterView indiaPostOwnerAccess />
+              </Suspense>
+            ) : isIndiaPost && officeMasterMode === 'BEATS' ? (
+              <Suspense fallback={<EmbeddedModuleLoading />}>
+                <BeatManagementView indiaPostOwnerAccess />
+              </Suspense>
+            ) : (
+              <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-bold text-slate-900">
+                      Office Master ({stores.length})
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      Canonical offices, branches &amp; PINs scoped to {branding.displayName} ({hierarchyBlueprint.defaultStateScope}).
+                    </p>
+                  </div>
+                  {session.memberRole === 'PARTNER_OWNER' && session.brandId && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAddStoreModal(true)}
+                      className="px-3.5 py-1.5 rounded-lg text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+                      style={{ backgroundColor: accent }}
+                    >
+                      <Plus size={14} />
+                      <span>Add Linked Hub / Store</span>
+                    </button>
+                  )}
+                </div>
+
+                {stores.length === 0 ? (
+                  <div className="p-10 text-center text-xs text-slate-500">
+                    No offices or stores linked in your scope yet.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-200 text-xs">
+                    {stores.map((st) => (
+                      <div
+                        key={st.id}
+                        className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/70"
+                      >
+                        <div className="space-y-1 min-w-0">
+                          <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                            <Building2 size={15} className="text-slate-500 shrink-0" />
+                            <span>{st.name}</span>
+                            <span className="font-mono text-xs font-normal text-slate-500">
+                              · {st.code}
+                            </span>
+                          </div>
+                          <div className="text-slate-600">
+                            PIN <span className="font-mono font-semibold">{st.pincode}</span>
+                            {st.beatNo ? ` · ${st.beatNo}` : ''} · {st.address}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            Manager: {st.managerName || 'Not assigned'}
+                            {st.managerPhone ? ` · ${st.managerPhone}` : ''} · Status:{' '}
+                            <span
+                              className={`font-semibold ${
+                                st.status === 'Active' ? 'text-emerald-700' : 'text-amber-700'
+                              }`}
+                            >
+                              {st.status}
+                            </span>
+                          </div>
+                        </div>
+
+                        {canManageStores && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingStore(st);
+                              setEditStoreManager(st.managerName || '');
+                              setEditStorePhone(st.managerPhone || '');
+                              setEditStoreAddress(st.address);
+                              setEditStoreStatus(st.status);
+                            }}
+                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg font-semibold inline-flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+                          >
+                            <Edit2 size={12} />
+                            <span>Edit</span>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+          </div>
+        )}
+
+        {/* ====================================================================
+            TERRITORY & TEAM MODULE 2: MASTER STAFF (MULTI-CRITERIA FILTERING)
+           ==================================================================== */}
+        {!isXpokart && effectiveTab === 'RBAC_TEAM' && (
           <div className="space-y-6">
             <BrandStaffManagementPanel
               brandSlug={branding.partnerSlug}
@@ -2256,123 +2660,106 @@ export default function PartnerScopedWorkspacePage() {
               </section>
             )}
 
-            {/* Embedded Brand RBAC Role Access Matrix */}
+            {/* Master Staff Directory & Duty Assignments */}
             <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-200">
-                <h2 className="text-base font-bold text-slate-900">
-                  Embedded Brand RBAC Matrix · Role Permissions
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Configure role-wise permissions and Non-Territory B2B Category Agent eligibility inside {branding.displayName}.
-                </p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                      <th className="py-3 px-4 font-semibold">Brand Role</th>
-                      <th className="py-3 px-4 font-semibold text-center">Create CRM</th>
-                      <th className="py-3 px-4 font-semibold text-center">Edit CRM</th>
-                      <th className="py-3 px-4 font-semibold text-center">Manage Stores</th>
-                      <th className="py-3 px-4 font-semibold text-center">Manage Team</th>
-                      <th className="py-3 px-4 font-semibold text-center">B2B Category Mode</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {rbacConfigs.map((cfg) => {
-                      const isOwner = cfg.role === 'PARTNER_OWNER';
-                      return (
-                        <tr key={cfg.role} className="hover:bg-slate-50/70">
-                          <td className="py-3 px-4 font-bold text-slate-900">
-                            {ROLE_LABELS[cfg.role]}
-                          </td>
-                          {(
-                            ['canCreateCrm', 'canEditCrm', 'canManageStores', 'canManageTeam'] as const
-                          ).map((permKey) => (
-                            <td key={permKey} className="py-3 px-4 text-center">
-                              <input
-                                type="checkbox"
-                                disabled={!canManageTeam || isOwner}
-                                checked={cfg.permissions[permKey]}
-                                onChange={(e) =>
-                                  partnerBrandService.updateBrandRbacConfig(
-                                    session.partnerId,
-                                    cfg.role,
-                                    { permissions: { [permKey]: e.target.checked } },
-                                    session
-                                  )
-                                }
-                              />
-                            </td>
-                          ))}
-                          <td className="py-3 px-4 text-center">
-                            <input
-                              type="checkbox"
-                              disabled={!canManageTeam || isOwner}
-                              checked={cfg.allowNonTerritoryCategoryAgents}
-                              onChange={(e) =>
-                                partnerBrandService.updateBrandRbacConfig(
-                                  session.partnerId,
-                                  cfg.role,
-                                  { allowNonTerritoryCategoryAgents: e.target.checked },
-                                  session
-                                )
-                              }
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+              <div className="px-5 py-4 border-b border-slate-200 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                      <Users size={16} className="text-slate-600" />
+                      <span>
+                        Master Staff Directory ({filteredRosterMembers.length} / {rosterMembers.length})
+                      </span>
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      Filter team assignments by Role, Status, and Beat/PIN. Manage permission presets in Master Role or transfers in Promotion Master.
+                    </p>
+                  </div>
 
-            {/* Brand Internal Team Roster */}
-            <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <Users size={16} className="text-slate-600" />
-                    <span>Internal Team &amp; B2B Agents ({rosterMembers.length})</span>
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    Assign Territory Stores/PINs or enable Non-Territory B2B Category Agent isolation per staff member.
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('MASTER_ROLE')}
+                      className="px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-800 font-semibold inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                    >
+                      <ShieldCheck size={14} />
+                      <span>Master Role</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('PROMOTION_MASTER')}
+                      className="px-3 py-1.5 rounded-lg border border-red-300 bg-red-50 hover:bg-red-100 text-red-800 font-semibold inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                    >
+                      <Award size={14} />
+                      <span>Promotion Master</span>
+                    </button>
+                    {canManageTeam && (
+                      <button
+                        type="button"
+                        title="Add team member"
+                        onClick={() => {
+                          setTmStoreIds(stores.length === 1 ? [stores[0].id] : []);
+                          setShowAddMemberModal(true);
+                        }}
+                        className="px-3.5 py-1.5 rounded-lg font-semibold inline-flex items-center gap-1.5 whitespace-nowrap text-white cursor-pointer"
+                        style={{ backgroundColor: accent }}
+                      >
+                        <Plus size={14} />
+                        <span>Add Team / B2B Agent</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                {canManageTeam && (
-                  <button
-                    type="button"
-                    disabled={isCoreStaffCapReached}
-                    title={
-                      isCoreStaffCapReached
-                        ? 'All 5 operational staff slots (Staff 1–Staff 5) are active'
-                        : 'Add team member'
-                    }
-                    onClick={() => {
-                      if (isCoreStaffCapReached) {
-                        setNoticeMsg(
-                          'All 5 operational staff slots (Staff 1–Staff 5) are occupied. Allocate an existing staff slot in the Staff Allocation panel above.'
-                        );
-                        return;
-                      }
-                      setTmStoreIds(stores.length === 1 ? [stores[0].id] : []);
-                      setShowAddMemberModal(true);
-                    }}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 ${
-                      isCoreStaffCapReached
-                        ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                        : 'text-white cursor-pointer'
-                    }`}
-                    style={isCoreStaffCapReached ? undefined : { backgroundColor: accent }}
+                {/* Multi-Criteria Filter Bar */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-2 border-t border-slate-100 text-xs">
+                  <div className="relative">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={staffSearch}
+                      onChange={(e) => setStaffSearch(e.target.value)}
+                      placeholder="Search name, email, mobile, beat..."
+                      className="w-full pl-8 pr-3 py-1.5 border border-slate-300 rounded-lg"
+                    />
+                  </div>
+                  <select
+                    value={staffRoleFilter}
+                    onChange={(e) => setStaffRoleFilter(e.target.value)}
+                    aria-label="Filter by role"
+                    className="px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white"
                   >
-                    <Plus size={14} />
-                    <span>
-                      {isCoreStaffCapReached ? '5/5 Staff Slots Allocated' : 'Add Team / B2B Agent'}
-                    </span>
-                  </button>
-                )}
+                    <option value="ALL">All Roles</option>
+                    {Object.entries(ROLE_LABELS).map(([k, lbl]) => (
+                      <option key={k} value={k}>
+                        {lbl}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={staffBeatFilter}
+                    onChange={(e) => setStaffBeatFilter(e.target.value)}
+                    aria-label="Filter by beat or PIN"
+                    className="px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white"
+                  >
+                    <option value="ALL">All Beats / PINs</option>
+                    {distinctTeamBeats.map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={staffStatusFilter}
+                    onChange={(e) => setStaffStatusFilter(e.target.value as any)}
+                    aria-label="Filter by status"
+                    className="px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white"
+                  >
+                    <option value="ALL">All Statuses</option>
+                    <option value="Active">Active</option>
+                    <option value="Deactivated">Deactivated</option>
+                  </select>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
@@ -2389,7 +2776,7 @@ export default function PartnerScopedWorkspacePage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
-                    {rosterMembers.map((m) => (
+                    {filteredRosterMembers.map((m) => (
                       <tr key={m.id} className="hover:bg-slate-50/70">
                         <td className="py-3 px-4">
                           <div className="font-bold text-slate-900">{m.name}</div>
@@ -2406,7 +2793,7 @@ export default function PartnerScopedWorkspacePage() {
                               Non-Territory B2B ({m.assignedCategories?.join(', ') || 'Own Records'})
                             </span>
                           ) : m.role === 'PARTNER_OWNER' || m.assignedStoreIds.length === 0 ? (
-                            'All Brand Stores / Hubs'
+                            m.assignedBeatOrPin ? `Beat/PIN: ${m.assignedBeatOrPin}` : 'All Brand Stores / Hubs'
                           ) : (
                             m.assignedStoreIds
                               .map((sid) => storeLookup.get(sid)?.name || sid)
@@ -2427,9 +2814,18 @@ export default function PartnerScopedWorkspacePage() {
                             <button
                               type="button"
                               onClick={() => openMemberEditor(m)}
-                              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-semibold cursor-pointer"
+                              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-semibold inline-flex items-center gap-1 cursor-pointer"
                             >
-                              Edit Access
+                              <Shield size={11} />
+                              <span>Edit Access</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('PROMOTION_MASTER')}
+                              className="px-2.5 py-1 bg-red-50 hover:bg-red-100 border border-red-200 text-red-800 rounded font-semibold inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              <Award size={11} />
+                              <span>Promote</span>
                             </button>
                             {m.role !== 'PARTNER_OWNER' && m.id !== session.memberId && (
                               <button
@@ -2455,6 +2851,39 @@ export default function PartnerScopedWorkspacePage() {
               </div>
             </section>
           </div>
+        )}
+
+        {/* ====================================================================
+            TERRITORY & TEAM MODULE 3: MASTER ROLE (PERMISSION MATRIX & SESSION LOCK)
+           ==================================================================== */}
+        {!isXpokart && effectiveTab === 'MASTER_ROLE' && brandOwnerProfile && (
+          <Suspense fallback={<EmbeddedModuleLoading />}>
+            <TerritoryMasterRoleView
+              profile={brandOwnerProfile}
+              actorName={session.memberName}
+              onNavigateToPromotion={(sid) => {
+                setPromoSelectedStaffId(sid);
+                setActiveTab('PROMOTION_MASTER');
+              }}
+              onNavigateToMasterStaff={() => setActiveTab('RBAC_TEAM')}
+            />
+          </Suspense>
+        )}
+
+        {/* ====================================================================
+            TERRITORY & TEAM MODULE 4: PROMOTION MASTER
+           ==================================================================== */}
+        {!isXpokart && effectiveTab === 'PROMOTION_MASTER' && brandOwnerProfile && (
+          <Suspense fallback={<EmbeddedModuleLoading />}>
+            <TerritoryPromotionMasterView
+              profile={brandOwnerProfile}
+              actorName={session.memberName}
+              actorRole={session.memberRole}
+              initialStaffId={promoSelectedStaffId}
+              onNavigateToMasterRole={() => setActiveTab('MASTER_ROLE')}
+              onNavigateToMasterStaff={() => setActiveTab('RBAC_TEAM')}
+            />
+          </Suspense>
         )}
 
         {/* ====================================================================
@@ -2689,13 +3118,13 @@ export default function PartnerScopedWorkspacePage() {
         )}
 
         {/* ====================================================================
-            INDIA POST KOTA DIVISION MODULES (TRANSFERRED INTO BRAND PORTAL)
+            DEPARTMENT OF POST (BRD-INPOST-01): DIVISIONAL & STATUTORY GOVERNANCE ONLY
            ==================================================================== */}
         {isIndiaPost && effectiveTab === 'IP_HIERARCHY' && (
           <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
             <div>
               <h2 className="text-base font-bold text-slate-900">
-                India Post Postal Hierarchy Tree ({hierarchyNodes.length} nodes)
+                Divisional Postal Hierarchy Tree ({hierarchyNodes.length} nodes)
               </h2>
               <p className="text-xs text-slate-500">
                 Circle → Region → Division → Subdivision → HPO → SO → BO
@@ -2716,23 +3145,10 @@ export default function PartnerScopedWorkspacePage() {
           </div>
         )}
 
-        {isIndiaPost && effectiveTab === 'IP_OFFICES' && (
-          <Suspense fallback={<EmbeddedModuleLoading />}>
-            <OfficeMasterView indiaPostOwnerAccess />
-          </Suspense>
-        )}
-
-        {isIndiaPost && effectiveTab === 'IP_BEATS' && (
-          <Suspense fallback={<EmbeddedModuleLoading />}>
-            <BeatManagementView indiaPostOwnerAccess />
-          </Suspense>
-        )}
-
-        {isIndiaPost && effectiveTab === 'IP_PROPERTIES' && (
+        {isIndiaPost && effectiveTab === 'IP_GEO_QUALITY' && (
           <div className="space-y-4">
             <div className="bg-white border border-slate-200 rounded-2xl p-3 flex flex-wrap gap-2 text-xs">
               {[
-                { key: 'FAMILY_HUB', label: 'Unified Property & Family Hub' },
                 { key: 'LOCATION_INTEL', label: '11-Level Geo Hub & Privacy Map' },
                 { key: 'DATA_QUALITY', label: 'Duplicate & Data Quality Audit' },
                 { key: 'ADDRESS', label: 'Address Resolution Engine' },
@@ -2740,10 +3156,10 @@ export default function PartnerScopedWorkspacePage() {
                 <button
                   key={item.key}
                   type="button"
-                  onClick={() => setIpGeoMode(item.key as any)}
+                  onClick={() => setActiveTabAndSub('IP_GEO_QUALITY', item.key)}
                   className={`px-3 py-1.5 rounded-lg font-semibold cursor-pointer ${
                     ipGeoMode === item.key
-                      ? 'bg-slate-900 text-white'
+                      ? 'bg-red-800 text-white'
                       : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
@@ -2752,16 +3168,11 @@ export default function PartnerScopedWorkspacePage() {
               ))}
             </div>
             <Suspense fallback={<EmbeddedModuleLoading />}>
-              {ipGeoMode === 'FAMILY_HUB' && <UnifiedPropertyFamilyHub indiaPostOwnerAccess />}
               {ipGeoMode === 'LOCATION_INTEL' && <LocationIntelligenceHub indiaPostOwnerAccess />}
               {ipGeoMode === 'DATA_QUALITY' && <DataQualityView />}
               {ipGeoMode === 'ADDRESS' && <AddressResolutionView />}
             </Suspense>
           </div>
-        )}
-
-        {isIndiaPost && effectiveTab === 'IP_STAFF_ROLES' && (
-          <IndiaPostStaffRolesPromotionsView actorOverride={session.memberName} />
         )}
 
         {isIndiaPost && effectiveTab === 'IP_SRM' && (
@@ -2912,6 +3323,107 @@ export default function PartnerScopedWorkspacePage() {
               {(ipLmsMode === 'LMS' || !retailActive) && <PostalLMSView />}
               {retailActive && ipLmsMode === 'STOREFRONT' && <IndiaPostStorefrontView />}
             </Suspense>
+          </div>
+        )}
+
+        {isIndiaPost && effectiveTab === 'IP_NOTIFICATIONS' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            <div className="lg:col-span-4 bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
+              <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Bell size={16} className="text-red-700" />
+                <span>Broadcast Divisional Notice</span>
+              </h2>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!divNotifTitle.trim() || !divNotifMessage.trim()) return;
+                  notificationService.broadcastNotification({
+                    title: divNotifTitle.trim(),
+                    message: divNotifMessage.trim(),
+                    senderName: session.memberName,
+                    category: 'CIRCULAR',
+                    priority: 'High',
+                    targetBeat: divNotifBeat,
+                  });
+                  setDivNotifTitle('');
+                  setDivNotifMessage('');
+                  setNoticeMsg(`Published divisional notice to ${divNotifBeat}.`);
+                }}
+                className="space-y-2.5 text-xs"
+              >
+                <input
+                  required
+                  value={divNotifTitle}
+                  onChange={(e) => setDivNotifTitle(e.target.value)}
+                  placeholder="Circular Title *"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                />
+                <select
+                  value={divNotifBeat}
+                  onChange={(e) => setDivNotifBeat(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white"
+                >
+                  <option value="ALL">All Division Beats (1–34)</option>
+                  {CONSOLIDATED_BEAT_MATRIX.slice(0, 12).map((b) => (
+                    <option key={b.beatNumber} value={b.beatNumber}>
+                      {b.beatNumber} · PIN {b.pincode}
+                    </option>
+                  ))}
+                </select>
+                <textarea
+                  required
+                  rows={3}
+                  value={divNotifMessage}
+                  onChange={(e) => setDivNotifMessage(e.target.value)}
+                  placeholder="Circular details *"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                />
+                <button
+                  type="submit"
+                  className="w-full py-2.5 bg-red-800 hover:bg-red-900 text-white font-semibold rounded-lg cursor-pointer"
+                >
+                  Publish Notice
+                </button>
+              </form>
+            </div>
+
+            <div className="lg:col-span-8 bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-bold text-slate-900">
+                  Divisional Circulars &amp; Alerts ({notifications.length})
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => notificationService.markAllAsRead(session.memberId)}
+                  className="px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-xs font-semibold cursor-pointer"
+                >
+                  Mark All Read
+                </button>
+              </div>
+              <div className="divide-y divide-slate-100 text-xs max-h-[480px] overflow-y-auto">
+                {notifications.map((n) => (
+                  <div key={n.id} className="py-3 flex flex-wrap items-start justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <div className="font-semibold text-slate-900">{n.title}</div>
+                      <p className="text-slate-600">{n.message}</p>
+                      <div className="text-[11px] font-mono text-slate-400">
+                        {n.targetBeat || 'ALL'} · {n.senderName || 'Division'} ·{' '}
+                        {new Date(n.timestamp).toLocaleString()}
+                      </div>
+                    </div>
+                    {!n.isRead && (
+                      <button
+                        type="button"
+                        onClick={() => notificationService.markAsRead(n.id, session.memberId)}
+                        className="px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
+                      >
+                        Mark Read
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
         </main>

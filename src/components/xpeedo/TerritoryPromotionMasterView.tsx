@@ -19,6 +19,7 @@ import { brandOwnerService } from '../../services/brandOwnerService';
 import { customerService } from '../../services/customerService';
 import { exportCsvWithBom } from '../../services/xpeedoOpsService';
 import { CONSOLIDATED_BEAT_MATRIX } from '../../data/consolidatedBeatMatrix';
+import OfficeBeatStaffMappedTree from '../common/OfficeBeatStaffMappedTree';
 
 interface TerritoryPromotionMasterViewProps {
   profile: SanitizedBrandOwnerProfile;
@@ -323,6 +324,25 @@ export default function TerritoryPromotionMasterView({
           </button>
         </div>
       )}
+
+      {/* Interactive Office-Wise Mapped Tree with Universal Search & Filter Console */}
+      <OfficeBeatStaffMappedTree
+        title="Interactive Office-Wise Mapped Tree (Promotion Master)"
+        subtitle="Click any Office, Beat, or Staff member in the tree to automatically pre-fill the promotion and transfer form below."
+        selectedStaffId={selectedStaffId}
+        selectedOfficeName={newOfficeName}
+        selectedBeat={newBeat}
+        onSelectStaff={(staffId) => handleSelectStaff(staffId)}
+        onSelectOffice={(officeName, pin) => {
+          setNewOfficeName(officeName);
+          setNewPincode(pin);
+        }}
+        onSelectBeat={(beatNum, officeName, pin) => {
+          setNewBeat(beatNum);
+          if (officeName) setNewOfficeName(officeName);
+          if (pin) setNewPincode(pin);
+        }}
+      />
 
       {/* Promotion Execution Form */}
       <form

@@ -403,8 +403,8 @@ export default function PartnerBrandManagementHub({
     const added = partnerBrandService.syncCoreStrategicPartners(true);
     setFeedbackMsg(
       added > 0
-        ? `Restored ${added} core anchor partner(s) (India Post, Xpeedo Logistics, Xpeedo EV).`
-        : 'All 3 core anchor brand partners (India Post, Xpeedo Logistics, Xpeedo EV) are already active.'
+        ? `Restored ${added} core India Post portal configuration(s).`
+        : 'India Post & Bulk Customer Hub portals are already active.'
     );
   };
 
@@ -417,15 +417,14 @@ export default function PartnerBrandManagementHub({
       <div className="px-6 py-5 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="text-xs font-medium text-slate-500">
-            Admin Control · Partner, Brand &amp; Theme Architecture
+            Admin Control · India Post &amp; Bulk Customer Hub Architecture
           </div>
           <h2 className="text-xl font-bold tracking-tight text-slate-900">
-            Partner &amp; Brand Management
+            India Post Hub &amp; Bulk Customer Management
           </h2>
           <p className="text-xs text-slate-600 max-w-2xl">
-            Manage Anchor &amp; Store Brand Partners (India Post, Xpeedo Logistics, Xpeedo EV),
-            linked stores, direct partners, and file-upload-free brand color/logo themes applied
-            dynamically to each partner&apos;s isolated login page and workspace.
+            Manage India Post &amp; Bulk Customer Showcase profiles,
+            linked post office desks, and dynamic portal configurations.
           </p>
         </div>
 
@@ -434,10 +433,10 @@ export default function PartnerBrandManagementHub({
             type="button"
             onClick={handleSyncCorePillars}
             className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0"
-            title="Ensure India Post, Xpeedo Logistics & Xpeedo EV pillars exist"
+            title="Ensure India Post portal configuration exists"
           >
             <RefreshCw size={13} />
-            <span>Sync Core Pillars</span>
+            <span>Sync India Post Core</span>
           </button>
           {commercialStores.length > 0 && (
             <button
@@ -1294,7 +1293,7 @@ export default function PartnerBrandManagementHub({
                           required
                           value={lsName}
                           onChange={(e) => setLsName(e.target.value)}
-                          placeholder="e.g. Talwandi Flagship Store"
+                          placeholder="e.g. Talwandi Sub Office Desk"
                           className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"
                         />
                       </div>

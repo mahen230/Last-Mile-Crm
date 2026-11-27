@@ -44,10 +44,10 @@ export default function XpeedoEvWorkWorkspace() {
   const role = xpeedoOpsService.resolvePlatformRole(userProfile);
   const canManageDepts = xpeedoOpsService.canPerform(userProfile, 'manageDepartments');
 
-  const departments = xpeedoOpsService.getDepartments('XPEEDO_EV', 'client-xpeedo-ev');
-  const projects = xpeedoOpsService.getProjects('XPEEDO_EV', 'client-xpeedo-ev');
-  const tasks = xpeedoOpsService.getTasks('XPEEDO_EV', 'client-xpeedo-ev');
-  const workReports = xpeedoOpsService.getWorkReports('XPEEDO_EV');
+  const departments = xpeedoOpsService.getDepartments('INDIA_POST', 'client-india-post');
+  const projects = xpeedoOpsService.getProjects('INDIA_POST', 'client-india-post');
+  const tasks = xpeedoOpsService.getTasks('INDIA_POST', 'client-india-post');
+  const workReports = xpeedoOpsService.getWorkReports('INDIA_POST');
 
   const pendingTl = workReports.filter((r) => r.approvalStage === 'PENDING_TL').length;
   const pendingPm = workReports.filter((r) => r.approvalStage === 'PENDING_PM').length;
@@ -65,12 +65,12 @@ export default function XpeedoEvWorkWorkspace() {
     if (!deptName.trim()) return;
     const saved = xpeedoOpsService.upsertDepartment(
       {
-        workspaceId: 'XPEEDO_EV',
-        clientId: 'client-xpeedo-ev',
+        workspaceId: 'INDIA_POST',
+        clientId: 'client-india-post',
         name: deptName.trim(),
-        code: deptCode.trim().toUpperCase() || `EV-${deptName.trim().slice(0, 3).toUpperCase()}`,
+        code: deptCode.trim().toUpperCase() || `IP-${deptName.trim().slice(0, 3).toUpperCase()}`,
         headName: deptHead.trim() || 'Unassigned',
-        description: deptDesc.trim() || 'Configurable EV work department.',
+        description: deptDesc.trim() || 'Configurable India Post operational unit.',
         isActive: true,
       },
       userProfile?.name || 'Admin',
@@ -80,7 +80,7 @@ export default function XpeedoEvWorkWorkspace() {
     setDeptCode('');
     setDeptHead('');
     setDeptDesc('');
-    showNotice(`Department "${saved.name}" added to Xpeedo EV.`);
+    showNotice(`Department "${saved.name}" added to India Post.`);
   };
 
   const handleSubmitWorkReport = (e: React.FormEvent) => {
@@ -88,12 +88,12 @@ export default function XpeedoEvWorkWorkspace() {
     if (!wrSummary.trim()) return;
     const created = xpeedoOpsService.submitWorkReport(
       {
-        workspaceId: 'XPEEDO_EV',
-        clientId: 'client-xpeedo-ev',
-        departmentId: wrDeptId || departments[0]?.id || 'dept-ev-ops',
+        workspaceId: 'INDIA_POST',
+        clientId: 'client-india-post',
+        departmentId: wrDeptId || departments[0]?.id || 'dept-ip-ops',
         projectId: wrProjectId || undefined,
-        employeeId: userProfile?.employeeId || userProfile?.id || 'EMP-EV',
-        employeeName: userProfile?.name || 'EV Team Member',
+        employeeId: userProfile?.employeeId || userProfile?.id || 'EMP-IP',
+        employeeName: userProfile?.name || 'India Post Staff',
         periodType: wrPeriod,
         reportDate: wrDate,
         hoursLogged: Number(wrHours) || 0,
@@ -122,27 +122,27 @@ export default function XpeedoEvWorkWorkspace() {
   };
 
   return (
-    <div className="space-y-6" id="xpeedo-ev-work-workspace">
+    <div className="space-y-6" id="india-post-work-workspace">
       {/* Header */}
       <div className="bg-slate-900 text-white rounded-xl border border-slate-800 p-6 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <div className="text-xs font-mono text-blue-400 uppercase tracking-wide">
-              Client #2 · Internal &amp; Client-Facing Work Management System
+            <div className="text-xs font-mono text-red-400 uppercase tracking-wide">
+              India Post · Postal Operations &amp; Approval Management
             </div>
             <h1 className="text-2xl font-bold tracking-tight mt-1">
-              Xpeedo EV — Work Management &amp; Approvals
+              India Post — Work Management &amp; Approvals
             </h1>
             <p className="text-xs text-slate-300 mt-1 max-w-2xl">
-              Manage EV operations departments, projects, tasks, Daily/Weekly/Monthly work reports,
-              and multi-tier approval chain (Employee → Team Leader → Project Manager → Owner).
+              Manage postal departments, projects, tasks, Daily/Weekly/Monthly work reports,
+              and multi-tier approval chain (Staff → Team Leader → Project Manager → Owner).
             </p>
           </div>
           <button
             type="button"
             onClick={() =>
               exportCsvWithBom(
-                'xpeedo_ev_work_reports',
+                'indiapost_work_reports',
                 ['Report ID', 'Employee', 'Period', 'Date', 'Hours', 'Tasks Completed', 'Approval Stage', 'Summary'],
                 workReports.map((w) => [
                   w.id,
@@ -268,12 +268,12 @@ export default function XpeedoEvWorkWorkspace() {
         </div>
       )}
 
-      {/* TAB 2: PROJECTS & TASKS (SCOPED STRICTLY TO XPEEDO_EV) */}
+      {/* TAB 2: PROJECTS & TASKS (SCOPED STRICTLY TO INDIA_POST) */}
       {activeTab === 'PROJECTS_TASKS' && (
         <ProjectsAndTasksView
           mode="COMBINED"
-          lockedClientId="client-xpeedo-ev"
-          lockedWorkspaceId="XPEEDO_EV"
+          lockedClientId="client-india-post"
+          lockedWorkspaceId="INDIA_POST"
         />
       )}
 
@@ -284,7 +284,7 @@ export default function XpeedoEvWorkWorkspace() {
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <Layers size={16} className="text-blue-600" />
-                <span>Xpeedo EV Configurable Departments ({departments.length})</span>
+                <span>India Post Configurable Departments ({departments.length})</span>
               </h2>
             </div>
             <div className="divide-y divide-slate-100 text-xs">

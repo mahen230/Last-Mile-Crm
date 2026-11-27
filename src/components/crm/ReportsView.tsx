@@ -24,35 +24,52 @@ import {
   Layers,
   ChevronRight,
   ShieldCheck,
+  Target,
+  Award,
+  Tag,
 } from 'lucide-react';
 import { POSTAL_PRODUCTS } from '../../data/productsData';
 import { customerService } from '../../services/customerService';
 import { operationsService } from '../../services/operationsService';
 import { staffPermissionService } from '../../services/staffPermissionService';
+import { productTargetService } from '../../services/productTargetService';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import {
   ALL_33_BEATS_FUEL_DATA,
-  BeatFuelMapping,
   DEPARTMENTAL_FUEL_RATE_PER_KM,
   STANDARD_MONTHLY_WORKING_DAYS,
-  calculateBeatFuelBill,
 } from '../../data/beatFuelData';
-import { DailyArticleEntry, ArticleQuantityPatch } from '../../types/models';
+import {
+  DailyArticleEntry,
+  ArticleQuantityPatch,
+  POSTAL_SERVICE_TAG_OPTIONS,
+} from '../../types/models';
 
-type ReportTab = 'fuel-matrix' | 'dss-articles' | 'crm-demographics';
+type ReportTab = 'superior-mis' | 'fuel-matrix' | 'dss-articles' | 'crm-demographics';
 
 export default function ReportsView() {
   const { userProfile } = useAuth();
   const currentStaff = staffPermissionService.getActiveSession() || userProfile;
+  const isSuperAdmin = staffPermissionService.isSuperAdmin(currentStaff);
+  const isSuperior = staffPermissionService.isSuperiorRole(currentStaff);
 
-  const [activeTab, setActiveTab] = useState<ReportTab>('fuel-matrix');
+  const [activeTab, setActiveTab] = useState<ReportTab>(() =>
+    isSuperior || isSuperAdmin ? 'superior-mis' : 'fuel-matrix'
+  );
   const [beatSearch, setBeatSearch] = useState('');
   const [terrainFilter, setTerrainFilter] = useState<string>('ALL');
   const [dssFilterBeat, setDssFilterBeat] = useState<string>('ALL');
 
-  // Daily entries state
+  // Daily entries state (strictly beat/office/staff scoped)
   const [dailyEntries, setDailyEntries] = useState<DailyArticleEntry[]>(() =>
-    operationsService.getDailyEntries()
+    operationsService.getDailyEntries().filter((d) =>
+      staffPermissionService.matchesUserBeatScope(currentStaff, {
+        beatNo: d.beatNo,
+        assignedStaffName: d.staffName,
+        assignedStaffEmail: d.staffEmail,
+        officeName: d.officeName,
+      })
+    )
   );
 
   // Safe Article Quantity Patch Modal State
@@ -71,7 +88,16 @@ export default function ReportsView() {
   const [patchNotice, setPatchNotice] = useState<string | null>(null);
 
   const refreshDailyEntries = () => {
-    setDailyEntries([...operationsService.getDailyEntries()]);
+    setDailyEntries(
+      operationsService.getDailyEntries().filter((d) =>
+        staffPermissionService.matchesUserBeatScope(currentStaff, {
+          beatNo: d.beatNo,
+          assignedStaffName: d.staffName,
+          assignedStaffEmail: d.staffEmail,
+          officeName: d.officeName,
+        })
+      )
+    );
   };
 
   // Open modal with prefilled data
@@ -128,9 +154,21 @@ export default function ReportsView() {
     }
   };
 
-  // All 33 Beats Fuel Metrics calculations
+  // Scoped Beats Fuel Metrics calculations
+  const scopedFuelBeats = useMemo(() => {
+    return ALL_33_BEATS_FUEL_DATA.filter((b) =>
+      staffPermissionService.matchesUserBeatScope(currentStaff, {
+        beatNo: b.beatNumber,
+        assignedStaffId: b.assignedStaffId,
+        assignedStaffName: b.assignedPostmanName,
+        officeName: b.officeName,
+        pincode: b.pincode,
+      })
+    );
+  }, [currentStaff]);
+
   const filteredFuelBeats = useMemo(() => {
-    return ALL_33_BEATS_FUEL_DATA.filter((b) => {
+    return scopedFuelBeats.filter((b) => {
       const matchSearch =
         beatSearch.trim() === '' ||
         b.beatNumber.toLowerCase().includes(beatSearch.toLowerCase()) ||
@@ -143,33 +181,71 @@ export default function ReportsView() {
 
       return matchSearch && matchTerrain;
     });
-  }, [beatSearch, terrainFilter]);
+  }, [scopedFuelBeats, beatSearch, terrainFilter]);
 
-  const totalSanctionedKmAllBeats = ALL_33_BEATS_FUEL_DATA.reduce(
+  const totalSanctionedKmAllBeats = scopedFuelBeats.reduce(
     (sum, b) => sum + b.sanctionedDailyKm,
     0
   );
-  const totalDailyFuelAllowanceAllBeats = ALL_33_BEATS_FUEL_DATA.reduce(
+  const totalDailyFuelAllowanceAllBeats = scopedFuelBeats.reduce(
     (sum, b) => sum + b.dailyFuelAllowance,
     0
   );
-  const totalMonthlyFuelAllowanceAllBeats = ALL_33_BEATS_FUEL_DATA.reduce(
+  const totalMonthlyFuelAllowanceAllBeats = scopedFuelBeats.reduce(
     (sum, b) => sum + b.monthlyFuelAllowance,
     0
   );
 
-  // CRM & Demographics Data
-  const customers = customerService.getCustomers();
-  const leads = customerService.getLeads();
-  const followUps = customerService.getFollowUps();
+  // Scoped CRM & Demographics Data
+  const customers = customerService.getScopedCustomers(currentStaff);
+  const leads = customerService.getScopedLeads(currentStaff);
+  const followUps = customerService.getScopedFollowUps(currentStaff);
 
   const sectorCounts: Record<string, number> = {};
   customers.forEach((c) => {
-    const sec = c.sector ? `Sector ${c.sector}` : c.area || 'Keshavpura';
+    const sec = c.sector ? `Sector ${c.sector}` : c.area || c.colony || 'Assigned Beat';
     sectorCounts[sec] = (sectorCounts[sec] || 0) + 1;
   });
 
-  const convertedLeads = leads.filter((l) => l.stage === 'Completed').length;
+  const convertedLeads = leads.filter(
+    (l) => l.stage === 'Completed' || l.stage === 'Converted - Product Opened'
+  ).length;
+
+  const targetProgressRows = useMemo(
+    () => productTargetService.computeScopedTargetProgress(currentStaff),
+    [currentStaff, leads.length, customers.length]
+  );
+
+  const scopedStaffRoster = useMemo(() => {
+    return staffPermissionService
+      .getAllStaffProfiles()
+      .filter(
+        (s) =>
+          (!s.brandId || s.brandId === 'india-post') &&
+          staffPermissionService.matchesUserBeatScope(currentStaff, {
+            beatNo: s.beat,
+            officeId: s.officeId,
+            officeName: s.assignedOffice,
+            pincode: s.officePincode,
+            assignedStaffId: s.employeeId || s.id,
+            assignedStaffEmail: s.email,
+          })
+      );
+  }, [currentStaff]);
+
+  const serviceTagCounts = useMemo(() => {
+    return POSTAL_SERVICE_TAG_OPTIONS.map((tag) => {
+      const custCount = customers.filter((c) =>
+        (c.interestedServiceTags || []).includes(tag)
+      ).length;
+      const leadCount = leads.filter(
+        (l) =>
+          (l.serviceTags || []).includes(tag) ||
+          (l.productName || '').toLowerCase().includes(tag.split(' ')[0].toLowerCase())
+      ).length;
+      return { tag, custCount, leadCount };
+    });
+  }, [customers, leads]);
 
   // Filtered DSS Entries
   const filteredDailyEntries = useMemo(() => {
@@ -179,7 +255,7 @@ export default function ReportsView() {
     );
   }, [dailyEntries, dssFilterBeat]);
 
-  // Export 33 Beats Fuel CSV
+  // Export Scoped Beats Fuel CSV
   const handleExportFuelMatrixCSV = () => {
     const headers = [
       'Beat Number',
@@ -197,7 +273,7 @@ export default function ReportsView() {
       'Route Description',
     ];
 
-    const rows = ALL_33_BEATS_FUEL_DATA.map((b) => [
+    const rows = scopedFuelBeats.map((b) => [
       `"${b.beatNumber}"`,
       `"${b.assignedPostmanName}"`,
       `"${b.assignedStaffId}"`,
@@ -218,7 +294,49 @@ export default function ReportsView() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `DADABARI_SO_33_BEATS_FUEL_ALLOWANCE_MATRIX_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `INDIA_POST_SCOPED_FUEL_ALLOWANCE_MATRIX_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  const handleExportSuperiorMisCSV = () => {
+    const headers = [
+      'Target ID',
+      'Product Code',
+      'Product / Service',
+      'Service Tag',
+      'Scope',
+      'Period',
+      'Target Units',
+      'Achieved Units',
+      'Unit %',
+      'Target Revenue (INR)',
+      'Achieved Revenue (INR)',
+      'Pipeline Leads',
+      'Converted Leads',
+      'Tagged Citizens',
+    ];
+    const rows = targetProgressRows.map((r) => [
+      `"${r.target.id}"`,
+      `"${r.target.productCode}"`,
+      `"${r.target.productName.replace(/"/g, '""')}"`,
+      `"${r.target.serviceTag.replace(/"/g, '""')}"`,
+      `"${r.target.scopeType}${r.target.officeName ? ` · ${r.target.officeName}` : ''}"`,
+      `"${r.target.period}"`,
+      r.target.targetUnits,
+      r.achievedUnits,
+      `${r.unitProgressPct}%`,
+      r.target.targetRevenueInr,
+      r.achievedRevenueInr,
+      r.activePipelineCount,
+      r.convertedCount,
+      r.taggedCustomersCount,
+    ]);
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `INDIA_POST_SUPERIOR_TARGET_MIS_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
 
@@ -294,6 +412,10 @@ export default function ReportsView() {
     link.click();
   };
 
+  const scopeSummaryLabel = isSuperAdmin
+    ? `All Divisional Offices & ${scopedFuelBeats.length} Sanctioned Delivery Beats · Protected DSS & Superior MIS`
+    : `${currentStaff?.subOffice || currentStaff?.assignedOffice || 'Assigned Post Office'} (${currentStaff?.officePincode || currentStaff?.pincode || '324009'}) · ${currentStaff?.beat || `${scopedFuelBeats.length} Scoped Beats`} · Protected DSS & Superior MIS`;
+
   return (
     <div className="space-y-6" id="reports-view-root">
       {/* Header */}
@@ -304,37 +426,47 @@ export default function ReportsView() {
               <BarChart2 size={18} />
             </div>
             <h2 className="text-xl font-bold text-slate-900">
-              Departmental Operational Reports & Beat Fuel Billing System
+              India Post Superior Reporting &amp; Departmental Operations System
             </h2>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Dadabari Sub Post Office (324009) · 33 Sanctioned Delivery Beats · Protected Daily Summary Sheet (DSS) & Fuel Scale @ ₹3.60/KM
+            {scopeSummaryLabel}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            to="/master-data-upload"
-            className="px-3.5 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition"
+            to="/product-targets"
+            className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition"
           >
-            <Download size={14} />
-            <span>Master Upload & Fuel Portal →</span>
+            <Target size={14} />
+            <span>Manage Targets →</span>
           </Link>
+
+          {activeTab === 'superior-mis' && (
+            <button
+              onClick={handleExportSuperiorMisCSV}
+              className="px-3.5 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+            >
+              <Download size={14} />
+              <span>Export Target MIS (CSV)</span>
+            </button>
+          )}
 
           {activeTab === 'fuel-matrix' && (
             <button
               onClick={handleExportFuelMatrixCSV}
-              className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition"
+              className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
             >
               <Download size={14} />
-              <span>Export 33-Beat Fuel Matrix (CSV)</span>
+              <span>Export Scoped Fuel Matrix (CSV)</span>
             </button>
           )}
 
           {activeTab === 'dss-articles' && (
             <button
               onClick={handleExportDssCSV}
-              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition"
+              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
             >
               <Download size={14} />
               <span>Export Protected DSS Logs (CSV)</span>
@@ -344,17 +476,29 @@ export default function ReportsView() {
           {activeTab === 'crm-demographics' && (
             <button
               onClick={() => {
-                const blob = new Blob([customerService.exportCustomersToCSV()], { type: 'text/csv' });
+                const headers = ['ID', 'Name', 'Mobile', 'Colony', 'PIN', 'Beat', 'Active Scheme', 'Interested Tags'];
+                const rows = customers.map((c) => [
+                  `"${c.id}"`,
+                  `"${(c.name || '').replace(/"/g, '""')}"`,
+                  `"${c.mobile || ''}"`,
+                  `"${(c.colony || c.area || '').replace(/"/g, '""')}"`,
+                  `"${c.pincode || ''}"`,
+                  `"${c.beatNo || ''}"`,
+                  `"${(c.financialInterest || c.products?.[0]?.productName || '').replace(/"/g, '""')}"`,
+                  `"${(c.interestedServiceTags || []).join('; ').replace(/"/g, '""')}"`,
+                ]);
+                const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `POSTAL_REPORT_${new Date().toISOString().split('T')[0]}.csv`;
+                a.download = `SCOPED_CITIZEN_REPORT_${new Date().toISOString().split('T')[0]}.csv`;
                 a.click();
               }}
-              className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition"
+              className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
             >
               <Download size={14} />
-              <span>Export Customer Dump</span>
+              <span>Export Scoped Citizens (CSV)</span>
             </button>
           )}
         </div>
@@ -363,34 +507,53 @@ export default function ReportsView() {
       {/* Tab Switcher */}
       <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto">
         <button
+          onClick={() => setActiveTab('superior-mis')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+            activeTab === 'superior-mis'
+              ? 'bg-red-800 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <Target size={15} />
+          <span>Superior Targets, Team &amp; Pipeline MIS</span>
+          <span
+            className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
+              activeTab === 'superior-mis' ? 'bg-red-950 text-amber-200' : 'bg-slate-200 text-slate-700'
+            }`}
+          >
+            {targetProgressRows.length} Targets
+          </span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('fuel-matrix')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
             activeTab === 'fuel-matrix'
               ? 'bg-amber-600 text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
           }`}
         >
           <Fuel size={15} />
-          <span>Beat-Wise Fuel Bill Mapping (All 33 Beats)</span>
+          <span>Beat-Wise Fuel Bill Mapping</span>
           <span
             className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
               activeTab === 'fuel-matrix' ? 'bg-amber-700 text-amber-100' : 'bg-slate-200 text-slate-700'
             }`}
           >
-            33 Beats
+            {scopedFuelBeats.length} Beats
           </span>
         </button>
 
         <button
           onClick={() => setActiveTab('dss-articles')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
             activeTab === 'dss-articles'
               ? 'bg-blue-600 text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
           }`}
         >
           <ShieldCheck size={15} />
-          <span>Protected DSS & Article Quantities</span>
+          <span>Protected DSS &amp; Article Quantities</span>
           <span
             className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
               activeTab === 'dss-articles' ? 'bg-blue-700 text-blue-100' : 'bg-slate-200 text-slate-700'
@@ -402,19 +565,222 @@ export default function ReportsView() {
 
         <button
           onClick={() => setActiveTab('crm-demographics')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
             activeTab === 'crm-demographics'
-              ? 'bg-red-700 text-white shadow-xs'
+              ? 'bg-slate-900 text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
           }`}
         >
           <TrendingUp size={15} />
-          <span>CRM Intelligence & Territory Demographics</span>
+          <span>CRM Intelligence &amp; Demographics</span>
         </button>
       </div>
 
       {/* ======================================================== */}
-      {/* TAB 1: ALL 33 BEATS FUEL BILL MAPPING MATRIX */}
+      {/* TAB 0: SUPERIOR TARGETS, TEAM & PIPELINE MIS */}
+      {/* ======================================================== */}
+      {activeTab === 'superior-mis' && (
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-red-950 via-slate-900 to-slate-950 text-white p-5 rounded-2xl border border-red-900/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="text-[11px] font-mono uppercase tracking-wider text-amber-300 font-bold">
+                Superior Jurisdiction · {isSuperAdmin ? 'All India Post Units (Admin / Developer)' : `${currentStaff?.role || 'Superior'} · ${currentStaff?.subOffice || currentStaff?.assignedOffice || 'Assigned Office'}`}
+              </div>
+              <h3 className="text-lg font-black">
+                Scoped Performance Rollup: Targets, Staff Productivity &amp; Service Interest
+              </h3>
+              <p className="text-xs text-slate-300 max-w-2xl">
+                Every figure below is dynamically scoped to your post, office PIN, and beat authority. Superiors see only their jurisdiction&apos;s staff, leads, targets, and citizen tags.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <Link
+                to="/master-search"
+                className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/15 transition"
+              >
+                Master Search Console →
+              </Link>
+              <Link
+                to="/india-post-storefront"
+                className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-black transition"
+              >
+                Open Showcase →
+              </Link>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white border border-slate-200 p-4 rounded-2xl">
+              <div className="text-xs font-semibold text-slate-500 flex items-center justify-between">
+                <span>Scoped Rostered Staff</span>
+                <Users size={15} className="text-blue-600" />
+              </div>
+              <div className="text-2xl font-black text-slate-900 mt-1 tabular-nums">{scopedStaffRoster.length}</div>
+              <div className="text-[11px] text-slate-500 mt-1">Within active PIN / beat jurisdiction</div>
+            </div>
+            <div className="bg-white border border-slate-200 p-4 rounded-2xl">
+              <div className="text-xs font-semibold text-slate-500 flex items-center justify-between">
+                <span>Total Scoped Leads</span>
+                <TrendingUp size={15} className="text-red-700" />
+              </div>
+              <div className="text-2xl font-black text-slate-900 mt-1 tabular-nums">{leads.length}</div>
+              <div className="text-[11px] text-emerald-700 font-semibold mt-1">{convertedLeads} converted</div>
+            </div>
+            <div className="bg-white border border-slate-200 p-4 rounded-2xl">
+              <div className="text-xs font-semibold text-slate-500 flex items-center justify-between">
+                <span>Scoped Citizens</span>
+                <CheckCircle2 size={15} className="text-emerald-600" />
+              </div>
+              <div className="text-2xl font-black text-slate-900 mt-1 tabular-nums">{customers.length}</div>
+              <div className="text-[11px] text-slate-500 mt-1">{followUps.filter((f) => f.currentStatus !== 'Completed').length} pending follow-ups</div>
+            </div>
+            <div className="bg-white border border-slate-200 p-4 rounded-2xl">
+              <div className="text-xs font-semibold text-slate-500 flex items-center justify-between">
+                <span>Avg Target Unit Progress</span>
+                <Award size={15} className="text-amber-600" />
+              </div>
+              <div className="text-2xl font-black text-slate-900 mt-1 tabular-nums">
+                {targetProgressRows.length > 0
+                  ? Math.round(targetProgressRows.reduce((s, r) => s + r.unitProgressPct, 0) / targetProgressRows.length)
+                  : 0}
+                %
+              </div>
+              <div className="text-[11px] text-slate-500 mt-1">{targetProgressRows.length} active targets</div>
+            </div>
+          </div>
+
+          {/* Product Target Achievement Table */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Product &amp; Scheme Target Achievement</h3>
+                <p className="text-[11px] text-slate-500">Live progress computed from converted leads, active pipeline &amp; tagged citizens</p>
+              </div>
+              <Link to="/product-targets" className="text-xs font-bold text-red-700 hover:underline">
+                Open Full Target Dashboard →
+              </Link>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-600 uppercase text-[10px] font-bold border-b border-slate-200">
+                    <th className="p-3">Product / Service</th>
+                    <th className="p-3">Scope</th>
+                    <th className="p-3 text-right">Units (Ach / Tgt)</th>
+                    <th className="p-3 text-right">Revenue (Ach / Tgt)</th>
+                    <th className="p-3 text-center">Pipeline / Due F/U</th>
+                    <th className="p-3 text-center">Unit Progress</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {targetProgressRows.map((row) => (
+                    <tr key={row.target.id} className="hover:bg-slate-50">
+                      <td className="p-3">
+                        <div className="font-bold text-slate-900">{row.target.productName}</div>
+                        <div className="text-[10px] text-slate-500 font-mono">{row.target.productCode} · {row.target.serviceTag}</div>
+                      </td>
+                      <td className="p-3 text-slate-600">
+                        <span className="font-semibold">{row.target.scopeType}</span>
+                        {row.target.officeName && <div className="text-[10px] text-slate-500">{row.target.officeName} {row.target.pincode ? `(${row.target.pincode})` : ''}</div>}
+                      </td>
+                      <td className="p-3 text-right font-mono font-bold text-slate-900">
+                        {row.achievedUnits} / {row.target.targetUnits}
+                      </td>
+                      <td className="p-3 text-right font-mono">
+                        <div className="font-bold text-emerald-700">₹{row.achievedRevenueInr.toLocaleString('en-IN')}</div>
+                        <div className="text-[10px] text-slate-500">of ₹{row.target.targetRevenueInr.toLocaleString('en-IN')}</div>
+                      </td>
+                      <td className="p-3 text-center font-mono text-slate-700">
+                        {row.activePipelineCount} open · {row.dueFollowUpsCount} due
+                      </td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 bg-slate-100 h-2 rounded-full overflow-hidden min-w-[70px]">
+                            <div
+                              className="bg-red-700 h-full rounded-full"
+                              style={{ width: `${row.unitProgressPct}%` }}
+                            />
+                          </div>
+                          <span className="font-mono font-bold text-slate-900 w-9 text-right">{row.unitProgressPct}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Scoped Staff Performance Breakdown */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+              <div className="p-4 border-b border-slate-200 bg-slate-50">
+                <h3 className="text-sm font-bold text-slate-900">Jurisdiction Team Activity Rollup</h3>
+                <p className="text-[11px] text-slate-500">Leads and citizens recorded under your scoped team roster</p>
+              </div>
+              <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+                {scopedStaffRoster.slice(0, 25).map((st) => {
+                  const stLeads = leads.filter(
+                    (l) =>
+                      l.assignedStaffId === (st.employeeId || st.id) ||
+                      l.sourceStaffId === (st.employeeId || st.id) ||
+                      (l.beatNo && st.beat && l.beatNo.toLowerCase() === st.beat.toLowerCase())
+                  );
+                  const stConv = stLeads.filter(
+                    (l) => l.stage === 'Completed' || l.stage === 'Converted - Product Opened'
+                  ).length;
+                  return (
+                    <div key={st.id} className="p-3.5 flex items-center justify-between gap-3 text-xs hover:bg-slate-50">
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-900 truncate">{st.name}</div>
+                        <div className="text-[11px] text-slate-500 truncate">
+                          {st.role} · {st.assignedOffice} ({st.officePincode || '324009'}) · {st.beat || 'Office Desk'}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 font-mono">
+                        <div className="font-bold text-slate-900">{stLeads.length} leads</div>
+                        <div className="text-[10px] text-emerald-700 font-semibold">{stConv} converted</div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {scopedStaffRoster.length === 0 && (
+                  <div className="p-6 text-center text-xs text-slate-500">No staff profiles matched your current scope.</div>
+                )}
+              </div>
+            </div>
+
+            {/* Citizen Service Tag Interest Breakdown */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+              <div className="p-4 border-b border-slate-200 bg-slate-50">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                  <Tag size={15} className="text-red-700" />
+                  <span>Citizen Interest Tags &amp; Demand Matrix</span>
+                </h3>
+                <p className="text-[11px] text-slate-500">Tagged citizens &amp; product leads across postal service categories</p>
+              </div>
+              <div className="p-4 space-y-3">
+                {serviceTagCounts.map((row) => (
+                  <div key={row.tag} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                    <div className="font-semibold text-slate-800 pr-2">{row.tag}</div>
+                    <div className="flex items-center gap-3 shrink-0 font-mono">
+                      <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">
+                        {row.custCount} Citizens
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-red-100 text-red-800 font-bold">
+                        {row.leadCount} Leads
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* TAB 1: BEAT FUEL BILL MAPPING MATRIX */}
       {/* ======================================================== */}
       {activeTab === 'fuel-matrix' && (
         <div className="space-y-6">
@@ -422,12 +788,12 @@ export default function ReportsView() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 p-5 rounded-2xl shadow-xs">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-amber-800 font-bold uppercase tracking-wider">Sanctioned Beats</span>
+                <span className="text-xs text-amber-800 font-bold uppercase tracking-wider">Scoped Sanctioned Beats</span>
                 <MapPin size={18} className="text-amber-600" />
               </div>
-              <div className="text-3xl font-black text-amber-950 mt-1">33 Beats</div>
+              <div className="text-3xl font-black text-amber-950 mt-1">{scopedFuelBeats.length} Beats</div>
               <div className="text-xs text-amber-700 mt-2 flex items-center gap-1 font-medium">
-                <CheckCircle2 size={13} /> Dadabari S.O. & Kota Delivery Area
+                <CheckCircle2 size={13} /> {isSuperAdmin ? 'All Division Delivery Beats' : `${currentStaff?.subOffice || 'Assigned Office'} Scope`}
               </div>
             </div>
 
@@ -453,7 +819,7 @@ export default function ReportsView() {
                 {totalSanctionedKmAllBeats} <span className="text-xs font-normal text-slate-500">KM / Day</span>
               </div>
               <div className="text-xs text-slate-500 mt-2 font-medium">
-                Avg {(totalSanctionedKmAllBeats / 33).toFixed(1)} KM per beat route
+                Avg {scopedFuelBeats.length > 0 ? (totalSanctionedKmAllBeats / scopedFuelBeats.length).toFixed(1) : '0.0'} KM per beat route
               </div>
             </div>
 
@@ -493,7 +859,7 @@ export default function ReportsView() {
                 onChange={(e) => setTerrainFilter(e.target.value)}
                 className="text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20"
               >
-                <option value="ALL">All Terrains ({ALL_33_BEATS_FUEL_DATA.length})</option>
+                <option value="ALL">All Terrains ({scopedFuelBeats.length})</option>
                 <option value="Urban High-Density">Urban High-Density</option>
                 <option value="Commercial Mixed">Commercial Mixed</option>
                 <option value="Extended Residential">Extended Residential</option>
@@ -502,20 +868,20 @@ export default function ReportsView() {
             </div>
           </div>
 
-          {/* Table of All 33 Beats */}
+          {/* Table of Scoped Beats */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
             <div className="p-4 border-b border-slate-200 bg-slate-50/70 flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <Fuel size={16} className="text-amber-600" />
-                  <span>33 Sanctioned Beats Fuel Allowance Matrix</span>
+                  <span>Sanctioned Beats Fuel Allowance Matrix</span>
                 </h3>
                 <p className="text-[11px] text-slate-500">
                   Calculated based on field route survey distance in KM, territory road density, and 24 monthly operational duty days.
                 </p>
               </div>
               <span className="text-xs font-semibold px-2.5 py-1 bg-amber-100 text-amber-800 rounded-lg">
-                Showing {filteredFuelBeats.length} of 33 Beats
+                Showing {filteredFuelBeats.length} of {scopedFuelBeats.length} Beats
               </span>
             </div>
 
@@ -648,8 +1014,8 @@ export default function ReportsView() {
                 onChange={(e) => setDssFilterBeat(e.target.value)}
                 className="text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               >
-                <option value="ALL">All 33 Beats ({dailyEntries.length} Records)</option>
-                {ALL_33_BEATS_FUEL_DATA.map((b) => (
+                <option value="ALL">All Permitted Beats ({dailyEntries.length} Records)</option>
+                {scopedFuelBeats.map((b) => (
                   <option key={b.beatNumber} value={b.beatNumber}>
                     {b.beatNumber} - {b.assignedPostmanName}
                   </option>
@@ -824,9 +1190,9 @@ export default function ReportsView() {
 
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
               <span className="text-xs text-slate-500 font-medium">Beat Field Coverage</span>
-              <div className="text-3xl font-black text-emerald-700 mt-1">98.4%</div>
+              <div className="text-3xl font-black text-emerald-700 mt-1">{scopedFuelBeats.length} Beats</div>
               <div className="text-xs text-slate-500 font-medium mt-2">
-                Dadabari S.O. High-Density Beats
+                {isSuperAdmin ? 'All Division High-Density Beats' : `${currentStaff?.subOffice || 'Assigned Post Office'} Coverage`}
               </div>
             </div>
           </div>

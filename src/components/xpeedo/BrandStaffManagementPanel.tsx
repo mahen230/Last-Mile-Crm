@@ -105,7 +105,7 @@ export default function BrandStaffManagementPanel({
             </span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Canonical India Post &amp; Xpeedo Services personnel are synced here. Allocate or remove access without creating duplicate credentials.
+            Canonical India Post personnel are synced here. Allocate or remove access without creating duplicate credentials.
           </p>
         </div>
 

@@ -948,7 +948,7 @@ export function buildMasterConsolidatedProperties(): UnifiedPropertyRecord[] {
   CONSOLIDATED_BEAT_MATRIX.forEach(bEntry => {
     const beatProps = Array.from(propertyMap.values()).filter(p => p.beatNo === bEntry.beatNumber);
     if (beatProps.length === 0) {
-      // Synthesize a flagship beat landmark entry for complete coverage
+      // Synthesize a primary beat landmark entry for complete coverage
       const col = bEntry.colonies[0] || 'Dadabari';
       const key = `${col.toLowerCase()}__beat-${bEntry.beatNumber.toLowerCase().replace(/\s+/g, '')}`;
       propertyMap.set(key, {
@@ -967,7 +967,7 @@ export function buildMasterConsolidatedProperties(): UnifiedPropertyRecord[] {
         assignedStaffId: bEntry.staffId || BEAT_STAFF_MAP[bEntry.beatNumber]?.id || 'STAFF-50457421',
         assignedStaffName: bEntry.assignedPostmanName,
         assignedStaffRole: bEntry.staffRole || BEAT_STAFF_MAP[bEntry.beatNumber]?.role || 'POSTMAN',
-        lastMileNote: `Flagship beat junction for ${bEntry.beatNumber} under Dadabari S.O.`,
+        lastMileNote: `Primary beat junction for ${bEntry.beatNumber} under Dadabari S.O.`,
         linkedMembers: [
           {
             id: `m-bm-${bEntry.beatNumber}`,
@@ -2142,6 +2142,27 @@ export default function UnifiedPropertyFamilyHub({
     setCustomBlockText('');
     showNotification(`✅ Successfully registered property '${newProp.housePlotNumber}' in ${newProp.colony} (${effectiveBlock})!`);
   };
+
+  const hasUnifiedPropertyAccess =
+    Boolean(indiaPostOwnerAccess) ||
+    staffPermissionService.canReadPropertyDetails(userProfile) ||
+    staffPermissionService.canSearchProperties(userProfile);
+
+  if (!hasUnifiedPropertyAccess) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-white p-6 text-slate-800">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          RBAC Territory Restriction
+        </p>
+        <h3 className="text-base font-bold text-slate-900 mt-1">
+          Unified Property & Family Inspection Restricted
+        </h3>
+        <p className="text-xs text-slate-600 mt-1">
+          Resident property browsing and property search are restricted by default for field/basic staff. Contact Master Admin to enable Property Details Access if required.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 bg-slate-50 min-h-screen font-sans">

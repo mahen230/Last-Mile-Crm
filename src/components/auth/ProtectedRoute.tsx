@@ -6,6 +6,7 @@ import { staffPermissionService } from '../../services/staffPermissionService';
 import { featureVisibilityService } from '../../services/featureVisibilityService';
 import { dataClearanceSanitizer, SecurityClearanceLevel } from '../../services/dataClearanceSanitizer';
 import { FeatureVisibilityKey, ServiceModulePermissions, UserRole, VendorSystemId } from '../../types/models';
+import { canAccessStandaloneStorefront } from '../../utils/envMode';
 import { ShieldAlert, Lock, ArrowRight, ShieldCheck } from 'lucide-react';
 
 export type StaffRole =
@@ -40,6 +41,7 @@ export interface ProtectedRouteProps {
   requiredFeature?: FeatureVisibilityKey;
   requiredVendor?: VendorSystemId;
   requiredBeat?: string;
+  developerOnly?: boolean;
   fallbackRedirect?: string;
 }
 
@@ -56,6 +58,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredFeature,
   requiredVendor,
   requiredBeat,
+  developerOnly = false,
   fallbackRedirect = '/login',
 }) => {
   const { user, userProfile, loading } = useAuth();
@@ -129,6 +132,41 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
+  // 3b. Developer Mode / Developer Access Restriction (e.g., Standalone Storefront)
+  if (developerOnly && !canAccessStandaloneStorefront(userProfile)) {
+    return (
+      <div className="max-w-xl mx-auto my-12 p-8 bg-white border border-slate-200 rounded-2xl shadow-sm text-slate-900 space-y-4 text-center">
+        <div className="w-14 h-14 rounded-xl bg-red-50 border border-red-200 text-red-700 flex items-center justify-center mx-auto">
+          <Lock size={26} />
+        </div>
+        <div className="text-xs font-mono font-bold uppercase tracking-wider text-slate-500">
+          Developer Access Only
+        </div>
+        <h2 className="text-lg font-bold text-slate-900">
+          Standalone Storefront Restricted to Developer Mode
+        </h2>
+        <p className="text-xs text-slate-600 leading-relaxed max-w-md mx-auto">
+          The standalone Storefront console is restricted to Developer accounts and AI Studio / local development mode. Use Postal Services &amp; Lead Capture for beat Showcase offerings.
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <Link
+            to="/services"
+            className="px-4 py-2 bg-[#991B1B] hover:bg-red-800 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5"
+          >
+            <span>Open Showcase &amp; Services</span>
+            <ArrowRight size={14} />
+          </Link>
+          <Link
+            to="/dashboard"
+            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5"
+          >
+            <span>Return to Dashboard</span>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   // 4. Role-Based Access Control (RBAC) Check
   if (allowedRoles && allowedRoles.length > 0 && userProfile) {
     const userRole = userProfile.role as StaffRole;
@@ -168,7 +206,9 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // 5. Service Module Permissions Guard
   if (requiredModule && userProfile) {
-    const isModuleAllowed = staffPermissionService.canAccessServiceModule(userProfile, requiredModule);
+    const isModuleAllowed =
+      staffPermissionService.isSuperAdmin(userProfile) ||
+      staffPermissionService.canAccessServiceModule(userProfile, requiredModule);
     if (!isModuleAllowed) {
       return (
         <div className="max-w-2xl mx-auto my-12 p-8 bg-white border border-red-200 rounded-3xl shadow-xl text-slate-900 space-y-4 text-center">
@@ -199,7 +239,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   // 5b. Granular Feature Visibility & Vendor Isolation Guard
-  if (userProfile) {
+  if (userProfile && !staffPermissionService.isSuperAdmin(userProfile)) {
     const effectiveFeature = requiredFeature || featureVisibilityService.mapPathToFeature(location.pathname);
     const isWhiteLabel = featureVisibilityService.isWhiteLabelPostalMode(userProfile);
 
@@ -210,13 +250,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
             <Lock size={26} />
           </div>
           <div className="text-xs font-mono font-bold uppercase tracking-wider text-slate-500">
-            Vendor Scope Boundary
+            Scope Boundary
           </div>
           <h2 className="text-lg font-bold text-slate-900">
-            Access Restricted to Assigned Vendor Workspace
+            Access Restricted to Assigned Workspace
           </h2>
           <p className="text-xs text-slate-600 leading-relaxed max-w-md mx-auto">
-            Your active profile (<strong>{userProfile.name}</strong>) is scoped to your assigned operational vendor system and cannot open external vendor directories or unrelated partner consoles.
+            Your active profile (<strong>{userProfile.name}</strong>) is scoped to your assigned India Post operational workspace.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
             <Link
@@ -238,7 +278,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
             <Lock size={26} />
           </div>
           <div className="text-xs font-mono font-bold uppercase tracking-wider text-slate-500">
-            {isWhiteLabel ? 'India Post Vendor System · Section Not Enabled' : 'Module Visibility Restricted'}
+            {isWhiteLabel ? 'India Post System · Section Not Enabled' : 'Module Visibility Restricted'}
           </div>
           <h2 className="text-lg font-bold text-slate-900">
             Section Currently Hidden for Your Role

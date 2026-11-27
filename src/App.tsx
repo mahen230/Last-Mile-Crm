@@ -12,6 +12,8 @@ import LoginPage from './pages/LoginPage';
 import XpeedoHomeLoginPage from './pages/XpeedoHomeLoginPage';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { OTAUpdateNotification } from './components/common/OTAUpdateNotification';
+import { dataConsolidationService } from './services/dataConsolidationService';
+import { kotaOsHierarchyService } from './services/kotaOsHierarchyService';
 
 // Lazy-load CRM & administrative modules for instant 0ms initial load on Public Home & Dashboard
 const CustomerList = lazy(() => import('./components/customers/CustomerList'));
@@ -80,14 +82,19 @@ const BrandOwnerPortalPage = lazy(() => import('./pages/BrandOwnerPortalPage'));
 const BrandStaffCustomerLoginPage = lazy(() => import('./pages/BrandStaffCustomerLoginPage'));
 const BrandScopedPortalPage = lazy(() => import('./pages/BrandScopedPortalPage'));
 const IndiaPostStorefrontView = lazy(() => import('./components/crm/IndiaPostStorefrontView'));
+const ProductTargetDashboard = lazy(() => import('./components/crm/ProductTargetDashboard'));
+const IndiaPostMasterSearchAndInspectionView = lazy(() =>
+  import('./components/xpeedo/IndiaPostMasterSearchAndInspectionView')
+);
+const PublicShortLinkPortalPage = lazy(() => import('./pages/PublicShortLinkPortalPage'));
+const LastMileVendorView = lazy(() => import('./components/crm/LastMileVendorView'));
 
-// Xpeedo IT Services — Owner Command Center & Client Operations Modules
+// India Post Command Center & Operations Modules
 const OwnerCommandDashboard = lazy(() => import('./components/xpeedo/OwnerCommandDashboard'));
 const ClientsDirectoryView = lazy(() => import('./components/xpeedo/ClientsDirectoryView'));
 const ClientDetailsView = lazy(() => import('./components/xpeedo/ClientDetailsView'));
 const ProjectsAndTasksView = lazy(() => import('./components/xpeedo/ProjectsAndTasksView'));
 const IndiaPostCommandWorkspace = lazy(() => import('./components/xpeedo/IndiaPostCommandWorkspace'));
-const XpeedoEvWorkWorkspace = lazy(() => import('./components/xpeedo/XpeedoEvWorkWorkspace'));
 const SettingsRbacMigrationView = lazy(() => import('./components/xpeedo/SettingsRbacMigrationView'));
 const DepartmentsDirectoryView = lazy(() =>
   import('./components/xpeedo/OperationsSupportViews').then((m) => ({
@@ -140,6 +147,10 @@ function ServiceModuleGuard({
   const { userProfile } = useAuth();
   const [, setVisTick] = useState(0);
   useEffect(() => featureVisibilityService.subscribe(() => setVisTick((v) => v + 1)), []);
+
+  if (staffPermissionService.isSuperAdmin(userProfile)) {
+    return <>{children}</>;
+  }
 
   const legacyAllowed = staffPermissionService.canAccessServiceModule(userProfile, moduleKey);
   const featureAllowed = featureKey ? featureVisibilityService.isFeatureVisible(userProfile, featureKey) : true;
@@ -201,7 +212,9 @@ function WorkspaceBoundaryGuard({
   const [, setTick] = useState(0);
   useEffect(() => xpeedoOpsService.subscribe(() => setTick((t) => t + 1)), []);
 
-  if (!requiredWorkspace) return <>{children}</>;
+  if (!requiredWorkspace || staffPermissionService.isSuperAdmin(userProfile)) {
+    return <>{children}</>;
+  }
   const scoped = xpeedoOpsService.getScopedWorkspaceKeys(userProfile);
   if (scoped === 'ALL' || scoped.includes(requiredWorkspace)) {
     return <>{children}</>;
@@ -284,7 +297,7 @@ function AuthenticatedApp() {
 
   if (location.pathname.startsWith('/brand-login')) {
     return (
-      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-xs font-semibold text-slate-600">Loading Brand Owner Login...</div>}>
+      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-xs font-semibold text-slate-600">Loading India Post Portal Login...</div>}>
         <Routes>
           <Route path="/brand-login/:brandSlug" element={<BrandOwnerLoginPage />} />
           <Route path="/brand-login" element={<BrandOwnerLoginPage />} />
@@ -295,7 +308,7 @@ function AuthenticatedApp() {
 
   if (location.pathname.startsWith('/brand-portal')) {
     return (
-      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-xs font-semibold text-slate-600">Loading Brand Workspace...</div>}>
+      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-xs font-semibold text-slate-600">Loading India Post Command Workspace...</div>}>
         <Routes>
           <Route path="/brand-portal/:brandSlug" element={<BrandOwnerPortalPage />} />
           <Route path="/brand-portal" element={<BrandOwnerPortalPage />} />
@@ -306,7 +319,7 @@ function AuthenticatedApp() {
 
   if (location.pathname.startsWith('/brand-access')) {
     return (
-      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-xs font-semibold text-slate-600">Loading Brand Staff &amp; Customer Portal...</div>}>
+      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-xs font-semibold text-slate-600">Loading India Post Staff &amp; Customer Portal...</div>}>
         <Routes>
           <Route path="/brand-access/:brandSlug" element={<BrandStaffCustomerLoginPage />} />
           <Route path="/brand-access" element={<BrandStaffCustomerLoginPage />} />
@@ -317,7 +330,7 @@ function AuthenticatedApp() {
 
   if (location.pathname.startsWith('/brand-member-portal')) {
     return (
-      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-xs font-semibold text-slate-600">Loading Brand Member Workspace...</div>}>
+      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-xs font-semibold text-slate-600">Loading India Post Member Workspace...</div>}>
         <Routes>
           <Route path="/brand-member-portal/:brandSlug" element={<BrandScopedPortalPage />} />
           <Route path="/brand-member-portal" element={<BrandScopedPortalPage />} />
@@ -328,7 +341,7 @@ function AuthenticatedApp() {
 
   if (location.pathname.startsWith('/partner/login') || location.pathname.startsWith('/client/login')) {
     return (
-      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-xs font-semibold text-slate-600">Loading Client &amp; Partner Portal...</div>}>
+      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-xs font-semibold text-slate-600">Loading India Post Bulk Customer Portal...</div>}>
         <Routes>
           <Route path="/client/login/:partnerSlug" element={<PartnerLoginPage />} />
           <Route path="/client/login" element={<PartnerLoginPage />} />
@@ -341,7 +354,7 @@ function AuthenticatedApp() {
 
   if (location.pathname.startsWith('/partner/workspace') || location.pathname.startsWith('/client/workspace')) {
     return (
-      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-xs font-semibold text-slate-600">Loading Workspace...</div>}>
+      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-xs font-semibold text-slate-600">Loading India Post Workspace...</div>}>
         <Routes>
           <Route path="/client/workspace/:partnerSlug" element={<PartnerScopedWorkspacePage />} />
           <Route path="/client/workspace" element={<PartnerScopedWorkspacePage />} />
@@ -361,6 +374,9 @@ function AuthenticatedApp() {
   }
 
   if (!retailActive && (location.pathname === '/' || location.pathname === '/home')) {
+    if (userProfile) {
+      return <Navigate to={kotaOsHierarchyService.getDefaultWorkspacePath(userProfile)} replace />;
+    }
     return (
       <>
         <XpeedoHomeLoginPage />
@@ -383,15 +399,25 @@ function AuthenticatedApp() {
 
   if (location.pathname === '/b2b-partner') {
     return (
-      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-sm font-bold text-slate-700">Loading XPOKART B2B Partner Portal...</div>}>
+      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-sm font-bold text-slate-700">Loading India Post Bulk Customer Portal...</div>}>
         <B2BPartnerPortalPage />
+      </Suspense>
+    );
+  }
+
+  if (location.pathname.startsWith('/s/')) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-slate-950 p-8 text-center text-sm font-bold text-slate-300">Loading India Post Short Link Portal...</div>}>
+        <Routes>
+          <Route path="/s/:shortCode" element={<PublicShortLinkPortalPage />} />
+        </Routes>
       </Suspense>
     );
   }
 
   if (location.pathname.startsWith('/brand')) {
     return (
-      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-sm font-bold text-slate-700">Loading Official Brand Store...</div>}>
+      <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-sm font-bold text-slate-700">Loading India Post Bulk Showcase...</div>}>
         <Routes>
           <Route path="/brand/:brandSlug" element={<BrandStorePage />} />
           <Route path="/brand" element={<BrandStorePage />} />
@@ -505,7 +531,7 @@ function AuthenticatedApp() {
             path="/projects"
             element={
               <ProtectedRoute requiredTier="STAFF">
-                <ProjectsAndTasksView mode="projects" />
+                <ProjectsAndTasksView mode="PROJECTS" />
               </ProtectedRoute>
             }
           />
@@ -513,7 +539,7 @@ function AuthenticatedApp() {
             path="/task-management"
             element={
               <ProtectedRoute requiredTier="STAFF">
-                <ProjectsAndTasksView mode="tasks" />
+                <ProjectsAndTasksView mode="TASKS" />
               </ProtectedRoute>
             }
           />
@@ -553,13 +579,7 @@ function AuthenticatedApp() {
           />
           <Route
             path="/xpeedo-ev"
-            element={
-              <ProtectedRoute requiredTier="STAFF">
-                <WorkspaceBoundaryGuard requiredWorkspace="XPEEDO_EV">
-                  <XpeedoEvWorkWorkspace />
-                </WorkspaceBoundaryGuard>
-              </ProtectedRoute>
-            }
+            element={<Navigate to="/india-post" replace />}
           />
           <Route
             path="/documents"
@@ -616,6 +636,14 @@ function AuthenticatedApp() {
           element={
             <ProtectedRoute requiredTier="ADMIN" requiredVendor="INDIA_POST" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN', 'CIRCLE_INCHARGE', 'DIVISION_INCHARGE', 'DISTRICT_INCHARGE', 'DISTRICT_MANAGER', 'CATEGORY_MANAGER']}>
               <OfficeMasterView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/last-mile-vendors"
+          element={
+            <ProtectedRoute requiredTier="STAFF">
+              <LastMileVendorView />
             </ProtectedRoute>
           }
         />
@@ -1065,7 +1093,33 @@ function AuthenticatedApp() {
         <Route
           path="/reports"
           element={
-            <ProtectedRoute requiredTier="ADMIN" allowedRoles={['OWNER', 'DEVELOPER', 'ADMIN', 'MASTER_ADMIN', 'SUPER_ADMIN']}>
+            <ProtectedRoute
+              requiredTier="STAFF"
+              requiredFeature="reports"
+              allowedRoles={[
+                'OWNER',
+                'DEVELOPER',
+                'MASTER_ADMIN',
+                'SUPER_ADMIN',
+                'ADMIN',
+                'CIRCLE_INCHARGE',
+                'DIVISION_INCHARGE',
+                'DIVISIONAL_HEAD',
+                'ASST_DIVISIONAL_ADMIN',
+                'DISTRICT_MANAGER',
+                'DISTRICT_INCHARGE',
+                'CATEGORY_MANAGER',
+                'SUBDIVISION_INCHARGE',
+                'CLUSTER_INCHARGE',
+                'BLOCK_INCHARGE',
+                'OFFICE_INCHARGE',
+                'POSTMASTER',
+                'ASST_POSTMASTER',
+                'SUB_POSTMASTER',
+                'LAST_MILE_SUPERVISOR',
+                'MARKETING_TEAM',
+              ]}
+            >
               <ReportsView />
             </ProtectedRoute>
           }
@@ -1181,25 +1235,41 @@ function AuthenticatedApp() {
         <Route
           path="/india-post-storefront"
           element={
-            retailActive ? (
-              <ProtectedRoute requiredTier="STAFF">
-                <IndiaPostStorefrontView />
-              </ProtectedRoute>
-            ) : (
-              <DormantRetailRedirect />
-            )
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="showcase" developerOnly={true}>
+              <IndiaPostStorefrontView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/product-targets"
+          element={
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="productTargets">
+              <ProductTargetDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/master-search"
+          element={
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="masterSearch">
+              <IndiaPostMasterSearchAndInspectionView />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/last-mile-ops"
+          element={
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="lastMileOps">
+              <PostmanAllDayArticlesOverview />
+            </ProtectedRoute>
           }
         />
         <Route
           path="/staff-storefront"
           element={
-            retailActive ? (
-              <ProtectedRoute requiredTier="STAFF" requiredFeature="storefront" requiredVendor="COMMERCIAL_PARTNERS">
-                <StaffProductStudioView />
-              </ProtectedRoute>
-            ) : (
-              <DormantRetailRedirect />
-            )
+            <ProtectedRoute requiredTier="STAFF" requiredFeature="storefront" developerOnly={true}>
+              <StaffProductStudioView />
+            </ProtectedRoute>
           }
         />
         <Route
@@ -1286,6 +1356,7 @@ export default function App() {
   const [mapsQuotaExceeded, setMapsQuotaExceeded] = useState(false);
 
   useEffect(() => {
+    dataConsolidationService.runInitialConsolidationAndBrandResetIfNeeded();
     const onQuotaExceeded = () => setMapsQuotaExceeded(true);
     window.addEventListener('gmp-quota-exceeded', onQuotaExceeded);
     return () => window.removeEventListener('gmp-quota-exceeded', onQuotaExceeded);

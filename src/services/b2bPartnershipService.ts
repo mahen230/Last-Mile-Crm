@@ -34,27 +34,11 @@ export interface B2BPartnershipApplication {
 
 const B2B_APPLICATIONS_STORAGE_KEY = 'xpokart_b2b_applications_v1';
 
-function resolveSectorBrandForB2B(category: string, requirements: string, explicitBrandSlug?: string): {
+function resolveSectorBrandForB2B(_category: string, _requirements: string, _explicitBrandSlug?: string): {
   brandId: string;
   brandName: string;
 } {
-  if (explicitBrandSlug) {
-    const matched = brandOwnerService.getBrandProfileBySlugOrKey(explicitBrandSlug);
-    if (matched) {
-      return { brandId: matched.partnerSlug, brandName: matched.brandName };
-    }
-  }
-  const blob = `${category} ${requirements}`.toLowerCase();
-  if (blob.includes('ev') || blob.includes('electric') || blob.includes('battery') || blob.includes('fleet')) {
-    return { brandId: 'xpeedo-ev', brandName: 'Xpeedo EV' };
-  }
-  if (blob.includes('logistics') || blob.includes('courier') || blob.includes('dispatch')) {
-    return { brandId: 'xpeedo-logistics', brandName: 'Xpeedo Logistics' };
-  }
-  if (blob.includes('postal') || blob.includes('speed post') || blob.includes('ippb') || blob.includes('india post')) {
-    return { brandId: 'india-post', brandName: 'India Post' };
-  }
-  return { brandId: 'xpokart', brandName: 'Xpokart' };
+  return { brandId: 'india-post', brandName: 'India Post Bulk Customer Hub' };
 }
 
 class B2BPartnershipService {
@@ -119,7 +103,7 @@ class B2BPartnershipService {
         brandName: input.businessName.trim(),
         ownerName: input.contactName.trim(),
         ownerContactNumber: cleanPhone,
-        ownerEmail: input.email?.trim() || `${cleanPhone || refId.toLowerCase()}@partner.xpeedo.in`,
+        ownerEmail: input.email?.trim() || `${cleanPhone || refId.toLowerCase()}@indiapost-portal.in`,
         category: input.category,
         pincode: hub.pincode,
         password: (input.portalPassword || '').trim().length >= 6 ? input.portalPassword!.trim() : 'Partner@2026',

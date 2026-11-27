@@ -58,6 +58,8 @@ import { customerService } from '../services/customerService';
 import { academyTrainingService } from '../services/academyTrainingService';
 import { featureVisibilityService } from '../services/featureVisibilityService';
 import { notificationService, SystemNotification } from '../services/notificationService';
+import { staffPermissionService } from '../services/staffPermissionService';
+import { canAccessStandaloneStorefront } from '../utils/envMode';
 import { POSTAL_PRODUCTS } from '../data/productsData';
 import { CONSOLIDATED_BEAT_MATRIX } from '../data/consolidatedBeatMatrix';
 import { buildBrandPortalNav } from '../data/navigationHierarchy';
@@ -66,7 +68,6 @@ import {
   resolveBrandTheme,
 } from '../components/common/PartnerBrandLogo';
 import { useAuth } from '../components/auth/FirebaseAuthProvider';
-import { staffPermissionService } from '../services/staffPermissionService';
 import { brandOwnerService } from '../services/brandOwnerService';
 import { kotaOsHierarchyService } from '../services/kotaOsHierarchyService';
 import { xpeedoOpsService } from '../services/xpeedoOpsService';
@@ -347,7 +348,7 @@ export default function PartnerScopedWorkspacePage() {
     } else if (tab === 'IP_DAILY_OPS' && (cleanSub === 'VERIFICATION' || cleanSub === 'SURVEY')) {
       setIpDailyMode(cleanSub);
     } else if (tab === 'IP_LMS_STOREFRONT') {
-      if (cleanSub === 'STOREFRONT' && retailActive) {
+      if (cleanSub === 'STOREFRONT' && canAccessStandaloneStorefront(staffPermissionService.getActiveSession())) {
         setIpLmsMode('STOREFRONT');
       } else {
         setIpLmsMode('LMS');
@@ -391,7 +392,7 @@ export default function PartnerScopedWorkspacePage() {
   }, [searchParams, activeTab, retailActive]);
 
   useEffect(() => {
-    if (!retailActive && ipLmsMode === 'STOREFRONT') {
+    if (!canAccessStandaloneStorefront(staffPermissionService.getActiveSession()) && ipLmsMode === 'STOREFRONT') {
       setIpLmsMode('LMS');
     }
   }, [retailActive, ipLmsMode]);
@@ -1159,7 +1160,7 @@ export default function PartnerScopedWorkspacePage() {
       setShowAddMemberModal(false);
       setNoticeMsg(
         err?.message ||
-          'Operational staff limit reached (max 5). Allocate an existing Staff 1–Staff 5 slot instead.'
+          'Unable to add team member. Verify unique Email/Mobile and active role permissions.'
       );
     }
   };
@@ -1272,8 +1273,8 @@ export default function PartnerScopedWorkspacePage() {
 
   const TAB_LABELS: Record<WorkspaceTab, string> = {
     DASHBOARD: 'Dashboard',
-    CUSTOMERS: isXpokart ? 'Store Buyers' : 'Customers',
-    LEADS: isXpokart ? 'Checkout & Order Leads' : 'Leads & Schemes',
+    CUSTOMERS: isXpokart ? 'Bulk Buyers' : 'Customers',
+    LEADS: isXpokart ? 'Bulk & Order Leads' : 'Leads & Schemes',
     FOLLOW_UPS: isXpokart ? 'Order Follow-Ups' : 'Follow-Ups',
     PROPERTIES: 'Properties',
     MASTER_SEARCH: 'Master Search Console',
@@ -1285,7 +1286,7 @@ export default function PartnerScopedWorkspacePage() {
     PROMOTION_MASTER: 'Promotion Master',
     PRODUCTS: 'Products & Storefront',
     ACADEMY: 'Skill & Academy',
-    NOTIFICATIONS: isXpokart ? 'Store Alerts' : 'Notifications',
+    NOTIFICATIONS: isXpokart ? 'Showcase Alerts' : 'Notifications',
     IP_HIERARCHY: 'Divisional Hierarchy',
     IP_GEO_QUALITY: 'Geo Mapping & Data Quality',
     IP_SRM: 'SRM & Escalations',
@@ -1593,7 +1594,7 @@ export default function PartnerScopedWorkspacePage() {
                   </div>
                 </div>
                 <div className="p-4">
-                  <div className="text-slate-500 font-medium">Store Buyers</div>
+                  <div className="text-slate-500 font-medium">Bulk Buyers</div>
                   <div className="text-2xl font-bold text-slate-900 font-mono tabular-nums mt-1">
                     {brandCustomers.length + crmRecords.length}
                   </div>
@@ -1611,7 +1612,7 @@ export default function PartnerScopedWorkspacePage() {
                   </div>
                 </div>
                 <div className="p-4">
-                  <div className="text-slate-500 font-medium">Store Alerts</div>
+                  <div className="text-slate-500 font-medium">Showcase Alerts</div>
                   <div className="text-2xl font-bold text-blue-700 font-mono tabular-nums mt-1">
                     {unreadNotifCount}
                   </div>
@@ -1662,10 +1663,10 @@ export default function PartnerScopedWorkspacePage() {
               <div className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
                 <div>
                   <div className="font-extrabold text-sm text-slate-900">
-                    XPOKART E-Commerce Store System
+                    India Post Bulk Showcase System
                   </div>
                   <p className="text-slate-600 mt-0.5">
-                    Dedicated storefront workspace for catalog SKUs, customer checkout leads, and store orders. Operational staff and postal territory modules belong to India Post &amp; Xpeedo Services.
+                    Dedicated workspace for India Post Bulk Customer catalogs, promoted products, and dispatch inquiries. Operational staff and postal territory modules belong to India Post Command.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -3305,7 +3306,7 @@ export default function PartnerScopedWorkspacePage() {
               >
                 Postal Departmental LMS
               </button>
-              {retailActive && (
+              {canAccessStandaloneStorefront(staffPermissionService.getActiveSession()) && (
                 <button
                   type="button"
                   onClick={() => setActiveTabAndSub('IP_LMS_STOREFRONT', 'STOREFRONT')}
@@ -3320,8 +3321,8 @@ export default function PartnerScopedWorkspacePage() {
               )}
             </div>
             <Suspense fallback={<EmbeddedModuleLoading />}>
-              {(ipLmsMode === 'LMS' || !retailActive) && <PostalLMSView />}
-              {retailActive && ipLmsMode === 'STOREFRONT' && <IndiaPostStorefrontView />}
+              {(ipLmsMode === 'LMS' || !canAccessStandaloneStorefront(staffPermissionService.getActiveSession())) && <PostalLMSView />}
+              {canAccessStandaloneStorefront(staffPermissionService.getActiveSession()) && ipLmsMode === 'STOREFRONT' && <IndiaPostStorefrontView />}
             </Suspense>
           </div>
         )}

@@ -1,209 +1,91 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Building2,
-  CheckCircle2,
-  Clock,
-  Compass,
-  Edit3,
-  ExternalLink,
-  Eye,
-  EyeOff,
-  FileText,
-  Filter,
-  IndianRupee,
-  Layers,
-  LayoutGrid,
-  List,
-  Mail,
-  MapPin,
-  MessageSquare,
-  Package,
-  Phone,
-  Plus,
-  RefreshCw,
-  Search,
-  Shield,
-  ShieldCheck,
-  Smartphone,
-  Sparkles,
-  TrendingUp,
-  User,
-  UserCheck,
-  UserPlus,
-  Users,
-  Wallet,
-  X,
-  Calendar,
   AlertCircle,
-  CheckSquare,
-  Square,
   ArrowRight,
   Award,
+  Building2,
+  CheckCircle2,
+  CheckSquare,
+  Clock,
+  Edit3,
+  Eye,
+  EyeOff,
+  LayoutGrid,
+  Minus,
+  Package,
+  Plus,
+  Search,
+  ShoppingBag,
+  SlidersHorizontal,
+  Square,
+  Trash2,
+  TrendingUp,
+  UserPlus,
+  Wallet,
+  X,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import { staffPermissionService } from '../../services/staffPermissionService';
 import { customerService } from '../../services/customerService';
-import { DynamicOfficeRecord, Lead, FollowUp, StaffProfile } from '../../types/models';
-import { Link } from 'react-router-dom';
+import {
+  indiaPostBulkShowcaseService,
+  SHOWCASE_ASSET_OPTIONS,
+  PostalServiceOffering,
+  DEFAULT_POSTAL_OFFERINGS,
+  POSTAL_OFFERINGS_STORAGE_KEY,
+  inferServiceTagsForProduct,
+} from '../../services/indiaPostBulkShowcaseService';
+import {
+  DynamicOfficeRecord,
+  FollowUp,
+  IndiaPostBulkCustomer,
+  IndiaPostPromotedProduct,
+  Lead,
+} from '../../types/models';
 
-export interface PostalServiceOffering {
+export type { PostalServiceOffering };
+
+interface DispatchBagItem {
   id: string;
   code: string;
-  name: string;
-  category: 'Banking & FinTech' | 'Identity & Citizen Services' | 'Mail & Logistics' | 'Sovereign Savings & Insurance';
-  description: string;
-  commissionRate: string;
-  commissionNumeric: number;
-  isActive: boolean;
-  minAmount?: string;
+  title: string;
+  subtitle: string;
+  category: string;
+  unitPrice: number;
+  priceDisplay: string;
+  quantity: number;
+  sourceType: 'BULK_PROMOTED' | 'SHOWCASE_OFFERING';
   sla: string;
-  iconType: 'bank' | 'id' | 'mail' | 'shield' | 'rupee';
-  highlights: string[];
+  pincode: string;
+  imageUrl?: string;
 }
 
-const DEFAULT_POSTAL_OFFERINGS: PostalServiceOffering[] = [
-  {
-    id: 'offering-ippb-banking',
-    code: 'IPPB_SB',
-    name: 'IPPB Digital Savings & Current Account',
-    category: 'Banking & FinTech',
-    description: 'Instant zero-balance Aadhaar biometric account opening with virtual debit card & direct DBT linkage.',
-    commissionRate: '₹50 per funded account',
-    commissionNumeric: 50,
-    isActive: true,
-    minAmount: '₹200 initial funding',
-    sla: 'Instant (5 minutes at doorstep)',
-    iconType: 'bank',
-    highlights: ['Zero Paperwork Biometric KYC', 'Direct DBT Subsidies Link', 'Virtual RuPay Debit Card'],
-  },
-  {
-    id: 'offering-aadhaar-celc',
-    code: 'CELC_AADHAAR',
-    name: 'Aadhaar / CELC Mobile Update & Enrolment',
-    category: 'Identity & Citizen Services',
-    description: 'Child Aadhaar enrolment (0-5 yrs) and mandatory mobile number linking/updating via micro-biometrics.',
-    commissionRate: '₹20 per mobile update / enrolment',
-    commissionNumeric: 20,
-    isActive: true,
-    minAmount: '₹50 official UIDAI fee',
-    sla: 'Same day (24-48 hrs UIDAI sync)',
-    iconType: 'id',
-    highlights: ['Child Enrolment (0-5 yrs)', 'Mobile Number Linkage', 'Doorstep Biometric Device'],
-  },
-  {
-    id: 'offering-aeps-cash',
-    code: 'AEPS_CASH',
-    name: 'AePS Doorstep Cash Withdrawal & Balance',
-    category: 'Banking & FinTech',
-    description: 'Inter-bank cash withdrawal from any bank account using Aadhaar fingerprint authentication.',
-    commissionRate: '₹10 per transaction (min ₹1,000)',
-    commissionNumeric: 10,
-    isActive: true,
-    minAmount: '₹100 to ₹10,000 per day',
-    sla: 'Instant cash hand-over',
-    iconType: 'rupee',
-    highlights: ['Works with 120+ Banks', 'Elderly & Sick Citizen Friendly', 'Instant Receipt via SMS'],
-  },
-  {
-    id: 'offering-jeevan-pramaan',
-    code: 'DLC_PENSION',
-    name: 'Jeevan Pramaan (Digital Life Certificate - DLC)',
-    category: 'Identity & Citizen Services',
-    description: 'Doorstep biometric digital life certificate generation for central, state, and defense pensioners.',
-    commissionRate: '₹30 per generated DLC',
-    commissionNumeric: 30,
-    isActive: true,
-    minAmount: '₹70 statutory fee',
-    sla: 'Instant DLC Pramaan ID',
-    iconType: 'shield',
-    highlights: ['Govt & Defense Pensioners', 'Biometric / Iris Matching', 'Auto-submission to Pension Disbursing Agency'],
-  },
-  {
-    id: 'offering-speed-post-parcel',
-    code: 'DNK_PARCEL',
-    name: 'Speed Post, Priority Parcel & Dak Ghar Niryat Kendra',
-    category: 'Mail & Logistics',
-    description: 'Express domestic speed post, priority parcels, and local merchant parcel pickup with end-to-end tracking.',
-    commissionRate: '₹15 per article booking',
-    commissionNumeric: 15,
-    isActive: true,
-    minAmount: 'Varies by weight (from ₹41)',
-    sla: '24-48 hours delivery SLA',
-    iconType: 'mail',
-    highlights: ['Real-time Track & Trace', 'Doorstep Bulk Pickup for Stores', 'Domestic & Export Customs Clearance'],
-  },
-  {
-    id: 'offering-my-stamp',
-    code: 'MY_STAMP',
-    name: 'My Stamp & Customized Philately Sheets',
-    category: 'Identity & Citizen Services',
-    description: 'Personalized postage stamps featuring photos of individuals, family milestones, or corporate branding.',
-    commissionRate: '₹60 per sheet',
-    commissionNumeric: 60,
-    isActive: true,
-    minAmount: '₹300 per sheet (12 stamps)',
-    sla: '3 working days delivery',
-    iconType: 'mail',
-    highlights: ['Valid Indian Postage', 'Custom Photo & Milestones', 'Official Collector Memorabilia'],
-  },
-  {
-    id: 'offering-ssa',
-    code: 'SSA_GIRL_CHILD',
-    name: 'Sukanya Samriddhi Yojana (SSA)',
-    category: 'Sovereign Savings & Insurance',
-    description: 'Premier sovereign-guaranteed 8.2% tax-free savings dedicated to girl children with EEE tax exemption.',
-    commissionRate: '₹75 per account opened',
-    commissionNumeric: 75,
-    isActive: true,
-    minAmount: '₹250 minimum deposit',
-    sla: 'Passbook within 2 days',
-    iconType: 'shield',
-    highlights: ['8.2% Sovereign Annual Return', '100% Tax Free (Section 80C)', 'Higher Education & Marriage Corpus'],
-  },
-  {
-    id: 'offering-pli-rpli',
-    code: 'PLI_SURAKSHA',
-    name: 'Postal Life Insurance (PLI / RPLI)',
-    category: 'Sovereign Savings & Insurance',
-    description: 'Oldest & highest-bonus life insurance in India with lowest premium rates for govt, semi-govt & rural citizens.',
-    commissionRate: '10% of 1st year premium (~₹200 - ₹1,200)',
-    commissionNumeric: 250,
-    isActive: true,
-    minAmount: 'Sum Assured ₹20,000 to ₹50 Lakh',
-    sla: 'Medical/Non-medical fast approval',
-    iconType: 'shield',
-    highlights: ['Highest Bonus Rate in Industry', 'Sovereign Govt of India Guarantee', 'Suraksha, Santosh & Suvidha Plans'],
-  },
-  {
-    id: 'offering-scss-mahila',
-    code: 'SCSS_MSSC',
-    name: 'Senior Citizen Savings (SCSS) & Mahila Samman',
-    category: 'Sovereign Savings & Insurance',
-    description: 'High-yield central government savings schemes tailored for retirees (8.2%) and women empowerment (7.5%).',
-    commissionRate: '₹50 per certificate account',
-    commissionNumeric: 50,
-    isActive: true,
-    minAmount: '₹1,000 to ₹30 Lakh',
-    sla: '2 working days',
-    iconType: 'rupee',
-    highlights: ['Quarterly Interest Payouts', 'Senior Citizen 8.2% Interest', '2-Year Mahila Samman 7.5%'],
-  },
-];
-
-const LOCAL_STORAGE_OFFERINGS_KEY = 'kota_division_os_postal_offerings_v1';
+const CATEGORY_PILLS = [
+  { id: 'ALL', label: 'All Catalog' },
+  { id: 'BULK_PRODUCTS', label: 'Bulk Promoted Products' },
+  { id: 'Banking & FinTech', label: 'Banking & FinTech' },
+  { id: 'Identity & Citizen Services', label: 'Identity & Citizen' },
+  { id: 'Mail & Logistics', label: 'Mail & Logistics' },
+  { id: 'Sovereign Savings & Insurance', label: 'Savings & Insurance' },
+] as const;
 
 export default function IndiaPostStorefrontView() {
   const { userProfile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'OFFERINGS_FUNNEL' | 'MEMBER_DASHBOARD'>('OFFERINGS_FUNNEL');
+  const [activeTab, setActiveTab] = useState<'STOREFRONT' | 'MEMBER_DASHBOARD' | 'BULK_SHOWCASE'>(
+    'STOREFRONT'
+  );
 
-  // Dynamic Offices
+  // Offices
   const [offices, setOffices] = useState<DynamicOfficeRecord[]>([]);
-  const [selectedOfficeId, setSelectedOfficeId] = useState<string>('DADABARI_SO');
+  const [selectedOfficeId, setSelectedOfficeId] = useState<string>(
+    () => userProfile?.officeId || userProfile?.officePincode || 'DADABARI_SO'
+  );
 
-  // Postal Offerings State
+  // Postal Offerings
   const [offerings, setOfferings] = useState<PostalServiceOffering[]>(() => {
     try {
-      const saved = localStorage.getItem(LOCAL_STORAGE_OFFERINGS_KEY);
+      const saved = localStorage.getItem(POSTAL_OFFERINGS_STORAGE_KEY);
       if (saved) return JSON.parse(saved);
     } catch {
       // fallback
@@ -211,67 +93,116 @@ export default function IndiaPostStorefrontView() {
     return DEFAULT_POSTAL_OFFERINGS;
   });
 
-  // Filters & Search
+  // Search, Category & Sort
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+  const [sortOrder, setSortOrder] = useState<'FEATURED' | 'PRICE_ASC' | 'PRICE_DESC'>('FEATURED');
 
-  // Leads & CRM data from customerService
+  // CRM State
   const [leads, setLeads] = useState<Lead[]>([]);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
 
-  // Notifications
+  // Notices
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
+  const [formErrorMessage, setFormErrorMessage] = useState<string | null>(null);
 
-  // Lead Funnel Modal State
+  // Bulk Customers & Promoted Products
+  const [bulkCustomers, setBulkCustomers] = useState<IndiaPostBulkCustomer[]>(() =>
+    indiaPostBulkShowcaseService.getBulkCustomers(true)
+  );
+  const [promotedProducts, setPromotedProducts] = useState<IndiaPostPromotedProduct[]>(() =>
+    indiaPostBulkShowcaseService.getPromotedProducts(true)
+  );
+  const [bulkSearch, setBulkSearch] = useState('');
+
+  // Quick View & Dispatch Bag Drawer
+  const [quickViewProduct, setQuickViewProduct] = useState<IndiaPostPromotedProduct | null>(null);
+  const [bagOpen, setBagOpen] = useState(false);
+  const [bagItems, setBagItems] = useState<DispatchBagItem[]>([]);
+  const [bagCustomerName, setBagCustomerName] = useState('');
+  const [bagMobile, setBagMobile] = useState('');
+  const [bagColony, setBagColony] = useState('');
+  const [bagNotes, setBagNotes] = useState('');
+  const [bagError, setBagError] = useState<string | null>(null);
+
+  // Bulk Customer & Promoted Product Admin Modals
+  const [showBulkCustModal, setShowBulkCustModal] = useState(false);
+  const [bcBusinessName, setBcBusinessName] = useState('');
+  const [bcCategory, setBcCategory] = useState('Books & Study Material');
+  const [bcPincode, setBcPincode] = useState('324009');
+  const [bcBeatNo, setBcBeatNo] = useState('Beat 2');
+  const [bcContactPerson, setBcContactPerson] = useState('');
+  const [bcTagline, setBcTagline] = useState('');
+
+  const [showPromoProdModal, setShowPromoProdModal] = useState(false);
+  const [ppTitle, setPpTitle] = useState('');
+  const [ppBulkCustId, setPpBulkCustId] = useState(
+    () => indiaPostBulkShowcaseService.getBulkCustomers(true)[0]?.id || 'BULK-KOTA-01'
+  );
+  const [ppPriceDisplay, setPpPriceDisplay] = useState('₹999');
+  const [ppRetailPrice, setPpRetailPrice] = useState(999);
+  const [ppBulkOffer, setPpBulkOffer] = useState('BNPL contract rates on 15+ units via Speed Post');
+  const [ppImageUrl, setPpImageUrl] = useState(SHOWCASE_ASSET_OPTIONS[0].url);
+  const [ppDescription, setPpDescription] = useState('');
+
+  // Lead Funnel Modal
   const [leadModalOffering, setLeadModalOffering] = useState<PostalServiceOffering | null>(null);
   const [lfCitizenName, setLfCitizenName] = useState('');
   const [lfMobile, setLfMobile] = useState('');
   const [lfAddress, setLfAddress] = useState('');
   const [lfColony, setLfColony] = useState('');
-  const [lfBeat, setLfBeat] = useState('Beat 1');
+  const [lfBeat, setLfBeat] = useState('Beat 2');
   const [lfPincode, setLfPincode] = useState('324009');
   const [lfPreferredDate, setLfPreferredDate] = useState('');
   const [lfInitialAmount, setLfInitialAmount] = useState('');
   const [lfNotes, setLfNotes] = useState('');
 
-  // Add / Custom Offering Modal State
+  // Add / Edit Offering Modals
   const [showAddOfferingModal, setShowAddOfferingModal] = useState(false);
   const [newOffName, setNewOffName] = useState('');
-  const [newOffCategory, setNewOffCategory] = useState<PostalServiceOffering['category']>('Banking & FinTech');
+  const [newOffCategory, setNewOffCategory] =
+    useState<PostalServiceOffering['category']>('Banking & FinTech');
   const [newOffDesc, setNewOffDesc] = useState('');
   const [newOffCommission, setNewOffCommission] = useState('₹35 per transaction');
   const [newOffCommissionNum, setNewOffCommissionNum] = useState(35);
   const [newOffSla, setNewOffSla] = useState('Within 24 hours');
-  const [newOffMin, setNewOffMin] = useState('₹100');
-
-  // Edit Offering Modal State
+  const [newOffMin] = useState('₹100');
   const [editingOffering, setEditingOffering] = useState<PostalServiceOffering | null>(null);
 
   const refreshAllData = () => {
     const allOffices = staffPermissionService.getDynamicOffices();
     setOffices(allOffices);
-    setLeads(customerService.getLeads());
-    setFollowUps(customerService.getFollowUps());
-    setTasks(customerService.getTasks());
+    setLeads(customerService.getScopedLeads(userProfile));
+    setFollowUps(customerService.getScopedFollowUps(userProfile));
+    const allTasks = customerService.getTasks();
+    setTasks(
+      staffPermissionService.isSuperAdmin(userProfile)
+        ? allTasks
+        : allTasks.filter((t) => staffPermissionService.matchesUserBeatScope(userProfile, t as any))
+    );
+    setBulkCustomers(indiaPostBulkShowcaseService.getBulkCustomers(true));
+    setPromotedProducts(indiaPostBulkShowcaseService.getPromotedProducts(true));
   };
 
   useEffect(() => {
     refreshAllData();
     const unsubPerms = staffPermissionService.subscribe(refreshAllData);
     const unsubCust = customerService.subscribe(refreshAllData);
+    const unsubBulk = indiaPostBulkShowcaseService.subscribe(refreshAllData);
     return () => {
       unsubPerms();
       unsubCust();
+      unsubBulk();
     };
-  }, []);
+  }, [userProfile]);
 
   const saveOfferingsToStorage = (updated: PostalServiceOffering[]) => {
     setOfferings(updated);
     try {
-      localStorage.setItem(LOCAL_STORAGE_OFFERINGS_KEY, JSON.stringify(updated));
-    } catch (e) {
-      console.warn('Failed to persist offerings:', e);
+      localStorage.setItem(POSTAL_OFFERINGS_STORAGE_KEY, JSON.stringify(updated));
+    } catch {
+      // ignore storage quota
     }
   };
 
@@ -280,7 +211,6 @@ export default function IndiaPostStorefrontView() {
     setTimeout(() => setBannerMessage(null), 5000);
   };
 
-  // Selected office record
   const currentOffice = useMemo(() => {
     return (
       offices.find(
@@ -294,7 +224,6 @@ export default function IndiaPostStorefrontView() {
     );
   }, [offices, selectedOfficeId]);
 
-  // Keep PIN & Beat in sync with office
   useEffect(() => {
     if (currentOffice) {
       setLfPincode(currentOffice.pincode || '324009');
@@ -303,12 +232,37 @@ export default function IndiaPostStorefrontView() {
       }
       if (currentOffice.mappedColonies?.length) {
         setLfColony(currentOffice.mappedColonies[0]);
+        setBagColony(currentOffice.mappedColonies[0]);
       }
     }
   }, [currentOffice]);
 
-  // Filtered offerings
+  const filteredProducts = useMemo(() => {
+    if (
+      categoryFilter !== 'ALL' &&
+      categoryFilter !== 'BULK_PRODUCTS'
+    ) {
+      return [];
+    }
+    const q = searchQuery.trim().toLowerCase();
+    const list = promotedProducts.filter((p) => {
+      if (!p.isActive) return false;
+      if (!q) return true;
+      return `${p.title} ${p.bulkCustomerName} ${p.category} ${p.pincode} ${p.sku} ${p.description}`
+        .toLowerCase()
+        .includes(q);
+    });
+    if (sortOrder === 'PRICE_ASC') {
+      return [...list].sort((a, b) => (a.retailPrice || 0) - (b.retailPrice || 0));
+    }
+    if (sortOrder === 'PRICE_DESC') {
+      return [...list].sort((a, b) => (b.retailPrice || 0) - (a.retailPrice || 0));
+    }
+    return [...list].sort((a, b) => Number(b.isFeatured) - Number(a.isFeatured));
+  }, [promotedProducts, categoryFilter, searchQuery, sortOrder]);
+
   const filteredOfferings = useMemo(() => {
+    if (categoryFilter === 'BULK_PRODUCTS') return [];
     return offerings.filter((off) => {
       if (categoryFilter !== 'ALL' && off.category !== categoryFilter) return false;
       if (!searchQuery.trim()) return true;
@@ -322,83 +276,345 @@ export default function IndiaPostStorefrontView() {
     });
   }, [offerings, categoryFilter, searchQuery]);
 
-  // Toggle Offering Visibility
+  const featuredHeroProduct = useMemo(() => {
+    return (
+      promotedProducts.find((p) => p.isActive && p.isFeatured) ||
+      promotedProducts.find((p) => p.isActive) ||
+      null
+    );
+  }, [promotedProducts]);
+
+  // Bag actions
+  const addPromotedProductToBag = (prod: IndiaPostPromotedProduct) => {
+    setBagItems((prev) => {
+      const existing = prev.find((i) => i.id === prod.id);
+      if (existing) {
+        return prev.map((i) => (i.id === prod.id ? { ...i, quantity: i.quantity + 1 } : i));
+      }
+      return [
+        ...prev,
+        {
+          id: prod.id,
+          code: prod.sku,
+          title: prod.title,
+          subtitle: prod.bulkCustomerName,
+          category: prod.category,
+          unitPrice: prod.retailPrice || 500,
+          priceDisplay: prod.priceDisplay || `₹${prod.retailPrice || 500}`,
+          quantity: 1,
+          sourceType: 'BULK_PROMOTED',
+          sla: prod.beatCoverage || 'Speed Post Dispatch',
+          pincode: prod.pincode,
+          imageUrl: prod.imageUrl,
+        },
+      ];
+    });
+    setBagOpen(true);
+  };
+
+  const addOfferingToBag = (off: PostalServiceOffering) => {
+    setBagItems((prev) => {
+      const existing = prev.find((i) => i.id === off.id);
+      if (existing) {
+        return prev.map((i) => (i.id === off.id ? { ...i, quantity: i.quantity + 1 } : i));
+      }
+      const numericVal = Number((off.minAmount || '').replace(/[^\d]/g, '')) || 500;
+      return [
+        ...prev,
+        {
+          id: off.id,
+          code: off.code,
+          title: off.name,
+          subtitle: off.category,
+          category: off.category,
+          unitPrice: numericVal,
+          priceDisplay: off.minAmount || `₹${numericVal}`,
+          quantity: 1,
+          sourceType: 'SHOWCASE_OFFERING',
+          sla: off.sla,
+          pincode: currentOffice?.pincode || '324009',
+        },
+      ];
+    });
+    setBagOpen(true);
+  };
+
+  const updateBagQuantity = (id: string, delta: number) => {
+    setBagItems((prev) =>
+      prev
+        .map((item) => (item.id === id ? { ...item, quantity: item.quantity + delta } : item))
+        .filter((item) => item.quantity > 0)
+    );
+  };
+
+  const totalBagCount = useMemo(
+    () => bagItems.reduce((sum, item) => sum + item.quantity, 0),
+    [bagItems]
+  );
+
+  const totalBagValue = useMemo(
+    () => bagItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
+    [bagItems]
+  );
+
+  const handleCheckoutBagAsLead = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (bagItems.length === 0) return;
+    const cleanName = bagCustomerName.trim();
+    const cleanMobile = bagMobile.replace(/\D/g, '').slice(-10);
+    if (!cleanName || cleanMobile.length < 10) {
+      setBagError('Enter citizen / bulk buyer name and a valid 10-digit mobile number.');
+      return;
+    }
+    setBagError(null);
+
+    const resolvedPincode = userProfile?.officePincode || currentOffice?.pincode || '324009';
+    const resolvedOfficeName = currentOffice?.officeName || userProfile?.subOffice || 'Dadabari S.O.';
+    const resolvedBeat =
+      (userProfile?.beat && userProfile.beat !== 'All Beats'
+        ? userProfile.beat
+        : currentOffice?.mappedBeats?.[0] || 'Beat 2'
+      )
+        .replace(/^Beat\s+/i, '')
+        .trim() || '2';
+
+    let linkedCustomer = customerService.getCustomerByMobile(cleanMobile);
+    const derivedTags: string[] = Array.from(
+      new Set<string>(
+        bagItems.flatMap((item) => inferServiceTagsForProduct(`${item.code} ${item.title} ${item.category}`))
+      )
+    );
+
+    if (!linkedCustomer) {
+      const added = customerService.addOrUpdateCustomer(
+        {
+          name: cleanName,
+          mobile: cleanMobile,
+          colony: bagColony || currentOffice?.mappedColonies?.[0] || 'Dadabari Extension',
+          area: bagColony || currentOffice?.mappedColonies?.[0] || 'Dadabari Extension',
+          pincode: resolvedPincode,
+          subOfficeMapping: resolvedOfficeName,
+          beatNo: resolvedBeat,
+          interestedServiceTags: derivedTags,
+          financialInterest: derivedTags.join(', '),
+          verificationStatus: 'Pending Verification',
+          enteredBy: userProfile?.email,
+          enteredByName: userProfile?.name,
+          assignedStaffId: userProfile?.id,
+          assignedStaffName: userProfile?.name,
+          assignedStaffEmail: userProfile?.email,
+        },
+        'India Post Storefront Dispatch Bag'
+      );
+      linkedCustomer = added.customer;
+    }
+
+    const primary = bagItems[0];
+    customerService.createLead({
+      customerId: linkedCustomer.id,
+      customerName: cleanName,
+      customerMobile: cleanMobile,
+      customerAddress: `${bagColony || 'Local Beat'}, ${resolvedOfficeName} (${resolvedPincode})`,
+      productCode: primary.code,
+      productName:
+        bagItems.length === 1
+          ? primary.title
+          : `${primary.title} + ${bagItems.length - 1} more item(s)`,
+      selectedProducts: bagItems.map((item) => ({
+        id: item.id,
+        code: item.code,
+        title: item.title,
+        sourceType: item.sourceType,
+        category: item.category,
+        unitPrice: item.unitPrice,
+        quantity: item.quantity,
+        sla: item.sla,
+        pincode: item.pincode,
+      })),
+      quantity: totalBagCount,
+      serviceTags: derivedTags,
+      sla: primary.sla,
+      requirement: bagNotes.trim()
+        ? `${bagNotes.trim()} · Items: ${bagItems.map((i) => `${i.title} x${i.quantity}`).join(', ')}`
+        : `Storefront Dispatch Order: ${bagItems.map((i) => `${i.title} x${i.quantity}`).join(', ')}`,
+      source: 'India Post Storefront Dispatch Bag',
+      sourceChannel: 'Postman Doorstep',
+      sourceStaffId: userProfile?.employeeId || userProfile?.id,
+      sourceStaffName: userProfile?.name,
+      priority: 'High',
+      leadScore: 88,
+      stage: 'New',
+      estimatedValue: totalBagValue,
+      nextFollowUpDate: new Date().toISOString().split('T')[0],
+      assignedStaffId: userProfile?.id || 'STAFF-BEAT-02',
+      assignedStaffName: userProfile?.name || 'Assigned Beat Staff',
+      assignedStaffEmail: userProfile?.email,
+      beatNo: resolvedBeat,
+      pincode: resolvedPincode,
+      officeName: resolvedOfficeName,
+    });
+
+    setBagItems([]);
+    setBagCustomerName('');
+    setBagMobile('');
+    setBagNotes('');
+    setBagOpen(false);
+    showSuccessNotice(
+      `Dispatch inquiry for ${cleanName} (${totalBagCount} items · ₹${totalBagValue.toLocaleString('en-IN')}) logged into CRM pipeline.`
+    );
+    refreshAllData();
+  };
+
   const handleToggleOfferingVisibility = (id: string) => {
-    const updated = offerings.map((off) => (off.id === id ? { ...off, isActive: !off.isActive } : off));
+    const updated = offerings.map((off) =>
+      off.id === id ? { ...off, isActive: !off.isActive } : off
+    );
     saveOfferingsToStorage(updated);
     showSuccessNotice('Offering visibility updated.');
   };
 
-  // Open Lead Funnel Modal
   const openLeadFunnel = (offering: PostalServiceOffering) => {
+    setFormErrorMessage(null);
     setLeadModalOffering(offering);
     setLfCitizenName('');
     setLfMobile('');
     setLfAddress('');
     setLfInitialAmount(offering.minAmount || '');
     setLfNotes('');
+    setLfBeat(
+      userProfile?.beat && userProfile.beat !== 'All Beats'
+        ? userProfile.beat
+        : currentOffice?.mappedBeats?.[0] || 'Beat 2'
+    );
+    setLfPincode(userProfile?.officePincode || currentOffice?.pincode || '324009');
     setLfPreferredDate(new Date().toISOString().split('T')[0]);
   };
 
-  // Submit Lead Funnel Form
+  const openBulkProductLeadFunnel = (prod: IndiaPostPromotedProduct) => {
+    openLeadFunnel({
+      id: prod.id,
+      code: prod.sku,
+      name: `${prod.title} (${prod.bulkCustomerName})`,
+      category: 'Mail & Logistics',
+      description: prod.description,
+      commissionRate: prod.priceDisplay,
+      commissionNumeric: prod.retailPrice > 0 ? prod.retailPrice : 500,
+      isActive: prod.isActive,
+      minAmount: `₹${prod.retailPrice || 500}`,
+      sla: prod.beatCoverage || 'Speed Post / Business Parcel Dispatch',
+      iconType: 'mail',
+      highlights: [prod.bulkOfferDetails, `PIN ${prod.pincode}`],
+    });
+  };
+
   const handleSubmitLeadFunnel = (e: React.FormEvent) => {
     e.preventDefault();
     if (!leadModalOffering) return;
-    if (!lfCitizenName.trim() || !lfMobile.trim()) {
-      alert('Please provide customer name and mobile contact.');
+    const cleanName = lfCitizenName.trim();
+    const cleanMobile = lfMobile.replace(/\D/g, '').slice(-10);
+    if (!cleanName || cleanMobile.length < 10) {
+      setFormErrorMessage('Please provide citizen name and a valid 10-digit mobile number.');
       return;
     }
+    setFormErrorMessage(null);
 
-    const newLead = customerService.createLead({
-      customerId: `CITIZEN-${Date.now().toString().slice(-6)}`,
-      customerName: lfCitizenName.trim(),
-      mobile: lfMobile.trim(),
-      phone: lfMobile.trim(),
-      productOrService: leadModalOffering.name,
-      category: leadModalOffering.category,
-      serviceName: leadModalOffering.name,
-      beat: lfBeat || currentOffice?.mappedBeats?.[0] || 'Beat 1',
-      beatNo: lfBeat || currentOffice?.mappedBeats?.[0] || 'Beat 1',
-      pincode: lfPincode || currentOffice?.pincode || '324009',
-      colony: lfColony || currentOffice?.mappedColonies?.[0] || 'Local Beat Area',
-      area: lfColony || currentOffice?.mappedColonies?.[0] || 'Local Beat Area',
-      address: lfAddress.trim() || currentOffice?.completeAddress || 'Doorstep Citizen Visit',
-      status: 'NEW',
-      potentialValue: Number(lfInitialAmount.replace(/[^0-9]/g, '')) || 500,
-      notes: `India Post Storefront Lead: ${lfNotes || 'Direct doorstep lead from field application'}. Preferred Date: ${lfPreferredDate}`,
-      assignedTo: userProfile?.name || 'Assigned Beat Staff',
-      source: 'INDIA_POST_STOREFRONT',
-    } as any);
+    const resolvedBeatNo =
+      (lfBeat || userProfile?.beat || currentOffice?.mappedBeats?.[0] || 'Beat 2')
+        .replace(/^Beat\s+/i, '')
+        .trim() || '2';
+    const resolvedPincode = (lfPincode || userProfile?.officePincode || currentOffice?.pincode || '324009').trim();
+    const resolvedOfficeName = currentOffice?.officeName || userProfile?.subOffice || 'Dadabari S.O.';
+    const numericEstValue =
+      Number(lfInitialAmount.replace(/[^0-9]/g, '')) ||
+      Math.max(500, leadModalOffering.commissionNumeric * 20);
+    const derivedTags = inferServiceTagsForProduct(
+      `${leadModalOffering.code} ${leadModalOffering.name} ${leadModalOffering.category}`
+    );
 
-    // Also auto-create a CRM follow-up so it appears immediately on Member Dashboard
-    try {
-      customerService.scheduleFollowUp({
-        customerId: newLead.customerId || `CITIZEN-${Date.now().toString().slice(-6)}`,
-        customerName: lfCitizenName.trim(),
-        customerMobile: lfMobile.trim(),
-        scheduledDate: lfPreferredDate || new Date().toISOString().split('T')[0],
-        currentStatus: 'Pending',
-        priority: 'High',
-        nextAction: `Doorstep verification for ${leadModalOffering.name}`,
-        assignedStaffName: userProfile?.name || 'Assigned Staff',
-        remarks: `Follow-up for ${leadModalOffering.name}. Contact: ${lfMobile}. Location: ${lfColony || lfAddress}`,
-      });
-    } catch {
-      // ignore
+    let linkedCustomer = customerService.getCustomerByMobile(cleanMobile);
+    if (!linkedCustomer) {
+      const addRes = customerService.addOrUpdateCustomer(
+        {
+          name: cleanName,
+          mobile: cleanMobile,
+          colony: lfColony || currentOffice?.mappedColonies?.[0] || 'Local Beat Area',
+          area: lfColony || currentOffice?.mappedColonies?.[0] || 'Local Beat Area',
+          pincode: resolvedPincode,
+          subOfficeMapping: resolvedOfficeName,
+          beatNo: resolvedBeatNo,
+          interestedServiceTags: derivedTags,
+          financialInterest: derivedTags.join(', '),
+          verificationStatus: 'Pending Verification',
+          enteredBy: userProfile?.email,
+          enteredByName: userProfile?.name,
+          assignedStaffId: userProfile?.id,
+          assignedStaffName: userProfile?.name,
+          assignedStaffEmail: userProfile?.email,
+        },
+        'India Post Showcase Lead'
+      );
+      linkedCustomer = addRes.customer;
     }
 
+    customerService.createLead({
+      customerId: linkedCustomer.id,
+      customerName: cleanName,
+      customerMobile: cleanMobile,
+      customerAddress:
+        lfAddress.trim() || `${lfColony || 'Beat Area'}, ${resolvedOfficeName} (${resolvedPincode})`,
+      productCode: leadModalOffering.code,
+      productName: leadModalOffering.name,
+      selectedProducts: [
+        {
+          id: leadModalOffering.id,
+          code: leadModalOffering.code,
+          title: leadModalOffering.name,
+          sourceType:
+            leadModalOffering.id.startsWith('PROD-') || leadModalOffering.code.startsWith('IP-')
+              ? 'BULK_PROMOTED'
+              : 'SHOWCASE_OFFERING',
+          category: leadModalOffering.category,
+          unitPrice: numericEstValue,
+          quantity: 1,
+          commissionOrRate: leadModalOffering.commissionRate,
+          sla: leadModalOffering.sla,
+          pincode: resolvedPincode,
+        },
+      ],
+      quantity: 1,
+      serviceTags: derivedTags,
+      commissionInfo: leadModalOffering.commissionRate,
+      sla: leadModalOffering.sla,
+      requirement: lfNotes.trim()
+        ? `${lfNotes.trim()} (Preferred Date: ${lfPreferredDate || 'ASAP'})`
+        : `India Post Showcase Inquiry for ${leadModalOffering.name}`,
+      source: 'India Post Showcase',
+      sourceChannel: 'Postman Doorstep',
+      sourceStaffId: userProfile?.employeeId || userProfile?.id,
+      sourceStaffName: userProfile?.name,
+      priority: 'High',
+      leadScore: 80,
+      stage: lfPreferredDate ? 'Follow-up Scheduled' : 'New',
+      estimatedValue: numericEstValue,
+      nextFollowUpDate: lfPreferredDate || new Date().toISOString().split('T')[0],
+      assignedStaffId: userProfile?.id || 'STAFF-BEAT-02',
+      assignedStaffName: userProfile ? `${userProfile.name} (${userProfile.beat})` : 'Assigned Beat Staff',
+      assignedStaffEmail: userProfile?.email,
+      beatNo: resolvedBeatNo,
+      pincode: resolvedPincode,
+      officeName: resolvedOfficeName,
+    });
+
     showSuccessNotice(
-      `✓ Lead captured successfully for "${lfCitizenName}" (${leadModalOffering.name})! Logged in CRM pipeline.`
+      `Lead captured for "${cleanName}" (${leadModalOffering.name}) and linked to CRM pipeline.`
     );
     setLeadModalOffering(null);
     refreshAllData();
   };
 
-  // Create Custom Offering
   const handleCreateOffering = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newOffName.trim()) return;
-
     const newOff: PostalServiceOffering = {
       id: `offering-${Date.now().toString().slice(-6)}`,
       code: `POST_${Date.now().toString().slice(-4)}`,
@@ -410,10 +626,14 @@ export default function IndiaPostStorefrontView() {
       isActive: true,
       minAmount: newOffMin.trim(),
       sla: newOffSla.trim(),
-      iconType: newOffCategory === 'Banking & FinTech' ? 'bank' : newOffCategory === 'Mail & Logistics' ? 'mail' : 'shield',
+      iconType:
+        newOffCategory === 'Banking & FinTech'
+          ? 'bank'
+          : newOffCategory === 'Mail & Logistics'
+          ? 'mail'
+          : 'shield',
       highlights: ['Local Beat Driven', 'Direct CRM Integration', 'Fast Turnaround'],
     };
-
     saveOfferingsToStorage([newOff, ...offerings]);
     showSuccessNotice(`Added new offering "${newOffName}".`);
     setShowAddOfferingModal(false);
@@ -421,21 +641,18 @@ export default function IndiaPostStorefrontView() {
     setNewOffDesc('');
   };
 
-  // Save Edited Offering
   const handleSaveEditedOffering = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingOffering) return;
-
-    const updated = offerings.map((off) => (off.id === editingOffering.id ? editingOffering : off));
+    const updated = offerings.map((off) =>
+      off.id === editingOffering.id ? editingOffering : off
+    );
     saveOfferingsToStorage(updated);
     showSuccessNotice(`Updated details for "${editingOffering.name}".`);
     setEditingOffering(null);
   };
 
-  // Member Dashboard Metrics Calculations
   const stats = useMemo(() => {
-    const totalLeadsCount = leads.length;
-    // Calculate commission earned based on captured leads and offerings
     let estimatedEarnings = 0;
     const categoryBreakdown: Record<string, number> = {
       'Banking & FinTech': 0,
@@ -443,7 +660,6 @@ export default function IndiaPostStorefrontView() {
       'Mail & Logistics': 0,
       'Sovereign Savings & Insurance': 0,
     };
-
     leads.forEach((l) => {
       const matched = offerings.find(
         (o) =>
@@ -455,12 +671,12 @@ export default function IndiaPostStorefrontView() {
       const cat = matched ? matched.category : 'Banking & FinTech';
       categoryBreakdown[cat] = (categoryBreakdown[cat] || 0) + earned;
     });
-
-    const activeFollowUps = followUps.filter((f) => f.currentStatus !== 'Completed' && f.currentStatus !== 'Cancelled');
+    const activeFollowUps = followUps.filter(
+      (f) => f.currentStatus !== 'Completed' && f.currentStatus !== 'Cancelled'
+    );
     const completedFollowUps = followUps.filter((f) => f.currentStatus === 'Completed');
-
     return {
-      totalLeadsCount,
+      totalLeadsCount: leads.length,
       estimatedEarnings,
       categoryBreakdown,
       activeFollowUpsCount: activeFollowUps.length,
@@ -468,459 +684,591 @@ export default function IndiaPostStorefrontView() {
     };
   }, [leads, followUps, offerings]);
 
-  // Update Follow Up Status inline
-  const handleUpdateFollowUpStatus = (followUpId: string, nextStatus: 'Pending' | 'Completed' | 'Overdue' | 'Rescheduled' | 'Cancelled') => {
+  const handleUpdateFollowUpStatus = (
+    followUpId: string,
+    nextStatus: 'Pending' | 'Completed' | 'Overdue' | 'Rescheduled' | 'Cancelled'
+  ) => {
     try {
       customerService.updateFollowUp(followUpId, { currentStatus: nextStatus });
-      showSuccessNotice(`Follow-up status marked as "${nextStatus}".`);
+      showSuccessNotice(`Follow-up marked as "${nextStatus}".`);
       refreshAllData();
-    } catch (e) {
-      console.warn('Update failed', e);
+    } catch {
+      // ignore
     }
   };
 
-  // Toggle Task Completion
   const handleToggleTask = (task: any) => {
     const nextStatus = task.status === 'Completed' ? 'Pending' : 'Completed';
     try {
       customerService.updateTask(task.id, { status: nextStatus });
       showSuccessNotice(`Task "${task.title}" marked as ${nextStatus}.`);
       refreshAllData();
-    } catch (e) {
-      console.warn('Task update failed', e);
+    } catch {
+      // ignore
     }
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-14 text-slate-900">
       {/* ==================================================================== */}
-      {/* 1. TOP HEADER & IDENTITY BAR                                         */}
+      {/* STICKY TOP STOREFRONT NAVIGATION BAR                                 */}
       {/* ==================================================================== */}
-      <div className="bg-gradient-to-r from-[#0A1628] via-[#0F1E36] to-[#1E3A8A] text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-blue-900/40 relative overflow-hidden">
-        {/* Subtle decorative background watermark */}
-        <div className="absolute right-0 top-0 bottom-0 w-96 opacity-10 pointer-events-none flex items-center justify-center">
-          <Building2 size={240} className="text-white" />
-        </div>
-
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-600 text-white shadow-xs">
-                Department of Posts · India Post
-              </span>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-400 text-slate-950">
-                Kota Division OS
-              </span>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-200 border border-blue-400/30">
-                Rajasthan Circle (Ajmer Region)
-              </span>
-            </div>
-
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-2.5">
-              <span>India Post Official Storefront &amp; Citizen Services</span>
-            </h1>
-
-            <p className="text-xs sm:text-sm text-blue-100/90 leading-relaxed">
-              Unified citizen services hub for IPPB Banking, Aadhaar CELC, AePS Doorstep Cash, Digital Life
-              Certificates (DLC), Speed Post / Priority Parcels, and Sovereign Government Savings.
-            </p>
-
-            <div className="flex flex-wrap items-center gap-3 pt-2 text-xs">
-              <div className="flex items-center gap-1.5 text-blue-200">
-                <UserCheck size={14} className="text-amber-300" />
-                <span>
-                  Staff on Duty: <strong>{userProfile?.name || 'Mahendra Kumar Meena'}</strong>
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5 text-blue-200">
-                <MapPin size={14} className="text-emerald-300" />
-                <span>
-                  Active Beat: <strong>{userProfile?.beat || 'Beat 2'}</strong>
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Office / BO Selector & Key Counter */}
-          <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/15 space-y-3 shrink-0 lg:w-80">
+      <div className="sticky top-0 z-30 bg-[#FAF8F5]/95 backdrop-blur-md border border-slate-200/80 rounded-2xl px-4 sm:px-5 py-3 shadow-xs">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          {/* Left: Brand Identity + Workspace Mode Switcher */}
+          <div className="flex flex-wrap items-center gap-3">
             <div>
-              <label className="block text-[11px] uppercase font-bold text-blue-200 mb-1 flex items-center gap-1">
-                <Building2 size={13} />
-                <span>Current Operating Office / BO</span>
-              </label>
-              <select
-                value={selectedOfficeId}
-                onChange={(e) => setSelectedOfficeId(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-900/90 border border-blue-400/40 rounded-xl text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-amber-400"
-              >
-                {offices.map((off) => (
-                  <option key={off.id} value={off.id} className="bg-slate-900 text-white">
-                    {off.officeName} ({off.pincode}) [{off.officeType}]
-                  </option>
-                ))}
-              </select>
+              <div className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#991B1B]">
+                Developer Storefront Console · India Post
+              </div>
+              <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-950">
+                India Post Official Catalog &amp; Bulk Hub
+              </h1>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-center pt-1 border-t border-white/10">
-              <div className="p-2 bg-white/5 rounded-xl">
-                <span className="block text-[10px] text-blue-200 uppercase font-bold">Active Offerings</span>
-                <span className="font-mono font-black text-lg text-amber-300">
-                  {offerings.filter((o) => o.isActive).length}
-                </span>
-              </div>
-              <div className="p-2 bg-white/5 rounded-xl">
-                <span className="block text-[10px] text-blue-200 uppercase font-bold">Total CRM Leads</span>
-                <span className="font-mono font-black text-lg text-emerald-300">{leads.length}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Global Notice Banner */}
-        {bannerMessage && (
-          <div className="mt-4 p-3 bg-emerald-500/20 border border-emerald-400/40 rounded-xl text-xs text-emerald-100 flex items-center gap-2 animate-fade-in">
-            <CheckCircle2 size={16} className="text-emerald-300 shrink-0" />
-            <span>{bannerMessage}</span>
-          </div>
-        )}
-
-        {/* 2-Tab Navigation Switcher */}
-        <div className="flex flex-wrap gap-2 mt-6 pt-4 border-t border-white/10">
-          <button
-            type="button"
-            onClick={() => setActiveTab('OFFERINGS_FUNNEL')}
-            className={`px-5 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 transition cursor-pointer ${
-              activeTab === 'OFFERINGS_FUNNEL'
-                ? 'bg-white text-slate-950 shadow-md'
-                : 'bg-white/10 hover:bg-white/20 text-white'
-            }`}
-          >
-            <LayoutGrid size={15} />
-            <span>01. Product &amp; Service Management + Lead Funnel</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('MEMBER_DASHBOARD')}
-            className={`px-5 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 transition cursor-pointer ${
-              activeTab === 'MEMBER_DASHBOARD'
-                ? 'bg-amber-400 text-slate-950 shadow-md'
-                : 'bg-white/10 hover:bg-white/20 text-white'
-            }`}
-          >
-            <TrendingUp size={15} />
-            <span>02. Member Dashboard (Profit, CRM &amp; Tasks)</span>
-            {stats.activeFollowUpsCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-mono">
-                {stats.activeFollowUpsCount} Follow-ups
-              </span>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* ==================================================================== */}
-      {/* SECTION 1: PRODUCT & SERVICE MANAGEMENT + LEAD FUNNEL                */}
-      {/* ==================================================================== */}
-      {activeTab === 'OFFERINGS_FUNNEL' && (
-        <div className="space-y-6">
-          {/* Controls Bar: Search, Category Filter, and Add Custom Offering */}
-          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 text-xs">
-            <div className="flex-1 flex flex-col sm:flex-row gap-2">
-              <div className="relative flex-1">
-                <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search postal offerings, IPPB, Aadhaar, Speed Post, PLI..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
-                />
-              </div>
-
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 font-bold text-slate-700"
-              >
-                <option value="ALL">All Categories</option>
-                <option value="Banking & FinTech">Banking &amp; FinTech (IPPB / AePS)</option>
-                <option value="Identity & Citizen Services">Identity &amp; Citizen Services (Aadhaar / DLC)</option>
-                <option value="Mail & Logistics">Mail &amp; Logistics (Speed Post / Parcel)</option>
-                <option value="Sovereign Savings & Insurance">Sovereign Savings &amp; Insurance (SSA / PLI)</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center bg-white border border-slate-200 rounded-xl p-1 text-xs">
               <button
                 type="button"
-                onClick={() => setShowAddOfferingModal(true)}
-                className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                onClick={() => setActiveTab('STOREFRONT')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                  activeTab === 'STOREFRONT'
+                    ? 'bg-slate-950 text-white'
+                    : 'text-slate-600 hover:text-slate-950'
+                }`}
               >
-                <Plus size={14} />
-                <span>+ Custom Postal Campaign</span>
+                Catalog
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('BULK_SHOWCASE')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                  activeTab === 'BULK_SHOWCASE'
+                    ? 'bg-slate-950 text-white'
+                    : 'text-slate-600 hover:text-slate-950'
+                }`}
+              >
+                Bulk Registry ({promotedProducts.filter((p) => p.isActive).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('MEMBER_DASHBOARD')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+                  activeTab === 'MEMBER_DASHBOARD'
+                    ? 'bg-slate-950 text-white'
+                    : 'text-slate-600 hover:text-slate-950'
+                }`}
+              >
+                CRM &amp; Payouts
               </button>
             </div>
           </div>
 
-          {/* Offerings Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredOfferings.map((off) => (
-              <div
-                key={off.id}
-                className={`rounded-2xl border bg-white p-5 flex flex-col justify-between transition shadow-xs hover:shadow-md ${
-                  off.isActive ? 'border-slate-200' : 'border-slate-200 opacity-60 bg-slate-50'
-                }`}
-              >
-                <div className="space-y-3">
-                  {/* Top Category & Status Header */}
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide bg-blue-50 text-blue-800 border border-blue-200">
-                      {off.category}
-                    </span>
+          {/* Right: Inline Search + Office Selector + Bag Drawer Button */}
+          <div className="flex flex-wrap items-center gap-2.5 text-xs">
+            <div className="relative flex-1 sm:w-64">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search products, PIN, SKU, scheme..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-slate-900"
+              />
+            </div>
 
-                    <button
-                      type="button"
-                      onClick={() => handleToggleOfferingVisibility(off.id)}
-                      title={off.isActive ? 'Click to deactivate in beat' : 'Click to activate in beat'}
-                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold flex items-center gap-1 border cursor-pointer ${
-                        off.isActive
-                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                          : 'bg-slate-200 text-slate-700 border-slate-300'
-                      }`}
-                    >
-                      {off.isActive ? <Eye size={11} /> : <EyeOff size={11} />}
-                      <span>{off.isActive ? 'Live in Beat' : 'Hidden'}</span>
-                    </button>
-                  </div>
+            <select
+              value={selectedOfficeId}
+              onChange={(e) => setSelectedOfficeId(e.target.value)}
+              className="px-3 py-2 bg-white border border-slate-300 rounded-xl font-semibold text-slate-800 max-w-[200px]"
+            >
+              {offices.map((off) => (
+                <option key={off.id} value={off.id}>
+                  {off.officeName} ({off.pincode})
+                </option>
+              ))}
+            </select>
 
-                  <div>
-                    <h3 className="text-base font-black text-slate-900 leading-snug">{off.name}</h3>
-                    <p className="text-xs text-slate-600 mt-1 line-clamp-2 leading-relaxed">{off.description}</p>
-                  </div>
-
-                  {/* Highlights Bullet Tags */}
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {off.highlights.map((h, i) => (
-                      <span
-                        key={i}
-                        className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold"
-                      >
-                        ✓ {h}
-                      </span>
-                    ))}
-                  </div>
-
-                  {/* Commission Rate & Turnaround */}
-                  <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200 space-y-1 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold uppercase text-amber-800">Member Commission</span>
-                      <span className="font-bold text-emerald-800 text-xs">{off.commissionRate}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] text-slate-600">
-                      <span>Delivery / Execution SLA:</span>
-                      <strong className="text-slate-800">{off.sla}</strong>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bottom Action Bar: Open Lead Funnel & Edit */}
-                <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditingOffering(off)}
-                    className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg text-xs font-bold cursor-pointer"
-                    title="Edit Offering Details"
-                  >
-                    <Edit3 size={15} />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => openLeadFunnel(off)}
-                    className="flex-1 py-2 px-3 bg-red-700 hover:bg-red-800 text-white rounded-xl font-black text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition"
-                  >
-                    <UserPlus size={14} />
-                    <span>Open Lead Funnel →</span>
-                  </button>
-                </div>
-              </div>
-            ))}
+            <button
+              type="button"
+              onClick={() => setBagOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-[#991B1B] hover:bg-red-800 text-white font-bold inline-flex items-center gap-2 cursor-pointer whitespace-nowrap"
+            >
+              <ShoppingBag size={14} />
+              <span>Dispatch Bag</span>
+              <span className="px-1.5 py-0.5 rounded bg-white/20 font-mono text-[11px] tabular-nums">
+                {totalBagCount}
+              </span>
+            </button>
           </div>
+        </div>
+      </div>
+
+      {bannerMessage && (
+        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 text-xs font-semibold flex items-center gap-2">
+          <CheckCircle2 size={16} className="text-emerald-700 shrink-0" />
+          <span>{bannerMessage}</span>
         </div>
       )}
 
       {/* ==================================================================== */}
-      {/* SECTION 2: MEMBER DASHBOARD (PROFIT, CRM & TASKS)                    */}
+      {/* TAB 1: PREMIUM STOREFRONT CATALOG                                    */}
+      {/* ==================================================================== */}
+      {activeTab === 'STOREFRONT' && (
+        <div className="space-y-8">
+          {/* Editorial 2-Column Hero */}
+          {featuredHeroProduct && (
+            <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 items-stretch">
+              <div className="lg:col-span-7 p-6 sm:p-9 flex flex-col justify-between space-y-6">
+                <div className="space-y-3">
+                  <div className="text-[11px] font-mono uppercase tracking-widest text-[#991B1B] font-bold">
+                    {currentOffice?.officeName || 'Dadabari S.O.'} · PIN {currentOffice?.pincode || '324009'} · Verified Dispatch
+                  </div>
+                  <h2 className="text-2xl sm:text-4xl font-black tracking-tight text-slate-950 leading-[1.12]">
+                    Doorstep Postal Services &amp; Verified Bulk Shipper Catalog.
+                  </h2>
+                  <p className="text-sm text-slate-600 max-w-xl leading-relaxed">
+                    Browse promoted regional merchandise and official citizen banking, Speed Post, and savings offerings ready for instant beat dispatch and CRM lead capture.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => addPromotedProductToBag(featuredHeroProduct)}
+                    className="px-5 py-3 rounded-xl bg-[#991B1B] hover:bg-red-800 text-white text-xs font-bold inline-flex items-center gap-2 cursor-pointer transition"
+                  >
+                    <ShoppingBag size={15} />
+                    <span>Add Featured Bundle ({featuredHeroProduct.priceDisplay})</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddOfferingModal(true)}
+                    className="px-4 py-3 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-900 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer transition"
+                  >
+                    <Plus size={14} />
+                    <span>New Postal Campaign</span>
+                  </button>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 grid grid-cols-3 gap-4 text-xs">
+                  <div>
+                    <div className="text-slate-500">Bulk Shippers</div>
+                    <div className="text-base font-black text-slate-950 tabular-nums">
+                      {bulkCustomers.filter((c) => c.isActive).length} Verified
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-slate-500">Catalog SKUs</div>
+                    <div className="text-base font-black text-slate-950 tabular-nums">
+                      {promotedProducts.filter((p) => p.isActive).length +
+                        offerings.filter((o) => o.isActive).length} Active
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-slate-500">Pipeline Leads</div>
+                    <div className="text-base font-black text-slate-950 tabular-nums">
+                      {leads.length} Logged
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="lg:col-span-5 bg-[#F8FAFC] border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col justify-between">
+                <div className="aspect-[4/3] w-full overflow-hidden bg-slate-100 relative">
+                  <img
+                    src={featuredHeroProduct.imageUrl}
+                    alt={featuredHeroProduct.title}
+                    className="w-full h-full object-cover"
+                  />
+                  <span className="absolute top-3 left-3 px-2.5 py-1 rounded-md bg-slate-950/90 text-white text-[10px] font-bold uppercase tracking-wider">
+                    Featured Drop
+                  </span>
+                </div>
+                <div className="p-5 flex items-center justify-between gap-4 bg-white border-t border-slate-100">
+                  <div className="min-w-0">
+                    <div className="font-bold text-slate-950 text-sm truncate">
+                      {featuredHeroProduct.title}
+                    </div>
+                    <div className="text-xs text-slate-500 truncate">
+                      {featuredHeroProduct.bulkCustomerName} · PIN {featuredHeroProduct.pincode}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-mono font-black text-base text-[#991B1B] tabular-nums">
+                      {featuredHeroProduct.priceDisplay}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setQuickViewProduct(featuredHeroProduct)}
+                      className="text-[11px] font-bold text-slate-700 hover:text-slate-950 underline cursor-pointer"
+                    >
+                      Quick View
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* Category Filter + Sort Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {CATEGORY_PILLS.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setCategoryFilter(cat.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    categoryFilter === cat.id
+                      ? 'bg-slate-950 text-white'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:border-slate-400'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 text-xs shrink-0">
+              <SlidersHorizontal size={14} className="text-slate-400" />
+              <select
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as any)}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white font-semibold text-slate-700"
+              >
+                <option value="FEATURED">Sort: Featured</option>
+                <option value="PRICE_ASC">Price: Low to High</option>
+                <option value="PRICE_DESC">Price: High to Low</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Promoted Bulk Products Grid (3-Column Clean Editorial Cards) */}
+          {filteredProducts.length > 0 && (
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
+                  Promoted Bulk Catalog ({filteredProducts.length})
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('BULK_SHOWCASE')}
+                  className="text-xs font-bold text-[#991B1B] hover:underline cursor-pointer"
+                >
+                  Manage Bulk Inventory →
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredProducts.map((prod) => (
+                  <article
+                    key={prod.id}
+                    className="group bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col justify-between transition hover:border-slate-300 hover:shadow-md"
+                  >
+                    <div>
+                      <div className="aspect-[4/3] bg-[#F8FAFC] overflow-hidden relative">
+                        <img
+                          src={prod.imageUrl}
+                          alt={prod.title}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                        />
+                        {prod.isFeatured && (
+                          <span className="absolute top-3 left-3 px-2 py-0.5 rounded bg-slate-950/90 text-white text-[10px] font-bold uppercase tracking-wider">
+                            Featured
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="p-5 space-y-2">
+                        <div className="text-[11px] font-medium text-slate-500 truncate">
+                          {prod.bulkCustomerName} · PIN {prod.pincode} · {prod.sku}
+                        </div>
+                        <div className="flex items-start justify-between gap-3">
+                          <h4 className="font-bold text-slate-950 text-base leading-snug line-clamp-2">
+                            {prod.title}
+                          </h4>
+                          <span className="font-mono font-black text-base text-[#991B1B] tabular-nums shrink-0">
+                            {prod.priceDisplay}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                          {prod.bulkOfferDetails}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="px-5 pb-5 pt-3 border-t border-slate-100 flex items-center gap-2 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setQuickViewProduct(prod)}
+                        className="px-3 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-800 font-bold cursor-pointer"
+                      >
+                        Details
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addPromotedProductToBag(prod)}
+                        className="flex-1 py-2 px-3 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <ShoppingBag size={13} />
+                        <span>Add to Bag</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openBulkProductLeadFunnel(prod)}
+                        className="py-2 px-3 rounded-xl bg-[#991B1B] hover:bg-red-800 text-white font-bold cursor-pointer"
+                        title="Direct CRM Lead"
+                      >
+                        Lead
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Citizen Postal Services & Sovereign Schemes Grid */}
+          {filteredOfferings.length > 0 && (
+            <section className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
+                  Citizen Banking, Savings &amp; Mail Services ({filteredOfferings.length})
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowAddOfferingModal(true)}
+                  className="text-xs font-bold text-slate-700 hover:text-slate-950 inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus size={13} /> Add Custom Service
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {filteredOfferings.map((off) => (
+                  <div
+                    key={off.id}
+                    className={`rounded-2xl border bg-white p-5 flex flex-col justify-between transition hover:border-slate-300 ${
+                      off.isActive ? 'border-slate-200' : 'border-slate-200 opacity-60 bg-slate-50'
+                    }`}
+                  >
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between gap-2 text-[11px]">
+                        <span className="font-bold uppercase tracking-wider text-[#991B1B]">
+                          {off.category}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleOfferingVisibility(off.id)}
+                          className="text-slate-500 hover:text-slate-900 inline-flex items-center gap-1 font-semibold cursor-pointer"
+                        >
+                          {off.isActive ? <Eye size={13} /> : <EyeOff size={13} />}
+                          <span>{off.isActive ? 'Live' : 'Hidden'}</span>
+                        </button>
+                      </div>
+
+                      <div>
+                        <h4 className="text-base font-bold text-slate-950 leading-snug">
+                          {off.name}
+                        </h4>
+                        <p className="text-xs text-slate-600 mt-1 line-clamp-2 leading-relaxed">
+                          {off.description}
+                        </p>
+                      </div>
+
+                      <div className="text-[11px] text-slate-500 pt-1">
+                        {off.highlights.slice(0, 2).join(' · ')} · SLA: {off.sla}
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                        <span className="text-slate-500">Staff Commission</span>
+                        <span className="font-mono font-bold text-emerald-800">
+                          {off.commissionRate}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 mt-4 border-t border-slate-100 flex items-center gap-2 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setEditingOffering(off)}
+                        className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-lg cursor-pointer"
+                        title="Edit Offering"
+                      >
+                        <Edit3 size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addOfferingToBag(off)}
+                        className="px-3 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-800 font-bold cursor-pointer"
+                      >
+                        + Bag
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openLeadFunnel(off)}
+                        className="flex-1 py-2 px-3 bg-[#991B1B] hover:bg-red-800 text-white rounded-xl font-bold inline-flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <UserPlus size={13} />
+                        <span>Capture Lead</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* TAB 2: MEMBER COMMISSION, FOLLOW-UPS & FIELD TASKS                   */}
       {/* ==================================================================== */}
       {activeTab === 'MEMBER_DASHBOARD' && (
         <div className="space-y-6">
-          {/* Member Commission & Earnings Summary Strip */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-1">
-              <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total Commission Earned</div>
-              <div className="text-2xl font-black text-slate-900 font-mono">₹{stats.estimatedEarnings.toLocaleString('en-IN')}</div>
-              <p className="text-[11px] text-emerald-600 font-bold">From {stats.totalLeadsCount} captured CRM leads</p>
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-1">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Commission Earned
+              </div>
+              <div className="text-2xl font-black text-slate-950 font-mono tabular-nums">
+                ₹{stats.estimatedEarnings.toLocaleString('en-IN')}
+              </div>
+              <p className="text-xs text-emerald-700 font-semibold">
+                From {stats.totalLeadsCount} CRM leads
+              </p>
             </div>
-
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-1">
-              <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Active CRM Follow-ups</div>
-              <div className="text-2xl font-black text-amber-600 font-mono">{stats.activeFollowUpsCount}</div>
-              <p className="text-[11px] text-slate-500 font-medium">Scheduled citizen doorstep visits</p>
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-1">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Active Follow-ups
+              </div>
+              <div className="text-2xl font-black text-amber-700 font-mono tabular-nums">
+                {stats.activeFollowUpsCount}
+              </div>
+              <p className="text-xs text-slate-500">Scheduled doorstep callbacks</p>
             </div>
-
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-1">
-              <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Target Achievement</div>
-              <div className="text-2xl font-black text-blue-700 font-mono">84%</div>
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-1">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Target Achievement
+              </div>
+              <div className="text-2xl font-black text-blue-700 font-mono tabular-nums">84%</div>
               <div className="w-full bg-slate-100 rounded-full h-2 mt-1">
                 <div className="bg-blue-600 h-2 rounded-full" style={{ width: '84%' }} />
               </div>
             </div>
-
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-1">
-              <div className="text-[10px] font-black uppercase tracking-wider text-slate-400">Projected Monthly Payout</div>
-              <div className="text-2xl font-black text-emerald-700 font-mono">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-1">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Projected Payout
+              </div>
+              <div className="text-2xl font-black text-emerald-700 font-mono tabular-nums">
                 ₹{(stats.estimatedEarnings + 2400).toLocaleString('en-IN')}
               </div>
-              <p className="text-[11px] text-slate-500 font-medium">Auto-credited with monthly CSI cycle</p>
+              <p className="text-xs text-slate-500">Monthly CSI disbursement cycle</p>
             </div>
           </div>
 
-          {/* Earnings Breakdown by Vertical */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3">
             <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-              <Wallet size={16} className="text-emerald-600" />
-              <span>Category-Wise Commission Breakdown</span>
+              <Wallet size={16} className="text-emerald-700" />
+              <span>Category Commission Breakdown</span>
             </h3>
-
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-              {Object.entries(stats.categoryBreakdown).map(([cat, amount]) => (
+              {(Object.entries(stats.categoryBreakdown) as Array<[string, number]>).map(([cat, amount]) => (
                 <div key={cat} className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                  <span className="text-[10px] uppercase font-bold text-slate-500 block truncate">{cat}</span>
-                  <span className="text-base font-black text-slate-900 font-mono">₹{amount.toLocaleString()}</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-500 block truncate">
+                    {cat}
+                  </span>
+                  <span className="text-base font-black text-slate-900 font-mono tabular-nums">
+                    ₹{Number(amount).toLocaleString('en-IN')}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Active CRM Follow-ups Table & Daily Tasks Side by Side */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Active CRM Follow-ups (2 cols) */}
-            <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
+            <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col">
               <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
                 <div>
                   <h3 className="font-black text-slate-900 text-sm flex items-center gap-2">
                     <Clock size={16} className="text-amber-600" />
-                    <span>Active CRM Follow-Ups &amp; Doorstep Visits ({followUps.length})</span>
+                    <span>Active CRM Follow-Ups ({followUps.length})</span>
                   </h3>
-                  <p className="text-xs text-slate-500">Citizen leads requiring field callback, biometric KYC, or cash collection</p>
+                  <p className="text-xs text-slate-500">
+                    Citizen leads requiring callback, KYC, or cash collection
+                  </p>
                 </div>
-                <Link
-                  to="/follow-ups"
-                  className="text-xs font-bold text-blue-700 hover:text-blue-900 flex items-center gap-1"
-                >
-                  <span>Open Full CRM →</span>
+                <Link to="/follow-ups" className="text-xs font-bold text-blue-700 hover:underline">
+                  Open Full CRM →
                 </Link>
               </div>
-
-              <div className="divide-y divide-slate-100 flex-1 overflow-y-auto max-h-[500px]">
+              <div className="divide-y divide-slate-100 flex-1 overflow-y-auto max-h-[460px]">
                 {followUps.map((fu) => {
                   const isDone = fu.currentStatus === 'Completed';
                   return (
                     <div
                       key={fu.id}
-                      className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition ${
+                      className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
                         isDone ? 'bg-slate-50/70' : 'hover:bg-slate-50'
                       }`}
                     >
                       <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-black text-slate-900 text-sm">{fu.customerName}</span>
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              isDone
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : fu.currentStatus === 'Rescheduled'
-                                ? 'bg-blue-100 text-blue-800'
-                                : 'bg-amber-100 text-amber-800'
-                            }`}
-                          >
-                            {fu.currentStatus}
-                          </span>
-                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-semibold">
-                            {fu.priority || 'Normal'} Priority
-                          </span>
+                        <div className="font-bold text-slate-900 text-sm">
+                          {fu.customerName} ·{' '}
+                          <span className="font-mono text-xs text-slate-500">{fu.currentStatus}</span>
                         </div>
-
-                        <div className="text-slate-600 font-medium">
-                          Next Action: <strong className="text-slate-900">{fu.nextAction || fu.remarks}</strong> · Due:{' '}
-                          <span className="font-mono font-bold text-slate-800">{fu.scheduledDate}</span>
+                        <div className="text-slate-600">
+                          {fu.nextAction || fu.remarks} · Due{' '}
+                          <span className="font-mono font-bold">{fu.scheduledDate}</span>
                         </div>
-
-                        {fu.remarks && <p className="text-[11px] text-slate-500 italic">"{fu.remarks}"</p>}
                       </div>
-
                       <div className="flex items-center gap-2 shrink-0">
                         {fu.currentStatus !== 'Completed' && (
                           <button
                             type="button"
                             onClick={() => handleUpdateFollowUpStatus(fu.id, 'Completed')}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[11px] cursor-pointer"
+                            className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-bold text-[11px] cursor-pointer"
                           >
                             Mark Completed
-                          </button>
-                        )}
-                        {fu.currentStatus === 'Pending' && (
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateFollowUpStatus(fu.id, 'Rescheduled')}
-                            className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg font-bold text-[11px] cursor-pointer"
-                          >
-                            Reschedule
                           </button>
                         )}
                       </div>
                     </div>
                   );
                 })}
-
                 {followUps.length === 0 && (
-                  <div className="p-8 text-center text-slate-400 space-y-2">
-                    <CheckCircle2 size={32} className="mx-auto text-emerald-500" />
-                    <p className="font-bold text-slate-700">All follow-ups clear!</p>
-                    <p className="text-xs">Open the lead funnel on any product to capture new citizen requests.</p>
+                  <div className="p-8 text-center text-slate-400 text-xs">
+                    No active follow-ups queued.
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Assigned Beat Tasks (1 col) */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 flex flex-col space-y-4">
-              <div>
-                <h3 className="font-black text-slate-900 text-sm flex items-center gap-2">
-                  <CheckSquare size={16} className="text-blue-600" />
-                  <span>Today's Field Tasks ({tasks.length})</span>
-                </h3>
-                <p className="text-xs text-slate-500">Assigned beat checklist &amp; campaigns</p>
-              </div>
-
-              <div className="space-y-2.5 flex-1 overflow-y-auto max-h-[460px]">
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col space-y-3">
+              <h3 className="font-black text-slate-900 text-sm flex items-center gap-2">
+                <CheckSquare size={16} className="text-blue-600" />
+                <span>Assigned Field Tasks ({tasks.length})</span>
+              </h3>
+              <div className="space-y-2 flex-1 overflow-y-auto max-h-[420px]">
                 {tasks.map((t) => {
                   const isDone = t.status === 'Completed';
                   return (
                     <div
                       key={t.id}
                       onClick={() => handleToggleTask(t)}
-                      className={`p-3 rounded-xl border text-xs cursor-pointer transition flex items-start gap-2.5 ${
-                        isDone
-                          ? 'bg-slate-50 border-slate-200 opacity-60'
-                          : 'bg-white border-slate-200 hover:border-blue-300 shadow-2xs'
+                      className={`p-3 rounded-xl border text-xs cursor-pointer flex items-start gap-2.5 ${
+                        isDone ? 'bg-slate-50 border-slate-200 opacity-60' : 'border-slate-200 hover:border-slate-400'
                       }`}
                     >
-                      <button type="button" className="mt-0.5 text-blue-600 shrink-0">
-                        {isDone ? <CheckSquare size={16} className="text-emerald-600" /> : <Square size={16} />}
-                      </button>
-                      <div className="space-y-1">
+                      <span className="mt-0.5 text-blue-600 shrink-0">
+                        {isDone ? (
+                          <CheckSquare size={16} className="text-emerald-600" />
+                        ) : (
+                          <Square size={16} />
+                        )}
+                      </span>
+                      <div>
                         <div className={`font-bold ${isDone ? 'line-through text-slate-500' : 'text-slate-900'}`}>
                           {t.title}
                         </div>
@@ -931,10 +1279,9 @@ export default function IndiaPostStorefrontView() {
                     </div>
                   );
                 })}
-
                 {tasks.length === 0 && (
                   <div className="p-6 text-center text-slate-400 text-xs">
-                    <p>No active tasks assigned for today.</p>
+                    No active tasks assigned.
                   </div>
                 )}
               </div>
@@ -944,35 +1291,425 @@ export default function IndiaPostStorefrontView() {
       )}
 
       {/* ==================================================================== */}
-      {/* MODAL 1: STRUCTURED LEAD FUNNEL MODAL                                */}
+      {/* TAB 3: BULK CUSTOMERS & PROMOTED PRODUCTS ADMIN                      */}
       {/* ==================================================================== */}
-      {leadModalOffering && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-lg w-full max-h-[92vh] overflow-hidden flex flex-col shadow-2xl border border-slate-200">
-            <div className="p-5 bg-gradient-to-r from-red-700 via-red-800 to-slate-900 text-white flex items-center justify-between">
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded bg-amber-400 text-slate-950">
-                  Direct CRM Lead Funnel
+      {activeTab === 'BULK_SHOWCASE' && (
+        <div className="space-y-6">
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4 text-xs">
+            <div className="space-y-1">
+              <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <Award size={17} className="text-[#991B1B]" />
+                <span>India Post Bulk Customer &amp; Product Promotion Registry</span>
+              </h2>
+              <p className="text-slate-600">
+                Manage verified India Post Bulk / BNPL contract accounts and promoted product catalogs synced live to Storefront &amp; Short Link Showcase.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={bulkSearch}
+                  onChange={(e) => setBulkSearch(e.target.value)}
+                  placeholder="Filter bulk customer or PIN..."
+                  className="pl-8 pr-3 py-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBulkCustModal(true)}
+                className="px-4 py-2 bg-slate-950 hover:bg-slate-800 text-white rounded-xl font-bold inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus size={14} /> Add Bulk Customer
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPromoProdModal(true)}
+                className="px-4 py-2 bg-[#991B1B] hover:bg-red-800 text-white rounded-xl font-bold inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus size={14} /> Promote Product
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black text-slate-900">
+                  Verified Bulk Customers ({bulkCustomers.length})
+                </h3>
+                <span className="text-[11px] font-mono text-emerald-700 font-bold">
+                  {bulkCustomers.filter((c) => c.isActive).length} Live
                 </span>
-                <h3 className="text-lg font-black mt-1">{leadModalOffering.name}</h3>
-                <p className="text-xs text-red-100">
-                  Capture citizen demand into CRM pipeline with immediate beat dispatch
+              </div>
+              <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+                {bulkCustomers
+                  .filter((c) => {
+                    const q = bulkSearch.trim().toLowerCase();
+                    if (!q) return true;
+                    return `${c.businessName} ${c.category} ${c.pincode} ${c.officeName} ${c.beatNo}`
+                      .toLowerCase()
+                      .includes(q);
+                  })
+                  .map((cust) => (
+                    <div
+                      key={cust.id}
+                      className={`p-4 rounded-xl border text-xs space-y-1.5 ${
+                        cust.isActive
+                          ? 'bg-slate-50/70 border-slate-200'
+                          : 'bg-slate-100 border-slate-200 opacity-65'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-bold text-slate-900 text-sm">{cust.businessName}</div>
+                          <div className="text-[11px] text-slate-600">
+                            {cust.category} · {cust.officeName} (PIN {cust.pincode}) · {cust.beatNo}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            indiaPostBulkShowcaseService.toggleBulkCustomerStatus(cust.id);
+                            showSuccessNotice(`Updated visibility for "${cust.businessName}".`);
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border cursor-pointer shrink-0 ${
+                            cust.isActive
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                              : 'bg-slate-200 text-slate-700 border-slate-300'
+                          }`}
+                        >
+                          {cust.isActive ? 'Live' : 'Hidden'}
+                        </button>
+                      </div>
+                      <p className="text-slate-600">{cust.tagline}</p>
+                    </div>
+                  ))}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-black text-slate-900">
+                  Promoted Products ({promotedProducts.length})
+                </h3>
+                <span className="text-[11px] font-mono text-[#991B1B] font-bold">
+                  Synced to Catalog
+                </span>
+              </div>
+              <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
+                {promotedProducts
+                  .filter((p) => {
+                    const q = bulkSearch.trim().toLowerCase();
+                    if (!q) return true;
+                    return `${p.title} ${p.bulkCustomerName} ${p.category} ${p.pincode}`
+                      .toLowerCase()
+                      .includes(q);
+                  })
+                  .map((prod) => (
+                    <div
+                      key={prod.id}
+                      className={`p-3.5 rounded-xl border text-xs flex items-start gap-3 ${
+                        prod.isActive
+                          ? 'bg-white border-slate-200'
+                          : 'bg-slate-100 border-slate-200 opacity-65'
+                      }`}
+                    >
+                      <img
+                        src={prod.imageUrl}
+                        alt={prod.title}
+                        referrerPolicy="no-referrer"
+                        className="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0"
+                      />
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="font-bold text-slate-900 leading-snug">{prod.title}</div>
+                          <span className="font-mono font-black text-[#991B1B] shrink-0">
+                            {prod.priceDisplay}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-600 truncate">
+                          {prod.bulkCustomerName} · PIN {prod.pincode}
+                        </div>
+                        <div className="pt-1 flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-mono text-slate-500">{prod.sku}</span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => openBulkProductLeadFunnel(prod)}
+                              className="px-2.5 py-1 rounded-lg bg-[#991B1B] hover:bg-red-800 text-white text-[10px] font-bold cursor-pointer"
+                            >
+                              + Lead
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                indiaPostBulkShowcaseService.togglePromotedProductStatus(prod.id);
+                                showSuccessNotice(`Updated status for "${prod.title}".`);
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border cursor-pointer ${
+                                prod.isActive
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                  : 'bg-slate-200 text-slate-700 border-slate-300'
+                              }`}
+                            >
+                              {prod.isActive ? 'Live' : 'Paused'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* SLIDE-OVER DISPATCH / INQUIRY BAG DRAWER                             */}
+      {/* ==================================================================== */}
+      {bagOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex justify-end">
+          <div className="w-full max-w-md bg-white h-full flex flex-col shadow-2xl border-l border-slate-200">
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-black text-slate-950">Dispatch &amp; Inquiry Bag</h3>
+                <p className="text-xs text-slate-500">
+                  Submit bundled offerings or promoted SKUs as one verified CRM lead.
                 </p>
               </div>
               <button
-                onClick={() => setLeadModalOffering(null)}
-                className="p-2 rounded-full hover:bg-white/10 text-white cursor-pointer"
+                type="button"
+                onClick={() => setBagOpen(false)}
+                className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 cursor-pointer"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSubmitLeadFunnel} className="p-5 overflow-y-auto space-y-4 text-xs flex-1">
-              <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 flex items-center justify-between">
-                <span>Commission on Conversion:</span>
-                <strong className="text-emerald-700 font-bold">{leadModalOffering.commissionRate}</strong>
-              </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
+              {bagItems.length === 0 ? (
+                <div className="py-12 text-center text-slate-500 space-y-2">
+                  <ShoppingBag size={28} className="mx-auto text-slate-300" />
+                  <p className="font-semibold text-slate-700">Your dispatch bag is empty</p>
+                  <p>Add promoted products or postal services from the catalog.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-3">
+                    {bagItems.map((item) => (
+                      <div
+                        key={item.id}
+                        className="p-3 rounded-xl border border-slate-200 flex items-start justify-between gap-3"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-950 truncate">{item.title}</div>
+                          <div className="text-[11px] text-slate-500">
+                            {item.subtitle} · {item.priceDisplay}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => updateBagQuantity(item.id, -1)}
+                            className="w-6 h-6 rounded border border-slate-300 flex items-center justify-center hover:bg-slate-100 cursor-pointer"
+                          >
+                            <Minus size={12} />
+                          </button>
+                          <span className="w-6 text-center font-mono font-bold tabular-nums">
+                            {item.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => updateBagQuantity(item.id, 1)}
+                            className="w-6 h-6 rounded border border-slate-300 flex items-center justify-center hover:bg-slate-100 cursor-pointer"
+                          >
+                            <Plus size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateBagQuantity(item.id, -item.quantity)}
+                            className="ml-1 p-1 text-slate-400 hover:text-red-600 cursor-pointer"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
 
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                    <span className="font-semibold text-slate-700">
+                      Estimated Dispatch Value ({totalBagCount} items)
+                    </span>
+                    <span className="font-mono font-black text-base text-[#991B1B] tabular-nums">
+                      ₹{totalBagValue.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+
+                  <form onSubmit={handleCheckoutBagAsLead} className="space-y-3 pt-2 border-t border-slate-200">
+                    {bagError && (
+                      <div className="p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-800 font-semibold">
+                        {bagError}
+                      </div>
+                    )}
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">
+                        Citizen / Bulk Buyer Name *
+                      </label>
+                      <input
+                        required
+                        value={bagCustomerName}
+                        onChange={(e) => setBagCustomerName(e.target.value)}
+                        placeholder="e.g. Rajesh Gupta"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-xl"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Mobile *</label>
+                        <input
+                          required
+                          value={bagMobile}
+                          onChange={(e) => setBagMobile(e.target.value)}
+                          placeholder="10-digit mobile"
+                          className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Colony / Area</label>
+                        <input
+                          value={bagColony}
+                          onChange={(e) => setBagColony(e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-xl"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Dispatch Notes</label>
+                      <textarea
+                        rows={2}
+                        value={bagNotes}
+                        onChange={(e) => setBagNotes(e.target.value)}
+                        placeholder="Preferred pickup time, BNPL code, or doorstep delivery notes..."
+                        className="w-full p-2.5 border border-slate-300 rounded-xl"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="w-full py-2.5 px-4 rounded-xl bg-[#991B1B] hover:bg-red-800 text-white font-bold inline-flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <span>Create Multi-Item CRM Lead</span>
+                      <ArrowRight size={14} />
+                    </button>
+                  </form>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* QUICK VIEW MODAL                                                     */}
+      {/* ==================================================================== */}
+      {quickViewProduct && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-2xl w-full overflow-hidden border border-slate-200 shadow-2xl grid grid-cols-1 sm:grid-cols-2">
+            <div className="bg-[#F8FAFC] aspect-square sm:aspect-auto">
+              <img
+                src={quickViewProduct.imageUrl}
+                alt={quickViewProduct.title}
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className="p-6 flex flex-col justify-between space-y-4 text-xs">
+              <div className="space-y-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-[11px] font-mono font-bold uppercase text-[#991B1B]">
+                    {quickViewProduct.sku} · PIN {quickViewProduct.pincode}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setQuickViewProduct(null)}
+                    className="p-1 rounded hover:bg-slate-100 text-slate-500 cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <h3 className="text-lg font-black text-slate-950 leading-snug">
+                  {quickViewProduct.title}
+                </h3>
+                <div className="font-mono font-black text-xl text-[#991B1B] tabular-nums">
+                  {quickViewProduct.priceDisplay}
+                </div>
+                <p className="text-slate-600 leading-relaxed">{quickViewProduct.description}</p>
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                  <div className="font-bold text-slate-900">
+                    Bulk Shipper: {quickViewProduct.bulkCustomerName}
+                  </div>
+                  <div className="text-slate-600">{quickViewProduct.bulkOfferDetails}</div>
+                  <div className="text-slate-500">Coverage: {quickViewProduct.beatCoverage}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    addPromotedProductToBag(quickViewProduct);
+                    setQuickViewProduct(null);
+                  }}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-bold cursor-pointer"
+                >
+                  Add to Bag
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const p = quickViewProduct;
+                    setQuickViewProduct(null);
+                    openBulkProductLeadFunnel(p);
+                  }}
+                  className="py-2.5 px-4 rounded-xl bg-[#991B1B] hover:bg-red-800 text-white font-bold cursor-pointer"
+                >
+                  Direct Lead
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================================== */}
+      {/* STRUCTURED LEAD FUNNEL MODAL                                         */}
+      {/* ==================================================================== */}
+      {leadModalOffering && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[92vh] overflow-hidden flex flex-col shadow-2xl border border-slate-200">
+            <div className="p-5 bg-slate-950 text-white flex items-center justify-between">
+              <div>
+                <div className="text-[10px] font-mono uppercase tracking-wider text-amber-300">
+                  Direct CRM Lead Funnel
+                </div>
+                <h3 className="text-base font-black mt-0.5">{leadModalOffering.name}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLeadModalOffering(null)}
+                className="p-2 rounded-full hover:bg-white/10 text-white cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleSubmitLeadFunnel} className="p-5 overflow-y-auto space-y-3.5 text-xs flex-1">
+              {formErrorMessage && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 font-bold flex items-center gap-2">
+                  <AlertCircle size={15} className="shrink-0" />
+                  <span>{formErrorMessage}</span>
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Citizen Full Name *</label>
@@ -981,7 +1718,7 @@ export default function IndiaPostStorefrontView() {
                     placeholder="e.g. Ramesh Kumar Sharma"
                     value={lfCitizenName}
                     onChange={(e) => setLfCitizenName(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold bg-slate-50 focus:bg-white"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold"
                   />
                 </div>
                 <div>
@@ -991,20 +1728,18 @@ export default function IndiaPostStorefrontView() {
                     placeholder="e.g. 9829012345"
                     value={lfMobile}
                     onChange={(e) => setLfMobile(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono font-bold text-blue-700 bg-slate-50 focus:bg-white"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono font-bold"
                   />
                 </div>
               </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Colony / Locality *</label>
                   <input
                     required
-                    placeholder="e.g. Keshavpura Sector 6"
                     value={lfColony}
                     onChange={(e) => setLfColony(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl"
                   />
                 </div>
                 <div>
@@ -1013,11 +1748,10 @@ export default function IndiaPostStorefrontView() {
                     required
                     value={lfPincode}
                     onChange={(e) => setLfPincode(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono font-bold bg-slate-50 focus:bg-white"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono font-bold"
                   />
                 </div>
               </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Delivery Beat *</label>
@@ -1025,7 +1759,7 @@ export default function IndiaPostStorefrontView() {
                     required
                     value={lfBeat}
                     onChange={(e) => setLfBeat(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold bg-slate-50 focus:bg-white"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold"
                   />
                 </div>
                 <div>
@@ -1034,53 +1768,46 @@ export default function IndiaPostStorefrontView() {
                     type="date"
                     value={lfPreferredDate}
                     onChange={(e) => setLfPreferredDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white font-mono"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono"
                   />
                 </div>
               </div>
-
               <div>
-                <label className="block font-bold text-slate-700 mb-1">House / Doorstep Address Details</label>
+                <label className="block font-bold text-slate-700 mb-1">Doorstep Address Details</label>
                 <input
-                  placeholder="e.g. Plot 42, Near CAD Circle"
                   value={lfAddress}
                   onChange={(e) => setLfAddress(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl"
                 />
               </div>
-
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Deposit / Booking Requirement (optional)</label>
+                <label className="block font-bold text-slate-700 mb-1">Deposit / Booking Requirement</label>
                 <input
-                  placeholder="e.g. ₹500 initial deposit / 2 parcel boxes"
                   value={lfInitialAmount}
                   onChange={(e) => setLfInitialAmount(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl"
                 />
               </div>
-
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Field Notes / Special Requirements</label>
+                <label className="block font-bold text-slate-700 mb-1">Field Notes</label>
                 <textarea
                   rows={2}
-                  placeholder="e.g. Elderly citizen needs doorstep fingerprint scanner on Sunday morning"
                   value={lfNotes}
                   onChange={(e) => setLfNotes(e.target.value)}
-                  className="w-full p-2.5 border border-slate-300 rounded-xl bg-slate-50 focus:bg-white"
+                  className="w-full p-2.5 border border-slate-300 rounded-xl"
                 />
               </div>
-
-              <div className="pt-2 flex justify-end gap-2.5">
+              <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setLeadModalOffering(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold cursor-pointer"
+                  className="px-4 py-2 bg-slate-100 rounded-xl font-bold text-slate-700 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl font-black cursor-pointer shadow-md"
+                  className="px-5 py-2 bg-[#991B1B] hover:bg-red-800 text-white rounded-xl font-bold cursor-pointer"
                 >
                   Submit &amp; Capture Lead
                 </button>
@@ -1090,42 +1817,33 @@ export default function IndiaPostStorefrontView() {
         </div>
       )}
 
-      {/* ==================================================================== */}
-      {/* MODAL 2: ADD CUSTOM POSTAL CAMPAIGN                                  */}
-      {/* ==================================================================== */}
+      {/* ADD CUSTOM OFFERING MODAL */}
       {showAddOfferingModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-lg w-full max-h-[92vh] overflow-hidden flex flex-col shadow-2xl border border-slate-200">
-            <div className="p-5 bg-gradient-to-r from-blue-900 to-slate-900 text-white flex items-center justify-between">
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded bg-blue-500 text-white">
-                  Postal Service Registry
-                </span>
-                <h3 className="text-lg font-black mt-1">Register New Postal Offering / Campaign</h3>
-              </div>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-200">
+            <div className="p-5 bg-slate-950 text-white flex items-center justify-between">
+              <h3 className="text-base font-black">Register New Postal Offering</h3>
               <button
+                type="button"
                 onClick={() => setShowAddOfferingModal(false)}
-                className="p-2 rounded-full hover:bg-white/10 text-white cursor-pointer"
+                className="p-1.5 rounded-full hover:bg-white/10 text-white cursor-pointer"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
-
-            <form onSubmit={handleCreateOffering} className="p-5 overflow-y-auto space-y-4 text-xs flex-1">
+            <form onSubmit={handleCreateOffering} className="p-5 space-y-3 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Offering Name *</label>
                 <input
                   required
-                  placeholder="e.g. Mahila Samman Festival Drive"
                   value={newOffName}
                   onChange={(e) => setNewOffName(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold"
                 />
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Category *</label>
+                  <label className="block font-bold text-slate-700 mb-1">Category</label>
                   <select
                     value={newOffCategory}
                     onChange={(e) => setNewOffCategory(e.target.value as any)}
@@ -1142,35 +1860,30 @@ export default function IndiaPostStorefrontView() {
                   <input
                     value={newOffSla}
                     onChange={(e) => setNewOffSla(e.target.value)}
-                    placeholder="e.g. Within 24 hours"
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl"
                   />
                 </div>
               </div>
-
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Description</label>
                 <textarea
                   rows={2}
-                  placeholder="Summary of service, citizen benefits, and eligibility..."
                   value={newOffDesc}
                   onChange={(e) => setNewOffDesc(e.target.value)}
                   className="w-full p-2.5 border border-slate-300 rounded-xl"
                 />
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Member Commission (Label)</label>
+                  <label className="block font-bold text-slate-700 mb-1">Commission Label</label>
                   <input
                     value={newOffCommission}
                     onChange={(e) => setNewOffCommission(e.target.value)}
-                    placeholder="e.g. ₹40 per account"
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Numeric Amount (₹ for dashboard)</label>
+                  <label className="block font-bold text-slate-700 mb-1">Commission (₹)</label>
                   <input
                     type="number"
                     value={newOffCommissionNum}
@@ -1179,18 +1892,17 @@ export default function IndiaPostStorefrontView() {
                   />
                 </div>
               </div>
-
-              <div className="pt-2 flex justify-end gap-2.5">
+              <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowAddOfferingModal(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold cursor-pointer"
+                  className="px-4 py-2 bg-slate-100 rounded-xl font-bold text-slate-700 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl font-black cursor-pointer shadow-md"
+                  className="px-5 py-2 bg-[#991B1B] text-white rounded-xl font-bold cursor-pointer"
                 >
                   Save Offering
                 </button>
@@ -1200,54 +1912,300 @@ export default function IndiaPostStorefrontView() {
         </div>
       )}
 
-      {/* ==================================================================== */}
-      {/* MODAL 3: EDIT OFFERING                                               */}
-      {/* ==================================================================== */}
-      {editingOffering && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-lg w-full max-h-[92vh] overflow-hidden flex flex-col shadow-2xl border border-slate-200">
-            <div className="p-5 bg-gradient-to-r from-amber-700 to-slate-900 text-white flex items-center justify-between">
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded bg-amber-400 text-slate-950">
-                  Offering Editor
-                </span>
-                <h3 className="text-lg font-black mt-1">Edit {editingOffering.name}</h3>
-              </div>
+      {/* ADD BULK CUSTOMER MODAL */}
+      {showBulkCustModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-200">
+            <div className="p-5 bg-slate-950 text-white flex items-center justify-between">
+              <h3 className="text-base font-black">Register Verified Bulk Customer</h3>
               <button
-                onClick={() => setEditingOffering(null)}
-                className="p-2 rounded-full hover:bg-white/10 text-white cursor-pointer"
+                type="button"
+                onClick={() => setShowBulkCustModal(false)}
+                className="p-1.5 rounded-full hover:bg-white/10 text-white cursor-pointer"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!bcBusinessName.trim()) return;
+                const saved = indiaPostBulkShowcaseService.upsertBulkCustomer({
+                  businessName: bcBusinessName.trim(),
+                  category: bcCategory,
+                  pincode: bcPincode.trim() || '324009',
+                  beatNo: bcBeatNo.trim() || 'Beat 2',
+                  contactPerson: bcContactPerson.trim() || 'Dispatch Desk',
+                  tagline: bcTagline.trim() || 'Verified India Post Speed Post & Business Parcel shipper',
+                });
+                setPpBulkCustId(saved.id);
+                setShowBulkCustModal(false);
+                setBcBusinessName('');
+                setBcContactPerson('');
+                setBcTagline('');
+                showSuccessNotice(`Added Bulk Customer "${saved.businessName}".`);
+              }}
+              className="p-5 space-y-3 text-xs"
+            >
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Business Name *</label>
+                <input
+                  required
+                  value={bcBusinessName}
+                  onChange={(e) => setBcBusinessName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-semibold"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Sector Category</label>
+                  <select
+                    value={bcCategory}
+                    onChange={(e) => setBcCategory(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold bg-white"
+                  >
+                    <option value="Books & Study Material">Books &amp; Study Material</option>
+                    <option value="Handloom & Textiles">Handloom &amp; Textiles</option>
+                    <option value="Medical & Diagnostics">Medical &amp; Diagnostics</option>
+                    <option value="Agro & Regional Goods">Agro &amp; Regional Goods</option>
+                    <option value="Industrial & Packaging">Industrial &amp; Packaging</option>
+                    <option value="e-Commerce & BNPL Merchant">e-Commerce &amp; BNPL Merchant</option>
+                    <option value="Government & Institutional">Government &amp; Institutional</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Office PIN Code *</label>
+                  <input
+                    required
+                    value={bcPincode}
+                    onChange={(e) => setBcPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono font-bold"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Assigned Beat</label>
+                  <input
+                    value={bcBeatNo}
+                    onChange={(e) => setBcBeatNo(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Contact Person</label>
+                  <input
+                    value={bcContactPerson}
+                    onChange={(e) => setBcContactPerson(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Promotion Tagline</label>
+                <textarea
+                  rows={2}
+                  value={bcTagline}
+                  onChange={(e) => setBcTagline(e.target.value)}
+                  className="w-full p-2.5 border border-slate-300 rounded-xl"
+                />
+              </div>
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkCustModal(false)}
+                  className="px-4 py-2 bg-slate-100 rounded-xl font-bold text-slate-700 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#991B1B] text-white rounded-xl font-bold cursor-pointer"
+                >
+                  Save Bulk Customer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
-            <form onSubmit={handleSaveEditedOffering} className="p-5 overflow-y-auto space-y-4 text-xs flex-1">
+      {/* PROMOTE PRODUCT MODAL */}
+      {showPromoProdModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-200">
+            <div className="p-5 bg-[#991B1B] text-white flex items-center justify-between">
+              <h3 className="text-base font-black">Promote Bulk Customer Product</h3>
+              <button
+                type="button"
+                onClick={() => setShowPromoProdModal(false)}
+                className="p-1.5 rounded-full hover:bg-white/10 text-white cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!ppTitle.trim()) return;
+                const saved = indiaPostBulkShowcaseService.upsertPromotedProduct({
+                  title: ppTitle.trim(),
+                  bulkCustomerId: ppBulkCustId,
+                  priceDisplay: ppPriceDisplay.trim() || `₹${ppRetailPrice}`,
+                  retailPrice: Number(ppRetailPrice) || 0,
+                  bulkOfferDetails: ppBulkOffer.trim(),
+                  imageUrl: ppImageUrl,
+                  description: ppDescription.trim() || 'Promoted via India Post Bulk Customer Showcase.',
+                  isFeatured: true,
+                });
+                setShowPromoProdModal(false);
+                setPpTitle('');
+                setPpDescription('');
+                showSuccessNotice(`Published "${saved.title}" to Storefront.`);
+              }}
+              className="p-5 space-y-3 text-xs"
+            >
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Product / Package Title *</label>
+                <input
+                  required
+                  value={ppTitle}
+                  onChange={(e) => setPpTitle(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-semibold"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Bulk Customer *</label>
+                  <select
+                    value={ppBulkCustId}
+                    onChange={(e) => setPpBulkCustId(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold bg-white"
+                  >
+                    {bulkCustomers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.businessName} ({c.pincode})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Showcase Image</label>
+                  <select
+                    value={ppImageUrl}
+                    onChange={(e) => setPpImageUrl(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold bg-white"
+                  >
+                    {SHOWCASE_ASSET_OPTIONS.map((opt) => (
+                      <option key={opt.id} value={opt.url}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Display Price</label>
+                  <input
+                    value={ppPriceDisplay}
+                    onChange={(e) => setPpPriceDisplay(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Numeric Price (₹)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={ppRetailPrice}
+                    onChange={(e) => setPpRetailPrice(Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono font-bold"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Bulk / BNPL Offer</label>
+                <input
+                  value={ppBulkOffer}
+                  onChange={(e) => setPpBulkOffer(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Description</label>
+                <textarea
+                  rows={2}
+                  value={ppDescription}
+                  onChange={(e) => setPpDescription(e.target.value)}
+                  className="w-full p-2.5 border border-slate-300 rounded-xl"
+                />
+              </div>
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPromoProdModal(false)}
+                  className="px-4 py-2 bg-slate-100 rounded-xl font-bold text-slate-700 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#991B1B] text-white rounded-xl font-bold cursor-pointer"
+                >
+                  Publish to Storefront
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT OFFERING MODAL */}
+      {editingOffering && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl border border-slate-200">
+            <div className="p-5 bg-slate-950 text-white flex items-center justify-between">
+              <h3 className="text-base font-black">Edit {editingOffering.name}</h3>
+              <button
+                type="button"
+                onClick={() => setEditingOffering(null)}
+                className="p-1.5 rounded-full hover:bg-white/10 text-white cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleSaveEditedOffering} className="p-5 space-y-3 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Offering Name</label>
                 <input
                   required
                   value={editingOffering.name}
-                  onChange={(e) => setEditingOffering({ ...editingOffering, name: e.target.value })}
+                  onChange={(e) =>
+                    setEditingOffering({ ...editingOffering, name: e.target.value })
+                  }
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl font-bold"
                 />
               </div>
-
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Description</label>
                 <textarea
                   rows={2}
                   value={editingOffering.description}
-                  onChange={(e) => setEditingOffering({ ...editingOffering, description: e.target.value })}
+                  onChange={(e) =>
+                    setEditingOffering({ ...editingOffering, description: e.target.value })
+                  }
                   className="w-full p-2.5 border border-slate-300 rounded-xl"
                 />
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Commission Rate</label>
                   <input
                     value={editingOffering.commissionRate}
-                    onChange={(e) => setEditingOffering({ ...editingOffering, commissionRate: e.target.value })}
+                    onChange={(e) =>
+                      setEditingOffering({ ...editingOffering, commissionRate: e.target.value })
+                    }
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl"
                   />
                 </div>
@@ -1257,24 +2215,26 @@ export default function IndiaPostStorefrontView() {
                     type="number"
                     value={editingOffering.commissionNumeric}
                     onChange={(e) =>
-                      setEditingOffering({ ...editingOffering, commissionNumeric: Number(e.target.value) })
+                      setEditingOffering({
+                        ...editingOffering,
+                        commissionNumeric: Number(e.target.value),
+                      })
                     }
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono font-bold"
                   />
                 </div>
               </div>
-
-              <div className="pt-2 flex justify-end gap-2.5">
+              <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setEditingOffering(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold cursor-pointer"
+                  className="px-4 py-2 bg-slate-100 rounded-xl font-bold text-slate-700 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black cursor-pointer shadow-md"
+                  className="px-5 py-2 bg-[#991B1B] text-white rounded-xl font-bold cursor-pointer"
                 >
                   Save Changes
                 </button>

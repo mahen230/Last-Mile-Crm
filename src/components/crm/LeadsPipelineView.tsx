@@ -1,9 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Target, Plus, ArrowRight, CheckCircle2, Clock, User, Phone, Filter, ChevronRight, X, MessageSquare, Eye, Calendar } from 'lucide-react';
-import { Lead, LeadStage, Customer } from '../../types/models';
+import {
+  Target,
+  Plus,
+  CheckCircle2,
+  Phone,
+  ChevronRight,
+  X,
+  MessageSquare,
+  Calendar,
+  Edit2,
+  Tag,
+  Package,
+  Search,
+} from 'lucide-react';
+import {
+  Lead,
+  LeadStage,
+  Customer,
+  POSTAL_SERVICE_TAG_OPTIONS,
+  LeadSelectedProductItem,
+} from '../../types/models';
 import { customerService } from '../../services/customerService';
 import { POSTAL_PRODUCTS } from '../../data/productsData';
+import {
+  indiaPostBulkShowcaseService,
+  UnifiedShowcaseCatalogItem,
+} from '../../services/indiaPostBulkShowcaseService';
 import CustomerProfileModal from '../customers/CustomerProfileModal';
 import DirectMessageModal from './DirectMessageModal';
 import { useAuth } from '../auth/FirebaseAuthProvider';
@@ -15,12 +38,17 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
   const location = useLocation();
   const isSuperAdmin = staffPermissionService.isSuperAdmin(userProfile);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [scopedCustomers, setScopedCustomers] = useState<Customer[]>(() =>
+    customerService.getScopedCustomers(userProfile)
+  );
+  const [catalogVersion, setCatalogVersion] = useState(0);
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'SMALL_SAVINGS' | 'IPPB' | 'IPPB_MERCHANT_QR' | 'INSURANCE' | 'SERVICE_REQ'>('ALL');
+  const [serviceTagFilter, setServiceTagFilter] = useState<string>('ALL');
   const [beatFilter, setBeatFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddLeadModal, setShowAddLeadModal] = useState(false);
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [leadToLink, setLeadToLink] = useState<Lead | null>(null);
@@ -35,18 +63,39 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
   const [routeTargetPool, setRouteTargetPool] = useState<NonNullable<Lead['poolStage']>>('Division Marketing Team');
   const [routeTargetClusterId, setRouteTargetClusterId] = useState<string>('CLU-KOTA-WEST');
   const [routeTargetAssignee, setRouteTargetAssignee] = useState<string>('');
-  const [routeReason, setRouteReason] = useState<string>('');
-  const clusters = React.useMemo(() => kotaOsHierarchyService.getClusters(), []);
+  const [routeReason] = useState<string>('');
+  const clusters = useMemo(() => kotaOsHierarchyService.getClusters(), []);
 
-  // New Lead Form State
+  const unifiedCatalog: UnifiedShowcaseCatalogItem[] = useMemo(() => {
+    void catalogVersion;
+    return indiaPostBulkShowcaseService.getUnifiedShowcaseCatalog();
+  }, [catalogVersion]);
+
+  // New / Edit Lead Form State
   const [leadCustomerId, setLeadCustomerId] = useState('CUST-TEMP');
+  const [leadCustomerSearch, setLeadCustomerSearch] = useState('');
   const [leadCustomerName, setLeadCustomerName] = useState('');
   const [leadCustomerMobile, setLeadCustomerMobile] = useState('');
+  const [leadCustomerAddress, setLeadCustomerAddress] = useState('');
+  const [leadBeatNo, setLeadBeatNo] = useState(userProfile?.beat || 'Beat 2');
+  const [leadPincode, setLeadPincode] = useState(userProfile?.officePincode || '324009');
+  const [leadFollowUpDate, setLeadFollowUpDate] = useState(
+    new Date(Date.now() + 86400000).toISOString().split('T')[0]
+  );
+  const [catalogSourceFilter, setCatalogSourceFilter] = useState<'ALL' | 'SHOWCASE_OFFERING' | 'BULK_PROMOTED' | 'POSTAL_SCHEME'>('ALL');
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [selectedCatalogItems, setSelectedCatalogItems] = useState<LeadSelectedProductItem[]>([]);
   const [leadProductCode, setLeadProductCode] = useState(POSTAL_PRODUCTS[0].code);
+  const [leadQuantity, setLeadQuantity] = useState<number>(1);
+  const [leadServiceTags, setLeadServiceTags] = useState<string[]>([]);
+  const [customTagInput, setCustomTagInput] = useState('');
   const [leadRequirement, setLeadRequirement] = useState('');
   const [leadPriority, setLeadPriority] = useState<'Low' | 'Medium' | 'High' | 'Urgent'>('High');
+  const [leadStage, setLeadStage] = useState<LeadStage>('New');
   const [leadEstimatedValue, setLeadEstimatedValue] = useState('');
-  const [leadAssignedStaff, setLeadAssignedStaff] = useState('Shri Rajesh Sharma (Beat 2 Postman)');
+  const [leadAssignedStaff, setLeadAssignedStaff] = useState(
+    userProfile ? `${userProfile.name} (${userProfile.beat || 'Beat 2'})` : 'Shri Mahendra Kumar Meena (Beat 2)'
+  );
 
   const showToast = (msg: string) => {
     setFeedbackBanner(msg);
@@ -57,20 +106,105 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
 
   useEffect(() => {
     setLeads(customerService.getLeads());
+    setScopedCustomers(customerService.getScopedCustomers(userProfile));
     const unsub = customerService.subscribe(() => {
       setLeads([...customerService.getLeads()]);
+      setScopedCustomers(customerService.getScopedCustomers(userProfile));
     });
-    return () => unsub();
-  }, []);
+    const unsubShowcase = indiaPostBulkShowcaseService.subscribe(() => {
+      setCatalogVersion((v) => v + 1);
+    });
+    return () => {
+      unsub();
+      unsubShowcase();
+    };
+  }, [userProfile]);
+
+  const resetLeadForm = () => {
+    setEditingLead(null);
+    setLeadCustomerId('CUST-TEMP');
+    setLeadCustomerSearch('');
+    setLeadCustomerName('');
+    setLeadCustomerMobile('');
+    setLeadCustomerAddress('');
+    setLeadBeatNo(userProfile?.beat || 'Beat 2');
+    setLeadPincode(userProfile?.officePincode || '324009');
+    setLeadFollowUpDate(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
+    setCatalogSourceFilter('ALL');
+    setCatalogSearch('');
+    const first = unifiedCatalog[0];
+    if (first) {
+      setLeadProductCode(first.code);
+      setSelectedCatalogItems([
+        {
+          code: first.code,
+          title: first.title,
+          sourceType: first.sourceType,
+          category: first.category,
+          unitPrice: first.unitPrice,
+          quantity: 1,
+          commissionOrRate: first.commissionOrRate,
+          sla: first.sla,
+          bulkCustomerName: first.bulkCustomerName,
+        },
+      ]);
+      setLeadServiceTags(first.suggestedServiceTags || []);
+      setLeadEstimatedValue(first.unitPrice > 0 ? String(first.unitPrice) : '');
+    } else {
+      setLeadProductCode(POSTAL_PRODUCTS[0].code);
+      setSelectedCatalogItems([]);
+      setLeadServiceTags([]);
+      setLeadEstimatedValue('');
+    }
+    setLeadQuantity(1);
+    setCustomTagInput('');
+    setLeadRequirement('');
+    setLeadPriority('High');
+    setLeadStage('New');
+  };
 
   useEffect(() => {
-    const prefillCustomer: Customer | null =
-      initialCustomer || (location.state as any)?.initialCustomer || null;
+    const stateObj = (location.state as any) || {};
+    const prefillCustomer: Customer | null = initialCustomer || stateObj.initialCustomer || null;
+    const preselectedProduct: string | undefined = stateObj.preselectedProduct;
     if (prefillCustomer) {
+      resetLeadForm();
       setLeadCustomerId(prefillCustomer.id || prefillCustomer.masterId || 'CUST-TEMP');
       setLeadCustomerName(prefillCustomer.name || '');
       setLeadCustomerMobile(prefillCustomer.mobile || '');
+      setLeadCustomerAddress(prefillCustomer.addressLine1 || prefillCustomer.area || '');
+      setLeadBeatNo(prefillCustomer.beatNo || userProfile?.beat || 'Beat 2');
+      setLeadPincode(prefillCustomer.pincode || userProfile?.officePincode || '324009');
+      if (prefillCustomer.interestedServiceTags?.length) {
+        setLeadServiceTags(prefillCustomer.interestedServiceTags);
+      }
       setShowAddLeadModal(true);
+    } else if (preselectedProduct) {
+      const matched = unifiedCatalog.find(
+        (item) =>
+          item.code.toLowerCase() === preselectedProduct.toLowerCase() ||
+          item.title.toLowerCase().includes(preselectedProduct.toLowerCase())
+      );
+      if (matched) {
+        setLeadProductCode(matched.code);
+        setSelectedCatalogItems([
+          {
+            id: matched.id,
+            code: matched.code,
+            title: matched.title,
+            sourceType: matched.sourceType,
+            category: matched.category,
+            unitPrice: matched.unitPrice,
+            quantity: 1,
+            commissionOrRate: matched.commissionOrRate,
+            sla: matched.sla,
+            bulkCustomerName: matched.bulkCustomerName,
+          },
+        ]);
+        setLeadServiceTags(matched.suggestedServiceTags);
+        setLeadEstimatedValue(matched.unitPrice > 0 ? String(matched.unitPrice) : '');
+        setShowAddLeadModal(true);
+      }
     }
   }, [initialCustomer, location.state]);
 
@@ -85,47 +219,199 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
     'Closed - Not Interested'
   ];
 
-  const handleCreateLead = (e: React.FormEvent) => {
+  const handleSelectCatalogProduct = (item: UnifiedShowcaseCatalogItem, multiToggle = false) => {
+    const mapped: LeadSelectedProductItem = {
+      id: item.id,
+      code: item.code,
+      title: item.title,
+      sourceType: item.sourceType,
+      category: item.category,
+      unitPrice: item.unitPrice,
+      quantity: leadQuantity || 1,
+      commissionOrRate: item.commissionOrRate,
+      sla: item.sla,
+      bulkCustomerName: item.bulkCustomerName,
+    };
+
+    let nextSelected: LeadSelectedProductItem[];
+    if (multiToggle) {
+      const exists = selectedCatalogItems.some((s) => s.code === item.code);
+      nextSelected = exists
+        ? selectedCatalogItems.filter((s) => s.code !== item.code)
+        : [...selectedCatalogItems, { ...mapped, quantity: 1 }];
+      if (nextSelected.length === 0) nextSelected = [mapped];
+    } else {
+      nextSelected = [mapped];
+    }
+
+    setSelectedCatalogItems(nextSelected);
+    setLeadProductCode(nextSelected[0].code);
+    const totalQty = nextSelected.reduce((acc, s) => acc + Math.max(1, s.quantity || 1), 0);
+    setLeadQuantity(totalQty);
+    const computedVal = nextSelected.reduce(
+      (acc, s) => acc + (Number(s.unitPrice) || 0) * Math.max(1, s.quantity || 1),
+      0
+    );
+    setLeadEstimatedValue(computedVal > 0 ? String(computedVal) : '');
+
+    // Auto-merge suggested service tags
+    const mergedTags = Array.from(
+      new Set([...leadServiceTags, ...(item.suggestedServiceTags || [])])
+    );
+    setLeadServiceTags(mergedTags);
+  };
+
+  const handleQuantityChange = (newQty: number) => {
+    const safeQty = Math.max(1, newQty || 1);
+    setLeadQuantity(safeQty);
+    if (selectedCatalogItems.length === 1) {
+      const item = selectedCatalogItems[0];
+      const updated = [{ ...item, quantity: safeQty }];
+      setSelectedCatalogItems(updated);
+      if (item.unitPrice > 0) {
+        setLeadEstimatedValue(String(item.unitPrice * safeQty));
+      }
+    }
+  };
+
+  const toggleServiceTag = (tag: string) => {
+    setLeadServiceTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  };
+
+  const handleAddCustomTag = () => {
+    const clean = customTagInput.trim();
+    if (!clean) return;
+    if (!leadServiceTags.includes(clean)) {
+      setLeadServiceTags((prev) => [...prev, clean]);
+    }
+    setCustomTagInput('');
+  };
+
+  const openEditLeadModal = (lead: Lead) => {
+    setEditingLead(lead);
+    setLeadCustomerId(lead.customerId || 'CUST-TEMP');
+    setLeadCustomerName(lead.customerName || '');
+    setLeadCustomerMobile(lead.customerMobile || '');
+    setLeadCustomerAddress(lead.customerAddress || '');
+    setLeadBeatNo(lead.beatNo || userProfile?.beat || 'Beat 2');
+    setLeadPincode(lead.pincode || userProfile?.officePincode || '324009');
+    setLeadFollowUpDate(
+      lead.nextFollowUpDate || new Date(Date.now() + 86400000).toISOString().split('T')[0]
+    );
+    setLeadProductCode(lead.productCode || POSTAL_PRODUCTS[0].code);
+    setSelectedCatalogItems(
+      lead.selectedProducts && lead.selectedProducts.length > 0
+        ? lead.selectedProducts
+        : [
+            {
+              code: lead.productCode,
+              title: lead.productName,
+              sourceType: 'POSTAL_SCHEME',
+              unitPrice: Number(lead.estimatedValue) || 0,
+              quantity: lead.quantity || 1,
+              commissionOrRate: lead.commissionInfo,
+              sla: lead.sla,
+            },
+          ]
+    );
+    setLeadQuantity(lead.quantity || 1);
+    setLeadServiceTags(lead.serviceTags || []);
+    setLeadRequirement(lead.requirement || '');
+    setLeadPriority(lead.priority || 'High');
+    setLeadStage(lead.stage || 'New');
+    setLeadEstimatedValue(lead.estimatedValue !== undefined ? String(lead.estimatedValue) : '');
+    setLeadAssignedStaff(lead.assignedStaffName || userProfile?.name || 'India Post Staff');
+    setShowAddLeadModal(true);
+  };
+
+  const handleSaveLead = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!leadCustomerName || !leadCustomerMobile) {
+    if (!leadCustomerName.trim() || !leadCustomerMobile.trim()) {
       showToast('Please fill customer name and mobile number.');
       return;
     }
 
-    const prod = POSTAL_PRODUCTS.find(p => p.code === leadProductCode);
-    const activeBeatNo = (userProfile?.beat || 'Beat 2').replace(/^Beat\s*/i, '').trim() || '2';
+    const primaryCatalog =
+      unifiedCatalog.find((p) => p.code === leadProductCode) ||
+      unifiedCatalog.find((p) => p.code === selectedCatalogItems[0]?.code);
+    const primaryName =
+      selectedCatalogItems.length > 1
+        ? `${selectedCatalogItems[0].title} (+${selectedCatalogItems.length - 1} more)`
+        : selectedCatalogItems[0]?.title || primaryCatalog?.title || leadProductCode;
+    const normalizedBeat = leadBeatNo.trim().startsWith('Beat')
+      ? leadBeatNo.trim()
+      : `Beat ${leadBeatNo.trim() || '2'}`;
+
+    const estValNum = leadEstimatedValue ? parseFloat(leadEstimatedValue) : undefined;
+    const commissionStr = selectedCatalogItems[0]?.commissionOrRate || primaryCatalog?.commissionOrRate;
+    const slaStr = selectedCatalogItems[0]?.sla || primaryCatalog?.sla;
+
+    if (editingLead) {
+      customerService.updateLead(editingLead.id, {
+        customerId: leadCustomerId || editingLead.customerId,
+        customerName: leadCustomerName.trim(),
+        customerMobile: leadCustomerMobile.trim(),
+        customerAddress: leadCustomerAddress.trim() || undefined,
+        productCode: selectedCatalogItems[0]?.code || leadProductCode,
+        productName: primaryName,
+        selectedProducts: selectedCatalogItems,
+        quantity: leadQuantity,
+        serviceTags: leadServiceTags,
+        commissionInfo: commissionStr,
+        sla: slaStr,
+        requirement: leadRequirement.trim() || `Interested in ${primaryName}`,
+        priority: leadPriority,
+        stage: leadStage,
+        estimatedValue: estValNum,
+        assignedStaffName: leadAssignedStaff,
+        beatNo: normalizedBeat,
+        pincode: leadPincode.trim() || '324009',
+        nextFollowUpDate: leadFollowUpDate || undefined,
+      });
+      setShowAddLeadModal(false);
+      resetLeadForm();
+      showToast(`Updated lead ${editingLead.id} (${leadCustomerName.trim()}) successfully.`);
+      return;
+    }
 
     customerService.createLead({
       customerId: leadCustomerId || 'CUST-TEMP',
-      customerName: leadCustomerName,
-      customerMobile: leadCustomerMobile,
-      productCode: leadProductCode,
-      productName: prod?.name || leadProductCode,
-      requirement: leadRequirement || `Interested in ${prod?.name}`,
-      source: 'Direct Lead Inquiry',
+      customerName: leadCustomerName.trim(),
+      customerMobile: leadCustomerMobile.trim(),
+      customerAddress: leadCustomerAddress.trim() || undefined,
+      productCode: selectedCatalogItems[0]?.code || leadProductCode,
+      productName: primaryName,
+      selectedProducts: selectedCatalogItems,
+      quantity: leadQuantity,
+      serviceTags: leadServiceTags,
+      commissionInfo: commissionStr,
+      sla: slaStr,
+      requirement: leadRequirement.trim() || `Interested in ${primaryName}`,
+      source: 'Showcase & Catalog Lead Capture',
       sourceChannel: 'Counter Desk',
       sourceStaffId: userProfile?.employeeId || userProfile?.id,
       sourceStaffName: userProfile?.name,
       poolStage: 'Central Division Lead Pool',
       clusterId: userProfile?.clusterId || clusters[0]?.id,
       clusterName: userProfile?.clusterName || clusters[0]?.name,
-      leadScore: 80,
+      leadScore: 85,
       priority: leadPriority,
-      estimatedValue: leadEstimatedValue ? parseFloat(leadEstimatedValue) : undefined,
-      assignedStaffName: userProfile ? `${userProfile.name} (${userProfile.beat})` : leadAssignedStaff,
+      estimatedValue: estValNum,
+      assignedStaffName: userProfile ? `${userProfile.name} (${normalizedBeat})` : leadAssignedStaff,
       assignedStaffId: userProfile?.id || 'STAFF-BEAT-02',
       assignedStaffEmail: userProfile?.email,
-      beatNo: activeBeatNo,
-      stage: 'New'
+      officeName: userProfile?.assignedOffice || userProfile?.subOffice || 'Dadabari S.O.',
+      pincode: leadPincode.trim() || '324009',
+      beatNo: normalizedBeat,
+      nextFollowUpDate: leadFollowUpDate || undefined,
+      stage: leadStage,
     });
 
     setShowAddLeadModal(false);
-    setLeadCustomerId('CUST-TEMP');
-    setLeadCustomerName('');
-    setLeadCustomerMobile('');
-    setLeadRequirement('');
-    setLeadEstimatedValue('');
-    showToast(`Created new ${prod?.name || leadProductCode} lead for ${leadCustomerName}.`);
+    resetLeadForm();
+    showToast(`Created new ${primaryName} lead for ${leadCustomerName.trim()} (${normalizedBeat}).`);
   };
 
   const handleAdvanceStage = (leadId: string, currentStage: LeadStage) => {
@@ -212,6 +498,11 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
       const b = String(l.beatNo || '2').replace(/^Beat\s*/i, '').trim();
       if (b !== beatFilter) return false;
     }
+    if (serviceTagFilter !== 'ALL') {
+      const tags = (l.serviceTags || []).map((t) => t.toLowerCase());
+      const needle = serviceTagFilter.toLowerCase();
+      if (!tags.some((t) => t === needle || t.includes(needle.split(' ')[0]))) return false;
+    }
     if (categoryFilter !== 'ALL') {
       const code = (l.productCode || '').toUpperCase();
       const name = (l.productName || '').toUpperCase();
@@ -235,6 +526,7 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
         (l.customerMobile || '').includes(q) ||
         (l.productName || '').toLowerCase().includes(q) ||
         (l.requirement || '').toLowerCase().includes(q) ||
+        (l.serviceTags || []).some((t) => t.toLowerCase().includes(q)) ||
         (l.id || '').toLowerCase().includes(q);
       if (!match) return false;
     }
@@ -244,7 +536,7 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
   useEffect(() => {
     setTablePage(1);
     setKanbanColumnPages({});
-  }, [categoryFilter, beatFilter, searchQuery, viewMode, userProfile]);
+  }, [categoryFilter, serviceTagFilter, beatFilter, searchQuery, viewMode, userProfile]);
 
   const totalTablePages = Math.max(1, Math.ceil(visibleLeads.length / LEADS_PAGE_SIZE));
   const safeTablePage = Math.min(tablePage, totalTablePages);
@@ -299,7 +591,10 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
           </div>
 
           <button
-            onClick={() => setShowAddLeadModal(true)}
+            onClick={() => {
+              resetLeadForm();
+              setShowAddLeadModal(true);
+            }}
             className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-xs"
             id="add-lead-btn"
           >
@@ -458,7 +753,17 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={serviceTagFilter}
+            onChange={(e) => setServiceTagFilter(e.target.value)}
+            className="px-2.5 py-1.5 bg-red-50 border border-red-200 rounded-xl text-xs font-bold text-red-900 max-w-[220px]"
+          >
+            <option value="ALL">All Service Tags</option>
+            {POSTAL_SERVICE_TAG_OPTIONS.map((tag) => (
+              <option key={tag} value={tag}>{tag}</option>
+            ))}
+          </select>
           {isSuperAdmin && (
             <select
               value={beatFilter}
@@ -475,7 +780,7 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search customer, scheme, mobile..."
+            placeholder="Search customer, tag, scheme, mobile..."
             className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 w-48 sm:w-56"
           />
         </div>
@@ -568,17 +873,48 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
                           </div>
                         </div>
 
-                        <div className={`p-2 rounded-xl border font-bold text-[11px] ${schemeBadge}`}>
-                          {lead.productName}
+                        <div className={`p-2 rounded-xl border font-bold text-[11px] flex items-center justify-between gap-1 ${schemeBadge}`}>
+                          <span className="truncate">{lead.productName}</span>
+                          {(lead.quantity && lead.quantity > 1) || (lead.selectedProducts && lead.selectedProducts.length > 1) ? (
+                            <span className="px-1.5 py-0.5 rounded bg-white/80 text-slate-900 font-mono text-[10px] shrink-0">
+                              Qty {lead.quantity || lead.selectedProducts?.length || 1}
+                            </span>
+                          ) : null}
                         </div>
+
+                        {lead.serviceTags && lead.serviceTags.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {lead.serviceTags.slice(0, 3).map((tag) => (
+                              <span
+                                key={tag}
+                                className="px-1.5 py-0.5 rounded bg-red-50 border border-red-200 text-red-900 text-[9px] font-bold truncate max-w-[140px]"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
 
                         <p className="text-slate-600 line-clamp-2 text-[11px]">{lead.requirement}</p>
 
-                        {lead.estimatedValue && (
-                          <div className="text-[11px] text-slate-800 font-black font-mono tabular-nums">
-                            Est. Value: ₹{lead.estimatedValue.toLocaleString('en-IN')}
-                          </div>
-                        )}
+                        <div className="flex items-center justify-between text-[11px]">
+                          {lead.estimatedValue ? (
+                            <div className="text-slate-800 font-black font-mono tabular-nums">
+                              Est: ₹{lead.estimatedValue.toLocaleString('en-IN')}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400">Beat {String(lead.beatNo || '2').replace(/^Beat\s*/i, '')}</span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => openEditLeadModal(lead)}
+                            className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold flex items-center gap-1 cursor-pointer"
+                            title="Edit Lead Details & Products"
+                          >
+                            <Edit2 size={10} />
+                            <span>Edit</span>
+                          </button>
+                        </div>
 
                         {/* Stage & Follow-up Quick Actions */}
                         <div className="pt-2 border-t border-slate-100 flex items-center justify-between flex-wrap gap-1.5">
@@ -681,7 +1017,21 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
                       <div className="font-bold text-slate-900">{l.customerName}</div>
                       <div className="font-mono text-[11px] text-slate-500">{l.customerMobile}</div>
                     </td>
-                    <td className="px-4 py-3 font-semibold text-slate-800">{l.productName}</td>
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-slate-800">{l.productName}</div>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {l.quantity && l.quantity > 1 && (
+                          <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 font-mono text-[10px]">
+                            Qty {l.quantity}
+                          </span>
+                        )}
+                        {(l.serviceTags || []).slice(0, 2).map((tag) => (
+                          <span key={tag} className="px-1.5 py-0.5 rounded bg-red-50 text-red-900 border border-red-200 text-[10px]">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       <span className="px-2 py-0.5 bg-blue-50 text-blue-800 rounded font-semibold text-[11px]">
                         {l.stage}
@@ -695,6 +1045,14 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
                     <td className="px-4 py-3 text-slate-600">{l.assignedStaffName || 'Dadabari SO'}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => openEditLeadModal(l)}
+                          className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg transition cursor-pointer"
+                          title="Edit Lead"
+                        >
+                          <Edit2 size={13} />
+                        </button>
                         <button
                           onClick={() => {
                             setMessageLead(l);
@@ -749,57 +1107,224 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
         </div>
       )}
 
-      {/* Add Lead Modal */}
+      {/* Add / Edit Lead Modal with Unified Showcase & Catalog Product Picker */}
       {showAddLeadModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto">
             <div className="flex justify-between items-center pb-3 border-b border-slate-200">
-              <h3 className="font-bold text-slate-900 text-lg">Create New Product Lead</h3>
-              <button onClick={() => setShowAddLeadModal(false)}>✕</button>
+              <div>
+                <h3 className="font-bold text-slate-900 text-lg">
+                  {editingLead ? `Edit Lead · ${editingLead.id}` : 'Create Lead from Showcase & Postal Catalog'}
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Pick Showcase Offerings, Promoted Bulk Products, or Postal Schemes and auto-tag citizen interests.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddLeadModal(false);
+                  resetLeadForm();
+                }}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
             </div>
 
-            <form onSubmit={handleCreateLead} className="space-y-4 mt-4 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Customer Full Name *</label>
+            <form onSubmit={handleSaveLead} className="space-y-4 mt-4 text-xs">
+              {/* Quick Link Existing Citizen */}
+              {!editingLead && scopedCustomers.length > 0 && (
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                      <Search size={13} className="text-red-700" />
+                      Quick-Fill Existing Citizen (Optional)
+                    </span>
+                    <input
+                      type="text"
+                      value={leadCustomerSearch}
+                      onChange={(e) => setLeadCustomerSearch(e.target.value)}
+                      placeholder="Filter citizen by name or mobile..."
+                      className="px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-[11px] w-56"
+                    />
+                  </div>
+                  {leadCustomerSearch.trim() && (
+                    <div className="max-h-28 overflow-y-auto divide-y divide-slate-200 bg-white rounded-lg border border-slate-200">
+                      {scopedCustomers
+                        .filter((c) => {
+                          const q = leadCustomerSearch.trim().toLowerCase();
+                          return c.name.toLowerCase().includes(q) || (c.mobile || '').includes(q);
+                        })
+                        .slice(0, 6)
+                        .map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              setLeadCustomerId(c.id || c.masterId || 'CUST-TEMP');
+                              setLeadCustomerName(c.name);
+                              setLeadCustomerMobile(c.mobile);
+                              setLeadCustomerAddress(c.addressLine1 || c.area || '');
+                              setLeadBeatNo(c.beatNo || leadBeatNo);
+                              setLeadPincode(c.pincode || leadPincode);
+                              if (c.interestedServiceTags?.length) {
+                                setLeadServiceTags(Array.from(new Set([...leadServiceTags, ...c.interestedServiceTags])));
+                              }
+                              setLeadCustomerSearch('');
+                            }}
+                            className="w-full text-left px-3 py-1.5 hover:bg-red-50 flex items-center justify-between cursor-pointer"
+                          >
+                            <span className="font-bold text-slate-900">{c.name}</span>
+                            <span className="font-mono text-slate-500 text-[11px]">
+                              {c.mobile} · {c.beatNo || 'Beat 2'}
+                            </span>
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Customer Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={leadCustomerName}
+                    onChange={(e) => setLeadCustomerName(e.target.value)}
+                    placeholder="e.g. Mukesh Sen"
+                    className="w-full p-2.5 border border-slate-300 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Mobile Number *</label>
+                  <input
+                    type="tel"
+                    required
+                    value={leadCustomerMobile}
+                    onChange={(e) => setLeadCustomerMobile(e.target.value)}
+                    placeholder="e.g. 9829012345"
+                    className="w-full p-2.5 border border-slate-300 rounded-xl font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Unified Showcase & Catalog Product Picker */}
+              <div className="p-3.5 bg-red-50/40 border border-red-200 rounded-xl space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label className="font-bold text-red-900 flex items-center gap-1.5">
+                    <Package size={14} />
+                    <span>Unified Showcase &amp; Catalog Product Picker ({selectedCatalogItems.length} selected)</span>
+                  </label>
+                  <div className="flex flex-wrap gap-1">
+                    {[
+                      { id: 'ALL', label: 'All' },
+                      { id: 'SHOWCASE_OFFERING', label: 'Showcase' },
+                      { id: 'BULK_PROMOTED', label: 'Bulk Promoted' },
+                      { id: 'POSTAL_SCHEME', label: 'Schemes' },
+                    ].map((src) => (
+                      <button
+                        key={src.id}
+                        type="button"
+                        onClick={() => setCatalogSourceFilter(src.id as any)}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                          catalogSourceFilter === src.id
+                            ? 'bg-red-700 text-white'
+                            : 'bg-white text-slate-600 border border-slate-200'
+                        }`}
+                      >
+                        {src.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <input
                   type="text"
-                  required
-                  value={leadCustomerName}
-                  onChange={(e) => setLeadCustomerName(e.target.value)}
-                  placeholder="e.g. Mukesh Sen"
-                  className="w-full p-2.5 border border-slate-300 rounded-xl"
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  placeholder="Search showcase products, bulk shippers, SSA, PLI, IPPB QR..."
+                  className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs"
                 />
+
+                <div className="max-h-40 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-1.5 pr-1">
+                  {unifiedCatalog
+                    .filter((item) => {
+                      if (catalogSourceFilter !== 'ALL' && item.sourceType !== catalogSourceFilter) return false;
+                      if (catalogSearch.trim()) {
+                        const q = catalogSearch.trim().toLowerCase();
+                        return (
+                          item.title.toLowerCase().includes(q) ||
+                          item.code.toLowerCase().includes(q) ||
+                          item.category.toLowerCase().includes(q) ||
+                          (item.bulkCustomerName || '').toLowerCase().includes(q)
+                        );
+                      }
+                      return true;
+                    })
+                    .slice(0, 24)
+                    .map((item) => {
+                      const isSel = selectedCatalogItems.some((s) => s.code === item.code);
+                      return (
+                        <button
+                          key={`${item.sourceType}-${item.id}`}
+                          type="button"
+                          onClick={() => handleSelectCatalogProduct(item, false)}
+                          className={`text-left p-2 rounded-lg border transition cursor-pointer ${
+                            isSel
+                              ? 'bg-red-700 text-white border-red-800 shadow-xs'
+                              : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-bold truncate text-[11px]">{item.title}</span>
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[9px] font-mono shrink-0 ${
+                                isSel ? 'bg-red-900 text-amber-300' : 'bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              {item.sourceType === 'BULK_PROMOTED'
+                                ? 'BULK'
+                                : item.sourceType === 'SHOWCASE_OFFERING'
+                                ? 'SHOWCASE'
+                                : 'SCHEME'}
+                            </span>
+                          </div>
+                          <div className={`text-[10px] truncate mt-0.5 ${isSel ? 'text-red-100' : 'text-slate-500'}`}>
+                            {item.bulkCustomerName ? `${item.bulkCustomerName} · ` : ''}
+                            {item.commissionOrRate || item.category}
+                          </div>
+                        </button>
+                      );
+                    })}
+                </div>
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Mobile Number *</label>
-                <input
-                  type="tel"
-                  required
-                  value={leadCustomerMobile}
-                  onChange={(e) => setLeadCustomerMobile(e.target.value)}
-                  placeholder="e.g. 9829012345"
-                  className="w-full p-2.5 border border-slate-300 rounded-xl"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Interested Scheme / Product</label>
-                <select
-                  value={leadProductCode}
-                  onChange={(e) => setLeadProductCode(e.target.value)}
-                  className="w-full p-2.5 border border-slate-300 rounded-xl bg-white"
-                >
-                  <option value="IPPB_MERCHANT_QR">IPPB Merchant QR &amp; Zero-MDR Soundbox Kit (IPPB_MERCHANT_QR)</option>
-                  {POSTAL_PRODUCTS.map((p) => (
-                    <option key={p.code} value={p.code}>
-                      {p.name} ({p.code})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+              {/* Quantity, Priority, Value, Stage */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Quantity / Units</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={leadQuantity}
+                    onChange={(e) => handleQuantityChange(parseInt(e.target.value, 10) || 1)}
+                    className="w-full p-2.5 border border-slate-300 rounded-xl font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Estimated Value (₹)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={leadEstimatedValue}
+                    onChange={(e) => setLeadEstimatedValue(e.target.value)}
+                    placeholder="e.g. 50000"
+                    className="w-full p-2.5 border border-slate-300 rounded-xl font-mono"
+                  />
+                </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Priority</label>
                   <select
@@ -814,54 +1339,141 @@ export default function LeadsPipelineView({ initialCustomer }: { initialCustomer
                   </select>
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Estimated Deposit/Cover (₹)</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Pipeline Stage</label>
+                  <select
+                    value={leadStage}
+                    onChange={(e) => setLeadStage(e.target.value as LeadStage)}
+                    className="w-full p-2.5 border border-slate-300 rounded-xl bg-white"
+                  >
+                    {stages.map((st) => (
+                      <option key={st} value={st}>{st}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Beat, PIN, Follow-up Date & Staff */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Assigned Beat</label>
                   <input
-                    type="number"
-                    value={leadEstimatedValue}
-                    onChange={(e) => setLeadEstimatedValue(e.target.value)}
-                    placeholder="e.g. 250000"
+                    type="text"
+                    value={leadBeatNo}
+                    onChange={(e) => setLeadBeatNo(e.target.value)}
+                    placeholder="Beat 2"
                     className="w-full p-2.5 border border-slate-300 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Office PIN Code</label>
+                  <input
+                    type="text"
+                    value={leadPincode}
+                    onChange={(e) => setLeadPincode(e.target.value)}
+                    placeholder="324009"
+                    className="w-full p-2.5 border border-slate-300 rounded-xl font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Next Follow-Up Date</label>
+                  <input
+                    type="date"
+                    value={leadFollowUpDate}
+                    onChange={(e) => setLeadFollowUpDate(e.target.value)}
+                    className="w-full p-2.5 border border-slate-300 rounded-xl font-mono"
                   />
                 </div>
               </div>
 
+              {/* Interested Service Tags */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <label className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <Tag size={13} className="text-red-700" />
+                  <span>Interested India Post Service Tags (Auto-syncs to Customer Profile)</span>
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {POSTAL_SERVICE_TAG_OPTIONS.map((tag) => {
+                    const active = leadServiceTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => toggleServiceTag(tag)}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer ${
+                          active
+                            ? 'bg-red-700 text-white border-red-800'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {active ? '✓ ' : '+ '}
+                        {tag}
+                      </button>
+                    );
+                  })}
+                  {leadServiceTags
+                    .filter((t) => !(POSTAL_SERVICE_TAG_OPTIONS as readonly string[]).includes(t))
+                    .map((custom) => (
+                      <button
+                        key={custom}
+                        type="button"
+                        onClick={() => toggleServiceTag(custom)}
+                        className="px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 cursor-pointer"
+                      >
+                        ✓ {custom} ×
+                      </button>
+                    ))}
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={customTagInput}
+                    onChange={(e) => setCustomTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddCustomTag();
+                      }
+                    }}
+                    placeholder="Add custom service tag..."
+                    className="flex-1 px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-[11px]"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddCustomTag}
+                    className="px-3 py-1.5 bg-slate-800 text-white rounded-lg font-bold text-[11px] cursor-pointer"
+                  >
+                    + Add Tag
+                  </button>
+                </div>
+              </div>
+
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Requirement Details</label>
+                <label className="block font-semibold text-slate-700 mb-1">Requirement &amp; Doorstep Notes</label>
                 <textarea
                   rows={2}
                   value={leadRequirement}
                   onChange={(e) => setLeadRequirement(e.target.value)}
-                  placeholder="e.g. Inquired about daughter's Sukanya scheme opening during beat distribution."
+                  placeholder="e.g. Inquired about bulk parcel dispatch / Sukanya account opening during beat distribution."
                   className="w-full p-2.5 border border-slate-300 rounded-xl"
                 />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Assigned Postal Staff</label>
-                <select
-                  value={leadAssignedStaff}
-                  onChange={(e) => setLeadAssignedStaff(e.target.value)}
-                  className="w-full p-2.5 border border-slate-300 rounded-xl bg-white"
-                >
-                  <option value="Shri Rajesh Sharma (Beat 2 Postman)">Shri Rajesh Sharma (Beat 2 Postman)</option>
-                  <option value="Shri Dinesh Verma (Beat 6 Postman)">Shri Dinesh Verma (Beat 6 Postman)</option>
-                  <option value="Dadabari SO Savings Counter">Dadabari SO Savings Counter</option>
-                </select>
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
                 <button
                   type="button"
-                  onClick={() => setShowAddLeadModal(false)}
-                  className="px-4 py-2 bg-slate-100 rounded-xl font-semibold"
+                  onClick={() => {
+                    setShowAddLeadModal(false);
+                    resetLeadForm();
+                  }}
+                  className="px-4 py-2 bg-slate-100 rounded-xl font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-red-700 text-white rounded-xl font-semibold"
+                  className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl font-semibold cursor-pointer"
                 >
-                  Create Opportunity
+                  {editingLead ? 'Save Lead Changes' : 'Create Opportunity'}
                 </button>
               </div>
             </form>

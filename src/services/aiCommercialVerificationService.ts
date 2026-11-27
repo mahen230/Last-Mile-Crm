@@ -536,7 +536,7 @@ export class AICommercialVerificationService {
         pincodeManagerId: 'STAFF-10310736',
         pincodeManagerName: 'Mohit Arvind',
         pincodeManagerContact: '9214056789',
-        serviceType: 'XPOKART Local Parcel',
+        serviceType: 'Bulk Customer Parcel & COD',
         status: 'COD_SETTLED',
         speedPostBarcode: 'SP-RJ-324009-B5-2219',
         codAmount: 1499,

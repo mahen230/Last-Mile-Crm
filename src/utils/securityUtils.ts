@@ -1,5 +1,5 @@
 /**
- * Security & Password Hashing Utilities for XPOKART — Sovereign B2B & E-Commerce Marketplace
+ * Security & Password Hashing Utilities for India Post Operations & Bulk Hub
  * Uses Web Crypto API (SHA-256 with cryptographic salt)
  * Ensures passwords are never stored in plaintext or exposed in API/listings.
  */
@@ -177,7 +177,7 @@ export function buildSecureWhatsAppShareUrl(options: SecureWhatsAppShareOptions)
     `📌 Sub-Office: Dadabari S.O. (PIN 324009)`,
     safeRef ? `🔗 Ref ID: ${safeRef}` : '',
     `🌐 Verified by: ${portalName}`,
-    'Doorstep Service Booking Available via XPOKART — Dadabari S.O. (PIN 324009).',
+    'Doorstep Service Booking Available via India Post Hub — Dadabari S.O. (PIN 324009).',
   ]
     .filter(Boolean)
     .join('\n');

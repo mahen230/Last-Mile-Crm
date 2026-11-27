@@ -808,7 +808,7 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
       {/* Ownership Model Delegation Banner */}
       <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs text-blue-950">
         <div>
-          <strong>Agency Core Team &amp; Division Bootstrap:</strong> Master Admin manages Xpeedo Core Team &amp; Brand Owner onboarding. Internal brand staff logins, passwords, beats &amp; RBAC belong to each <strong>Brand Owner</strong> inside their Brand Portal.
+          <strong>Division &amp; Staff Governance:</strong> Master Admin manages Divisional Core Team &amp; Office Incharge onboarding. Internal beat staff logins, passwords, beats &amp; RBAC are managed inside the India Post Staff &amp; Roles Portal.
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           <Link
@@ -1283,7 +1283,7 @@ export const StaffMasterView: React.FC<StaffMasterViewProps> = ({ currentUser: p
                     type="text"
                     value={formPartnerOrganization}
                     onChange={e => setFormPartnerOrganization(e.target.value)}
-                    placeholder="e.g., XPEEDO EV / Logistics Partner"
+                    placeholder="e.g., Kota Division / Bulk Operations Unit"
                     className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900"
                   />
                 </div>

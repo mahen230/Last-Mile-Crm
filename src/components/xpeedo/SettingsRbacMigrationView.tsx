@@ -23,6 +23,7 @@ import {
 } from '../../services/xpeedoOpsService';
 import { customerService } from '../../services/customerService';
 import { staffPermissionService } from '../../services/staffPermissionService';
+import { whiteLabelMasterService } from '../../services/whiteLabelMasterService';
 import {
   MigrationEntityType,
   PlatformRbacRole,
@@ -30,6 +31,10 @@ import {
 } from '../../types/xpeedoOps';
 import SettingsView from '../crm/SettingsView';
 import BrandProfilesAndSectorRoutingView from './BrandProfilesAndSectorRoutingView';
+import {
+  CANONICAL_BACKUP_SYNC_EMAILS,
+  dataConsolidationService,
+} from '../../services/dataConsolidationService';
 
 type SettingsTab = 'RBAC' | 'BRAND_LOGINS' | 'SECTOR_ROUTING' | 'MIGRATION' | 'AUDIT_LOGS' | 'LEGACY_POSTAL';
 
@@ -101,6 +106,36 @@ const ENTITY_FIELD_SPECS: Record<MigrationEntityType, MigrationFieldSpec[]> = {
     { key: 'category', label: 'SRM Category' },
     { key: 'priority', label: 'Priority' },
   ],
+  Staff: [
+    { key: 'employeeId', label: 'Employee ID', required: true },
+    { key: 'name', label: 'Staff Name', required: true },
+    { key: 'mobile', label: 'Mobile (10-digit)', required: true },
+    { key: 'email', label: 'Email' },
+    { key: 'role', label: 'Designation / Role' },
+    { key: 'assignedOffice', label: 'Post Office / Hub' },
+    { key: 'pincode', label: 'PIN Code' },
+    { key: 'beat', label: 'Beat No' },
+  ],
+  Leads: [
+    { key: 'customerName', label: 'Customer Name', required: true },
+    { key: 'customerMobile', label: 'Customer Mobile', required: true },
+    { key: 'productName', label: 'Product / Scheme', required: true },
+    { key: 'productCode', label: 'Product Code' },
+    { key: 'estimatedValue', label: 'Estimated Value (INR)' },
+    { key: 'stage', label: 'Lead Stage' },
+    { key: 'beatNo', label: 'Beat No' },
+    { key: 'pincode', label: 'PIN Code' },
+  ],
+  'Product Sales': [
+    { key: 'orderNumber', label: 'Order / Receipt No.', required: true },
+    { key: 'productName', label: 'Product Name', required: true },
+    { key: 'customerName', label: 'Customer Name', required: true },
+    { key: 'customerMobile', label: 'Customer Mobile', required: true },
+    { key: 'quantity', label: 'Quantity' },
+    { key: 'amountInr', label: 'Amount (INR)' },
+    { key: 'paymentMode', label: 'Payment Mode (COD/UPI/IPPB/Invoice)' },
+    { key: 'status', label: 'Status' },
+  ],
 };
 
 interface ParsedPreviewRow {
@@ -123,12 +158,15 @@ const VALID_SETTINGS_TABS = new Set<SettingsTab>([
 export default function SettingsRbacMigrationView() {
   const { userProfile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
   const initialTabParam = (searchParams.get('tab') || '').toUpperCase() as SettingsTab;
   const [activeTab, setActiveTabState] = useState<SettingsTab>(
     VALID_SETTINGS_TABS.has(initialTabParam) ? initialTabParam : 'RBAC'
   );
   const [notice, setNotice] = useState<string | null>(null);
+  const [pendingConsolidationAction, setPendingConsolidationAction] = useState<
+    'CONSOLIDATE' | 'CONSOLIDATE_AND_RESET' | null
+  >(null);
 
   const setActiveTab = (next: SettingsTab) => {
     setActiveTabState(next);
@@ -149,7 +187,7 @@ export default function SettingsRbacMigrationView() {
   const simulatedClientId = xpeedoOpsService.getSimulatedClientId();
 
   // Excel/CSV Migration Wizard State
-  const [targetWorkspaceId, setTargetWorkspaceId] = useState<string>('XPEEDO_EV');
+  const [targetWorkspaceId, setTargetWorkspaceId] = useState<string>('INDIA_POST');
   const [targetEntity, setTargetEntity] = useState<MigrationEntityType>('Tasks');
   const [fileName, setFileName] = useState<string>('');
   const [fileType, setFileType] = useState<'xlsx' | 'xls' | 'csv'>('xlsx');
@@ -181,6 +219,10 @@ export default function SettingsRbacMigrationView() {
   const clients = xpeedoOpsService.getClients(userProfile);
   const migrationLogs = xpeedoOpsService.getMigrationLogs();
   const activityLogs = xpeedoOpsService.getActivityLogs(auditWsFilter);
+  const consolidationPreview = useMemo(
+    () => dataConsolidationService.previewConsolidationStatus(),
+    [tick]
+  );
 
   const filteredActivityLogs = useMemo(() => {
     const q = auditSearch.trim().toLowerCase();
@@ -335,6 +377,27 @@ export default function SettingsRbacMigrationView() {
           duplicateReason = 'Task title already exists in workspace';
         }
         seenInBatch.add(sig);
+      } else if (targetEntity === 'Staff' || targetEntity === 'Employees') {
+        const sig = (mapped.employeeId || mapped.mobile || '').toLowerCase();
+        if (seenInBatch.has(sig)) {
+          isDuplicate = true;
+          duplicateReason = 'Duplicate staff ID or mobile in batch';
+        }
+        seenInBatch.add(sig);
+      } else if (targetEntity === 'Leads') {
+        const sig = `${mapped.customerMobile}|${mapped.productName?.toLowerCase()}`;
+        if (seenInBatch.has(sig)) {
+          isDuplicate = true;
+          duplicateReason = 'Duplicate lead in batch';
+        }
+        seenInBatch.add(sig);
+      } else if (targetEntity === 'Product Sales') {
+        const sig = (mapped.orderNumber || '').toLowerCase();
+        if (seenInBatch.has(sig)) {
+          isDuplicate = true;
+          duplicateReason = 'Duplicate order number in batch';
+        }
+        seenInBatch.add(sig);
       }
 
       return {
@@ -351,9 +414,9 @@ export default function SettingsRbacMigrationView() {
     if (previewRows.length === 0) return;
     const targetClient =
       clients.find((c) => c.workspaceKey === targetWorkspaceId) ||
-      clients.find((c) => c.workspaceKey === 'XPEEDO_EV') ||
+      clients.find((c) => c.workspaceKey === 'INDIA_POST') ||
       clients[0];
-    const targetClientId = targetClient?.id || 'client-xpeedo-ev';
+    const targetClientId = targetClient?.id || 'client-india-post';
     const actorName = userProfile?.name || 'Admin';
 
     let importedCount = 0;
@@ -415,34 +478,65 @@ export default function SettingsRbacMigrationView() {
             brandId: targetWorkspaceId === 'INDIA_POST' ? 'india-post' : targetWorkspaceId.toLowerCase(),
           });
           importedCount += 1;
-        } else if (targetEntity === 'Employees') {
-          const { profile } = staffPermissionService.upsertStaffWithAutoOfficeAndBeat({
+        } else if (targetEntity === 'Employees' || targetEntity === 'Staff') {
+          staffPermissionService.upsertStaffWithAutoOfficeAndBeat({
             employeeId: m.employeeId,
             name: m.name,
             contact: m.mobile || '0000000000',
-            designationType: (m.role as any) || 'OTHER_STAFF',
-            role: (m.role as any) || 'STAFF',
+            email: m.email || undefined,
+            designationType: (m.role as any) || 'POSTMAN',
+            role: (m.role as any) || 'POSTMAN',
             circle: 'Rajasthan Circle',
-            division: targetWorkspaceId === 'INDIA_POST' ? 'Kota Division' : 'Xpeedo Operations',
-            headOffice: targetWorkspaceId === 'INDIA_POST' ? 'Kota HPO' : 'Xpeedo HQ',
-            subOffice: m.assignedOffice || (targetWorkspaceId === 'INDIA_POST' ? 'Dadabari S.O.' : 'Xpeedo EV Hub'),
-            officePincode: '324009',
+            division: 'Kota Division',
+            headOffice: 'Kota HPO',
+            subOffice: m.assignedOffice || 'Dadabari S.O.',
+            officePincode: m.pincode || '324009',
             officeAddress: m.assignedOffice || 'Kota Division, Rajasthan',
             beat: m.beat || 'Beat 1',
             assignedColonies: [],
-            partnerOrganization: targetWorkspaceId === 'XPEEDO_EV' ? 'Xpeedo EV' : 'India Post',
+            partnerOrganization: 'India Post',
           });
-          if (targetWorkspaceId === 'XPEEDO_EV') {
-            staffPermissionService.assignVendorAccess(
-              profile.email || profile.id,
-              {
-                assignedVendorId: 'EV_MOBILITY',
-                allowedVendors: ['EV_MOBILITY'],
-                strictVendorIsolation: true,
-              },
-              actorName
-            );
-          }
+          importedCount += 1;
+        } else if (targetEntity === 'Leads') {
+          const cleanMobile = (m.customerMobile || '').replace(/\D/g, '').slice(-10);
+          const matchedCust = customerService.getCustomerByMobile(cleanMobile);
+          customerService.createLead({
+            customerId: matchedCust?.id || `CUST-${Date.now().toString().slice(-5)}`,
+            customerName: m.customerName,
+            customerMobile: cleanMobile,
+            productCode: (m.productCode || 'GEN_LEAD').toUpperCase(),
+            productName: m.productName,
+            requirement: m.productName || 'Imported Lead',
+            priority: 'Medium',
+            leadScore: 60,
+            estimatedValue: Number(m.estimatedValue) || 0,
+            stage: (m.stage as any) || 'New',
+            beatNo: m.beatNo || matchedCust?.beatNo || 'Beat 1',
+            pincode: m.pincode || matchedCust?.pincode || '324009',
+            assignedStaffName: actorName,
+            brandId: targetWorkspaceId === 'INDIA_POST' ? 'india-post' : targetWorkspaceId.toLowerCase().replace(/_/g, '-'),
+            source: `Migration:${fileName}`,
+          });
+          importedCount += 1;
+        } else if (targetEntity === 'Product Sales') {
+          const cleanSlug = targetWorkspaceId.toLowerCase().replace(/_/g, '-');
+          whiteLabelMasterService.addProductSale({
+            orderNumber: m.orderNumber,
+            brandSlug: cleanSlug,
+            brandName: targetClient?.name || targetWorkspaceId,
+            workspaceKey: targetWorkspaceId,
+            productName: m.productName,
+            sku: 'SKU-MIG',
+            customerName: m.customerName,
+            customerMobile: (m.customerMobile || '').replace(/\D/g, '').slice(-10),
+            pincode: '324009',
+            beatNo: 'Beat 1',
+            quantity: Math.max(1, Number(m.quantity) || 1),
+            amountInr: Math.max(0, Number(m.amountInr) || 0),
+            paymentMode: (['COD', 'UPI', 'IPPB', 'Invoice'].includes(m.paymentMode) ? m.paymentMode : 'UPI') as any,
+            status: (['Booked', 'Dispatched', 'Delivered', 'Cancelled'].includes(m.status) ? m.status : 'Delivered') as any,
+            soldBy: actorName,
+          });
           importedCount += 1;
         } else if (targetEntity === 'Projects') {
           xpeedoOpsService.upsertProject(
@@ -757,6 +851,127 @@ export default function SettingsRbacMigrationView() {
       {/* TAB 2: EXCEL (.xlsx/.xls) & CSV MIGRATION PIPELINE */}
       {activeTab === 'MIGRATION' && (
         <div className="space-y-6">
+          {/* India Post Data Consolidation & Non-Destructive Brand Reset */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Database size={18} className="text-red-700" />
+                  <span>India Post Data Consolidation &amp; Non-Destructive Brand Reset</span>
+                </h2>
+                <p className="text-xs text-slate-600 mt-0.5">
+                  Consolidates Property, Staff, and Citizen/Lead records into India Post modules while keeping other brands&apos; UI modules, schemas, and RBAC rules intact. Sync recipients:{' '}
+                  <span className="font-mono text-slate-800">
+                    {CANONICAL_BACKUP_SYNC_EMAILS.join(' · ')}
+                  </span>
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={!canImport}
+                  onClick={() => setPendingConsolidationAction('CONSOLIDATE')}
+                  className="px-3.5 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-800 whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-50"
+                >
+                  Consolidate Other Brands into India Post
+                </button>
+                <button
+                  type="button"
+                  disabled={!canImport}
+                  onClick={() => setPendingConsolidationAction('CONSOLIDATE_AND_RESET')}
+                  className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-50"
+                >
+                  Consolidate &amp; Reset Non-India-Post Operational Data
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
+                <div className="text-slate-500">India Post Properties</div>
+                <div className="text-lg font-bold text-slate-900 tabular-nums mt-0.5">
+                  {consolidationPreview.indiaPost.properties}
+                </div>
+                <div className="text-[11px] text-slate-500 tabular-nums">
+                  {consolidationPreview.otherBrands.properties} in other brands
+                </div>
+              </div>
+              <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
+                <div className="text-slate-500">India Post Staff</div>
+                <div className="text-lg font-bold text-slate-900 tabular-nums mt-0.5">
+                  {consolidationPreview.indiaPost.staff}
+                </div>
+                <div className="text-[11px] text-slate-500 tabular-nums">
+                  {consolidationPreview.otherBrands.staff} in other brands
+                </div>
+              </div>
+              <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
+                <div className="text-slate-500">India Post Customers</div>
+                <div className="text-lg font-bold text-slate-900 tabular-nums mt-0.5">
+                  {consolidationPreview.indiaPost.customers}
+                </div>
+                <div className="text-[11px] text-slate-500 tabular-nums">
+                  {consolidationPreview.otherBrands.customers} in other brands
+                </div>
+              </div>
+              <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
+                <div className="text-slate-500">India Post Leads / Ops</div>
+                <div className="text-lg font-bold text-slate-900 tabular-nums mt-0.5">
+                  {consolidationPreview.indiaPost.leads}
+                </div>
+                <div className="text-[11px] text-slate-500 tabular-nums">
+                  {consolidationPreview.otherBrands.leads + consolidationPreview.otherBrands.opsTasksAndReports} other brand items
+                </div>
+              </div>
+            </div>
+
+            {pendingConsolidationAction && (
+              <div className="p-3.5 rounded-lg border border-amber-300 bg-amber-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="text-amber-950">
+                  <span className="font-bold">
+                    {pendingConsolidationAction === 'CONSOLIDATE_AND_RESET'
+                      ? 'Confirm Consolidation & Non-Destructive Brand Reset:'
+                      : 'Confirm Consolidation into India Post:'}
+                  </span>{' '}
+                  {pendingConsolidationAction === 'CONSOLIDATE_AND_RESET'
+                    ? 'All Property, Staff, and Citizen/Lead records will normalize into India Post and legacy sample entries from retired modules will be cleared while schemas and RBAC remain intact.'
+                    : 'All Property, Staff, and Citizen/Lead records will be normalized and linked into India Post without clearing task queues.'}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setPendingConsolidationAction(null)}
+                    className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const actor = userProfile?.name || 'Master Admin';
+                      if (pendingConsolidationAction === 'CONSOLIDATE_AND_RESET') {
+                        const res = dataConsolidationService.consolidateAndResetNonIndiaPostBrands(actor);
+                        showNotice(
+                          `Consolidated (${res.consolidatedIntoIndiaPost.propertiesMoved} properties, ${res.consolidatedIntoIndiaPost.staffProfilesMoved} staff, ${res.consolidatedIntoIndiaPost.customersMoved} customers, ${res.consolidatedIntoIndiaPost.leadsMoved} leads) into India Post and reset non-India-Post sample data cleanly.`
+                        );
+                      } else {
+                        const res = dataConsolidationService.consolidateOtherBrandsIntoIndiaPost(actor);
+                        showNotice(
+                          `Consolidated ${res.propertiesMoved} properties, ${res.staffProfilesMoved} staff, ${res.customersMoved} customers, ${res.leadsMoved} leads into India Post.`
+                        );
+                      }
+                      setPendingConsolidationAction(null);
+                      setTick((t) => t + 1);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-800 text-white font-semibold cursor-pointer"
+                  >
+                    Confirm &amp; Execute
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-5">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
               <div>
@@ -782,7 +997,7 @@ export default function SettingsRbacMigrationView() {
             <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-950 flex items-start gap-2.5">
               <AlertTriangle size={16} className="text-amber-700 shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold">Strict Workspace Isolation Guard:</span> Always select the exact target workspace before uploading. Never import Xpeedo Pvt Ltd commercial records into <span className="font-mono font-semibold">INDIA_POST</span>.
+                <span className="font-bold">India Post Data Integrity Guard:</span> Always verify PIN codes and beat assignments before committing spreadsheet imports into <span className="font-mono font-semibold">INDIA_POST</span>.
               </div>
             </div>
 
@@ -797,9 +1012,8 @@ export default function SettingsRbacMigrationView() {
                   onChange={(e) => setTargetWorkspaceId(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white font-semibold"
                 >
-                  <option value="XPEEDO_EV">Xpeedo EV (XPEEDO_EV)</option>
-                  <option value="INDIA_POST">India Post — Kota Division (INDIA_POST)</option>
-                  <option value="XPEEDO_INTERNAL">Xpeedo Internal Commercial (XPEEDO_INTERNAL)</option>
+                  <option value="INDIA_POST">India Post — Kota Division &amp; Pan-India (INDIA_POST)</option>
+                  <option value="INDIAPOST_BULK">India Post — Bulk Customer Showcase (INDIAPOST_BULK)</option>
                 </select>
               </div>
               <div>

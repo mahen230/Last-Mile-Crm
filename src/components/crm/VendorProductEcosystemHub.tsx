@@ -55,10 +55,10 @@ import { aiCommercialVerificationService } from '../../services/aiCommercialVeri
 import { POSTAL_PRODUCTS } from '../../data/productsData';
 import DynamicProductPageView, { resolveDynamicCategoryMode } from '../common/DynamicProductPageView';
 import { useAuth } from '../auth/FirebaseAuthProvider';
-import imgBrandQsrPizza from '../../assets/images/brand_qsr_pizza_1794743632250.jpg';
-import imgBrandSupermarket from '../../assets/images/brand_supermarket_mart_1794743632575.jpg';
-import imgBrandApparel from '../../assets/images/brand_apparel_fashion_1794743634256.jpg';
-import imgBrandElectronics from '../../assets/images/brand_electronics_hub_1794743634422.jpg';
+import imgPostalCod from '../../assets/images/prod_b2b_cod_logistics_1794734840043.jpg';
+import imgPostalHandloom from '../../assets/images/store_kota_handloom_1794731364865.jpg';
+import imgPostalPharma from '../../assets/images/prod_b2b_pharma_wellness_1794734843342.jpg';
+import imgPostalStationery from '../../assets/images/prod_b2b_stationery_coaching_1794734844056.jpg';
 
 type EcosystemTab = 'VENDORS' | 'CATALOGS' | 'CATEGORIES' | 'COMMISSIONS';
 
@@ -455,7 +455,7 @@ export default function VendorProductEcosystemHub() {
       setVStoreType('LOCAL_MERCHANT');
       setVBrandName('');
       setVBrandPreset('DEFAULT');
-      setVStoreName('XPEEDO & XPO KART Direct House Desk');
+      setVStoreName('India Post Direct Division Desk');
       setVOwnerName(userProfile?.name || 'Mahendra Kumar Meena');
       setVPhone(userProfile?.contact || '8769706002');
       setVCategory('Wholesale');
@@ -492,19 +492,19 @@ export default function VendorProductEcosystemHub() {
     const safeWholesale = Math.max(0, Math.min(safeRetail, Number(vWholesalePrice) || 0));
     const marginPct = safeRetail > 0 ? Math.round(((safeRetail - safeWholesale) / safeRetail) * 100) : 15;
     const presetLogoMap: Record<typeof vBrandPreset, string | undefined> = {
-      QSR: imgBrandQsrPizza,
-      MART: imgBrandSupermarket,
-      APPAREL: imgBrandApparel,
-      TECH: imgBrandElectronics,
+      QSR: imgPostalCod,
+      MART: imgPostalStationery,
+      APPAREL: imgPostalHandloom,
+      TECH: imgPostalPharma,
       DEFAULT: undefined,
     };
     const isBrand = vStoreType === 'BRAND_FRANCHISE';
     const isHouse = vSourceOwnership === 'COMPANY_HOUSE';
     const cleanStoreName = isHouse
-      ? vStoreName.trim() || 'XPEEDO & XPO KART Direct House Desk'
+      ? vStoreName.trim() || 'India Post Direct Division Desk'
       : vStoreName.trim();
     const cleanBrandName = isHouse
-      ? 'XPEEDO & XPO KART'
+      ? 'India Post'
       : isBrand
       ? vBrandName.trim() || cleanStoreName
       : undefined;
@@ -949,7 +949,7 @@ export default function VendorProductEcosystemHub() {
                 </a>
                 <a
                   href={`https://api.whatsapp.com/send?phone=91${(activeVendor.whatsappNumber || activeVendor.primaryPhone || activeVendor.beatMeta.staffContact).replace(/\D/g, '').slice(-10)}&text=${encodeURIComponent(
-                    `Namaste ${activeVendor.ownerName} (${activeVendor.storeName}), connecting from XPOKART Dadabari S.O. (PIN 324009) regarding your ${activeVendor.beatMeta.beatNo} inventory & Speed Post COD orders.`
+                    `Namaste ${activeVendor.ownerName} (${activeVendor.storeName}), connecting from India Post Dadabari S.O. (PIN 324009) regarding your ${activeVendor.beatMeta.beatNo} inventory & Speed Post COD orders.`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -1226,7 +1226,7 @@ export default function VendorProductEcosystemHub() {
               <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl font-bold">
                 {[
                   { id: 'ALL', label: 'All Sources' },
-                  { id: 'COMPANY_HOUSE', label: 'XPEEDO Direct (Self)' },
+                  { id: 'COMPANY_HOUSE', label: 'India Post Direct (Self)' },
                   { id: 'VENDOR_PARTNER', label: 'Partners & Vendors' },
                 ].map((opt) => (
                   <button
@@ -1882,7 +1882,7 @@ export default function VendorProductEcosystemHub() {
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
                 <div>
                   <h3 className="text-base font-black text-slate-900">
-                    XPOKART Commission Ledger · ₹15/Delivery + ₹100/Referral + 15–25% B2B Margins
+                    India Post Bulk &amp; Beat Commission Ledger · ₹15/Delivery + ₹100/Referral + B2B Margins
                   </h3>
                   <p className="text-xs text-slate-500">
                     Real-time partner commission earned per dispatch synced with Dadabari S.O. IPPB Merchant settlements.
@@ -1978,20 +1978,20 @@ export default function VendorProductEcosystemHub() {
                   type="button"
                   onClick={() => {
                     setVSourceOwnership('COMPANY_HOUSE');
-                    setVStoreName('XPEEDO & XPO KART Direct House Desk');
+                    setVStoreName('India Post Direct Division Desk');
                     setVOwnerName(userProfile?.name || 'Mahendra Kumar Meena');
                   }}
                   className={`py-2 rounded-lg cursor-pointer transition ${
                     vSourceOwnership === 'COMPANY_HOUSE' ? 'bg-amber-400 text-slate-950' : 'text-slate-300 hover:text-white'
                   }`}
                 >
-                  XPEEDO Direct (Company House)
+                  India Post Direct (Departmental)
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setVSourceOwnership('VENDOR_PARTNER');
-                    if (vStoreName === 'XPEEDO & XPO KART Direct House Desk') setVStoreName('');
+                    if (vStoreName === 'India Post Direct Division Desk') setVStoreName('');
                   }}
                   className={`py-2 rounded-lg cursor-pointer transition ${
                     vSourceOwnership === 'VENDOR_PARTNER' ? 'bg-red-700 text-white' : 'text-slate-300 hover:text-white'
@@ -2071,12 +2071,12 @@ export default function VendorProductEcosystemHub() {
                       required
                       value={vBrandName}
                       onChange={(e) => setVBrandName(e.target.value)}
-                      placeholder="e.g. Domino's / Reliance / KFC"
+                      placeholder="e.g. Kota Academic Hub / Kaithoon Weavers Guild"
                       className="w-full px-3 py-2 bg-white border border-red-200 rounded-xl text-slate-900"
                     />
                   </div>
                   <div>
-                    <label className="block font-bold text-red-950 mb-1">Brand Storefront Artwork</label>
+                    <label className="block font-bold text-red-950 mb-1">Showcase Category Artwork</label>
                     <select
                       value={vBrandPreset}
                       onChange={(e) =>
@@ -2084,11 +2084,11 @@ export default function VendorProductEcosystemHub() {
                       }
                       className="w-full px-3 py-2 bg-white border border-red-200 rounded-xl font-semibold text-slate-900"
                     >
-                      <option value="QSR">QSR Food &amp; Pizza Hub</option>
-                      <option value="MART">Supermarket &amp; Grocery</option>
-                      <option value="APPAREL">Branded Fashion &amp; Apparel</option>
-                      <option value="TECH">Electronics &amp; Appliances</option>
-                      <option value="DEFAULT">Standard Store Cover</option>
+                      <option value="QSR">Speed Post &amp; BNPL Parcel Hub</option>
+                      <option value="MART">Study Material &amp; Institutional Bulk</option>
+                      <option value="APPAREL">Kota Doria &amp; GI Handloom</option>
+                      <option value="TECH">Medical &amp; Diagnostic Dispatch</option>
+                      <option value="DEFAULT">Standard Showcase Cover</option>
                     </select>
                   </div>
                 </div>
@@ -2097,14 +2097,14 @@ export default function VendorProductEcosystemHub() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
-                    {vStoreType === 'BRAND_FRANCHISE' ? 'Outlet / Franchise Branch Name *' : 'Store / Merchant Name *'}
+                    {vStoreType === 'BRAND_FRANCHISE' ? 'Bulk Customer / Institutional Unit *' : 'Bulk Customer / Partner Name *'}
                   </label>
                   <input
                     type="text"
                     required
                     value={vStoreName}
                     onChange={(e) => setVStoreName(e.target.value)}
-                    placeholder={vStoreType === 'BRAND_FRANCHISE' ? "e.g. Domino's Dadabari Outlet" : 'e.g. Agrawal Masala Hub'}
+                    placeholder={vStoreType === 'BRAND_FRANCHISE' ? 'e.g. Dadabari Surgical & Pharmacy Hub' : 'e.g. Hadoti Agro Collective'}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900"
                   />
                 </div>
@@ -2453,7 +2453,7 @@ export default function VendorProductEcosystemHub() {
                     onChange={(e) => setEditSourceOwnership(e.target.value as ProductSourceType)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-900"
                   >
-                    <option value="COMPANY_HOUSE">XPEEDO Direct (Company House)</option>
+                    <option value="COMPANY_HOUSE">India Post Direct (Departmental)</option>
                     <option value="VENDOR_PARTNER">Partner / Vendor Listing</option>
                   </select>
                 </div>
@@ -2583,7 +2583,7 @@ export default function VendorProductEcosystemHub() {
             <div className="p-5 bg-gradient-to-r from-indigo-950 to-slate-900 text-white flex items-start justify-between gap-3">
               <div>
                 <div className="text-[11px] font-bold text-amber-300 uppercase">
-                  XPOKART Affiliate &amp; Marketing Budget Controls
+                  India Post Bulk Partner &amp; Showcase Controls
                 </div>
                 <h3 className="text-sm font-black mt-0.5">{editingMonetizationStore.storeName}</h3>
               </div>
@@ -2645,7 +2645,7 @@ export default function VendorProductEcosystemHub() {
                   onChange={(e) => setMonStorefrontEnabled(e.target.checked)}
                   className="w-4 h-4 accent-emerald-700"
                 />
-                <span>Enable Storefront Listing (Visible on XPOKART Public Storefront)</span>
+                <span>Enable Storefront Listing (Visible on India Post Public Showcase)</span>
               </label>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">

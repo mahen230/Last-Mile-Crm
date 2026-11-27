@@ -20,7 +20,11 @@ import {
 } from 'lucide-react';
 import { Property, Customer } from '../../types/models';
 import { customerService } from '../../services/customerService';
+import { staffPermissionService } from '../../services/staffPermissionService';
 import { useAuth } from '../auth/FirebaseAuthProvider';
+import { commonDataCentreService } from '../../services/commonDataCentreService';
+import { SearchConsoleDuplicatePanel } from '../common/SearchConsoleDuplicatePanel';
+import { StaffAttributionLink } from '../common/StaffAttributionModal';
 import CustomerProfileModal from '../customers/CustomerProfileModal';
 import SequenceWisePropertyHub from './SequenceWisePropertyHub';
 import UnifiedPropertyFamilyHub from './UnifiedPropertyFamilyHub';
@@ -53,6 +57,42 @@ export default function PropertiesView() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [restrictedHouseNo, setRestrictedHouseNo] = useState('');
+  const [restrictedColony, setRestrictedColony] = useState(userProfile?.assignedColonies?.[0] || 'Keshavpura');
+  const [restrictedSector, setRestrictedSector] = useState('Sector 6');
+  const [restrictedBeat, setRestrictedBeat] = useState(
+    (userProfile?.beat || 'Beat 2').replace(/^Beat\s*/i, '').trim() || '2'
+  );
+  const [restrictedPincode, setRestrictedPincode] = useState(userProfile?.officePincode || '324009');
+  const [restrictedPropType, setRestrictedPropType] = useState<'House' | 'Commercial' | 'Mixed' | 'Flat / Residency'>('House');
+  const [restrictedStatus, setRestrictedStatus] = useState<'Occupied' | 'Vacant' | 'Commercial' | 'Mixed'>('Occupied');
+  const [restrictedResidentName, setRestrictedResidentName] = useState('');
+  const [restrictedMobile, setRestrictedMobile] = useState('');
+  const [restrictedRemark, setRestrictedRemark] = useState('');
+  const [restrictedFeedback, setRestrictedFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // Add Property Modal controlled state
+  const [addHouseNo, setAddHouseNo] = useState('');
+  const [addSector, setAddSector] = useState('Sector 6');
+  const [addArea, setAddArea] = useState('Dadabari');
+  const [addBeatNo, setAddBeatNo] = useState('2');
+  const [addPincode, setAddPincode] = useState('324009');
+  const [addPropType, setAddPropType] = useState<'House' | 'Commercial' | 'Mixed' | 'Flat / Residency'>('House');
+  const [addStatus, setAddStatus] = useState<'Occupied' | 'Vacant' | 'Commercial' | 'Mixed'>('Occupied');
+  const [addRemark, setAddRemark] = useState('');
+  const [addModalError, setAddModalError] = useState<string | null>(null);
+
+  // Edit Property Modal controlled state
+  const [editHousePlotNumber, setEditHousePlotNumber] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editSector, setEditSector] = useState('');
+  const [editBeatNo, setEditBeatNo] = useState('2');
+  const [editStatus, setEditStatus] = useState<Property['status']>('Occupied');
+  const [editRemark, setEditRemark] = useState('');
+  const [editModalError, setEditModalError] = useState<string | null>(null);
+
+  const canReadPropertyDetails = staffPermissionService.canReadPropertyDetails(userProfile);
+  const canSearchPropertyDetails = staffPermissionService.canSearchProperties(userProfile);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -78,6 +118,13 @@ export default function PropertiesView() {
 
   const handleEditProperty = (prop: Property) => {
     setSelectedProperty(prop);
+    setEditHousePlotNumber(prop.housePlotNumber || prop.houseNo || '');
+    setEditAddress(formatPropertyAddress(prop.address));
+    setEditSector(prop.sector || '');
+    setEditBeatNo((prop.beatNo || '2').replace(/^Beat\s*/i, '').trim() || '2');
+    setEditStatus(prop.status || 'Occupied');
+    setEditRemark(prop.remark || prop.notes || '');
+    setEditModalError(null);
     setIsEditModalOpen(true);
   };
 
@@ -212,6 +259,269 @@ export default function PropertiesView() {
     (safePropertyPage - 1) * PROPERTIES_PER_PAGE,
     safePropertyPage * PROPERTIES_PER_PAGE
   );
+
+  const restrictedDupCheck = useMemo(() => {
+    if (!restrictedHouseNo.trim() && !restrictedColony.trim()) {
+      return { hasMatch: false, matchReasons: [], matches: [] };
+    }
+    return commonDataCentreService.detectPropertyDuplicates({
+      houseNo: restrictedHouseNo,
+      colony: restrictedColony,
+      sector: restrictedSector,
+      pincode: restrictedPincode,
+      beatNo: restrictedBeat,
+    });
+  }, [restrictedHouseNo, restrictedColony, restrictedSector, restrictedPincode, restrictedBeat]);
+
+  const restrictedTerritoryCheck = useMemo(() => {
+    return staffPermissionService.isTerritoryAllowedForProperty(userProfile, {
+      beatNo: restrictedBeat,
+      pincode: restrictedPincode,
+      colony: restrictedColony,
+    });
+  }, [userProfile, restrictedBeat, restrictedPincode, restrictedColony]);
+
+  const addPropDupCheck = useMemo(() => {
+    if (!isAddModalOpen || (!addHouseNo.trim() && !addArea.trim())) {
+      return { hasMatch: false, matchReasons: [], matches: [] };
+    }
+    return commonDataCentreService.detectPropertyDuplicates({
+      houseNo: addHouseNo,
+      colony: addArea,
+      sector: addSector,
+      pincode: addPincode,
+      beatNo: addBeatNo,
+    });
+  }, [isAddModalOpen, addHouseNo, addArea, addSector, addPincode, addBeatNo]);
+
+  const addTerritoryCheck = useMemo(() => {
+    return staffPermissionService.isTerritoryAllowedForProperty(userProfile, {
+      beatNo: addBeatNo,
+      pincode: addPincode,
+      colony: addArea,
+    });
+  }, [userProfile, addBeatNo, addPincode, addArea]);
+
+  const editPropDupCheck = useMemo(() => {
+    if (!isEditModalOpen || !selectedProperty) {
+      return { hasMatch: false, matchReasons: [], matches: [] };
+    }
+    return commonDataCentreService.detectPropertyDuplicates({
+      excludeId: selectedProperty.id || selectedProperty.propertyCode,
+      houseNo: editHousePlotNumber,
+      colony: selectedProperty.colony || selectedProperty.area,
+      sector: editSector,
+      address: editAddress,
+      pincode: selectedProperty.pincode,
+      beatNo: editBeatNo,
+    });
+  }, [isEditModalOpen, selectedProperty, editHousePlotNumber, editSector, editAddress, editBeatNo]);
+
+  const editTerritoryCheck = useMemo(() => {
+    return staffPermissionService.isTerritoryAllowedForProperty(userProfile, {
+      beatNo: editBeatNo,
+      pincode: selectedProperty?.pincode || '324009',
+      colony: selectedProperty?.colony || selectedProperty?.area || '',
+    });
+  }, [userProfile, editBeatNo, selectedProperty]);
+
+  if (!canReadPropertyDetails && !canSearchPropertyDetails) {
+    const handleRestrictedSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      setRestrictedFeedback(null);
+      const res = commonDataCentreService.verifyAndCommitProperty(
+        userProfile,
+        {
+          houseNo: restrictedHouseNo,
+          colony: restrictedColony,
+          sector: restrictedSector,
+          pincode: restrictedPincode,
+          beatNo: restrictedBeat,
+          propertyType: restrictedPropType,
+          status: restrictedStatus,
+          residentOrOwnerName: restrictedResidentName,
+          mobile: restrictedMobile,
+          notes: restrictedRemark,
+        },
+        { remark: restrictedRemark }
+      );
+      if (res.success && res.data) {
+        setRestrictedFeedback({
+          ok: true,
+          msg: `3-Layer Verified Property ${res.data.propertyCode} saved & synced in allotted Beat ${restrictedBeat}.`,
+        });
+        setRestrictedHouseNo('');
+        setRestrictedResidentName('');
+        setRestrictedMobile('');
+        setRestrictedRemark('');
+      } else {
+        setRestrictedFeedback({
+          ok: false,
+          msg: res.error || 'Three-Layer Verification blocked this property entry.',
+        });
+      }
+    };
+
+    return (
+      <div className="space-y-6" id="properties-restricted-root">
+        <div className="rounded-lg border border-slate-200 bg-white p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Restricted Property Mode · Allotted Territory Entry Only
+              </p>
+              <h2 className="text-lg font-bold text-slate-900 mt-1">
+                Add Property in My Allotted Territory
+              </h2>
+              <p className="text-xs text-slate-600 mt-1">
+                Property search and property registry inspection are disabled for your role by Administrator RBAC. You can submit new properties strictly within your assigned Beat / PIN area ({userProfile?.beat || 'Beat 2'} · {userProfile?.officePincode || '324009'}).
+              </p>
+            </div>
+            <span className="inline-flex items-center gap-1.5 rounded border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800">
+              <ShieldAlert className="w-3.5 h-3.5" />
+              Search & Details Hidden
+            </span>
+          </div>
+
+          {restrictedFeedback && (
+            <div
+              className={`mt-4 rounded-md px-3.5 py-2.5 text-xs font-medium border ${
+                restrictedFeedback.ok
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  : 'bg-rose-50 border-rose-200 text-rose-800'
+              }`}
+            >
+              {restrictedFeedback.msg}
+            </div>
+          )}
+
+          <form onSubmit={handleRestrictedSubmit} className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+            <div>
+              <label className="block font-medium text-slate-700 mb-1">House / Plot / Flat No. *</label>
+              <input
+                type="text"
+                required
+                value={restrictedHouseNo}
+                onChange={(e) => setRestrictedHouseNo(e.target.value)}
+                placeholder="e.g. KH-222"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              />
+            </div>
+            <div>
+              <label className="block font-medium text-slate-700 mb-1">Allotted Colony / Area *</label>
+              <input
+                type="text"
+                required
+                value={restrictedColony}
+                onChange={(e) => setRestrictedColony(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              />
+            </div>
+            <div>
+              <label className="block font-medium text-slate-700 mb-1">Sector / Block</label>
+              <input
+                type="text"
+                value={restrictedSector}
+                onChange={(e) => setRestrictedSector(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              />
+            </div>
+            <div>
+              <label className="block font-medium text-slate-700 mb-1">Assigned Beat No. *</label>
+              <input
+                type="text"
+                required
+                value={restrictedBeat}
+                onChange={(e) => setRestrictedBeat(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              />
+            </div>
+            <div>
+              <label className="block font-medium text-slate-700 mb-1">Allotted PIN Code *</label>
+              <input
+                type="text"
+                required
+                value={restrictedPincode}
+                onChange={(e) => setRestrictedPincode(e.target.value)}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-mono text-slate-900"
+              />
+            </div>
+            <div>
+              <label className="block font-medium text-slate-700 mb-1">Property Classification</label>
+              <select
+                value={restrictedPropType}
+                onChange={(e) => setRestrictedPropType(e.target.value as any)}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              >
+                <option value="House">House</option>
+                <option value="Commercial">Commercial</option>
+                <option value="Mixed">Mixed</option>
+                <option value="Flat / Residency">Flat / Residency</option>
+              </select>
+            </div>
+            <div>
+              <label className="block font-medium text-slate-700 mb-1">Occupancy Status</label>
+              <select
+                value={restrictedStatus}
+                onChange={(e) => setRestrictedStatus(e.target.value as any)}
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              >
+                <option value="Occupied">Occupied</option>
+                <option value="Vacant">Vacant</option>
+                <option value="Commercial">Commercial</option>
+                <option value="Mixed">Mixed</option>
+              </select>
+            </div>
+            <div>
+              <label className="block font-medium text-slate-700 mb-1">Primary Resident / Owner Name</label>
+              <input
+                type="text"
+                value={restrictedResidentName}
+                onChange={(e) => setRestrictedResidentName(e.target.value)}
+                placeholder="Optional resident name"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              />
+            </div>
+            <div>
+              <label className="block font-medium text-slate-700 mb-1">Mobile Number</label>
+              <input
+                type="tel"
+                value={restrictedMobile}
+                onChange={(e) => setRestrictedMobile(e.target.value)}
+                placeholder="10-digit mobile"
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm font-mono text-slate-900"
+              />
+            </div>
+            <div className="sm:col-span-2 lg:col-span-3">
+              <SearchConsoleDuplicatePanel
+                entityType="PROPERTY"
+                propertyCheck={restrictedDupCheck}
+                remark={restrictedRemark}
+                onRemarkChange={setRestrictedRemark}
+                layer1Ok={Boolean(
+                  (restrictedHouseNo.trim() || restrictedStatus === 'Vacant') &&
+                    restrictedColony.trim() &&
+                    /^\d{6}$/.test(restrictedPincode.trim())
+                )}
+                layer2Ok={restrictedTerritoryCheck.allowed}
+                layer2Reason={restrictedTerritoryCheck.reason}
+              />
+            </div>
+
+            <div className="sm:col-span-2 lg:col-span-3 pt-2">
+              <button
+                type="submit"
+                className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Verify &amp; Save Property in Allotted Area</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6" id="properties-view-root">
@@ -348,7 +658,18 @@ export default function PropertiesView() {
           </div>
 
           <button
-            onClick={() => setIsAddModalOpen(true)}
+            onClick={() => {
+              setAddHouseNo('');
+              setAddSector('Sector 6');
+              setAddArea('Dadabari');
+              setAddBeatNo('2');
+              setAddPincode('324009');
+              setAddPropType('House');
+              setAddStatus('Occupied');
+              setAddRemark('');
+              setAddModalError(null);
+              setIsAddModalOpen(true);
+            }}
             className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
           >
             <Plus size={14} />
@@ -539,6 +860,16 @@ export default function PropertiesView() {
                         </span>
                       )}
                     </div>
+
+                    {(prop.staffAttribution || prop.submittedByStaffId) && (
+                      <div className="pt-1.5 border-t border-slate-200/70">
+                        <StaffAttributionLink
+                          attribution={prop.staffAttribution}
+                          staffId={prop.submittedByStaffId}
+                          compact
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -668,6 +999,30 @@ export default function PropertiesView() {
                   <strong>Area:</strong> {selectedProperty.area}
                 </div>
               </div>
+              {(selectedProperty.staffAttribution || selectedProperty.submittedByStaffId || selectedProperty.verificationMeta?.verifiedAt) && (
+                <div className="mt-2 p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                  {(selectedProperty.staffAttribution || selectedProperty.submittedByStaffId) && (
+                    <div>
+                      <span className="font-bold text-slate-800 mr-1.5">Submitted By:</span>
+                      <StaffAttributionLink
+                        attribution={selectedProperty.staffAttribution}
+                        staffId={selectedProperty.submittedByStaffId}
+                        compact
+                      />
+                    </div>
+                  )}
+                  {selectedProperty.verificationMeta?.verifiedAt && (
+                    <div className="text-[11px] font-semibold text-emerald-700 flex items-center gap-1">
+                      <CheckCircle2 size={12} /> 3-Layer Verified &amp; Synced ({selectedProperty.verificationMeta.verifiedAt.slice(0, 10)})
+                    </div>
+                  )}
+                  {selectedProperty.remark && (
+                    <div className="text-[11px] text-slate-600">
+                      <strong>Remark:</strong> {selectedProperty.remark}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Residents list */}
@@ -739,17 +1094,53 @@ export default function PropertiesView() {
 
       {/* Edit Property Modal */}
       {isEditModalOpen && selectedProperty && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto">
             <h3 className="font-bold text-slate-900 text-lg mb-4">
               Edit Property: {selectedProperty.propertyCode}
             </h3>
-            <form className="space-y-3">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                setEditModalError(null);
+                const hasValidNo = Boolean(editHousePlotNumber && editHousePlotNumber.trim());
+                const finalStatus: Property['status'] = !hasValidNo ? 'Vacant' : editStatus;
+                const commitRes = commonDataCentreService.verifyAndCommitProperty(
+                  userProfile,
+                  {
+                    id: selectedProperty.id,
+                    propertyCode: selectedProperty.propertyCode,
+                    houseNo: editHousePlotNumber.trim(),
+                    colony: selectedProperty.colony || selectedProperty.area || 'Dadabari',
+                    sector: editSector || selectedProperty.sector || 'Sector 1',
+                    pincode: selectedProperty.pincode || '324009',
+                    beatNo: editBeatNo || selectedProperty.beatNo || '2',
+                    officeId: selectedProperty.officeId,
+                    propertyType: selectedProperty.propertyType || 'House',
+                    status: finalStatus,
+                    addressLine: editAddress || formatPropertyAddress(selectedProperty.address),
+                    verificationStatus: hasValidNo,
+                    notes: editRemark,
+                  },
+                  {
+                    remark: editRemark,
+                    isIntentionalEdit: true,
+                  }
+                );
+                if (!commitRes.success || !commitRes.data) {
+                  setEditModalError(commitRes.error || 'Three-Layer Verification failed.');
+                  return;
+                }
+                setIsEditModalOpen(false);
+                showToast(`3-Layer Verified: Property ${commitRes.data.propertyCode} updated & synced.`);
+              }}
+              className="space-y-3"
+            >
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">House / Plot Number</label>
                 <input
-                  defaultValue={selectedProperty.housePlotNumber}
-                  id="edit-housePlotNumber"
+                  value={editHousePlotNumber}
+                  onChange={(e) => setEditHousePlotNumber(e.target.value)}
                   placeholder="e.g. 101 or leave blank for unnumbered"
                   className="w-full p-2.5 border rounded-xl text-xs"
                 />
@@ -757,18 +1148,18 @@ export default function PropertiesView() {
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">Full Address</label>
                 <input
-                  defaultValue={formatPropertyAddress(selectedProperty.address)}
-                  id="edit-address"
+                  value={editAddress}
+                  onChange={(e) => setEditAddress(e.target.value)}
                   placeholder="Address"
                   className="w-full p-2.5 border rounded-xl text-xs"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">Sector</label>
                   <input
-                    defaultValue={selectedProperty.sector}
-                    id="edit-sector"
+                    value={editSector}
+                    onChange={(e) => setEditSector(e.target.value)}
                     placeholder="Sector"
                     className="w-full p-2.5 border rounded-xl text-xs"
                   />
@@ -776,19 +1167,32 @@ export default function PropertiesView() {
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">Beat No</label>
                   <input
-                    defaultValue={selectedProperty.beatNo || '2'}
-                    id="edit-beatNo"
+                    value={editBeatNo}
+                    onChange={(e) => setEditBeatNo(e.target.value)}
                     placeholder="Beat No"
                     className="w-full p-2.5 border rounded-xl text-xs"
                   />
                 </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Status</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as Property['status'])}
+                    className="w-full p-2.5 border rounded-xl text-xs bg-white"
+                  >
+                    <option value="Occupied">Occupied</option>
+                    <option value="Vacant">Vacant</option>
+                    <option value="Commercial">Commercial</option>
+                    <option value="Mixed">Mixed</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="pt-4 border-t">
+              <div className="pt-3 border-t">
                 <h4 className="text-xs font-bold text-slate-900 mb-2">
                   Residents Associated with Property ({selectedProperty.residentNames?.length || 0})
                 </h4>
-                <div className="space-y-1.5 mb-3 max-h-36 overflow-y-auto">
+                <div className="space-y-1.5 mb-2 max-h-32 overflow-y-auto">
                   {selectedProperty.residentNames && selectedProperty.residentNames.length > 0 ? (
                     selectedProperty.residentNames.map((resName, idx) => (
                       <div
@@ -812,6 +1216,24 @@ export default function PropertiesView() {
                 </div>
               </div>
 
+              <SearchConsoleDuplicatePanel
+                entityType="PROPERTY"
+                propertyCheck={editPropDupCheck}
+                remark={editRemark}
+                onRemarkChange={setEditRemark}
+                forceShowRemark
+                layer1Ok={Boolean(editAddress.trim() && (editHousePlotNumber.trim() || editStatus === 'Vacant'))}
+                layer2Ok={editTerritoryCheck.allowed}
+                layer2Reason={editTerritoryCheck.reason}
+              />
+
+              {editModalError && (
+                <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-medium flex items-center gap-2">
+                  <AlertTriangle size={14} className="shrink-0 text-red-600" />
+                  <span>{editModalError}</span>
+                </div>
+              )}
+
               <div className="flex justify-between items-center pt-3 border-t">
                 <button
                   type="button"
@@ -831,32 +1253,10 @@ export default function PropertiesView() {
                     Cancel
                   </button>
                   <button
-                    type="button"
-                    onClick={() => {
-                      const houseVal = (document.getElementById('edit-housePlotNumber') as HTMLInputElement)?.value;
-                      const addrVal = (document.getElementById('edit-address') as HTMLInputElement)?.value;
-                      const secVal = (document.getElementById('edit-sector') as HTMLInputElement)?.value;
-                      const beatVal = (document.getElementById('edit-beatNo') as HTMLInputElement)?.value;
-
-                      const hasValidNo = Boolean(houseVal && houseVal.trim());
-                      const updated: Property = {
-                        ...selectedProperty,
-                        housePlotNumber: houseVal,
-                        address: addrVal || selectedProperty.address,
-                        sector: secVal || selectedProperty.sector,
-                        beatNo: beatVal || selectedProperty.beatNo,
-                        // If house number is empty, mark Vacant and clear residents
-                        status: !hasValidNo ? 'Vacant' : selectedProperty.status,
-                        residentNames: !hasValidNo ? [] : selectedProperty.residentNames,
-                      };
-
-                      customerService.updateProperty(updated);
-                      setIsEditModalOpen(false);
-                      showToast(`Property ${updated.propertyCode} updated successfully.`);
-                    }}
-                    className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-semibold shadow-xs"
+                    type="submit"
+                    className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer"
                   >
-                    Save Changes
+                    Verify &amp; Save Changes
                   </button>
                 </div>
               </div>
@@ -867,41 +1267,40 @@ export default function PropertiesView() {
 
       {/* Add New Property Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
-            <h3 className="font-bold text-slate-900 text-lg mb-4">Add New Property</h3>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto">
+            <h3 className="font-bold text-slate-900 text-lg mb-4">Add New Property (Common Data Centre)</h3>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                const form = e.target as HTMLFormElement;
-                const houseNo = (form.elements.namedItem('houseNo') as HTMLInputElement).value;
-                const sector = (form.elements.namedItem('sector') as HTMLInputElement).value;
-                const area = (form.elements.namedItem('area') as HTMLInputElement).value;
-                const pincode = (form.elements.namedItem('pincode') as HTMLInputElement).value;
-                const beatNo = (form.elements.namedItem('beatNo') as HTMLInputElement).value;
+                setAddModalError(null);
+                const hasValidNo = Boolean(addHouseNo && addHouseNo.trim());
+                const finalStatus = !hasValidNo ? 'Vacant' : addStatus;
+                const commitRes = commonDataCentreService.verifyAndCommitProperty(
+                  userProfile,
+                  {
+                    houseNo: addHouseNo.trim(),
+                    colony: addArea.trim() || 'Dadabari',
+                    sector: addSector.trim() || 'Sector 6',
+                    pincode: addPincode.trim() || '324009',
+                    beatNo: addBeatNo.trim() || '2',
+                    propertyType: addPropType,
+                    status: finalStatus,
+                    verificationStatus: hasValidNo,
+                    notes: addRemark,
+                  },
+                  {
+                    remark: addRemark,
+                  }
+                );
 
-                const hasValidNo = Boolean(houseNo && houseNo.trim());
-                const newPropCode = `PROP-S${sector || '7'}-H${hasValidNo ? houseNo : 'UNNUMBERED'}`;
+                if (!commitRes.success || !commitRes.data) {
+                  setAddModalError(commitRes.error || 'Three-Layer Verification failed.');
+                  return;
+                }
 
-                const newProp: Property = {
-                  id: newPropCode,
-                  propertyCode: newPropCode,
-                  housePlotNumber: houseNo || '',
-                  address: `${houseNo ? houseNo + ', ' : ''}Sector ${sector || '7'}, ${area || 'Keshavpura'}, Kota`,
-                  sector: sector || '7',
-                  area: area || 'Keshavpura',
-                  pincode: pincode || '324009',
-                  beatNo: beatNo || '2',
-                  status: !hasValidNo ? 'Vacant' : 'Occupied',
-                  residentNames: [],
-                  residents: [],
-                  verificationStatus: hasValidNo,
-                  notes: !hasValidNo ? 'Added as Vacant (No House Number).' : 'Registered Property',
-                };
-
-                customerService.updateProperty(newProp);
                 setIsAddModalOpen(false);
-                showToast(`New property ${newPropCode} registered (${newProp.status}).`);
+                showToast(`3-Layer Verified: Property ${commitRes.data.propertyCode} registered (${commitRes.data.status}).`);
               }}
               className="space-y-3"
             >
@@ -910,7 +1309,8 @@ export default function PropertiesView() {
                   House / Plot No (Leave empty to create Vacant Unnumbered plot)
                 </label>
                 <input
-                  name="houseNo"
+                  value={addHouseNo}
+                  onChange={(e) => setAddHouseNo(e.target.value)}
                   placeholder="e.g. 101 or Plot 239"
                   className="w-full p-2.5 border rounded-xl text-xs"
                 />
@@ -919,17 +1319,18 @@ export default function PropertiesView() {
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Sector</label>
                   <input
-                    name="sector"
-                    defaultValue="Sector 6"
+                    value={addSector}
+                    onChange={(e) => setAddSector(e.target.value)}
                     placeholder="Sector"
                     className="w-full p-2.5 border rounded-xl text-xs"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Area</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Colony / Area *</label>
                   <input
-                    name="area"
-                    defaultValue="Dadabari"
+                    required
+                    value={addArea}
+                    onChange={(e) => setAddArea(e.target.value)}
                     placeholder="Area"
                     className="w-full p-2.5 border rounded-xl text-xs"
                   />
@@ -939,22 +1340,69 @@ export default function PropertiesView() {
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Beat No</label>
                   <input
-                    name="beatNo"
-                    defaultValue="2"
+                    value={addBeatNo}
+                    onChange={(e) => setAddBeatNo(e.target.value)}
                     placeholder="Beat No"
                     className="w-full p-2.5 border rounded-xl text-xs"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Pincode</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Pincode *</label>
                   <input
-                    name="pincode"
-                    defaultValue="324009"
-                    placeholder="Pincode"
-                    className="w-full p-2.5 border rounded-xl text-xs"
+                    required
+                    maxLength={6}
+                    value={addPincode}
+                    onChange={(e) => setAddPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="324009"
+                    className="w-full p-2.5 border rounded-xl text-xs font-mono"
                   />
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Property Type</label>
+                  <select
+                    value={addPropType}
+                    onChange={(e) => setAddPropType(e.target.value as any)}
+                    className="w-full p-2.5 border rounded-xl text-xs bg-white"
+                  >
+                    <option value="House">House</option>
+                    <option value="Commercial">Commercial</option>
+                    <option value="Mixed">Mixed</option>
+                    <option value="Flat / Residency">Flat / Residency</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Occupancy Status</label>
+                  <select
+                    value={addStatus}
+                    onChange={(e) => setAddStatus(e.target.value as any)}
+                    className="w-full p-2.5 border rounded-xl text-xs bg-white"
+                  >
+                    <option value="Occupied">Occupied</option>
+                    <option value="Vacant">Vacant</option>
+                    <option value="Commercial">Commercial</option>
+                    <option value="Mixed">Mixed</option>
+                  </select>
+                </div>
+              </div>
+
+              <SearchConsoleDuplicatePanel
+                entityType="PROPERTY"
+                propertyCheck={addPropDupCheck}
+                remark={addRemark}
+                onRemarkChange={setAddRemark}
+                layer1Ok={Boolean(addArea.trim() && /^\d{6}$/.test(addPincode.trim()))}
+                layer2Ok={addTerritoryCheck.allowed}
+                layer2Reason={addTerritoryCheck.reason}
+              />
+
+              {addModalError && (
+                <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs font-medium flex items-center gap-2">
+                  <AlertTriangle size={14} className="shrink-0 text-red-600" />
+                  <span>{addModalError}</span>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 mt-4 pt-3 border-t">
                 <button
@@ -968,7 +1416,7 @@ export default function PropertiesView() {
                   type="submit"
                   className="px-4 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer"
                 >
-                  Save Property
+                  Verify &amp; Save Property
                 </button>
               </div>
             </form>

@@ -95,9 +95,6 @@ export default function ClientDetailsView() {
     if (client.workspaceKey === 'INDIA_POST') {
       return (s.brandId || 'india-post') === 'india-post' || s.vendorScope?.assignedVendorId === 'INDIA_POST';
     }
-    if (client.workspaceKey === 'XPEEDO_EV') {
-      return (s.brandId || '').toUpperCase().includes('EV') || s.vendorScope?.assignedVendorId === 'EV_MOBILITY';
-    }
     return false;
   });
 
@@ -131,18 +128,9 @@ export default function ClientDetailsView() {
             {client.workspaceKey === 'INDIA_POST' && (
               <Link
                 to="/india-post"
-                className="px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5"
+                className="px-3.5 py-2 rounded-lg bg-red-700 hover:bg-red-800 text-white text-xs font-semibold flex items-center gap-1.5"
               >
                 <span>Open India Post Management System</span>
-                <ExternalLink size={13} />
-              </Link>
-            )}
-            {client.workspaceKey === 'XPEEDO_EV' && (
-              <Link
-                to="/xpeedo-ev"
-                className="px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5"
-              >
-                <span>Open Xpeedo EV Work Management</span>
                 <ExternalLink size={13} />
               </Link>
             )}

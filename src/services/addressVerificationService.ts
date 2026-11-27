@@ -1,4 +1,3 @@
-import { GoogleGenAI } from '@google/genai';
 import { 
   Customer, 
   Address_Exceptions, 
@@ -57,20 +56,7 @@ export interface AddressVerificationResult {
   exceptionCreated?: Address_Exceptions;
 }
 
-// In Vite environment, safely access client env vars
-const apiKey =
-  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GEMINI_API_KEY) ||
-  (typeof process !== 'undefined' && (process.env?.GEMINI_API_KEY || process.env?.API_KEY)) ||
-  '';
-
-let aiClient: GoogleGenAI | null = null;
-if (apiKey) {
-  try {
-    aiClient = new GoogleGenAI({ apiKey });
-  } catch (err) {
-    console.warn('GoogleGenAI initialization in addressVerificationService skipped:', err);
-  }
-}
+// Address AI verification is routed securely via the server-side proxy (/api/ai/verify-address)
 
 class AddressVerificationService {
   private exceptions: Address_Exceptions[] = [];
@@ -563,9 +549,9 @@ class AddressVerificationService {
 
     let explanation = `Reconciled with official Department of Posts Kota Master Beat Matrix. ${standardColony} maps to ${expectedOffice} (PIN ${expectedPincode}), assigned to ${expectedBeat} (${assignedStaffName}).`;
 
-    // 9. Optional Gemini 3.8 Flash AI Model Evaluation for Enhanced Nuance
+    // 9. Optional Server-Proxied Gemini AI Model Evaluation for Enhanced Nuance
     let modelNameUsed = 'Postal Geo-Intelligence Engine (Rules + Hierarchy)';
-    if (aiClient && (rawInput || discrepancies.length > 0)) {
+    if (typeof fetch !== 'undefined' && (rawInput || discrepancies.length > 0)) {
       try {
         const aiPrompt = `You are the Lead Postal Address AI Verification System for Department of Posts, Kota Division (Dadabari S.O., PIN 324009).
 Analyze the following Indian address:
@@ -595,23 +581,24 @@ Output valid JSON only with keys:
   "suggestedFullAddress": "...",
   "confidenceScore": 0.95
 }`;
-        const response = await aiClient.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: aiPrompt,
-          config: {
-            responseMimeType: 'application/json',
-          },
+        const apiResp = await fetch('/api/ai/verify-address', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: aiPrompt }),
         });
-        const parsed = JSON.parse(response.text || '{}');
-        if (parsed.explanation) {
-          explanation = parsed.explanation;
-          modelNameUsed = 'gemini-3.8-flash (AI Postal Semantic Parser)';
-        }
-        if (parsed.confidenceScore && typeof parsed.confidenceScore === 'number') {
-          confidence = Math.max(0.6, Math.min(0.99, parsed.confidenceScore));
+        if (apiResp.ok) {
+          const apiData = await apiResp.json();
+          const parsed = JSON.parse(apiData.text || '{}');
+          if (parsed.explanation) {
+            explanation = parsed.explanation;
+            modelNameUsed = 'gemini-3.8-flash (Server Proxy AI Parser)';
+          }
+          if (parsed.confidenceScore && typeof parsed.confidenceScore === 'number') {
+            confidence = Math.max(0.6, Math.min(0.99, parsed.confidenceScore));
+          }
         }
       } catch (geminiErr) {
-        console.warn('Gemini AI postal analysis fallback to deterministic engine:', geminiErr);
+        console.warn('Server AI postal analysis fallback to deterministic engine:', geminiErr);
       }
     }
 

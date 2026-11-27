@@ -1,6 +1,6 @@
 {
-  "name": "Xpeedo Last Mile",
-  "description": "Xpeedo Last Mile • Dadabari S.O. • PIN 324009 (XPEEDO Private Limited) — India Post Field Operations OS.",
+  "name": "India Post — Last-Mile & Bulk Customer Hub",
+  "description": "India Post Operations Command, Office & Beat Hierarchy, Citizen CRM, and Bulk Customer & Product Promotion Hub.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

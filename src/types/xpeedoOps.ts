@@ -24,7 +24,10 @@ export type RbacCapabilityKey =
   | 'manageFinance'
   | 'importMigration'
   | 'exportReports'
-  | 'manageRbac';
+  | 'manageRbac'
+  | 'masterDataCentre'
+  | 'propertyDetailsRead'
+  | 'propertySearch';
 
 export type RolePermissionMatrix = Record<PlatformRbacRole, Record<RbacCapabilityKey, boolean>>;
 
@@ -365,9 +368,12 @@ export interface WorkflowExecutionLog {
 }
 
 export type MigrationEntityType =
-  | 'Customers'
   | 'Properties'
+  | 'Customers'
+  | 'Staff'
   | 'Offices'
+  | 'Leads'
+  | 'Product Sales'
   | 'Employees'
   | 'Projects'
   | 'Tasks'

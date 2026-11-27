@@ -218,7 +218,7 @@ export default function RoleAccessDashboard() {
       roleKey: 'CATEGORY_MANAGER',
       title: 'Category Manager (Multi-Business Vertical Head)',
       scope: 'Business Service Categories & Partner Lines',
-      viewScope: 'Assigned Categories (EV Mobility, Software/AI SaaS, Logistics, Solar, Retail), Linked Hubs & Catalogs',
+      viewScope: 'Assigned India Post Categories (Speed Post & Parcel, PLI/RPLI, IPPB Banking, Bulk Customer Products), Linked Hubs & Catalogs',
       permissions: 'Manage House & Partner Product Catalogs, Stock/Listing Status & Category Office Sections',
       badgeColor: 'bg-indigo-700 text-white font-bold',
     },
@@ -759,8 +759,8 @@ export default function RoleAccessDashboard() {
 
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase">Hierarchy Blueprint &amp; Isolation</span>
-              <div className="font-black text-blue-700 text-sm">
-                India Post + Xpeedo Logistics Share Blueprint · 0% Cross-Brand Leak
+              <div className="font-black text-red-700 text-sm">
+                India Post Divisional Blueprint · Strict Role &amp; Beat Isolation
               </div>
             </div>
           </div>
@@ -783,14 +783,24 @@ export default function RoleAccessDashboard() {
         const performer = userProfile?.name || userProfile?.email || 'MASTER_ADMIN';
         const visState = featureVisibilityService.getState();
         const roleOptions = [
-          { id: 'POSTMAN', label: 'Postman (Default: Property & Members Only)' },
-          { id: 'GDS', label: 'GDS (Default: Property & Members Only)' },
+          { id: 'POSTMAN', label: 'Postman (Beat & Doorstep Staff)' },
+          { id: 'GDS', label: 'GDS / BPM / ABPM / Dak Sevak' },
+          { id: 'STAFF', label: 'Postal Assistant / General Staff' },
           { id: 'POSTMASTER', label: 'Postmaster / SPM / BPM' },
-          { id: 'OFFICE_INCHARGE', label: 'Office Incharge' },
+          { id: 'SUB_POSTMASTER', label: 'Sub Postmaster (S.O. Incharge)' },
+          { id: 'OFFICE_INCHARGE', label: 'Office / Pincode Incharge' },
           { id: 'BLOCK_INCHARGE', label: 'Block Incharge' },
+          { id: 'CLUSTER_INCHARGE', label: 'Cluster Incharge' },
+          { id: 'SUBDIVISION_INCHARGE', label: 'Subdivision Incharge (IP / ASP)' },
+          { id: 'LAST_MILE_SUPERVISOR', label: 'Last-Mile Supervisor' },
+          { id: 'MARKETING_TEAM', label: 'Division Marketing Team' },
+          { id: 'CATEGORY_MANAGER', label: 'Category Manager' },
           { id: 'DISTRICT_MANAGER', label: 'District Manager' },
           { id: 'DISTRICT_INCHARGE', label: 'District Incharge' },
-          { id: 'CATEGORY_MANAGER', label: 'Category Manager' },
+          { id: 'DIVISION_INCHARGE', label: 'Division Incharge' },
+          { id: 'DIVISIONAL_HEAD', label: 'Divisional Head' },
+          { id: 'CIRCLE_INCHARGE', label: 'Circle Incharge' },
+          { id: 'DEO', label: 'Data Entry Operator (DEO)' },
         ];
         const filteredUsersForScope = staffProfiles.filter((s) => {
           if (featureVisibilityService.isPlatformSuperUser(s)) return false;
@@ -826,7 +836,7 @@ export default function RoleAccessDashboard() {
                     <span>Dynamic Feature Visibility Toggles (What Is Visible Is What Shows)</span>
                   </h3>
                   <p className="text-xs text-slate-600 mt-0.5">
-                    Postman &amp; GDS default strictly to <strong>Property</strong> and <strong>Members</strong> only. Toggle modules ON/OFF anytime—nothing is ever deleted.
+                    Postman &amp; GDS default to <strong>Property, Members, Showcase, Leads, Master Search &amp; Last-Mile Ops</strong>. Toggle any page/section ON or OFF per role/post or individual user anytime.
                   </p>
                 </div>
 
@@ -848,13 +858,13 @@ export default function RoleAccessDashboard() {
                     onClick={() => {
                       featureVisibilityService.resetPostmanAndGdsToDefault(performer);
                       setBannerMessage(
-                        'Reset POSTMAN & GDS visibility defaults strictly to Property & Members Only.'
+                        'Reset POSTMAN & GDS visibility defaults to Core Beat Workspace (Property, Members, Showcase, Leads, Master Search, Last-Mile Ops).'
                       );
                     }}
                     className="px-3.5 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer transition shadow-2xs"
                   >
                     <RotateCcw size={14} />
-                    <span>Reset Postman &amp; GDS (Property + Members Only)</span>
+                    <span>Reset Postman &amp; GDS Defaults</span>
                   </button>
                 </div>
               </div>

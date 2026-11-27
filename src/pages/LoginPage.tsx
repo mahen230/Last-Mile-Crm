@@ -45,8 +45,9 @@ import {
 import { createNewSecureSession, fetchServerCsrfToken, getActiveSessionToken } from '../services/authSecurityService';
 import { customerAuthService } from '../services/customerAuthService';
 import { POSTAL_AUTH_DATABASE_SCHEMA_SQL } from '../data/postalAuthSchemaSql';
-import { DesignationType } from '../types/models';
+import { DesignationType, UserRole } from '../types/models';
 import SearchableOfficeSelect from '../components/common/SearchableOfficeSelect';
+import IndiaPostLogo from '../components/common/IndiaPostLogo';
 import {
   PINCODE_OFFICE_HUBS,
   getPincodeHub,
@@ -92,7 +93,6 @@ export default function LoginPage({
     clearError,
   } = useAuth();
   const isAiStudioContext = staffPermissionService.isAiStudioOrLocalPreview();
-  const directoryStaffList = React.useMemo(() => staffPermissionService.getDirectoryStaff(), []);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -340,17 +340,16 @@ export default function LoginPage({
     setTimeout(finishCustomerLogin, 400);
   };
 
-  // 2. Staff Handlers
+  // 2. Staff & Developer Handlers
   const isMasterAdminIdentifier = (val: string) => {
     const lower = val.trim().toLowerCase();
     return (
       lower === 'ektamahenmeena@gmail.com' ||
       lower === 'master-admin-01' ||
       lower === 'staff-master-ekta' ||
-      lower === 'owner@xpokart.in' ||
       lower === 'owner-01' ||
-      lower === 'dev@xpokart.in' ||
-      lower === 'dev-01'
+      lower === 'dev-01' ||
+      lower === 'dev@indiapost-portal.in'
     );
   };
 
@@ -374,25 +373,26 @@ export default function LoginPage({
     }
   };
 
-  const handleQuickDirectoryLogin = async (staffIdOrEmail: string) => {
-    if (!staffIdOrEmail) return;
-    if (!isAiStudioContext) {
-      handlePreFillStaff(staffIdOrEmail);
-      return;
-    }
+  const handleDeveloperLogin = async () => {
     clearMessages();
-    setIsLoading(true);
-    try {
-      const ok = await signInStaffDirect(staffIdOrEmail);
-      setIsLoading(false);
-      if (ok) {
-        securityAuthService.recordSuccessfulLogin(staffIdOrEmail);
-        finishLoginAndEnterCRM();
+    setMode('LOGIN');
+    if (isAiStudioContext) {
+      setIsLoading(true);
+      try {
+        const ok = await signInStaffDirect('DEV-01');
+        setIsLoading(false);
+        if (ok) {
+          securityAuthService.recordSuccessfulLogin('DEV-01');
+          finishLoginAndEnterCRM();
+          return;
+        }
+      } catch {
+        setIsLoading(false);
       }
-    } catch {
-      setIsLoading(false);
-      setLocalError('Unable to sign in selected employee.');
     }
+    setIdentifier('DEV-01');
+    setPassword('');
+    setSuccessMessage('Developer Gateway (DEV-01 · Unrestricted Full Access) selected. Enter Developer password to sign in.');
   };
 
   const verifiedStaffMatch = React.useMemo(() => {
@@ -507,12 +507,22 @@ export default function LoginPage({
     }
 
     setIsLoading(true);
-    const mappedRole =
-      regDesignation.includes('Postmaster') || regDesignation.includes('Inspector')
-        ? 'ADMIN'
-        : regDesignation.includes('Postman') || regDesignation.includes('GDS')
-        ? 'POSTMAN'
-        : 'STAFF';
+    const desigLower = regDesignation.toLowerCase();
+    const mappedRole: UserRole = desigLower.includes('gds')
+      ? 'GDS'
+      : desigLower.includes('postman')
+      ? 'POSTMAN'
+      : desigLower.includes('spm')
+      ? 'SUB_POSTMASTER'
+      : desigLower.includes('postmaster')
+      ? 'POSTMASTER'
+      : desigLower.includes('inspector')
+      ? 'SUBDIVISION_INCHARGE'
+      : desigLower.includes('mail guard')
+      ? 'MAIL_GUARD'
+      : desigLower.includes('mts')
+      ? 'MTS'
+      : 'STAFF';
 
     const ok = await registerStaff({
       name: securityAuthService.sanitizeInput(regName),
@@ -608,28 +618,12 @@ export default function LoginPage({
     clearMessages();
     setMode('LOGIN');
     setIdentifier('ektamahenmeena@gmail.com');
-    setPassword('Admin');
+    setPassword('');
     setSuccessMessage(
       isAiStudioContext
         ? 'Master Admin (ektamahenmeena@gmail.com) selected. Click "Authenticate & Sign In" or use 1-Click AI Studio Admin Login.'
         : 'Master Admin email (ektamahenmeena@gmail.com) pre-filled.'
     );
-  };
-
-  const handlePreFillRoleAccount = (idOrEmail: string, defaultPass: string, roleLabel: string) => {
-    clearMessages();
-    setMode('LOGIN');
-    setIdentifier(idOrEmail);
-    setPassword(defaultPass);
-    setSuccessMessage(`${roleLabel} (${idOrEmail}) selected. Click "Authenticate & Sign In".`);
-  };
-
-  const handlePreFillStaff = (staffIdOrEmail: string) => {
-    clearMessages();
-    setMode('LOGIN');
-    setIdentifier(staffIdOrEmail);
-    setPassword(DEFAULT_STAFF_FALLBACK_PASSWORD);
-    setSuccessMessage(`Employee ID ${staffIdOrEmail} selected with default password (${DEFAULT_STAFF_FALLBACK_PASSWORD}). Click Authenticate or enter your custom password.`);
   };
 
   const handleTestPbkdf2Hash = async () => {
@@ -642,9 +636,9 @@ export default function LoginPage({
 
   const activeError = localError || error;
 
-  // Reusable Preset Buttons Component (All 5 RBAC Roles)
+  // Progressive Credential Verification Card (Replaces exposed staff directory quick-picks)
   const presetsList = (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       {/* 1-Click Master Admin AI Studio Login (Pilot Preview Mode Only) */}
       {isAiStudioContext && (
         <button
@@ -652,111 +646,50 @@ export default function LoginPage({
           onClick={handleInstantMasterAdminAiStudioLogin}
           disabled={isLoading}
           id="master-admin-aistudio-instant-btn"
-          className="w-full text-left p-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 border border-emerald-300 transition flex items-center justify-between group shadow-md cursor-pointer"
+          className="w-full text-left p-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 border border-emerald-300 transition flex items-center justify-between group shadow-md cursor-pointer"
         >
           <div className="min-w-0">
             <div className="text-xs font-black uppercase tracking-wide flex items-center gap-1.5 truncate">
               <Flame size={14} className="shrink-0" />
-              <span className="truncate">Instant Admin Login (AI Studio · Pilot)</span>
+              <span className="truncate">Instant Master Admin Login (Pilot)</span>
             </div>
             <div className="text-[11px] font-mono text-slate-950/90 mt-0.5 truncate">
-              Ekta Meena • MASTER-ADMIN-01 • Global Control
+              Ekta Meena • Ektamahenmeena@gmail.com
             </div>
           </div>
           <ArrowRight size={15} className="text-slate-950 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
         </button>
       )}
 
-      {/* Role 1: Owner */}
+      {/* Dedicated Developer Login Entry */}
       <button
         type="button"
-        onClick={() => handlePreFillRoleAccount('OWNER-01', 'Owner@123', 'Marketplace Owner')}
-        className="w-full text-left p-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 border border-amber-300 transition flex items-center justify-between group shadow-sm cursor-pointer"
+        onClick={handleDeveloperLogin}
+        disabled={isLoading}
+        id="developer-login-shortcut-btn"
+        className="w-full text-left p-3 rounded-xl bg-slate-950/75 hover:bg-slate-950 text-white border border-amber-400/40 transition flex items-center justify-between group shadow-sm cursor-pointer"
       >
         <div className="min-w-0">
-          <div className="text-xs font-black uppercase tracking-wide flex items-center gap-1.5 truncate">
-            <ShieldCheck size={14} className="shrink-0" />
-            <span className="truncate">1. Owner • XPOKART Sovereign</span>
+          <div className="text-xs font-black uppercase tracking-wide flex items-center gap-1.5 text-amber-300 truncate">
+            <Code2 size={14} className="shrink-0" />
+            <span className="truncate">Developer Systems Login (Full Access)</span>
           </div>
-          <div className="text-[11px] font-mono text-slate-900 mt-0.5 truncate">
-            OWNER-01 • owner@xpokart.in
-          </div>
-        </div>
-        <ArrowRight size={15} className="text-slate-950 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
-      </button>
-
-      {/* Role 2: Master Admin */}
-      <button
-        type="button"
-        onClick={handlePreFillMasterAdmin}
-        id="master-admin-prefill-btn"
-        className="w-full text-left p-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-white border border-amber-400/50 transition flex items-center justify-between group shadow-sm cursor-pointer"
-      >
-        <div className="min-w-0">
-          <div className="text-xs font-black uppercase tracking-wide flex items-center gap-1.5 truncate">
-            <ShieldCheck size={14} className="text-amber-300 shrink-0" />
-            <span className="truncate">2. Master Admin • Ekta Meena</span>
-          </div>
-          <div className="text-[11px] font-mono text-amber-100 mt-0.5 truncate">
-            MASTER-ADMIN-01 • ektamahenmeena@gmail.com
+          <div className="text-[11px] font-mono text-slate-300 mt-0.5 truncate">
+            DEV-01 • Unrestricted Modules &amp; RBAC
           </div>
         </div>
         <ArrowRight size={15} className="text-amber-300 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
       </button>
 
-      {/* Role 3: Developer */}
-      <button
-        type="button"
-        onClick={() => handlePreFillRoleAccount('DEV-01', 'Dev@123', 'Lead Systems Developer')}
-        className="w-full text-left p-2.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/50 transition flex items-center justify-between group text-white cursor-pointer"
-      >
-        <div className="min-w-0">
-          <div className="text-xs font-bold text-sky-200 flex items-center gap-1.5 truncate">
-            <Code2 size={14} className="text-sky-300 shrink-0" />
-            <span className="truncate">3. Developer • API &amp; DB Sync Console</span>
-          </div>
-          <div className="text-[10px] font-mono text-sky-100/80 mt-0.5 truncate">
-            DEV-01 • dev@xpokart.in • Full Telemetry &amp; Catalog
-          </div>
+      <div className="p-3.5 rounded-xl bg-white/10 border border-white/20 text-xs space-y-2">
+        <div className="font-bold text-amber-300 flex items-center gap-1.5">
+          <ShieldCheck size={14} className="shrink-0" />
+          <span>Protected Staff &amp; Role Lookup</span>
         </div>
-        <ArrowRight size={14} className="text-sky-300 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
-      </button>
-
-      {/* Role 4: Official Staff Beat 2 (Mahendra Kumar Meena) */}
-      <button
-        type="button"
-        onClick={() => handlePreFillStaff('50457421')}
-        className="w-full text-left p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 transition flex items-center justify-between group text-white cursor-pointer"
-      >
-        <div className="min-w-0">
-          <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5 truncate">
-            <BadgeCheck size={14} className="text-emerald-400 shrink-0" />
-            <span className="truncate">4. Official Staff Beat 2 • Mahendra Kumar Meena</span>
-          </div>
-          <div className="text-[10px] font-mono text-slate-300 mt-0.5 truncate">
-            Emp ID: 50457421 • Dadabari S.O. Beat 2
-          </div>
-        </div>
-        <ArrowRight size={14} className="text-slate-300 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
-      </button>
-
-      {/* Beat 5: Mohit Arvind */}
-      <button
-        type="button"
-        onClick={() => handlePreFillStaff('10310736')}
-        className="w-full text-left p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 transition flex items-center justify-between group text-white cursor-pointer"
-      >
-        <div className="min-w-0">
-          <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5 truncate">
-            <BadgeCheck size={14} className="text-amber-300 shrink-0" />
-            <span className="truncate">Beat 5 Postman • Mohit Arvind</span>
-          </div>
-          <div className="text-[10px] font-mono text-slate-300 mt-0.5 truncate">
-            Emp ID: 10310736 • Mahaveer Nagar
-          </div>
-        </div>
-        <ArrowRight size={14} className="text-slate-300 group-hover:translate-x-0.5 transition shrink-0 ml-2" />
-      </button>
+        <p className="text-[11px] text-red-100/90 leading-relaxed">
+          Staff directories are hidden from public view. Enter your Employee ID, Official Email, or Registered Mobile to confirm your post &amp; beat assignment before password verification.
+        </p>
+      </div>
     </div>
   );
 
@@ -773,20 +706,18 @@ export default function LoginPage({
         </button>
       )}
 
-      {/* Left Column: Official India Post Crimson Identity & Presets (5 cols on lg) */}
+      {/* Left Column: Official India Post Crimson Identity (5 cols on lg) */}
       <div className="lg:col-span-5 bg-gradient-to-b from-red-800 via-red-900 to-slate-900 p-6 sm:p-7 text-white flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-red-700/40">
         <div className="space-y-4">
           {/* Official Emblem & Title */}
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center font-black text-xl shadow-md shrink-0">
-              📮
-            </div>
+            <IndiaPostLogo size="sm" variant="dark" showWordmark={false} className="shrink-0" />
             <div className="min-w-0">
               <div className="text-[11px] font-bold text-amber-300 uppercase tracking-wider">
-                XPOKART • Sovereign B2B &amp; E-Commerce Marketplace
+                India Post • Last-Mile &amp; Bulk Customer Hub
               </div>
               <h1 className="text-lg font-black text-white tracking-tight leading-tight truncate">
-                {authTier === 'STAFF' ? 'XPOKART — 5-Role Command Gate' : 'XPOKART — Citizen & Buyer Portal'}
+                {authTier === 'STAFF' ? 'India Post — Command Gate' : 'India Post — Citizen Portal'}
               </h1>
             </div>
           </div>
@@ -794,38 +725,43 @@ export default function LoginPage({
           <div className="space-y-1">
             <h2 className="text-sm font-bold text-slate-100 leading-snug">
               {authTier === 'STAFF'
-                ? 'Owner, Master Admin, Developer & 34-Beat Staff Access'
-                : 'Sovereign Speed Post COD & Marketplace Buyer Portal'}
+                ? 'Master Admin, Divisional Office & Beat Staff Access'
+                : 'India Post Speed Post COD & Bulk Customer Portal'}
             </h2>
             <p className="text-xs text-red-100/80 leading-relaxed">
               {authTier === 'STAFF'
-                ? 'Authenticate with Employee ID, Email, or Mobile (Dadabari S.O. 34 Beats). Staff default password: Post@1234.'
-                : 'Shop wholesale & retail stores across 34 Dadabari beats, track COD parcels, and earn ₹100/referral.'}
+                ? 'Authenticate with your Employee ID, Email, or Registered Mobile to access your beat, office, or command workspace.'
+                : 'Browse India Post Bulk Customer catalogs, track inquiries, book Speed Post COD pickup, and request PLI/IPPB visits.'}
             </p>
           </div>
 
-          {/* Desktop Presets View (Hidden on mobile to save scroll space) */}
+          {/* Desktop Verification Info View */}
           {authTier === 'STAFF' && (
             <div className="hidden lg:block pt-2">
-              <div className="text-[11px] font-bold text-amber-300 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                <ShieldCheck size={14} />
-                <span>Quick Directory ID Selection (Password Required):</span>
-              </div>
               {presetsList}
             </div>
           )}
         </div>
 
         {/* Footer info in left column */}
-        <div className="pt-4 border-t border-red-700/40 text-[11px] text-red-200/80 flex items-center justify-between">
+        <div className="pt-4 border-t border-red-700/40 text-[11px] text-red-200/80 flex items-center justify-between gap-2">
           <span className="font-mono">Kota &amp; Baran · 13 Pincode Hubs</span>
-          <button
-            type="button"
-            onClick={() => setShowArchModal(true)}
-            className="text-amber-300 hover:text-white underline font-mono text-[10px] cursor-pointer"
-          >
-            RBAC Specs
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="text-white hover:text-amber-300 underline font-semibold text-[11px] cursor-pointer whitespace-nowrap"
+            >
+              India Post Single Sign-In →
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowArchModal(true)}
+              className="text-amber-300 hover:text-white underline font-mono text-[10px] cursor-pointer"
+            >
+              RBAC Specs
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1253,15 +1189,19 @@ export default function LoginPage({
                 </button>
               </div>
 
-              {/* Single Session & Security Status Indicator */}
-              <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center justify-between text-[11px]">
-                <div className="flex items-center gap-1.5 font-semibold">
+              {/* Single Session & India Post SSO Link */}
+              <div className="mb-3 px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center justify-between text-[11px] gap-2">
+                <div className="flex items-center gap-1.5 font-semibold min-w-0">
                   <ShieldCheck size={13} className="text-emerald-600 shrink-0" />
-                  <span>Single-Device Session & Token Protection Active</span>
+                  <span className="truncate">Single-Device Session &amp; All-Staff SSO Active</span>
                 </div>
-                <span className="font-mono text-[10px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
-                  Anti-Concurrent
-                </span>
+                <button
+                  type="button"
+                  onClick={() => navigate('/')}
+                  className="font-semibold text-red-800 hover:underline whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  India Post Single Sign-In →
+                </button>
               </div>
 
               {/* AI Studio Pilot Mode Quick Admin Access Strip */}
@@ -1302,33 +1242,34 @@ export default function LoginPage({
                 <form onSubmit={handlePasswordLogin} className="space-y-3">
                   <input type="hidden" name="csrf_token" value={csrfToken} />
 
-                  {/* Directory Quick-Picker: Direct instant login ONLY in AI Studio Pilot mode; otherwise pre-fills Employee ID */}
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                      {isAiStudioContext
-                        ? `Quick Select Employee from Directory (${directoryStaffList.length} Staff · Pilot Instant Sign-In)`
-                        : `Select Employee from Directory (${directoryStaffList.length} Staff · Password Required)`}
-                    </label>
-                    <select
-                      value=""
-                      disabled={isLoading}
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          void handleQuickDirectoryLogin(e.target.value);
-                        }
+                  {/* Quick Account Type Selector (Without Exposing Staff List) */}
+                  <div className="flex flex-wrap items-center gap-1.5 pb-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clearMessages();
+                        setIdentifier('50457421');
+                        setPassword('');
                       }}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-700 focus:bg-white min-h-[40px] cursor-pointer"
+                      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-bold cursor-pointer"
                     >
-                      <option value="">-- Choose Employee ({directoryStaffList.length} Dadabari S.O. Staff) --</option>
-                      {directoryStaffList.map((emp) => {
-                        const empId = emp.employeeId || emp.id.replace(/^STAFF-/, '');
-                        return (
-                          <option key={emp.id} value={empId}>
-                            {emp.beat} • {emp.name} (ID: {empId} | Mob: {emp.contact})
-                          </option>
-                        );
-                      })}
-                    </select>
+                      Post / Beat Staff Sign-In
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeveloperLogin}
+                      className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-300 text-[11px] font-bold cursor-pointer flex items-center gap-1"
+                    >
+                      <Code2 size={12} />
+                      <span>Developer Login</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePreFillMasterAdmin}
+                      className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-800 border border-red-200 text-[11px] font-bold cursor-pointer"
+                    >
+                      Master Admin
+                    </button>
                   </div>
 
                   <div>
@@ -1728,7 +1669,7 @@ export default function LoginPage({
         {/* Clean Footer Bar */}
         <div className="mt-4 pt-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
           <div className="flex flex-wrap items-center gap-3">
-            <span>XPOKART • Kota &amp; Baran Division · 13 Pincode Office Hubs</span>
+            <span>India Post • Kota &amp; Baran Division · 13 Pincode Office Hubs</span>
             <button
               type="button"
               onClick={() => setShowArchModal(true)}
@@ -1737,14 +1678,8 @@ export default function LoginPage({
               <ShieldCheck size={12} />
               <span>RBAC Specs</span>
             </button>
-            <a
-              href="/brand-login"
-              className="text-blue-700 hover:text-blue-900 font-bold underline"
-            >
-              Brand Owner Login →
-            </a>
           </div>
-          <span className="font-mono tabular-nums">Staff Pass: Emp ID / Post@1234</span>
+          <span className="font-mono text-slate-400">Authorized Credential Access</span>
         </div>
       </div>
 

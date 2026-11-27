@@ -24,6 +24,7 @@ import MobileFAB from './MobileFAB';
 import LoginPage from '../pages/LoginPage';
 import StaffProfileModal from './auth/StaffProfileModal';
 import { NotificationBellDropdown } from './common/AdminNotificationHub';
+import IndiaPostLogo from './common/IndiaPostLogo';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -231,23 +232,28 @@ export default function Layout({ children }: LayoutProps) {
       }`}
     >
       <Link to="/dashboard" onClick={() => setIsOpen(false)} className="flex items-center gap-3 min-w-0">
-        <div
-          className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-            isWhiteLabel
-              ? 'bg-slate-800 text-white border border-slate-700'
-              : 'bg-blue-600 text-white'
-          }`}
-        >
-          {isWhiteLabel ? <Building2 size={18} /> : 'XP'}
-        </div>
-        <div className="min-w-0">
-          <h1 className="text-sm font-bold text-white tracking-tight leading-tight truncate">
-            {isWhiteLabel ? brandIdentity.title : 'Xpeedo Services'}
-          </h1>
-          <p className="text-[11px] text-slate-300 font-medium truncate">
-            {isWhiteLabel ? brandIdentity.subtitle : 'Operations & Brand CRM'}
-          </p>
-        </div>
+        {isWhiteLabel ? (
+          <>
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 bg-red-800 text-white border border-red-700">
+              <Building2 size={18} />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-sm font-bold text-white tracking-tight leading-tight truncate">
+                {brandIdentity.title}
+              </h1>
+              <p className="text-[11px] text-slate-300 font-medium truncate">
+                {brandIdentity.subtitle}
+              </p>
+            </div>
+          </>
+        ) : (
+          <IndiaPostLogo
+            size="sm"
+            variant="dark"
+            subtitle="Last-Mile & Bulk Customer Hub"
+            className="min-w-0"
+          />
+        )}
       </Link>
 
       <div className="flex items-center gap-1.5">
@@ -345,29 +351,29 @@ export default function Layout({ children }: LayoutProps) {
                 <Menu size={20} />
               </button>
 
+              <Link
+                to="/dashboard"
+                className="flex items-center shrink-0 hover:opacity-90 transition"
+                title="India Post Operations Dashboard"
+              >
+                <IndiaPostLogo
+                  size="sm"
+                  variant="light"
+                  subtitle={`${userProfile?.subOffice || 'Dadabari S.O.'} · PIN ${userProfile?.officePincode || '324009'}`}
+                />
+              </Link>
+
+              <span className="hidden sm:block h-6 w-px bg-slate-200 shrink-0" aria-hidden="true" />
+
               {isCommandShell ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-mono uppercase text-slate-500 hidden sm:inline">
-                    Workspace:
+                <div className="hidden lg:flex items-center gap-2 shrink-0">
+                  <span className="px-2.5 py-1 rounded-md bg-red-50 border border-red-200 text-red-900 text-xs font-bold whitespace-nowrap">
+                    India Post Command
                   </span>
-                  <select
-                    value={activeWorkspace}
-                    onChange={(e) => xpeedoOpsService.setActiveWorkspaceFilter(e.target.value)}
-                    className="px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 bg-white"
-                  >
-                    {scopedWorkspaces === 'ALL' && (
-                      <option value="ALL">All Workspaces</option>
-                    )}
-                    {availableClients.map((c) => (
-                      <option key={c.id} value={c.workspaceKey}>
-                        {c.name} ({c.workspaceKey})
-                      </option>
-                    ))}
-                  </select>
                 </div>
               ) : (
-                <div className="text-xs font-bold text-slate-800 truncate">
-                  {userProfile?.subOffice || 'Dadabari S.O.'} · PIN {userProfile?.officePincode || '324009'}
+                <div className="hidden lg:block text-xs font-semibold text-slate-600 whitespace-nowrap truncate">
+                  {userProfile?.beat || 'Division Desk'}
                 </div>
               )}
 
@@ -381,8 +387,8 @@ export default function Layout({ children }: LayoutProps) {
                     onFocus={() => setSearchFocused(true)}
                     onBlur={() => setTimeout(() => setSearchFocused(false), 180)}
                     onChange={(e) => setGlobalQuery(e.target.value)}
-                    placeholder="Search clients, projects, tasks, SRM..."
-                    className="pl-8 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs w-64 bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500"
+                    placeholder="Search offices, tasks, SRM, bulk..."
+                    className="pl-8 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs w-64 bg-slate-50 focus:bg-white focus:outline-none focus:border-red-600"
                   />
                   {searchFocused && globalQuery.trim().length > 0 && (() => {
                     const q = globalQuery.trim().toLowerCase();
@@ -443,6 +449,16 @@ export default function Layout({ children }: LayoutProps) {
                 >
                   Preview: {PLATFORM_RBAC_ROLE_META[simulatedRole].label} (Reset)
                 </button>
+              )}
+              {featureVisibilityService.isFeatureVisible(userProfile, 'masterSearch') && (
+                <Link
+                  to="/master-search"
+                  className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-red-50 hover:border-red-200 hover:text-red-800 text-slate-700 text-xs font-bold transition"
+                  title="Open Unified Master Search Console"
+                >
+                  <Search size={13} />
+                  <span>Master Search</span>
+                </Link>
               )}
               <Link
                 to="/notifications"

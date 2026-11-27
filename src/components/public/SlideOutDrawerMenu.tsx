@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   X,
-  ShoppingBag,
-  Utensils,
-  BatteryCharging,
-  Shirt,
-  Smartphone,
+  Package,
+  BookOpen,
+  Award,
+  HeartPulse,
+  Sprout,
   Wallet,
   ShieldCheck,
   Landmark,
@@ -20,8 +20,6 @@ import {
   MessageCircle,
   ArrowRight,
   Clock,
-  HeartPulse,
-  Leaf,
   Building2,
   Store,
 } from 'lucide-react';
@@ -100,8 +98,7 @@ export default function SlideOutDrawerMenu({
   onOpenStaffLogin,
   onSelectCategoryFilter,
 }: SlideOutDrawerMenuProps) {
-  // Accordion active state: defaults to first category open
-  const [expandedGroupId, setExpandedGroupId] = useState<string | null>('kirana');
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>('bulk_study');
   const activeHub = getPincodeHub(activePincode);
 
   if (!isOpen) return null;
@@ -123,149 +120,98 @@ export default function SlideOutDrawerMenu({
     }, 80);
   };
 
-  // 1. Clean Consumer-Facing Categories
-  const consumerCategories: CategoryMenuGroup[] = [
+  // 1. India Post Bulk Customer Showcase Categories
+  const bulkShowcaseCategories: CategoryMenuGroup[] = [
     {
-      id: 'kirana',
-      title: 'Kirana & Daily Staples',
-      titleHi: 'किराना एवं दैनिक राशन',
-      subtitle: 'Atta, Edible Oils, Unpolished Pulses & Ration Crates',
-      subtitleHi: 'आटा, खाद्य तेल, दालें एवं मासिक राशन पेटी',
-      icon: ShoppingBag,
+      id: 'bulk_study',
+      title: 'Books & Academic Study Material',
+      titleHi: 'पुस्तकें एवं अध्ययन सामग्री',
+      subtitle: 'Vigyan Nagar S.O. Bulk Parcel & Coaching Module Dispatch',
+      subtitleHi: 'विज्ञान नगर डाकघर से देशभर में अध्ययन सामग्री डिस्पैच',
+      icon: BookOpen,
       accentColor: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
-      badgeText: '₹15 Beat Del',
-      anchorId: 'daily-kirana-section',
-      filterKey: 'supermarket',
+      badgeText: 'BNPL Tariff',
+      anchorId: 'bulk-customer-showcase',
+      filterKey: 'Books & Study Material',
       subItems: [
-        { id: 'atta', name: 'Aashirvaad Chakki Atta 10kg Sack', nameHi: 'आशीर्वाद चक्की आटा 10 किलो', badge: 'Wholesale' },
-        { id: 'oils', name: 'Fortune Mustard & Sunlite 5L Twin Pack', nameHi: 'फॉर्च्यून सरसों व सनलाइट तेल 5 लीटर' },
-        { id: 'pulses', name: 'Tata Sampann Unpolished Toor & Moong 5kg', nameHi: 'टाटा सम्पन्न अनपॉलिश दालें 5 किलो' },
-        { id: 'hamper', name: 'Dadabari 12-Item Monthly Kitchen Crate', nameHi: 'दादाबाड़ी 12-वस्तु मासिक रसोई पेटी', badge: 'Save ₹400' },
-        { id: 'spices', name: 'MDH & Everest Spices + Red Label Tea', nameHi: 'एमडीएच मसाले एवं रेड लेबल चाय' },
+        { id: 'study_5kg', name: 'Competitive Exam Printed Module Bundle (5 kg)', nameHi: 'प्रतियोगी परीक्षा अध्ययन बंडल (5 किग्रा)', badge: 'PIN 324005' },
+        { id: 'book_post', name: 'Registered Printed Book Parcel Dispatch', nameHi: 'पंजीकृत पुस्तक पार्सल सेवा' },
       ],
     },
     {
-      id: 'bakery_dairy',
-      title: 'Fresh Dairy & QSR',
-      titleHi: 'ताजा डेयरी एवं फास्ट फूड',
-      subtitle: "Pure A2 Milk, Malai Paneer, Cakes & Domino's QSR",
-      subtitleHi: "शुद्ध ए2 दूध, मलाई पनीर, केक एवं डोमिनोज़ पिज्जा",
-      icon: Utensils,
-      accentColor: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
-      badgeText: 'Cold-Chain 35m',
-      anchorId: 'dairy-bakery-section',
-      filterKey: 'bakery_dairy',
-      subItems: [
-        { id: 'milk', name: 'Dadabari Fresh Pure A2 Buffalo Milk 2L', nameHi: 'दादाबाड़ी शुद्ध ए2 भैंस का दूध 2 लीटर' },
-        { id: 'paneer', name: 'Fresh Malai Paneer 500g & Matka Curd', nameHi: 'ताजा मलाई पनीर 500 ग्राम व मटका दही' },
-        { id: 'dominos', name: "Domino's Farmhouse Feast + Garlic Bread Combo", nameHi: 'डोमिनोज़ पिज्जा एवं गार्लिक ब्रेड कॉम्बो', badge: 'Hot COD' },
-        { id: 'cakes', name: 'Dutch Chocolate Truffle Celebration Cake 1kg', nameHi: 'डच चॉकलेट ट्रफल बर्थडे केक 1 किलो' },
-        { id: 'bakery_bakes', name: 'Artisanal Butter Croissants & Toast Rusks', nameHi: 'ताजा मक्खन क्रोइसैन एवं रस्क' },
-      ],
-    },
-    {
-      id: 'ev',
-      title: 'EV Mobility & Batteries',
-      titleHi: 'ईवी मोबिलिटी एवं बैटरी',
-      subtitle: 'XPEEDO Scooters, 60V Lithium Packs & 10A Fast Chargers',
-      subtitleHi: 'एक्सपीडो इलेक्ट्रिक स्कूटर, 60V लीथियम पैक व चार्जर',
-      icon: BatteryCharging,
-      accentColor: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
-      badgeText: 'Govt Subsidy Ready',
-      anchorId: 'vendor-carousels-hub',
-      filterKey: 'ev',
-      subItems: [
-        { id: 'scooter', name: 'XPEEDO X1 Pro 85km Range EV Scooter', nameHi: 'एक्सपीडो X1 प्रो 85 किमी रेंज स्कूटर', badge: 'Test Ride' },
-        { id: 'battery', name: '60V 30Ah LiFePO4 Swappable Smart Battery', nameHi: '60V 30Ah स्वापेबल लीथियम बैटरी' },
-        { id: 'charger', name: '60V/72V 10A Intelligent Auto-Cut Fast Charger', nameHi: '60V 10A ऑटो-कट फास्ट चार्जर' },
-        { id: 'delivery_box', name: '45L Lockable Delivery Box & USB Mount', nameHi: '45 लीटर लॉक पार्सल बॉक्स व मोबाइल स्टैंड' },
-        { id: 'helmet', name: 'ISI Modular Safety Helmet & GPS Tracker Kit', nameHi: 'आईएसआई हेलमेट एवं जीपीएस ट्रैकर किट' },
-      ],
-    },
-    {
-      id: 'apparel',
-      title: 'Branded Fashion & Footwear',
-      titleHi: 'ब्रांडेड परिधान एवं जूते',
-      subtitle: "Allen Solly, Levi's, Fabindia & Velocity Sports Studio",
-      subtitleHi: 'एलन सोली, लेवाइस, फैबइंडिया एवं वेलोसिटी स्पोर्ट्स',
-      icon: Shirt,
-      accentColor: 'text-purple-400 bg-purple-400/10 border-purple-400/20',
-      badgeText: 'Size Exchange',
-      anchorId: 'fashion-footwear-section',
-      filterKey: 'apparel',
-      subItems: [
-        { id: 'solly_polo', name: 'Allen Solly Pique Cotton Polos & Formal Blazers', nameHi: 'एलन सोली कॉटन पोलो टीशर्ट व ब्लेजर' },
-        { id: 'levi_jeans', name: "Levi's 511 Authentic Stretch Denims & Truckers", nameHi: 'लेवाइस 511 स्ट्रेच जींस व जैकेट्स' },
-        { id: 'fabindia', name: 'Fabindia Artisanal Handloom Cotton Kurta Sets', nameHi: 'फैबइंडिया हैंडलूम कॉटन कुर्ता सेट' },
-        { id: 'velocity_shoe', name: 'Velocity Marathon Running Shoes + Hydration Flask', nameHi: 'वेलोसिटी मैराथन रनिंग जूते व बॉटल', badge: 'Top Seller' },
-        { id: 'trainers', name: 'Court Trainers, Cricket Bat Kit & Gym Duffel', nameHi: 'कोर्ट ट्रेनर्स, क्रिकेट किट व जिम बैग' },
-      ],
-    },
-    {
-      id: 'electronics',
-      title: 'Electronics & Smart Tech',
-      titleHi: 'इलेक्ट्रॉनिक्स एवं स्मार्ट टेक',
-      subtitle: 'Reliance Digital Audio, GaN Chargers & Smart Living',
-      subtitleHi: 'रिलायंस डिजिटल ऑडियो, चार्जर एवं स्मार्ट लिविंग',
-      icon: Smartphone,
-      accentColor: 'text-sky-400 bg-sky-400/10 border-sky-400/20',
-      badgeText: 'Brand Warranty',
-      anchorId: 'electronics-tech-section',
-      filterKey: 'electronics',
-      subItems: [
-        { id: 'earbuds', name: 'boAt Airdopes 48H ANC Wireless Earbuds', nameHi: 'बोट एयरडोप्स 48 घंटे एएनसी ईयरबड्स' },
-        { id: 'gan_charger', name: '65W Triple-Port GaN Laptop & Phone Fast Charger', nameHi: '65W ट्रिपल-पोर्ट GaN फास्ट चार्जर' },
-        { id: 'powerbank', name: '20,000mAh 22.5W Quick Charge Power Bank', nameHi: '20,000mAh क्विक चार्ज पावर बैंक' },
-        { id: 'airfryer', name: 'Smart Living 4.5L Digital Touch Air Fryer & Grill', nameHi: 'स्मार्ट लिविंग 4.5L डिजिटल टच एयर फ्रायर', badge: 'Save ₹1500' },
-        { id: 'kettle', name: '1.8L Stainless Steel Kettle & 1000W NutriBlender', nameHi: '1.8L स्टील केतली व न्यूट्री ब्लेंडर' },
-      ],
-    },
-    {
-      id: 'medical',
-      title: 'Medical & Pharmacy',
-      titleHi: 'मेडिकल एवं फार्मेसी',
-      subtitle: 'OTCs, BP Monitors, Immunity & First-Aid Kits',
-      subtitleHi: 'दवाइयां, बीपी मॉनिटर, इम्युनिटी व फर्स्ट-एड किट',
-      icon: HeartPulse,
+      id: 'bulk_handloom',
+      title: 'Handloom & GI Kota Doria',
+      titleHi: 'हथकरघा एवं कोटा डोरिया',
+      subtitle: 'Kaithoon S.O. Loom Cooperative & Insured COD Shipping',
+      subtitleHi: 'कैथून डाकघर से जीआई कोटा डोरिया व हस्तशिल्प पार्सल',
+      icon: Award,
       accentColor: 'text-rose-400 bg-rose-400/10 border-rose-400/20',
-      badgeText: 'Sealed Pharmacy',
-      anchorId: 'medical-pharmacy-section',
-      filterKey: 'medical',
+      badgeText: 'GI Verified',
+      anchorId: 'bulk-customer-showcase',
+      filterKey: 'Handloom & Textiles',
       subItems: [
-        { id: 'med_bp', name: 'Omron Automatic Digital BP Monitor', nameHi: 'ओमरोन डिजिटल बीपी मॉनिटर', badge: '25-Min Del' },
-        { id: 'med_glucometer', name: 'Accu-Chek Instant Glucometer + 25 Strips', nameHi: 'ग्लूकोमीटर + 25 टेस्ट स्ट्रिप्स' },
-        { id: 'med_firstaid', name: '24-Piece Family Emergency First-Aid Kit', nameHi: '24-पीस फैमिली फर्स्ट-एड किट' },
-        { id: 'med_ors', name: 'Electral Hydration & Daily Vitamin C Pack', nameHi: 'इलेक्ट्रल एवं विटामिन C पैक' },
+        { id: 'doria_box', name: 'GI-Tagged Kota Doria Handloom Gift Box', nameHi: 'जीआई टैग कोटा डोरिया गिफ्ट बॉक्स', badge: 'COD Ready' },
+        { id: 'weavers_bulk', name: 'Weavers Cooperative Wholesale Parcel Slab', nameHi: 'बुनकर सहकारी थोक पार्सल दर' },
       ],
     },
     {
-      id: 'sabji_mandi',
-      title: 'Sabji Mandi (Farm Fresh)',
-      titleHi: 'ताजा सब्जी मंडी',
-      subtitle: 'Morning Farm Tomatoes, Onions, Greens & Seasonal Fruits',
-      subtitleHi: 'ताजा टमाटर, प्याज, हरी सब्जियां व मौसमी फल',
-      icon: Leaf,
-      accentColor: 'text-lime-400 bg-lime-400/10 border-lime-400/20',
-      badgeText: '6 AM Harvest',
-      anchorId: 'sabji-mandi-section',
-      filterKey: 'sabji_mandi',
+      id: 'bulk_medical',
+      title: 'Medical & Diagnostics Kits',
+      titleHi: 'मेडिकल एवं डायग्नोस्टिक पैक',
+      subtitle: 'Dadabari S.O. Sealed Clinic & Wellness Parcel Dispatch',
+      subtitleHi: 'दादाबाड़ी डाकघर से सुरक्षित मेडिकल व क्लिनिक किट डिस्पैच',
+      icon: HeartPulse,
+      accentColor: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
+      badgeText: 'Beat 2 Fast',
+      anchorId: 'bulk-customer-showcase',
+      filterKey: 'Medical & Diagnostics',
       subItems: [
-        { id: 'veg_basket', name: 'Daily Sabji Mandi Essentials Crate (5kg Mix)', nameHi: 'दैनिक ताजा सब्जी टोकरी (5 किलो)', badge: 'Farm Direct' },
-        { id: 'veg_greens', name: 'Fresh Spinach, Coriander & Curry Leaves Combo', nameHi: 'ताजा पालक, धनिया व हरी मिर्च कॉम्बो' },
-        { id: 'veg_potato_onion', name: 'Indore Chipsona Potato + Nashik Onion 5kg', nameHi: 'आलू + नासिक लाल प्याज 5 किलो पैक' },
-        { id: 'fruit_box', name: 'Seasonal Kota Orchard Kinnow & Banana Box', nameHi: 'ताजा मौसमी फल फैमिली बॉक्स' },
+        { id: 'med_kit', name: 'Clinic First-Aid & Digital BP Monitor Pack', nameHi: 'क्लिनिक फर्स्ट-एड एवं बीपी मॉनिटर पैक', badge: 'PIN 324009' },
+        { id: 'diag_seal', name: 'Moisture-Sealed Pharmacy Carton Booking', nameHi: 'फार्मेसी कार्टन प्राथमिकता डिस्पैच' },
+      ],
+    },
+    {
+      id: 'bulk_agro',
+      title: 'Hadoti Agro & Regional FPOs',
+      titleHi: 'हाड़ौती कृषि एवं क्षेत्रीय उत्पाद',
+      subtitle: 'Baran H.O. Spice Collective & Cold-Pressed Oil Cartons',
+      subtitleHi: 'बारां मुख्य डाकघर से मसाले व एफपीओ पार्सल',
+      icon: Sprout,
+      accentColor: 'text-lime-400 bg-lime-400/10 border-lime-400/20',
+      badgeText: 'FPO Direct',
+      anchorId: 'bulk-customer-showcase',
+      filterKey: 'Agro & Regional Goods',
+      subItems: [
+        { id: 'hadoti_5kg', name: 'Hadoti Whole Spices & Mustard Oil 5kg Box', nameHi: 'हाड़ौती साबुत मसाले व सरसों तेल बॉक्स', badge: 'PIN 325205' },
+      ],
+    },
+    {
+      id: 'bulk_packaging',
+      title: 'Packaging, Philately & My Stamp',
+      titleHi: 'पैकेजिंग, डाक टिकट एवं माय स्टैंप',
+      subtitle: 'Indraprastha RIICO Mailers, Kota H.O. My Stamp & Gangajal',
+      subtitleHi: 'इंद्रप्रस्थ मेलर्स, कोटा एच.ओ. माय स्टैंप एवं गंगाजल',
+      icon: Package,
+      accentColor: 'text-sky-400 bg-sky-400/10 border-sky-400/20',
+      badgeText: 'Official Issue',
+      anchorId: 'bulk-customer-showcase',
+      filterKey: 'Industrial & Packaging',
+      subItems: [
+        { id: 'tamper_mailers', name: 'Tamper-Proof Courier Pouches (250 Pack)', nameHi: 'टैम्पर-प्रूफ कूरियर पाउच (250 पैक)' },
+        { id: 'mystamp_sheet', name: 'Personalized My Stamp Sheet (12 Stamps)', nameHi: 'व्यक्तिगत माय स्टैंप शीट (12 डाक टिकट)', badge: '₹300' },
+        { id: 'gangajal_pack', name: 'Gangotri Sacred Gangajal Pack (250 ml)', nameHi: 'गंगोत्री पवित्र गंगाजल पैक (250 मिली)', badge: '₹30' },
       ],
     },
   ];
 
-  // 2. Sovereign & Postal Services mapped under clean financial headings
+  // 2. Sovereign Postal & Financial Services
   const sovereignFinancialServices: FinancialMenuGroup[] = [
     {
       id: 'sovereign_savings',
-      title: 'Sovereign Savings (SSY/SCSS)',
-      titleHi: 'सरकारी बचत योजनाएं (सुकन्या/वरिष्ठ नागरिक)',
+      title: 'Sovereign Savings (SSY / SCSS / PPF)',
+      titleHi: 'सरकारी बचत योजनाएं (सुकन्या / वरिष्ठ नागरिक)',
       rateHighlight: '8.2% p.a. Tax-Free',
-      desc: 'Sukanya Samriddhi (SSY), Senior Citizen Savings (SCSS), PPF & Monthly Income (MIS)',
+      desc: 'Sukanya Samriddhi (SSY), Senior Citizen Savings (SCSS), PPF & Monthly Income Scheme (MIS)',
       icon: Wallet,
       anchorId: 'post-office-banking-store',
       subTab: 'SAVINGS_SSY_SCSS',
@@ -278,10 +224,10 @@ export default function SlideOutDrawerMenu({
     },
     {
       id: 'postal_insurance',
-      title: 'Postal Insurance (PLI/RPLI)',
-      titleHi: 'डाक जीवन बीमा (पीएलआई/आरपीएलआई)',
-      rateHighlight: '₹76/1K Peak Bonus',
-      desc: 'PLI Suraksha Whole Life, Santosh Endowment & RPLI Gram Santosh with sovereign claim guarantee',
+      title: 'Postal Insurance (PLI / RPLI)',
+      titleHi: 'डाक जीवन बीमा (पीएलआई / आरपीएलआई)',
+      rateHighlight: 'Peak Sovereign Bonus',
+      desc: 'PLI Suraksha Whole Life, Santosh Endowment & RPLI Gram Santosh with Government backing',
       icon: ShieldCheck,
       anchorId: 'post-office-banking-store',
       subTab: 'INSURANCE_PLI',
@@ -296,7 +242,7 @@ export default function SlideOutDrawerMenu({
       title: 'IPPB Digital Accounts & Accident Cover',
       titleHi: 'आईपीपीबी डिजिटल खाते एवं दुर्घटना बीमा',
       rateHighlight: '₹10L Cover @ ₹399/Yr',
-      desc: 'Zero-Balance Digital Accounts, ₹10 Lakh Accidental Cover, AePS Doorstep Cash & Shopkeeper QR Standees',
+      desc: 'Zero-Balance Digital Accounts, ₹10L Accidental Cover, AePS Doorstep Cash & Merchant QR',
       icon: Landmark,
       anchorId: 'post-office-banking-store',
       subTab: 'IPPB_QR_COVER',
@@ -304,7 +250,7 @@ export default function SlideOutDrawerMenu({
         { title: 'IPPB Zero-Balance Account', highlight: 'Instant RuPay & AePS' },
         { title: '₹10 Lakh Accidental Insurance', highlight: '₹399/Yr Premium' },
         { title: 'Doorstep AePS Biometric Cash', highlight: 'Up to ₹10,000 Delivery' },
-        { title: 'Merchant QR Standee & Soundbox', highlight: 'Zero MDR Settlement' },
+        { title: 'Merchant QR Standee & BNPL Sync', highlight: 'Zero MDR Settlement' },
       ],
     },
   ];
@@ -313,11 +259,11 @@ export default function SlideOutDrawerMenu({
   const logisticsAndCitizenServices = [
     {
       id: 'logistics_speed_post',
-      title: 'Courier & Speed Post Logistics',
-      titleHi: 'स्पीड पोस्ट कूरियर एवं पार्सल लॉजिस्टिक्स',
-      subtitle: 'Doorstep Pickup, Real-Time Consignment Barcode Tracking & Dak Niryat Kendra',
+      title: 'Speed Post Tracking & Inquiry Status',
+      titleHi: 'स्पीड पोस्ट ट्रैकिंग एवं आवेदन स्थिति',
+      subtitle: 'Verify Reference/Ticket ID + registered mobile or Speed Post barcode status',
       icon: Truck,
-      badgeText: 'Track SP-RJ-...',
+      badgeText: 'Track Status',
       action: () => {
         onClose();
         onOpenTrackModal();
@@ -325,9 +271,9 @@ export default function SlideOutDrawerMenu({
     },
     {
       id: 'citizen_documentation',
-      title: 'Citizen Documentation Desk (e-Mitra / PAN / Aadhaar)',
-      titleHi: 'नागरिक दस्तावेज डेस्क (ई-मित्र / पैन / आधार)',
-      subtitle: 'Child Aadhaar CELC (0–5 Yrs), PAN Form 49A, Ayushman PM-JAY & Rajasthan e-Stamps',
+      title: 'Citizen Documentation Desk (CELC / DLC / PAN)',
+      titleHi: 'नागरिक दस्तावेज डेस्क (आधार / जीवन प्रमाण / पैन)',
+      subtitle: 'Child Aadhaar CELC (0–5 Yrs), Jeevan Pramaan DLC, PAN Form 49A & e-Stamps',
       icon: FileText,
       badgeText: 'Biometric Doorstep',
       action: () => {
@@ -337,80 +283,79 @@ export default function SlideOutDrawerMenu({
     },
   ];
 
-  // 4. Authorized Local Stores & Hubs (Dedicated Bottom Section)
-  const authorizedLocalStores: LocalStoreHub[] = [
+  // 4. India Post Post Offices & Bulk Dispatch Hubs
+  const officialPostalHubs: LocalStoreHub[] = [
     {
-      name: 'Dadabari Sub Post Office Sovereign Counters',
-      category: 'Department of Posts · Head Office Desk',
-      beatManager: 'Official Postal Desk',
-      beatNo: 'Headquarters',
+      name: 'Dadabari Sub Post Office (S.O.)',
+      category: 'Department of Posts · Beat 2 Field Operations & IPPB',
+      beatManager: 'Mahendra Kumar Meena',
+      beatNo: 'Beat 2',
       phone: '9460020640',
-      address: 'Near Shastri Park, Main Commercial Road, Dadabari (324009)',
+      address: 'Near Shastri Park, Main Road, Dadabari (PIN 324009)',
       timings: '09:00 AM – 05:00 PM',
       isOfficial: true,
     },
     {
-      name: 'XPEEDO EV & Green Mobility Regional Hub',
-      category: 'EV Scooters, LiFePO4 Batteries & Fast Chargers',
-      beatManager: 'Mahendra Kumar Meena',
-      beatNo: 'Beat 2 Delivery Head',
-      phone: '8769706002',
-      address: 'Dadabari Commercial Arcade, Near Circle, Kota',
-      timings: '08:00 AM – 08:30 PM',
-    },
-    {
-      name: "Allen Solly & Levi's Authorized Franchise",
-      category: 'Branded Apparel, Stretch Denim & Size Exchange',
-      beatManager: 'Mahendra Kumar Meena',
-      beatNo: 'Beat 2 & Beat 3',
+      name: 'Kota Head Post Office (Kota H.O.)',
+      category: 'Divisional Head Office · Philately, MyStamp & Corporate Bulk',
+      beatManager: 'Philately & Bulk Mail Counter',
+      beatNo: 'Beat 1',
       phone: '9460020640',
-      address: 'Showroom 14, Main Road, Dadabari, Kota',
-      timings: '10:00 AM – 09:00 PM',
+      address: 'Civil Lines, Kota Division (PIN 324001)',
+      timings: '09:00 AM – 05:30 PM',
+      isOfficial: true,
     },
     {
-      name: 'Dadabari Fresh Cold-Chain Dairy & Bakery',
-      category: 'Pure A2 Buffalo Milk, Paneer & Truffle Cakes',
-      beatManager: 'Cold-Chain Supervisor',
-      beatNo: 'Beat 2 Sector 4 Hub',
-      phone: '8769706002',
-      address: 'Sector 4 Market, Dadabari, Kota',
-      timings: '06:00 AM – 09:00 PM',
-    },
-    {
-      name: "Domino's QSR Express Hub",
-      category: 'Farmhouse Pizzas, Stuffed Garlic Bread & Hot Combos',
-      beatManager: 'Dadabari Circle Express Team',
-      beatNo: 'Beat 2 Delivery Node',
+      name: 'Vigyan Nagar Sub Post Office (S.O.)',
+      category: 'Academic Study Material Bulk Parcel & BNPL Node',
+      beatManager: 'Academic Fulfillment Desk',
+      beatNo: 'Beat 14',
       phone: '9460020640',
-      address: 'Dadabari Circle Express Counter, Kota',
-      timings: '11:00 AM – 11:00 PM',
+      address: 'Vigyan Nagar Commercial Center, Kota (PIN 324005)',
+      timings: '09:00 AM – 06:00 PM',
     },
     {
-      name: 'Reliance Digital & Smart Tech Center',
-      category: 'ANC Earbuds, GaN Chargers, Air Fryers & Home Tech',
-      beatManager: 'Mohit Arvind',
-      beatNo: 'Beat 5 Keshavpura Node',
+      name: 'Kaithoon Sub Post Office (S.O.)',
+      category: 'GI Kota Doria Weavers Guild & Insured Parcel Hub',
+      beatManager: 'Heritage Loom Cooperative',
+      beatNo: 'Beat 1',
       phone: '9460020640',
-      address: 'Keshavpura Commercial Center, Kota',
-      timings: '10:00 AM – 08:30 PM',
+      address: 'Kaithoon Main Market, Kota Division (PIN 325001)',
+      timings: '09:30 AM – 05:30 PM',
+    },
+    {
+      name: 'Indraprastha Sub Post Office (S.O.)',
+      category: 'RIICO Industrial Mailers & SME Business Parcel Pickup',
+      beatManager: 'RIICO Industrial Hub Desk',
+      beatNo: 'Beat 1',
+      phone: '9460020640',
+      address: 'Indraprastha Industrial Area, Kota (PIN 324003)',
+      timings: '09:00 AM – 06:00 PM',
+    },
+    {
+      name: 'Baran Head Post Office (Baran H.O.)',
+      category: 'Hadoti Spice & Agro FPO Bulk Dispatch Terminal',
+      beatManager: 'FPO Agro Dispatch',
+      beatNo: 'Beat 1',
+      phone: '9460020640',
+      address: 'Baran Division HQ (PIN 325205)',
+      timings: '09:00 AM – 05:30 PM',
     },
   ];
 
   return (
     <div className="fixed inset-0 z-50 flex">
-      {/* Dimmed Backdrop */}
       <div
         className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs transition-opacity duration-200"
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Slide-Out Drawer Panel */}
       <aside
         className="relative w-full max-w-md bg-slate-950 text-slate-100 flex flex-col justify-between shadow-2xl z-10 border-r border-slate-800 h-full overflow-hidden animate-in slide-in-from-left duration-200"
         role="dialog"
         aria-modal="true"
-        aria-label="XPOKART Category-First Navigation Menu"
+        aria-label="India Post Navigation Menu"
       >
         {/* Drawer Header */}
         <div className="p-4 sm:p-5 bg-gradient-to-r from-red-950 via-slate-950 to-slate-900 border-b border-slate-800 shrink-0">
@@ -421,7 +366,7 @@ export default function SlideOutDrawerMenu({
               </div>
               <div>
                 <div className="text-base font-black text-white tracking-tight leading-tight flex items-center gap-2">
-                  <span>XPOKART</span>
+                  <span>INDIA POST</span>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-red-800 text-white font-bold">
                     PIN {activePincode}
                   </span>
@@ -429,7 +374,7 @@ export default function SlideOutDrawerMenu({
                 <p className="text-[11px] text-amber-300 font-medium truncate">
                   {lang === 'hi'
                     ? `${activeHub.officeName} · पिन ${activeHub.pincode}`
-                    : `${activeHub.officeName} · ${activeHub.localStockingPartner}`}
+                    : `${activeHub.officeName} · ${activeHub.division}`}
                 </p>
               </div>
             </div>
@@ -444,7 +389,7 @@ export default function SlideOutDrawerMenu({
             </button>
           </div>
 
-          {/* Location Selector & Quick Bilingual Toggle Strip */}
+          {/* Location Selector & Language Toggle */}
           <div className="mt-3.5 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2 text-xs">
             <button
               type="button"
@@ -459,7 +404,6 @@ export default function SlideOutDrawerMenu({
               <span className="text-slate-400 text-[10px] font-normal font-sans">({lang === 'hi' ? 'बदलें' : 'Change'})</span>
             </button>
 
-            {/* Quick Bilingual Switcher (English / Hindi / Rajasthani) */}
             <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
               <Globe size={11} className="text-amber-400 ml-1 shrink-0" />
               {LANGUAGE_OPTIONS.map((opt) => (
@@ -497,9 +441,9 @@ export default function SlideOutDrawerMenu({
               </div>
               <div className="min-w-0">
                 <div className="font-bold text-white text-xs truncate">
-                  {lang === 'hi' ? 'ऑर्डर ट्रैक करें' : 'Track Order'}
+                  {lang === 'hi' ? 'आवेदन / पार्सल ट्रैक' : 'Track Status'}
                 </div>
-                <div className="text-[10px] text-slate-400 truncate mt-0.5">Speed Post Barcode</div>
+                <div className="text-[10px] text-slate-400 truncate mt-0.5">Ticket ID + Mobile</div>
               </div>
             </button>
 
@@ -518,20 +462,20 @@ export default function SlideOutDrawerMenu({
                 <div className="font-bold text-white text-xs truncate">
                   {lang === 'hi' ? 'नागरिक सेवा डेस्क' : 'Citizen Desk'}
                 </div>
-                <div className="text-[10px] text-slate-400 truncate mt-0.5">PAN, Aadhaar, e-Stamps</div>
+                <div className="text-[10px] text-slate-400 truncate mt-0.5">CELC, DLC, PAN, e-Stamp</div>
               </div>
             </button>
           </div>
 
-          {/* 1. SECTION: CONSUMER-FACING CATEGORIES (ACCORDION STRUCTURE) */}
+          {/* 1. BULK CUSTOMER & PROMOTED PRODUCTS CATEGORIES */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between text-[11px] font-black tracking-wider text-slate-400 uppercase">
-              <span>{lang === 'hi' ? 'उपभोक्ता श्रेणियां' : 'Consumer Catalog Categories'}</span>
-              <span className="text-[10px] text-amber-400 lowercase font-mono">7 verticals</span>
+              <span>{lang === 'hi' ? 'बल्क ग्राहक एवं प्रचारित उत्पाद' : 'Bulk Customer Showcase'}</span>
+              <span className="text-[10px] text-amber-400 lowercase font-mono">5 categories</span>
             </div>
 
             <div className="space-y-2">
-              {consumerCategories.map((cat) => {
+              {bulkShowcaseCategories.map((cat) => {
                 const IconComp = cat.icon;
                 const isExpanded = expandedGroupId === cat.id;
 
@@ -540,7 +484,6 @@ export default function SlideOutDrawerMenu({
                     key={cat.id}
                     className="rounded-2xl border border-slate-800 bg-slate-900/80 overflow-hidden transition"
                   >
-                    {/* Category Accordion Header */}
                     <button
                       type="button"
                       onClick={() => toggleAccordion(cat.id)}
@@ -571,7 +514,6 @@ export default function SlideOutDrawerMenu({
                       </div>
                     </button>
 
-                    {/* Smooth Accordion Body */}
                     {isExpanded && (
                       <div className="p-3 pt-0 border-t border-slate-800/80 space-y-2.5 bg-slate-950/50 animate-in fade-in duration-150">
                         <div className="space-y-1.5 pt-2">
@@ -594,7 +536,6 @@ export default function SlideOutDrawerMenu({
                           ))}
                         </div>
 
-                        {/* View Entire Category Button */}
                         <button
                           type="button"
                           onClick={() => handleNavClick(cat.anchorId, cat.filterKey)}
@@ -611,7 +552,7 @@ export default function SlideOutDrawerMenu({
             </div>
           </div>
 
-          {/* 2. SECTION: SOVEREIGN POSTAL & FINANCIAL SERVICES */}
+          {/* 2. SOVEREIGN POSTAL & FINANCIAL SERVICES */}
           <div className="space-y-2.5 pt-2 border-t border-slate-800">
             <div className="flex items-center justify-between text-[11px] font-black tracking-wider text-slate-400 uppercase">
               <span>{lang === 'hi' ? 'सरकारी डाक एवं वित्तीय सेवाएं' : 'Sovereign Postal & Finance'}</span>
@@ -693,10 +634,10 @@ export default function SlideOutDrawerMenu({
             </div>
           </div>
 
-          {/* 3. SECTION: LOGISTICS & CITIZEN DOCUMENTATION DESK */}
+          {/* 3. LOGISTICS & CITIZEN DOCUMENTATION DESK */}
           <div className="space-y-2.5 pt-2 border-t border-slate-800">
             <div className="text-[11px] font-black tracking-wider text-slate-400 uppercase">
-              {lang === 'hi' ? 'लॉजिस्टिक्स एवं ई-मित्र नागरिक सेवाएं' : 'Courier & Citizen Services'}
+              {lang === 'hi' ? 'डाक एवं नागरिक सेवाएं' : 'Speed Post & Citizen Services'}
             </div>
 
             <div className="space-y-2">
@@ -731,20 +672,20 @@ export default function SlideOutDrawerMenu({
             </div>
           </div>
 
-          {/* 4. SECTION: DEDICATED "AUTHORIZED LOCAL STORES & HUBS" SECTION */}
+          {/* 4. INDIA POST OFFICES & BULK HUBS */}
           <div className="space-y-2.5 pt-2 border-t border-slate-800" id="drawer-local-stores-section">
             <div className="flex items-center justify-between text-[11px] font-black tracking-wider text-slate-400 uppercase">
-              <span>{lang === 'hi' ? 'अधिकृत स्थानीय स्टोर्स एवं हब' : 'Authorized Local Stores & Hubs'}</span>
-              <span className="text-[10px] text-emerald-400 lowercase font-mono">Beat 2 mapped</span>
+              <span>{lang === 'hi' ? 'डाकघर एवं बल्क डिस्पैच हब' : 'Post Offices & Bulk Hubs'}</span>
+              <span className="text-[10px] text-emerald-400 lowercase font-mono">Division mapped</span>
             </div>
             <p className="text-[10px] text-slate-400 leading-relaxed">
               {lang === 'hi'
-                ? 'भौतिक स्टोर, ब्रांड शोरूम एवं डाकघर काउंटरों से सीधे व्हाट्सएप व कॉल पर जुड़ें।'
-                : 'Connect directly with physical showrooms, Post Office counters & assigned Beat Managers.'}
+                ? 'डाकघर काउंटरों एवं बीट प्रबंधकों से सीधे व्हाट्सएप पर जुड़ें।'
+                : 'Connect directly with regional Post Office counters & Beat operations desks.'}
             </p>
 
             <div className="space-y-2">
-              {authorizedLocalStores.map((st, idx) => (
+              {officialPostalHubs.map((st, idx) => (
                 <div
                   key={idx}
                   className={`p-3 rounded-2xl border transition ${
@@ -765,7 +706,7 @@ export default function SlideOutDrawerMenu({
                       </div>
                       <div className="text-[10px] text-slate-400 truncate">{st.category}</div>
                       <div className="text-[10px] text-slate-300 flex items-center gap-2 flex-wrap">
-                        <span>Beat Mgr: <strong className="text-white">{st.beatManager}</strong></span>
+                        <span>Desk: <strong className="text-white">{st.beatManager}</strong></span>
                         <span>·</span>
                         <span className="text-amber-300 font-mono font-semibold">{st.beatNo}</span>
                       </div>
@@ -775,11 +716,10 @@ export default function SlideOutDrawerMenu({
                       </div>
                     </div>
 
-                    {/* Quick WhatsApp Support Bridge */}
                     <div className="flex flex-col gap-1.5 shrink-0">
                       <a
                         href={`https://api.whatsapp.com/send?phone=${activeHub.whatsappPhone}&text=${encodeURIComponent(
-                          `Namaste ${st.name} (${activeHub.officeName} · PIN ${activeHub.pincode}),\nI want to connect with ${st.beatManager} (${st.beatNo}) for order assistance.`
+                          `Namaste ${st.name} (${activeHub.officeName} · PIN ${activeHub.pincode}),\nI want to connect with ${st.beatManager} (${st.beatNo}) for India Post assistance.`
                         )}`}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -796,31 +736,31 @@ export default function SlideOutDrawerMenu({
             </div>
           </div>
 
-          {/* 4B. CONSOLIDATED OFFICIAL BRAND STORES */}
+          {/* 4B. INDIA POST HUBS & BULK SHOWCASE */}
           <div className="space-y-2.5 pt-2 border-t border-slate-800">
             <div className="flex items-center justify-between text-[11px] font-black tracking-wider text-slate-400 uppercase">
-              <span>Official Brand Stores</span>
-              <span className="text-[10px] text-amber-400 font-mono">Central COD</span>
+              <span>India Post Hubs &amp; Bulk Showcase</span>
+              <span className="text-[10px] text-amber-400 font-mono">Official Portal</span>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              {OFFICIAL_BRAND_STORES.slice(0, 8).map((brand) => (
+            <div className="grid grid-cols-1 gap-2">
+              {OFFICIAL_BRAND_STORES.map((store) => (
                 <Link
-                  key={brand.slug}
-                  to={`/brand/${brand.slug}`}
+                  key={store.slug}
+                  to={`/brand/${store.slug}`}
                   onClick={onClose}
-                  className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-left flex items-center gap-2 transition"
+                  className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-left flex items-center gap-2 transition"
                 >
                   <Store size={13} className="text-amber-400 shrink-0" />
-                  <span className="text-[11px] font-bold text-white truncate">{brand.brandName}</span>
+                  <span className="text-[11px] font-bold text-white truncate">{store.brandName}</span>
                 </Link>
               ))}
             </div>
           </div>
 
-          {/* 5. SECTION: B2B PORTAL & ROLE-BASED COMMAND GATEWAY */}
+          {/* 5. BULK CUSTOMER DESK & STAFF SIGN-IN */}
           <div className="space-y-2 pt-2 border-t border-slate-800">
             <div className="text-[11px] font-black tracking-wider text-slate-400 uppercase">
-              {lang === 'hi' ? 'व्यापार एवं संचालन डेस्क' : 'Business & Operational Gateways'}
+              {lang === 'hi' ? 'थोक ग्राहक एवं संचालन डेस्क' : 'Bulk Customer & Operational Gateways'}
             </div>
             <Link
               to="/b2b-partner"
@@ -830,8 +770,8 @@ export default function SlideOutDrawerMenu({
               <div className="flex items-center gap-2">
                 <Building2 size={14} className="text-emerald-400 shrink-0" />
                 <div>
-                  <div className="text-xs font-bold text-white">B2B &amp; Merchant Partner Portal</div>
-                  <div className="text-[10px] text-emerald-300/90">Bulk Buyers, Franchises &amp; Local Sellers</div>
+                  <div className="text-xs font-bold text-white">Bulk Customer &amp; BNPL Desk</div>
+                  <div className="text-[10px] text-emerald-300/90">Institutional Buyers &amp; Business Parcel</div>
                 </div>
               </div>
               <ArrowRight size={13} className="text-emerald-400 shrink-0" />
@@ -852,31 +792,32 @@ export default function SlideOutDrawerMenu({
                 <div className="text-[10px] text-slate-400 mt-0.5">Beat Postman &amp; Desk</div>
               </button>
 
-              <a
-                href="/dev-command-secure-portal?token=xpokart_master_key_9460020640"
+              <Link
+                to="/login"
+                onClick={onClose}
                 className="p-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-left border border-amber-400/30 transition block"
               >
                 <div className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
                   <Crown size={13} className="text-amber-400" />
-                  <span>Master Console</span>
+                  <span>Operations Portal</span>
                 </div>
-                <div className="text-[10px] text-amber-200/80 mt-0.5">Super Admin Desk</div>
-              </a>
+                <div className="text-[10px] text-amber-200/80 mt-0.5">Admin &amp; Office Sign-In</div>
+              </Link>
             </div>
           </div>
         </div>
 
-        {/* Drawer Footer with Clean Support Bridges (Zero Visible Raw Numbers) */}
+        {/* Drawer Footer */}
         <div className="p-4 bg-slate-950 border-t border-slate-800 space-y-2.5 text-xs shrink-0">
           <div className="flex items-center justify-between text-slate-400 text-[11px]">
             <span>{lang === 'hi' ? 'डाकघर आधिकारिक सहायता:' : '13 Pincode Hub Support:'}</span>
-            <span className="font-mono text-emerald-400 font-bold">24×7 Express Desk</span>
+            <span className="font-mono text-emerald-400 font-bold">India Post Desk</span>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <a
               href={`https://api.whatsapp.com/send?phone=${activeHub.whatsappPhone}&text=${encodeURIComponent(
-                `Namaste XPOKART Hub Desk (${activeHub.officeName} · PIN ${activeHub.pincode}), I need order assistance.`
+                `Namaste India Post Hub Desk (${activeHub.officeName} · PIN ${activeHub.pincode}), I need assistance with postal services or a bulk inquiry.`
               )}`}
               target="_blank"
               rel="noopener noreferrer"
@@ -892,7 +833,7 @@ export default function SlideOutDrawerMenu({
               className="py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 font-bold flex items-center justify-center gap-1.5 transition text-[11px]"
             >
               <Building2 size={13} className="text-amber-400" />
-              <span>Partner Portal</span>
+              <span>Bulk Customer Desk</span>
             </Link>
           </div>
         </div>

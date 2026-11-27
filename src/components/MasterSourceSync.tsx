@@ -22,6 +22,8 @@ import {
 } from '../lib/google-workspace';
 import { customerService } from '../services/customerService';
 import { operationsService, BackupEngineState } from '../services/operationsService';
+import { locationSurveyService } from '../services/locationSurveyService';
+import { lastMileVendorService } from '../services/lastMileVendorService';
 
 interface PendingWorkspaceAction {
   type: 'SYNC_SHEETS' | 'SEND_GMAIL_DAILY' | 'SEND_GMAIL_WEEKLY';
@@ -47,9 +49,14 @@ export default function MasterSourceSync() {
     tasks: 0,
     leads: 0,
     conflicts: 0,
+    propertySurveys: 0,
+    customerVerifications: 0,
+    distributions: 0,
+    lastMileVendors: 0,
   });
 
   const updateAllStats = () => {
+    const locState = locationSurveyService.exportState();
     setStats({
       customers: customerService.getCustomers().length,
       properties: customerService.getProperties().length,
@@ -58,6 +65,10 @@ export default function MasterSourceSync() {
       tasks: customerService.getTasks().length,
       leads: customerService.getLeads().length,
       conflicts: customerService.getConflicts().filter((c) => c.status === 'Pending Review').length,
+      propertySurveys: locState.propertySurveys.length,
+      customerVerifications: locState.customerVerifications.length,
+      distributions: locState.distributionRecords.length,
+      lastMileVendors: lastMileVendorService.exportState().length,
     });
     setBackupState(operationsService.getBackupState());
   };
@@ -66,9 +77,13 @@ export default function MasterSourceSync() {
     updateAllStats();
     const unsubCust = customerService.subscribe(updateAllStats);
     const unsubOps = operationsService.subscribe(updateAllStats);
+    const unsubLoc = locationSurveyService.subscribe(updateAllStats);
+    const unsubVend = lastMileVendorService.subscribe(updateAllStats);
     return () => {
       unsubCust();
       unsubOps();
+      unsubLoc();
+      unsubVend();
     };
   }, []);
 
@@ -95,6 +110,9 @@ export default function MasterSourceSync() {
         `Bills_Claims Tab: ${stats.bills} special forms & reimbursement vouchers`,
         `Tasks Tab: ${stats.tasks} field tasks`,
         `Leads Tab: ${stats.leads} scheme leads (PLI / SSA / IPPB)`,
+        `Survey_Properties Tab: ${stats.propertySurveys} doorstep property surveys`,
+        `Customer_Verification Tab: ${stats.customerVerifications} customer KYC/address verifications`,
+        `Sticker_Distribution Tab: ${stats.distributions} sticker & visiting card distribution logs`,
       ],
     });
   };
@@ -105,9 +123,9 @@ export default function MasterSourceSync() {
       title: `Confirm Sending ${period} Activity & Backup Summary via Gmail`,
       description: `This action will send an automated ${period} Operations & Database Backup Summary email from your authenticated Gmail account directly to Master Admin (Ektamahenmeena@gmail.com):`,
       details: [
-        `Recipient: Ektamahenmeena@gmail.com`,
+        `Recipient: Ektamahenmeena@gmail.com & mahen.comtech@gmail.com`,
         `Subject: [India Post CRM] ${period} Operations & Database Backup Summary - Dadabari S.O.`,
-        `Included Summary: ${stats.customers} Customers, ${stats.leads} Leads, ${stats.dailyEntries} Daily Article Logs, ${stats.bills} Reimbursement Bills, and ${stats.tasks} Field Tasks.`,
+        `Included Summary: ${stats.customers} Customers, ${stats.leads} Leads, ${stats.propertySurveys} Property Surveys, ${stats.customerVerifications} Verifications, ${stats.distributions} Distributions, ${stats.dailyEntries} Daily Logs.`,
       ],
     });
   };
@@ -124,10 +142,10 @@ export default function MasterSourceSync() {
       const token = await ensureWorkspaceToken();
 
       if (actionType === 'SYNC_SHEETS') {
-        setMessage('Syncing all 6 CRM & Operations datasets to Google Sheets...');
+        setMessage('Syncing all 9 CRM & Survey datasets to Google Sheets...');
         const res = await operationsService.syncAllToGoogleSheets(token);
         setMessage(
-          `Google Sheets Master Auto-Sync Complete! Synced ${res.totalRowsSynced} records across 6 tabs.`
+          `Google Sheets Master Auto-Sync Complete! Synced ${res.totalRowsSynced} records across 9 tabs.`
         );
       } else {
         const period = actionType === 'SEND_GMAIL_DAILY' ? 'Daily' : 'Weekly';
@@ -308,13 +326,13 @@ export default function MasterSourceSync() {
             className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
           >
             <Download size={15} />
-            <span>Download 6-Sheet Excel Backup (.XLSX)</span>
+            <span>Download 10-Sheet Excel Backup (.XLSX)</span>
           </button>
         </div>
       </div>
 
-      {/* 6-Dataset Inventory Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* 10-Dataset Inventory Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <div className="bg-white p-4 rounded-xl border border-slate-200">
           <span className="text-[11px] text-slate-500 font-semibold block">01. Customers</span>
           <span className="text-2xl font-black text-slate-900 font-mono tabular-nums mt-1 block">
@@ -349,6 +367,30 @@ export default function MasterSourceSync() {
           <span className="text-[11px] text-slate-500 font-semibold block">06. Scheme Leads</span>
           <span className="text-2xl font-black text-emerald-700 font-mono tabular-nums mt-1 block">
             {stats.leads}
+          </span>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-200">
+          <span className="text-[11px] text-slate-500 font-semibold block">07. Prop. Surveys</span>
+          <span className="text-2xl font-black text-slate-900 font-mono tabular-nums mt-1 block">
+            {stats.propertySurveys}
+          </span>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-200">
+          <span className="text-[11px] text-slate-500 font-semibold block">08. Cust. Verif.</span>
+          <span className="text-2xl font-black text-blue-700 font-mono tabular-nums mt-1 block">
+            {stats.customerVerifications}
+          </span>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-200">
+          <span className="text-[11px] text-slate-500 font-semibold block">09. Stickers/Cards</span>
+          <span className="text-2xl font-black text-red-800 font-mono tabular-nums mt-1 block">
+            {stats.distributions}
+          </span>
+        </div>
+        <div className="bg-white p-4 rounded-xl border border-slate-200">
+          <span className="text-[11px] text-slate-500 font-semibold block">10. Mile Vendors</span>
+          <span className="text-2xl font-black text-amber-800 font-mono tabular-nums mt-1 block">
+            {stats.lastMileVendors}
           </span>
         </div>
       </div>
@@ -414,7 +456,7 @@ export default function MasterSourceSync() {
               Google Sheets Master Database Auto-Sync
             </h2>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Automatically tracks every CRM mutation ({backupState.pendingChangesCount} pending changes in queue) and writes all 6 operational tabs (Customers, Properties, Daily_Entries, Bills_Claims, Tasks, Leads) to Google Sheets under <strong>Ektamahenmeena@gmail.com</strong>.
+              Automatically tracks every CRM mutation ({backupState.pendingChangesCount} pending changes in queue) and writes all 9 operational tabs (Customers, Properties, Daily_Entries, Bills_Claims, Tasks, Leads, Survey_Properties, Customer_Verification, Sticker_Distribution) to Google Sheets under <strong>Ektamahenmeena@gmail.com</strong>.
             </p>
 
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
@@ -452,7 +494,7 @@ export default function MasterSourceSync() {
               className="py-2.5 px-4 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer"
             >
               <Cloud size={15} />
-              <span>{syncing ? 'Syncing...' : 'Sync All 6 Datasets to Sheets'}</span>
+              <span>{syncing ? 'Syncing...' : 'Sync All 9 Datasets to Sheets'}</span>
             </button>
 
             <button

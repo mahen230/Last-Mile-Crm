@@ -141,12 +141,19 @@ export default function PrivateDevConsole() {
       ? (sessionStorage.getItem(SESSION_TOKEN_STORAGE_KEY) || '').trim()
       : '';
 
+  const isElevatedSession =
+    Boolean(userProfile?.role) &&
+    ['OWNER', 'MASTER_ADMIN', 'SUPER_ADMIN', 'DEVELOPER'].includes(
+      String(userProfile?.role || '').toUpperCase()
+    );
+
   const isAuthorized = useMemo(() => {
+    if (isElevatedSession) return true;
     if (urlToken) {
       return urlToken === DEV_CONSOLE_MASTER_TOKEN;
     }
     return storedSessionToken === DEV_CONSOLE_MASTER_TOKEN;
-  }, [urlToken, storedSessionToken]);
+  }, [isElevatedSession, urlToken, storedSessionToken]);
 
   const [activeTab, setActiveTab] = useState<ConsoleTabId>('ROLE_GATEWAY');
   const [auditLogs, setAuditLogs] = useState<DevConsoleAuditEntry[]>(() => readLocalAuditLogs());
@@ -336,8 +343,8 @@ export default function PrivateDevConsole() {
 
   const secretPortalUrl =
     typeof window !== 'undefined'
-      ? `${window.location.origin}/dev-command-secure-portal?token=${DEV_CONSOLE_MASTER_TOKEN}`
-      : `/dev-command-secure-portal?token=${DEV_CONSOLE_MASTER_TOKEN}`;
+      ? `${window.location.origin}/dev-command-secure-portal`
+      : `/dev-command-secure-portal`;
 
   const handleCopySecretUrl = async () => {
     try {
@@ -354,7 +361,7 @@ export default function PrivateDevConsole() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `xpokart_login_audit_logs_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `indiapost_login_audit_logs_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -463,7 +470,7 @@ export default function PrivateDevConsole() {
       title: 'Owner / Super Admin',
       person: 'Mahendra Kumar Meena (Exec Owner)',
       contact: '9460020640',
-      email: 'owner@xpokart.in',
+      email: 'mahen.comtech@gmail.com',
       beat: 'All 13 Hubs · Dadabari S.O.',
       badge: 'OWNER',
       gradient: 'from-amber-500 via-orange-600 to-red-700',
@@ -483,9 +490,9 @@ export default function PrivateDevConsole() {
     {
       id: 'DEV-01',
       title: 'Lead Systems Developer',
-      person: 'XPOKART Systems Architect',
+      person: 'India Post Systems Architect',
       contact: '9414170563',
-      email: 'dev@xpokart.in',
+      email: 'Ektamahenmeena@gmail.com',
       beat: 'API Health, DB Sync & RBAC',
       badge: 'DEVELOPER',
       gradient: 'from-indigo-600 via-violet-700 to-slate-900',
@@ -518,10 +525,10 @@ export default function PrivateDevConsole() {
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-2.5">
               <Terminal className="text-amber-400 shrink-0" size={26} />
-              <span>XPOKART Master Admin &amp; Developer Command Console</span>
+              <span>India Post Master Admin &amp; Developer Command Console</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-3xl">
-              Kota &amp; Baran Division (13 Pincode Hubs · Regional Operations 324001–325205) · Live RBAC switcher, multi-hub staff onboarding, and real-time storefront inventory gating.
+              Kota &amp; Baran Division (13 Pincode Hubs · Regional Operations 324001–325205) · Live RBAC switcher, multi-hub staff onboarding, and showcase controls.
             </p>
             {userProfile && (
               <div className="text-xs font-mono text-amber-300 pt-1 flex flex-wrap items-center gap-2">
@@ -743,7 +750,7 @@ export default function PrivateDevConsole() {
                   <div>
                     <h2 className="text-sm font-black text-white flex items-center gap-2">
                       <Activity size={15} className="text-emerald-400" />
-                      <span>Live Login Audit Logger (xpokart_login_audit_logs)</span>
+                      <span>Live Login Audit Logger (India Post)</span>
                     </h2>
                     <p className="text-[11px] text-slate-400">
                       Persisted securely with quota-safe truncation.
@@ -1296,7 +1303,7 @@ export default function PrivateDevConsole() {
                   <span>Developer Dynamic Feature Visibility &amp; White-Label Control</span>
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Postman &amp; GDS default to Property &amp; Members only. Toggle modules dynamically or jump to full per-user vendor scope controls.
+                  Postman &amp; GDS default to Property, Members, Showcase, Leads, Master Search &amp; Last-Mile Ops. Toggle modules dynamically or jump to full per-user scope controls.
                 </p>
               </div>
 
@@ -1308,8 +1315,19 @@ export default function PrivateDevConsole() {
                 >
                   <option value="POSTMAN">POSTMAN</option>
                   <option value="GDS">GDS</option>
+                  <option value="STAFF">STAFF</option>
                   <option value="POSTMASTER">POSTMASTER</option>
+                  <option value="SUB_POSTMASTER">SUB_POSTMASTER</option>
+                  <option value="OFFICE_INCHARGE">OFFICE_INCHARGE</option>
+                  <option value="BLOCK_INCHARGE">BLOCK_INCHARGE</option>
+                  <option value="CLUSTER_INCHARGE">CLUSTER_INCHARGE</option>
+                  <option value="SUBDIVISION_INCHARGE">SUBDIVISION_INCHARGE</option>
+                  <option value="LAST_MILE_SUPERVISOR">LAST_MILE_SUPERVISOR</option>
+                  <option value="MARKETING_TEAM">MARKETING_TEAM</option>
                   <option value="DISTRICT_MANAGER">DISTRICT_MANAGER</option>
+                  <option value="DISTRICT_INCHARGE">DISTRICT_INCHARGE</option>
+                  <option value="DIVISION_INCHARGE">DIVISION_INCHARGE</option>
+                  <option value="CIRCLE_INCHARGE">CIRCLE_INCHARGE</option>
                   <option value="CATEGORY_MANAGER">CATEGORY_MANAGER</option>
                 </select>
 
@@ -1319,7 +1337,7 @@ export default function PrivateDevConsole() {
                     featureVisibilityService.resetPostmanAndGdsToDefault(userProfile?.name || 'DEV_CONSOLE');
                     setStatusMessage({
                       type: 'success',
-                      text: 'Reset POSTMAN & GDS visibility defaults strictly to Property & Members Only.',
+                      text: 'Reset POSTMAN & GDS visibility defaults to Core Beat Workspace (Property, Members, Showcase, Leads, Master Search, Last-Mile Ops).',
                     });
                   }}
                   className="px-3.5 py-2 bg-red-700 hover:bg-red-600 text-white rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer"

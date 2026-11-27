@@ -116,10 +116,10 @@ const VERTICAL_META: Record<
     buttonClass: 'bg-indigo-700 hover:bg-indigo-800 text-white',
   },
   'Custom Staff / Partner Products': {
-    badge: 'VERTICAL 05 · VERIFIED STORES & DAILY ESSENTIALS',
-    title: 'Brand Outlets, Gangajal & Verified Local Stores',
+    badge: 'VERTICAL 05 · INDIA POST BULK CUSTOMERS & PROMOTED PRODUCTS',
+    title: 'Bulk Customers, Gangajal & Postal Hub Offerings',
     subtitle:
-      'Shop authentic daily essentials and brand catalog items — fulfilled via XPOKART Speed Post COD across 13 hubs.',
+      'Explore promoted products from registered India Post Bulk Customers & BNPL shippers — booked via Speed Post COD.',
     icon: Package,
     headerGradient: 'bg-gradient-to-r from-amber-700 via-orange-700 to-red-800 text-white shadow-lg',
     cardBorder: 'border-slate-200 hover:border-amber-300',
@@ -321,16 +321,16 @@ export default function PublicStorefrontSection({
     const msg =
       pitchLang === 'HI'
         ? `नमस्ते ${item.beatManagerName || item.staffName},\n` +
-          `XPOKART हाइपर-लोकल स्टोरफ्रंट (PIN ${item.pincode || selectedPincode}) से ऑर्डर / जानकारी:\n\n` +
-          `🏪 स्टोर: ${item.vendorName || item.staffName}\n` +
+          `India Post पोर्टल (PIN ${item.pincode || selectedPincode}) से ऑर्डर / जानकारी:\n\n` +
+          `📮 हब / प्रेषक: ${item.vendorName || item.staffName}\n` +
           `📦 उत्पाद / सेवा: ${item.title}\n` +
           `🔖 कोड (SKU): ${item.sku}\n` +
           `💰 मूल्य: ${priceLabel} (${item.codEligible ? 'Speed Post COD उपलब्ध' : 'Doorstep Service'} · Flat ₹15 Delivery)\n` +
           `📍 बीट क्षेत्र: ${item.beatNumber || 'Beat 2'}\n` +
-          `कृपया डोरस्टेप बुकिंग और ऑर्डर कन्फर्म करें। (${actionLabel})`
+          `कृपया डोरस्टेप बुकिंग और डिस्पैच कन्फर्म करें। (${actionLabel})`
         : `Namaste ${item.beatManagerName || item.staffName},\n` +
-          `Connecting via XPOKART Storefront (*${actionLabel}*):\n\n` +
-          `Store: ${item.vendorName || item.staffName}\n` +
+          `Connecting via India Post Official Showcase (*${actionLabel}*):\n\n` +
+          `Hub / Bulk Sender: ${item.vendorName || item.staffName}\n` +
           `Product / Service: ${item.title}\n` +
           `SKU: ${item.sku}\n` +
           `Price: ${priceLabel} (${item.codEligible ? 'Speed Post COD Supported' : 'Doorstep Service'} · Flat ₹15 Delivery)\n` +
@@ -357,8 +357,8 @@ export default function PublicStorefrontSection({
     const defaultPrice = store.category === 'eMitra/CSC' ? 100 : 499;
     return {
       id: `COMM-PROD-${store.id}`,
-      sku: `XPD-${store.category.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4)}-${store.cleanBeatNo}`,
-      title: `${store.storeName} · Doorstep Order & Delivery`,
+      sku: `INP-${store.category.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4)}-${store.cleanBeatNo}`,
+      title: `${store.storeName} · Doorstep Order & Dispatch`,
       vertical: 'Custom Staff / Partner Products',
       pricingModel: 'Fixed Price',
       productType: store.category === 'eMitra/CSC' || store.category === 'Services' ? 'Service' : 'Physical Item',
@@ -410,12 +410,12 @@ export default function PublicStorefrontSection({
     const targetPhone = resolveTargetWhatsapp(`91${waDigits || '8769706002'}`);
     const msg =
       pitchLang === 'HI'
-        ? `नमस्ते ${beatMeta.staffName} (XPOKART Hub Desk),\n` +
+        ? `नमस्ते ${beatMeta.staffName} (India Post Hub Desk),\n` +
           `मैं *${store.storeName}* (${store.colony}, PIN ${store.pincode}) से India Post Speed Post COD के माध्यम से ऑर्डर / जानकारी चाहता हूँ।\n` +
-          `📍 बीट: ${beatMeta.beatNo} | ✅ 4-Factor Verified`
-        : `Namaste ${beatMeta.staffName} (XPOKART Hub Desk),\n` +
-          `I want to order/inquire from *${store.storeName}* (${store.colony}, PIN ${store.pincode}) via India Post Speed Post COD.\n` +
-          `Beat: ${beatMeta.beatNo} | Verified Store`;
+          `📍 बीट: ${beatMeta.beatNo} | ✅ Verified Hub`
+        : `Namaste ${beatMeta.staffName} (India Post Hub Desk),\n` +
+          `I want to inquire/book with *${store.storeName}* (${store.colony}, PIN ${store.pincode}) via India Post Speed Post COD.\n` +
+          `Beat: ${beatMeta.beatNo} | Verified Hub`;
     return `https://api.whatsapp.com/send?phone=${targetPhone}&text=${encodeURIComponent(msg)}`;
   };
 
@@ -506,18 +506,18 @@ export default function PublicStorefrontSection({
         <div className="bg-gradient-to-r from-slate-950 via-red-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-2">
             <div className="text-[11px] font-bold uppercase tracking-wider text-amber-300">
-              XPOKART — Verified Neighborhood Marketplace · PIN {selectedPincode}
+              India Post — Official Services &amp; Bulk Customer Hub · PIN {selectedPincode}
             </div>
             <h2 className="text-xl sm:text-2xl font-black tracking-tight" style={{ textWrap: 'balance' }}>
-              Verified Brand Stores, Speed Post COD &amp; Express Beat Delivery
+              India Post Services, Bulk Customer Offerings &amp; Speed Post COD
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-              Every verified neighborhood store maps directly to its designated Delivery Hub with flat ₹15 Beat delivery, fast local dispatch, and Speed Post COD support.
+              Every regional postal counter and bulk customer node maps directly to its designated Delivery Hub with Speed Post COD and Beat dispatch tracking.
             </p>
             {partnerFilterId && (
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 text-xs font-bold mt-1">
                 <UserCheck size={14} />
-                <span>Partner Storefront: {partnerFilterId}</span>
+                <span>Hub / Officer Filter: {partnerFilterId}</span>
                 <button
                   type="button"
                   onClick={() => setPartnerFilterId(undefined)}
@@ -536,7 +536,7 @@ export default function PublicStorefrontSection({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search Vendors, SKU, Beat..."
+                placeholder="Search Services, SKU, Beat..."
                 className="w-full pl-9 pr-12 py-2.5 bg-white/10 border border-white/20 rounded-xl text-xs text-white placeholder:text-slate-300 focus:bg-white focus:text-slate-900 focus:outline-none transition"
                 id="storefront-search-input"
               />
@@ -557,7 +557,7 @@ export default function PublicStorefrontSection({
               id="register-vendor-product-btn"
             >
               <Building2 size={15} />
-              <span>B2B &amp; Partner Portal</span>
+              <span>Bulk Customer Desk</span>
             </Link>
           </div>
         </div>
@@ -609,7 +609,7 @@ export default function PublicStorefrontSection({
                   storeTypeFilter === 'ALL' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                All Stores
+                All Hubs
               </button>
               <button
                 type="button"
@@ -618,7 +618,7 @@ export default function PublicStorefrontSection({
                   storeTypeFilter === 'BRAND_FRANCHISE' ? 'bg-red-700 text-white' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Brand Franchises
+                Bulk Customers
               </button>
               <button
                 type="button"
@@ -627,7 +627,7 @@ export default function PublicStorefrontSection({
                   storeTypeFilter === 'LOCAL_MERCHANT' ? 'bg-emerald-700 text-white' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Local Shops
+                Postal Nodes
               </button>
             </div>
           </div>
@@ -695,7 +695,7 @@ export default function PublicStorefrontSection({
                 className="px-3 py-1.5 rounded-lg font-bold bg-slate-900 hover:bg-slate-800 text-amber-300 flex items-center gap-1 whitespace-nowrap"
               >
                 <Building2 size={13} />
-                <span>Seller &amp; B2B Portal</span>
+                <span>Bulk Customer Desk</span>
               </Link>
             )}
           </div>
@@ -713,7 +713,7 @@ export default function PublicStorefrontSection({
                   : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
               }`}
             >
-              All Partner Verticals ({storeProducts.length})
+              All India Post Verticals ({storeProducts.length})
             </button>
             {ALL_PRODUCT_VERTICALS.map((vert) => {
               const count = storeProducts.filter((p) => p.vertical === vert).length;

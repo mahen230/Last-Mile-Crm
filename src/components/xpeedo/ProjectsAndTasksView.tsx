@@ -59,7 +59,7 @@ export default function ProjectsAndTasksView({
 
   // Project Form
   const [projTitle, setProjTitle] = useState('');
-  const [projClientId, setProjClientId] = useState(lockedClientId || 'client-xpeedo-ev');
+  const [projClientId, setProjClientId] = useState(lockedClientId || 'client-india-post');
   const [projDeptId, setProjDeptId] = useState('');
   const [projManager, setProjManager] = useState(userProfile?.name || 'Mahendra Kumar Meena');
   const [projPriority, setProjPriority] = useState<OpsProject['priority']>('High');
@@ -1018,12 +1018,12 @@ export default function ProjectsAndTasksView({
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Assignee</label>
                   <input
-                    list="xpeedo-staff-names"
+                    list="indiapost-staff-names"
                     value={taskAssignee}
                     onChange={(e) => setTaskAssignee(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg"
                   />
-                  <datalist id="xpeedo-staff-names">
+                  <datalist id="indiapost-staff-names">
                     {staffOptions.slice(0, 30).map((s) => (
                       <option key={s.id} value={s.name} />
                     ))}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Customer } from '../../types/models';
+import { Customer, POSTAL_SERVICE_TAG_OPTIONS } from '../../types/models';
 import { customerService } from '../../services/customerService';
 import { staffPermissionService } from '../../services/staffPermissionService';
 import { featureVisibilityService } from '../../services/featureVisibilityService';
@@ -8,11 +8,12 @@ import { useAuth } from '../auth/FirebaseAuthProvider';
 import { 
   Search, Filter, Plus, Download, Upload, Eye, Edit3, Target, Calendar, 
   AlertTriangle, CheckCircle2, Shield, Users, ArrowUpDown, MessageSquare,
-  UserCheck, Trash2, Lock, Sparkles, X, User, MapPin, Layers, LayoutGrid, List, Phone
+  UserCheck, Trash2, Lock, Sparkles, X, User, MapPin, Layers, LayoutGrid, List, Phone, Tag
 } from 'lucide-react';
 import CustomerProfileModal from './CustomerProfileModal';
 import AddCustomerModal from './AddCustomerModal';
 import DirectMessageModal from '../crm/DirectMessageModal';
+import { StaffAttributionLink } from '../common/StaffAttributionModal';
 import { 
   OFFICIAL_MAJOR_COLONIES,
   getHierarchyColoniesList,
@@ -36,6 +37,7 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
   const [selectedBeat, setSelectedBeat] = useState<string>('All');
   const [selectedStaffFilter, setSelectedStaffFilter] = useState<string>('All');
   const [selectedResidency, setSelectedResidency] = useState<string>('All');
+  const [selectedServiceTag, setSelectedServiceTag] = useState<string>('All');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [showImportModal, setShowImportModal] = useState(false);
   const [importCsvText, setImportCsvText] = useState('');
@@ -264,7 +266,8 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
       (c.remarks && c.remarks.toLowerCase().includes(s)) ||
       (c.address?.fullAddress && c.address.fullAddress.toLowerCase().includes(s)) ||
       (c.enteredByName && c.enteredByName.toLowerCase().includes(s)) ||
-      (c.assignedStaffName && c.assignedStaffName.toLowerCase().includes(s));
+      (c.assignedStaffName && c.assignedStaffName.toLowerCase().includes(s)) ||
+      (c.interestedServiceTags && c.interestedServiceTags.some((t) => t.toLowerCase().includes(s)));
 
     // 4. Hierarchical Colony & Sub-Sector filter
     const matchesColonyAndSector = matchCustomerToColonyAndSector(c, selectedColony, selectedSubSector);
@@ -286,7 +289,13 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
       else if (selectedResidency === 'Unmapped') matchesResidency = c.propertyMappingStatus === 'Unmapped / Pending Re-assignment' || !c.houseNo;
     }
 
-    return matchesSearch && matchesColonyAndSector && matchesBeat && matchesVerification && matchesConflict && matchesResidency;
+    const matchesServiceTag =
+      selectedServiceTag === 'All' ||
+      (c.interestedServiceTags &&
+        c.interestedServiceTags.some((t) => t.toLowerCase() === selectedServiceTag.toLowerCase())) ||
+      (c.financialInterest || '').toLowerCase().includes(selectedServiceTag.toLowerCase());
+
+    return matchesSearch && matchesColonyAndSector && matchesBeat && matchesVerification && matchesConflict && matchesResidency && matchesServiceTag;
   });
 
   // Sort (Default 'colony' sorts Colony Name ascending A to Z, then House/Plot Number ascending)
@@ -655,6 +664,28 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
             </select>
           </div>
 
+          {/* Service Tag Filter */}
+          <div className="flex items-center gap-1.5 sm:ml-1">
+            <span className="text-slate-500 font-semibold flex items-center gap-1">
+              <Tag size={12} className="text-red-700" /> Service:
+            </span>
+            <select
+              value={selectedServiceTag}
+              onChange={(e) => {
+                setSelectedServiceTag(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="py-1.5 px-2.5 rounded-xl border border-red-200 bg-red-50 text-red-900 font-bold text-xs focus:ring-2 focus:ring-red-600"
+            >
+              <option value="All">All Service Tags</option>
+              {POSTAL_SERVICE_TAG_OPTIONS.map((tag) => (
+                <option key={tag} value={tag}>
+                  {tag}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Admin Staff Filter Dropdown */}
           {isAdmin && (
             <div className="flex items-center gap-1.5 sm:ml-1">
@@ -818,6 +849,35 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
                             <span>PIN: <strong>{cust.pincode || '324009'}</strong></span>
                           </div>
                         </div>
+
+                        {cust.interestedServiceTags && cust.interestedServiceTags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pt-0.5">
+                            {cust.interestedServiceTags.slice(0, 3).map((tag) => (
+                              <span
+                                key={tag}
+                                className="px-2 py-0.5 rounded-md bg-red-50 border border-red-200 text-red-800 text-[10px] font-bold"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                            {cust.interestedServiceTags.length > 3 && (
+                              <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold">
+                                +{cust.interestedServiceTags.length - 3}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {(cust.staffAttribution || cust.submittedByStaffId || cust.enteredByName || cust.assignedStaffName) && (
+                          <div className="pt-0.5">
+                            <StaffAttributionLink
+                              attribution={cust.staffAttribution}
+                              staffId={cust.submittedByStaffId || cust.assignedStaffId}
+                              fallbackName={cust.enteredByName || cust.assignedStaffName}
+                              compact
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -995,6 +1055,23 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
                       {cust.fatherHusbandName && (
                         <div className="text-[11px] text-slate-400 font-normal">S/o {cust.fatherHusbandName}</div>
                       )}
+                      {cust.interestedServiceTags && cust.interestedServiceTags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {cust.interestedServiceTags.slice(0, 2).map((tag) => (
+                            <span
+                              key={tag}
+                              className="px-1.5 py-0.5 rounded bg-red-50 border border-red-200 text-red-800 text-[9px] font-bold"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                          {cust.interestedServiceTags.length > 2 && (
+                            <span className="text-[9px] font-bold text-slate-500">
+                              +{cust.interestedServiceTags.length - 2}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </td>
 
                     <td className="px-4 py-3 font-mono text-slate-800">
@@ -1027,13 +1104,16 @@ export default function CustomerList({ onAddLead, onAddFollowUp }: {
 
                     {/* Staff Ownership Column */}
                     <td className="px-4 py-3">
-                      {cust.enteredByName || cust.assignedStaffName || cust.enteredBy ? (
-                        <div>
-                          <div className="font-semibold text-slate-900 text-[11px]">
-                            {cust.enteredByName || cust.assignedStaffName || cust.enteredBy?.split('@')[0]}
-                          </div>
-                          <div className="text-[10px] text-slate-400 truncate max-w-[130px]">
-                            {cust.enteredBy || cust.assignedStaffEmail || 'Assigned'}
+                      {cust.staffAttribution || cust.submittedByStaffId || cust.enteredByName || cust.assignedStaffName || cust.enteredBy ? (
+                        <div className="space-y-0.5">
+                          <StaffAttributionLink
+                            attribution={cust.staffAttribution}
+                            staffId={cust.submittedByStaffId || cust.assignedStaffId}
+                            fallbackName={cust.enteredByName || cust.assignedStaffName || cust.enteredBy?.split('@')[0]}
+                            compact
+                          />
+                          <div className="text-[10px] text-slate-400 truncate max-w-[160px]">
+                            {cust.staffAttribution?.officeName || cust.enteredBy || cust.assignedStaffEmail || 'Assigned'}
                           </div>
                         </div>
                       ) : (

@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Customer } from '../../types/models';
+import { Customer, POSTAL_SERVICE_TAG_OPTIONS } from '../../types/models';
 import { customerService } from '../../services/customerService';
 import { addressVerificationService, AddressVerificationResult } from '../../services/addressVerificationService';
-import { X, AlertTriangle, MapPin, Sparkles, Layers, CheckCircle2, Zap } from 'lucide-react';
+import { X, AlertTriangle, MapPin, Sparkles, Layers, CheckCircle2, Zap, Tag, Plus } from 'lucide-react';
 import { normalizeMobile } from '../../data/initialMasterData';
 import { UPDATED_STAFF_LIST } from '../../data/updatedStaffData';
 import { KOTA_POST_OFFICE_OPTIONS } from '../../data/officesData';
 import { useAuth } from '../auth/FirebaseAuthProvider';
 import { staffPermissionService } from '../../services/staffPermissionService';
+import { commonDataCentreService } from '../../services/commonDataCentreService';
+import { SearchConsoleDuplicatePanel } from '../common/SearchConsoleDuplicatePanel';
 import { 
   OFFICIAL_MAJOR_COLONIES,
   getHierarchyColoniesList,
@@ -65,6 +67,13 @@ export default function AddCustomerModal({
         permLandmark?: string;
         permArea?: string;
         permPincode?: string;
+        panHouseDoorFlatNo?: string;
+        panBuildingPremises?: string;
+        panStreetRoadLane?: string;
+        panAreaLocalityPostOffice?: string;
+        panPincode?: string;
+        panCityDistrict?: string;
+        panState?: string;
       }
     >
   >({
@@ -82,29 +91,67 @@ export default function AddCustomerModal({
     landmark: '',
     pincode: defaultPincode,
     subOfficeMapping: defaultSubOffice,
-    houseNo: '',
     sameAsResidential: true,
     permHouseNo: '',
     permStreet: '',
     permLandmark: '',
     permArea: 'Keshavpura',
     permPincode: defaultPincode,
+    panHouseDoorFlatNo: '',
+    panBuildingPremises: '',
+    panStreetRoadLane: '',
+    panAreaLocalityPostOffice: 'Keshavpura, Dadabari S.O.',
+    panPincode: defaultPincode,
+    panCityDistrict: 'Kota',
+    panState: 'Rajasthan',
     beatNo: defaultBeatNo,
     officeId: userProfile?.officeId || 'DADABARI_SO',
     verificationStatus: 'Field Confirmed',
     financialInterest: '',
+    interestedServiceTags: [],
     remarks: '',
   });
 
   const [saving, setSaving] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ mobile?: string }>({});
   const [autoMappedNotice, setAutoMappedNotice] = useState<string | null>(null);
   const [isCustomColony, setIsCustomColony] = useState(false);
   const [isCustomSector, setIsCustomSector] = useState(false);
   const [isCustomBlock, setIsCustomBlock] = useState(false);
   const [customBlockText, setCustomBlockText] = useState('');
+  const [customServiceTagInput, setCustomServiceTagInput] = useState('');
   const [aiVerificationResult, setAiVerificationResult] = useState<AddressVerificationResult | null>(null);
   const [isVerifyingAddress, setIsVerifyingAddress] = useState(false);
+
+  const toggleServiceTag = (tag: string) => {
+    setFormData((prev) => {
+      const current = prev.interestedServiceTags || [];
+      const exists = current.includes(tag);
+      const next = exists ? current.filter((t) => t !== tag) : [...current, tag];
+      return {
+        ...prev,
+        interestedServiceTags: next,
+        financialInterest: next.length > 0 ? next.join(', ') : prev.financialInterest,
+      };
+    });
+  };
+
+  const addCustomServiceTag = () => {
+    const clean = customServiceTagInput.trim();
+    if (!clean) return;
+    setFormData((prev) => {
+      const current = prev.interestedServiceTags || [];
+      if (current.some((t) => t.toLowerCase() === clean.toLowerCase())) return prev;
+      const next = [...current, clean];
+      return {
+        ...prev,
+        interestedServiceTags: next,
+        financialInterest: next.join(', '),
+      };
+    });
+    setCustomServiceTagInput('');
+  };
 
   const handleRunAiVerification = async () => {
     setIsVerifyingAddress(true);
@@ -331,10 +378,20 @@ export default function AddCustomerModal({
         permLandmark: customerToEdit.permanentAddress?.landmark || customerToEdit.landmark || '',
         permArea: customerToEdit.permanentAddress?.area || cleanCol,
         permPincode: customerToEdit.permanentAddress?.pincode || pin,
+        panHouseDoorFlatNo: customerToEdit.panAddress?.houseDoorFlatNo || hNo,
+        panBuildingPremises: customerToEdit.panAddress?.buildingPremises || '',
+        panStreetRoadLane: customerToEdit.panAddress?.streetRoadLane || customerToEdit.street || '',
+        panAreaLocalityPostOffice:
+          customerToEdit.panAddress?.areaLocalityPostOffice ||
+          `${cleanCol}, ${customerToEdit.subOfficeMapping || 'Dadabari S.O.'}`,
+        panPincode: customerToEdit.panAddress?.pincode || pin,
+        panCityDistrict: customerToEdit.panAddress?.cityDistrict || 'Kota',
+        panState: customerToEdit.panAddress?.state || 'Rajasthan',
         beatNo: customerToEdit.beatNo || '2',
         officeId: customerToEdit.officeId || 'DADABARI_SO',
         verificationStatus: customerToEdit.verificationStatus || 'Field Confirmed',
         financialInterest: customerToEdit.financialInterest || '',
+        interestedServiceTags: customerToEdit.interestedServiceTags || [],
         remarks: customerToEdit.remarks || '',
       });
     } else {
@@ -364,19 +421,68 @@ export default function AddCustomerModal({
         permLandmark: '',
         permArea: defaultCol,
         permPincode: defaultPin,
+        panHouseDoorFlatNo: '',
+        panBuildingPremises: '',
+        panStreetRoadLane: '',
+        panAreaLocalityPostOffice: `${defaultCol}, Dadabari S.O.`,
+        panPincode: defaultPin,
+        panCityDistrict: 'Kota',
+        panState: 'Rajasthan',
         beatNo: defaultBeatNo,
         officeId: 'DADABARI_SO',
         verificationStatus: 'Field Confirmed',
         financialInterest: '',
+        interestedServiceTags: [],
         remarks: '',
       }));
     }
   }, [customerToEdit, isOpen]);
 
+  useEffect(() => {
+    setSubmitError(null);
+  }, [customerToEdit, isOpen]);
+
+  const liveCustomerDupCheck = useMemo(() => {
+    const mob = (formData.mobile || '').trim();
+    const hNo = (formData.panHouseDoorFlatNo || formData.houseNo || '').trim();
+    const area = (formData.colony || formData.area || '').trim();
+    if (mob.replace(/\D/g, '').length < 10 && (!hNo || !area) && !(formData.name || '').trim()) {
+      return { hasMatch: false, matchReasons: [], matches: [] };
+    }
+    return commonDataCentreService.detectCustomerDuplicates({
+      excludeId: customerToEdit?.id,
+      masterId: customerToEdit ? formData.masterId : undefined,
+      mobile: mob,
+      name: formData.name,
+      houseNo: hNo,
+      colony: area,
+      propertyId: formData.propertyId,
+    });
+  }, [
+    customerToEdit,
+    formData.masterId,
+    formData.mobile,
+    formData.name,
+    formData.panHouseDoorFlatNo,
+    formData.houseNo,
+    formData.colony,
+    formData.area,
+    formData.propertyId,
+  ]);
+
+  const layer2ScopeCheck = useMemo(() => {
+    return staffPermissionService.isTerritoryAllowedForProperty(userProfile, {
+      beatNo: formData.beatNo || defaultBeatNo,
+      pincode: formData.pincode || defaultPincode,
+      colony: formData.colony || formData.area || '',
+    });
+  }, [userProfile, formData.beatNo, formData.pincode, formData.colony, formData.area, defaultBeatNo, defaultPincode]);
+
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
     if (!isFormValid) return;
 
     setSaving(true);
@@ -460,9 +566,27 @@ export default function AddCustomerModal({
       pincode: pin,
       subOfficeMapping: so,
       sameAsResidential: formData.sameAsResidential ?? true,
+      interestedServiceTags: Array.from(
+        new Set(
+          (formData.interestedServiceTags || [])
+            .map((t) => t.trim())
+            .filter(Boolean)
+        )
+      ),
       residentialAddress: resAddressObj,
       permanentAddress: permAddressObj,
       address: resAddressObj,
+      panAddress: {
+        houseDoorFlatNo: (formData.panHouseDoorFlatNo || houseNoClean).trim(),
+        buildingPremises: (formData.panBuildingPremises || '').trim() || undefined,
+        streetRoadLane: (formData.panStreetRoadLane || formData.street || '').trim() || undefined,
+        areaLocalityPostOffice: (
+          formData.panAreaLocalityPostOffice || `${colonyClean}, ${so}`
+        ).trim(),
+        pincode: (formData.panPincode || pin).trim(),
+        cityDistrict: (formData.panCityDistrict || 'Kota').trim(),
+        state: (formData.panState || 'Rajasthan').trim(),
+      },
     };
 
     if (!customerToEdit && !quotaCheck.allowed) {
@@ -481,34 +605,43 @@ export default function AddCustomerModal({
       customerPayload.assignedStaffEmail = userProfile.email;
     }
 
-    const res = customerService.addOrUpdateCustomer(
+    const commitRes = commonDataCentreService.verifyAndCommitCustomer(
+      userProfile,
       customerPayload,
-      customerToEdit ? 'CRM Customer Edit' : 'CRM Structured Colony-Beat Customer Entry'
+      {
+        remark: formData.remarks,
+        isIntentionalEdit: Boolean(customerToEdit),
+        source: customerToEdit ? 'CRM Customer Edit' : 'CRM Structured Colony-Beat Customer Entry',
+      }
     );
 
-    // Auto-evaluate address against postal records & log to Address_Exceptions if discrepancies exist
-    if (res.customer) {
-      addressVerificationService.verifyAddress(
-        {
-          customerId: res.customer.id,
-          customerName: res.customer.name,
-          customerMobile: res.customer.mobile,
-          houseNo: res.customer.houseNo,
-          colony: res.customer.colony || res.customer.area,
-          sector: res.customer.sector,
-          landmark: res.customer.landmark,
-          pincode: res.customer.pincode,
-          beatNo: res.customer.beatNo,
-          subOffice: res.customer.subOfficeMapping,
-          rawInput: res.customer.address?.fullAddress,
-          source: 'MANUAL_ENTRY',
-        },
-        { recordExceptionIfFlawed: true }
-      ).catch((err) => console.warn('Background address verify error:', err));
+    if (!commitRes.success || !commitRes.data) {
+      setSubmitError(commitRes.error || 'Three-Layer Verification failed.');
+      setSaving(false);
+      return;
     }
 
+    // Auto-evaluate address against postal records & log to Address_Exceptions if discrepancies exist
+    addressVerificationService.verifyAddress(
+      {
+        customerId: commitRes.data.id,
+        customerName: commitRes.data.name,
+        customerMobile: commitRes.data.mobile,
+        houseNo: commitRes.data.houseNo,
+        colony: commitRes.data.colony || commitRes.data.area,
+        sector: commitRes.data.sector,
+        landmark: commitRes.data.landmark,
+        pincode: commitRes.data.pincode,
+        beatNo: commitRes.data.beatNo,
+        subOffice: commitRes.data.subOfficeMapping,
+        rawInput: commitRes.data.address?.fullAddress,
+        source: 'MANUAL_ENTRY',
+      },
+      { recordExceptionIfFlawed: true }
+    ).catch((err) => console.warn('Background address verify error:', err));
+
     setSaving(false);
-    if (onSaved) onSaved(res.customer);
+    if (onSaved) onSaved(commitRes.data);
     onClose();
   };
 
@@ -570,6 +703,20 @@ export default function AddCustomerModal({
               {errors.mobile && <p className="text-red-600 text-[10px] mt-1">{errors.mobile}</p>}
             </div>
           </div>
+
+          {liveCustomerDupCheck.hasMatch && (
+            <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-950 text-xs flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">
+                  Already Exists / Duplicate Match ({liveCustomerDupCheck.matches.length} existing record{liveCustomerDupCheck.matches.length > 1 ? 's' : ''})
+                </p>
+                <p className="text-[11px] text-amber-800 mt-0.5">
+                  Matched ({liveCustomerDupCheck.matchReasons.join(' · ')}): {liveCustomerDupCheck.matches.slice(0, 2).map((m) => `${m.name} (${m.mobile}, ${m.houseNo || m.colony})`).join(' · ')}. Complete the Remark section below to commit.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div>
@@ -833,6 +980,104 @@ export default function AddCustomerModal({
                   onChange={(e) => setFormData({ ...formData, landmark: e.target.value })}
                   className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-xs"
                 />
+              </div>
+            </div>
+
+            {/* PAN-Aligned Structured Customer Address Fields */}
+            <div className="p-3 bg-white rounded-xl border border-slate-200 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold text-slate-800 text-[11px]">
+                  PAN Data Address Format (Structured Compliance Fields)
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      panHouseDoorFlatNo: prev.houseNo || prev.panHouseDoorFlatNo || '',
+                      panStreetRoadLane: prev.street || prev.panStreetRoadLane || '',
+                      panAreaLocalityPostOffice: `${prev.colony || prev.area || 'Keshavpura'}, ${prev.subOfficeMapping || 'Dadabari S.O.'}`,
+                      panPincode: prev.pincode || '324009',
+                      panCityDistrict: prev.panCityDistrict || 'Kota',
+                      panState: prev.panState || 'Rajasthan',
+                    }))
+                  }
+                  className="text-[10px] font-bold text-slate-700 hover:text-slate-950 underline cursor-pointer"
+                >
+                  Sync from Colony-Beat Fields
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 mb-0.5">House / Door / Flat No.</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. KH-222 / Flat 104"
+                    value={formData.panHouseDoorFlatNo || ''}
+                    onChange={(e) => setFormData({ ...formData, panHouseDoorFlatNo: e.target.value })}
+                    className="w-full p-2 border border-slate-300 rounded-lg text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Building / Premises</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Shanti Bhawan / Tower B"
+                    value={formData.panBuildingPremises || ''}
+                    onChange={(e) => setFormData({ ...formData, panBuildingPremises: e.target.value })}
+                    className="w-full p-2 border border-slate-300 rounded-lg text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Street / Road / Lane</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Sector 6 Main Road"
+                    value={formData.panStreetRoadLane || ''}
+                    onChange={(e) => setFormData({ ...formData, panStreetRoadLane: e.target.value })}
+                    className="w-full p-2 border border-slate-300 rounded-lg text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Area / Locality / Post Office</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Keshavpura, Dadabari S.O."
+                    value={formData.panAreaLocalityPostOffice || ''}
+                    onChange={(e) => setFormData({ ...formData, panAreaLocalityPostOffice: e.target.value })}
+                    className="w-full p-2 border border-slate-300 rounded-lg text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 mb-0.5">PIN Code</label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={formData.panPincode || formData.pincode || '324009'}
+                    onChange={(e) => setFormData({ ...formData, panPincode: e.target.value })}
+                    className="w-full p-2 border border-slate-300 rounded-lg text-xs font-mono"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-0.5">City / District</label>
+                    <input
+                      type="text"
+                      value={formData.panCityDistrict || 'Kota'}
+                      onChange={(e) => setFormData({ ...formData, panCityDistrict: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded-lg text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-0.5">State</label>
+                    <input
+                      type="text"
+                      value={formData.panState || 'Rajasthan'}
+                      onChange={(e) => setFormData({ ...formData, panState: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded-lg text-xs"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1106,6 +1351,75 @@ export default function AddCustomerModal({
             </div>
           </div>
 
+          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                <Tag size={14} className="text-red-700" />
+                <span>Interested India Post Service Tags (Multi-Select)</span>
+              </label>
+              <span className="text-[10px] font-semibold text-slate-500">
+                {(formData.interestedServiceTags || []).length} tag(s) selected
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {POSTAL_SERVICE_TAG_OPTIONS.map((tag) => {
+                const selected = (formData.interestedServiceTags || []).includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => toggleServiceTag(tag)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
+                      selected
+                        ? 'bg-red-700 text-white border-red-800 shadow-2xs'
+                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                    }`}
+                  >
+                    {selected ? '✓ ' : '+ '}
+                    {tag}
+                  </button>
+                );
+              })}
+              {(formData.interestedServiceTags || [])
+                .filter((t) => !POSTAL_SERVICE_TAG_OPTIONS.includes(t as any))
+                .map((customTag) => (
+                  <button
+                    key={customTag}
+                    type="button"
+                    onClick={() => toggleServiceTag(customTag)}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold border bg-indigo-700 text-white border-indigo-800 cursor-pointer"
+                  >
+                    ✓ {customTag} ×
+                  </button>
+                ))}
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={customServiceTagInput}
+                onChange={(e) => setCustomServiceTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addCustomServiceTag();
+                  }
+                }}
+                placeholder="Add custom service tag (e.g. NPS, Sovereign Gold Bond, Bulk Parcel)..."
+                className="flex-1 px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs"
+              />
+              <button
+                type="button"
+                onClick={addCustomServiceTag}
+                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <Plus size={13} />
+                <span>Add Tag</span>
+              </button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">Financial / Postal Scheme Interest</label>
@@ -1127,6 +1441,24 @@ export default function AddCustomerModal({
               />
             </div>
           </div>
+
+          <SearchConsoleDuplicatePanel
+            entityType="CUSTOMER"
+            customerCheck={liveCustomerDupCheck}
+            remark={formData.remarks || ''}
+            onRemarkChange={(val) => setFormData({ ...formData, remarks: val })}
+            forceShowRemark={Boolean(customerToEdit)}
+            layer1Ok={Boolean(isFormValid && (!formData.pincode || /^\d{6}$/.test(formData.pincode.trim())))}
+            layer2Ok={layer2ScopeCheck.allowed}
+            layer2Reason={layer2ScopeCheck.reason}
+          />
+
+          {submitError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-800 text-xs flex items-center gap-2 font-medium">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
+              <span>{submitError}</span>
+            </div>
+          )}
 
           <div className="pt-4 flex justify-end gap-2 border-t border-slate-200">
             <button

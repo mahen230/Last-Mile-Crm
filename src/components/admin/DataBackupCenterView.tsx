@@ -19,6 +19,10 @@ import {
   DataExportHistoryRecord,
   DataImportValidationReport,
 } from '../../types/models';
+import {
+  CANONICAL_BACKUP_SYNC_EMAILS,
+  dataConsolidationService,
+} from '../../services/dataConsolidationService';
 
 export default function DataBackupCenterView() {
   const { userProfile } = useAuth();
@@ -28,7 +32,17 @@ export default function DataBackupCenterView() {
   const [notice, setNotice] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   // Export filters
-  const [dataset, setDataset] = useState<'HouseMaster' | 'StreetMaster' | 'Surveys' | 'CustomerMaster' | 'LeadsPool' | 'OrgHierarchy'>('HouseMaster');
+  const [dataset, setDataset] = useState<
+    | 'HouseMaster'
+    | 'StreetMaster'
+    | 'Surveys'
+    | 'PropertySurveys'
+    | 'CustomerVerifications'
+    | 'StickerDistribution'
+    | 'CustomerMaster'
+    | 'LeadsPool'
+    | 'OrgHierarchy'
+  >('HouseMaster');
   const [pinFilter, setPinFilter] = useState('');
 
   // Controlled Import state
@@ -42,6 +56,9 @@ export default function DataBackupCenterView() {
     message: string;
     restoredCounts?: Record<string, number>;
   } | null>(null);
+
+  const [consolidationConfirm, setConsolidationConfirm] = useState(false);
+  const [consolidationTick, setConsolidationTick] = useState(0);
 
   useEffect(() => {
     const sync = () => {
@@ -103,6 +120,65 @@ export default function DataBackupCenterView() {
           Consent: s.consentCaptured ? 'YES' : 'NO',
           GpsStatus: s.gpsStatus,
           VerifiedBy: s.verifiedBy || '',
+        }));
+    }
+    if (dataset === 'PropertySurveys') {
+      return locationSurveyService
+        .getPropertySurveys(userProfile)
+        .filter((p) => !pin || p.officePincode.includes(pin))
+        .map((p) => ({
+          SurveyID: p.id,
+          PropertyType: p.propertyType,
+          HouseOrBuildingNo: p.houseOrBuildingNo,
+          Address: p.address,
+          Colony: p.colony,
+          Landmark: p.landmark || '',
+          OwnerOrOccupant: p.ownerOrOccupantName,
+          Mobile: p.ownerOrOccupantMobile || '',
+          PIN: p.officePincode,
+          Beat: p.beatNo,
+          GpsStatus: p.gpsStatus,
+          Status: p.verificationStatus,
+          SurveyedBy: p.surveyedByName,
+        }));
+    }
+    if (dataset === 'CustomerVerifications') {
+      return locationSurveyService
+        .getCustomerVerifications(userProfile)
+        .filter((v) => !pin || v.officePincode.includes(pin))
+        .map((v) => ({
+          VerificationID: v.id,
+          CustomerName: v.customerName,
+          Mobile: v.customerMobile,
+          HouseRef: v.houseOrPropertyRef || '',
+          Colony: v.colony,
+          PIN: v.officePincode,
+          Beat: v.beatNo,
+          IDVerified: v.idVerified ? 'YES' : 'NO',
+          AddressVerified: v.addressVerified ? 'YES' : 'NO',
+          OccupancyVerified: v.occupancyVerified ? 'YES' : 'NO',
+          Status: v.verificationStatus,
+          VerifiedBy: v.verifiedByStaffName,
+          VerifiedAt: v.verifiedAt || '',
+        }));
+    }
+    if (dataset === 'StickerDistribution') {
+      return locationSurveyService
+        .getDistributionRecords(userProfile)
+        .filter((d) => !pin || d.officePincode.includes(pin))
+        .map((d) => ({
+          DistributionID: d.id,
+          ItemType: d.itemType,
+          Quantity: d.quantity,
+          RecipientName: d.recipientName,
+          Category: d.recipientCategory,
+          Mobile: d.recipientMobile || '',
+          HouseOrShopNo: d.houseOrShopNo,
+          Colony: d.colony,
+          PIN: d.officePincode,
+          Beat: d.beatNo,
+          Date: d.distributionDate,
+          DistributedBy: d.distributedByStaffName,
         }));
     }
     if (dataset === 'CustomerMaster') {
@@ -301,6 +377,9 @@ export default function DataBackupCenterView() {
                 <option value="HouseMaster">House Master Registry</option>
                 <option value="StreetMaster">Street Master Registry</option>
                 <option value="Surveys">Doorstep Surveys Log</option>
+                <option value="PropertySurveys">Survey Tab 1: Property Surveys</option>
+                <option value="CustomerVerifications">Survey Tab 2: Customer Verifications</option>
+                <option value="StickerDistribution">Survey Tab 3: Sticker &amp; Visiting Card Distribution</option>
                 <option value="CustomerMaster">Customer Master</option>
                 <option value="LeadsPool">Leads Pool &amp; Clusters</option>
                 <option value="OrgHierarchy">Org Hierarchy (Circle to BO)</option>
@@ -522,6 +601,91 @@ export default function DataBackupCenterView() {
                 <div className="mt-1">{restoreResult.message}</div>
               </div>
             )}
+          </div>
+
+          <div
+            key={consolidationTick}
+            className="md:col-span-2 bg-white rounded-xl border border-slate-200 p-5 space-y-3"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-black text-slate-900">
+                  Admin Sync Compatibility &amp; Non-Destructive Brand Reset
+                </h2>
+                <p className="text-slate-600 mt-0.5">
+                  Primary &amp; Mirror Backup Sync:{' '}
+                  <span className="font-mono text-slate-900">
+                    {CANONICAL_BACKUP_SYNC_EMAILS.join(' · ')}
+                  </span>
+                </p>
+              </div>
+              {!consolidationConfirm ? (
+                <button
+                  type="button"
+                  onClick={() => setConsolidationConfirm(true)}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  Consolidate into India Post &amp; Reset Other Brands
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setConsolidationConfirm(false)}
+                    className="px-3 py-1.5 border border-slate-300 rounded-lg font-bold text-slate-700 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const out = dataConsolidationService.consolidateAndResetNonIndiaPostBrands(
+                        userProfile?.name || 'Master Admin'
+                      );
+                      setConsolidationConfirm(false);
+                      setConsolidationTick((t) => t + 1);
+                      setNotice({
+                        type: 'ok',
+                        text: `Consolidated ${out.consolidatedIntoIndiaPost.propertiesMoved} properties, ${out.consolidatedIntoIndiaPost.staffProfilesMoved} staff, ${out.consolidatedIntoIndiaPost.customersMoved} customers, ${out.consolidatedIntoIndiaPost.leadsMoved} leads into India Post and reset non-India-Post operational records.`,
+                      });
+                    }}
+                    className="px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-lg font-bold cursor-pointer"
+                  >
+                    Confirm Reset
+                  </button>
+                </div>
+              )}
+            </div>
+            {(() => {
+              const status = dataConsolidationService.previewConsolidationStatus();
+              return (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                  <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                    <div className="text-slate-500">India Post Properties</div>
+                    <div className="font-bold text-slate-900 tabular-nums">{status.indiaPostCounts.properties}</div>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                    <div className="text-slate-500">India Post Staff</div>
+                    <div className="font-bold text-slate-900 tabular-nums">{status.indiaPostCounts.staff}</div>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                    <div className="text-slate-500">India Post Customers</div>
+                    <div className="font-bold text-slate-900 tabular-nums">{status.indiaPostCounts.customers}</div>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                    <div className="text-slate-500">Pending Other Brand Items</div>
+                    <div className="font-bold text-slate-900 tabular-nums">
+                      {status.otherBrandsCounts.properties +
+                        status.otherBrandsCounts.staff +
+                        status.otherBrandsCounts.customers +
+                        status.otherBrandsCounts.leads +
+                        status.otherBrandsCounts.tasks +
+                        status.otherBrandsCounts.workReports}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

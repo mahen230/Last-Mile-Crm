@@ -38,7 +38,7 @@ export default function StoreFooter({
   return (
     <footer
       className="mt-16 bg-slate-950 text-slate-300 border-t border-slate-800 rounded-3xl overflow-hidden shadow-2xl"
-      id="xpokart-store-footer"
+      id="india-post-store-footer"
     >
       {/* Top Sovereign Trust Ribbon */}
       <div className="bg-gradient-to-r from-red-950 via-red-900 to-slate-950 border-b border-red-800/60 px-5 sm:px-8 py-4">
@@ -49,7 +49,7 @@ export default function StoreFooter({
             </div>
             <div>
               <div className="text-sm font-black text-white tracking-tight flex items-center gap-2">
-                <span>XPOKART · Sovereign Hyper-Local Storefront</span>
+                <span>India Post · Last-Mile &amp; Bulk Customer Hub</span>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-red-700 text-white font-bold">
                   PIN {activePincode}
                 </span>
@@ -296,7 +296,7 @@ export default function StoreFooter({
           <div className="grid grid-cols-2 gap-2 pt-1">
             <a
               href={`https://api.whatsapp.com/send?phone=${activeHub.whatsappPhone}&text=${encodeURIComponent(
-                `Namaste XPOKART Hub Desk (${activeHub.officeName} · PIN ${activeHub.pincode}), I need order assistance.`
+                `Namaste India Post Hub Desk (${activeHub.officeName} · PIN ${activeHub.pincode}), I need assistance with a postal service or bulk dispatch.`
               )}`}
               target="_blank"
               rel="noopener noreferrer"
@@ -310,17 +310,17 @@ export default function StoreFooter({
               className="py-2 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold flex items-center justify-center gap-1 transition text-[11px]"
             >
               <Building2 size={12} className="text-amber-400" />
-              <span>B2B Partner Portal</span>
+              <span>Bulk Customer Desk</span>
             </Link>
           </div>
         </div>
       </div>
 
-      {/* Bottom Bar: Copyright, B2B Portal & Staff Command Gateway */}
+      {/* Bottom Bar: Copyright, Bulk Desk & Staff Command Gateway */}
       <div className="bg-black/80 border-t border-slate-800 px-6 sm:px-8 py-4">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-400">
           <div>
-            © 2026 XPOKART · {activeHub.officeName} (PIN {activeHub.pincode}) · All Rights Reserved.
+            © 2026 India Post · {activeHub.officeName} (PIN {activeHub.pincode}) · Department of Posts Showcase
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -329,7 +329,7 @@ export default function StoreFooter({
               className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 transition"
             >
               <Building2 size={11} />
-              <span>B2B &amp; Wholesale Portal</span>
+              <span>Bulk Customer &amp; BNPL Desk</span>
             </Link>
             <span>·</span>
             <button
@@ -341,14 +341,14 @@ export default function StoreFooter({
               <span>Staff Login</span>
             </button>
             <span>·</span>
-            <a
-              href="/dev-command-secure-portal?token=xpokart_master_key_9460020640"
+            <Link
+              to="/login"
               className="text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 transition"
-              title="Restricted Super Admin & Developer Portal"
+              title="India Post Master Admin & Operations Sign-In"
             >
               <Crown size={12} />
-              <span>Master Gateway</span>
-            </a>
+              <span>Operations Portal</span>
+            </Link>
           </div>
         </div>
       </div>

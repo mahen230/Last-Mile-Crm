@@ -63,7 +63,7 @@ export default function CustomerRegisterPage() {
       const customerProfile = {
         uid: `cust-${Date.now()}`,
         name: cleanName,
-        email: cleanEmail || `${cleanMobile}@customer.xpeedo.in`,
+        email: cleanEmail || `${cleanMobile}@indiapost-portal.in`,
         mobile: cleanMobile,
         role: 'CUSTOMER' as const,
         brandId: selectedBrand.slug,
@@ -247,7 +247,7 @@ export default function CustomerRegisterPage() {
       </div>
 
       <footer className="max-w-xl w-full mx-auto text-center text-xs text-slate-500 pt-4">
-        Xpeedo Last Mile &amp; Department of Post Execution Engine · Secure OAuth &amp; RBAC Architecture
+        India Post — Last-Mile Operations &amp; Bulk Customer Hub · Secure OAuth &amp; RBAC Architecture
       </footer>
     </div>
   );

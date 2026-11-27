@@ -331,7 +331,7 @@ export default function IndiaPostStaffRolesPromotionsView({
     const cleanEmpId =
       createEmployeeId.trim().toUpperCase() || `IP-KOTA-${cleanMobile.slice(-4)}`;
     const cleanEmail =
-      createEmail.trim().toLowerCase() || `${cleanEmpId.toLowerCase()}@indiapost.xpeedo.in`;
+      createEmail.trim().toLowerCase() || `${cleanEmpId.toLowerCase()}@indiapost-portal.in`;
     let created: StaffProfile;
     try {
       const result = staffPermissionService.upsertStaffWithAutoOfficeAndBeat({
@@ -1107,7 +1107,7 @@ export default function IndiaPostStaffRolesPromotionsView({
                     type="email"
                     value={createEmail}
                     onChange={(e) => setCreateEmail(e.target.value)}
-                    placeholder="staff@indiapost.xpeedo.in"
+                    placeholder="staff@indiapost-portal.in"
                     className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg"
                   />
                 </div>

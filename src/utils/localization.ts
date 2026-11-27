@@ -1,4 +1,4 @@
-// Localization module for XPOKART (Kota & Baran Division 13-Pincode Hub Network)
+// Localization module for India Post (Kota & Baran Division 13-Pincode Hub Network)
 // Supports English (en), Hindi (hi), and Regional Rajasthani/Marwari (raj)
 import { safeStorage } from './safeStorage';
 
@@ -39,7 +39,7 @@ const TRANSLATIONS: Record<SupportedLanguage, Record<string, string>> = {
     partner_margin: 'Direct Store Savings',
 
     // Search & Actions
-    search_placeholder: 'Search SSY, PLI, Milk, EV, Kirana, Pharmacy...',
+    search_placeholder: 'Search SSY, PLI, Speed Post, IPPB, MyStamp, Bulk Parcel...',
     add_to_cart: 'Add to Cart · COD',
     quick_inquiry: 'Quick Inquiry',
     whatsapp_desk: 'Order on WhatsApp',
@@ -105,7 +105,7 @@ const TRANSLATIONS: Record<SupportedLanguage, Record<string, string>> = {
     partner_margin: 'सीधी स्टोर बचत',
 
     // Search & Actions
-    search_placeholder: 'सुकन्या, पीएलआई, दूध, दवाई, सब्जी, किराना खोजें...',
+    search_placeholder: 'सुकन्या, पीएलआई, स्पीड पोस्ट, आईपीपीबी, मायस्टैम्प, बल्क पार्सल खोजें...',
     add_to_cart: 'कार्ट में जोड़ें · सीओडी',
     quick_inquiry: 'त्वरित पूछताछ',
     whatsapp_desk: 'व्हाट्सएप ऑर्डर',
@@ -113,7 +113,7 @@ const TRANSLATIONS: Record<SupportedLanguage, Record<string, string>> = {
     partner_mode: 'प्रमाणित बचत',
 
     // Hero & Live Desk
-    hero_kicker: 'अधिकृत दादाबाड़ी फ्लैगशिप · स्पीड पोस्ट सीओडी',
+    hero_kicker: 'अधिकृत दादाबाड़ी डाकघर हब · स्पीड पोस्ट सीओडी',
     live_desk_title: 'लाइव डेस्क: तत्काल फ्लैश डील्स एवं आधिकारिक सूचनाएं',
     urgent_deal: 'सीमित समय ऑफर',
     expires_in: 'समाप्ति में शेष',
@@ -171,7 +171,7 @@ const TRANSLATIONS: Record<SupportedLanguage, Record<string, string>> = {
     partner_margin: 'सीधी दुकान बचत',
 
     // Search & Actions
-    search_placeholder: 'सुकन्या, बीमा, दूध, दवाई, सब्जी, किराणा ढूंढो...',
+    search_placeholder: 'सुकन्या, बीमा, स्पीड पोस्ट, डाकघर सेवा अर बल्क पार्सल ढूंढो...',
     add_to_cart: 'थैली में घालो · नकद द्यो',
     quick_inquiry: 'झटपट पूछो',
     whatsapp_desk: 'व्हाट्सएप ऑर्डर',
@@ -218,7 +218,7 @@ const TRANSLATIONS: Record<SupportedLanguage, Record<string, string>> = {
   },
 };
 
-const STORAGE_KEY = 'xpokart_selected_lang';
+const STORAGE_KEY = 'indiapost_selected_lang';
 
 export function getInitialLanguage(): SupportedLanguage {
   if (typeof window === 'undefined') return 'en';

@@ -38,6 +38,7 @@ import { staffPermissionService } from '../../services/staffPermissionService';
 import { masterDataService } from '../../services/masterDataService';
 import { ColonyMasterRecord, ColonyEntityType, OfficeJurisdiction } from '../../types/models';
 import { useAuth } from '../auth/FirebaseAuthProvider';
+import { TreeStructuredRegistryNavigator } from '../common/TreeStructuredRegistryNavigator';
 
 import { UPDATED_STAFF_LIST } from '../../data/updatedStaffData';
 
@@ -1251,6 +1252,17 @@ export default function UnifiedCrmMasterHub() {
           </button>
         </div>
       </div>
+
+      {/* Tree Structured Central Registry Navigator */}
+      <TreeStructuredRegistryNavigator
+        brandName="India Post Central Registry"
+        onSelectNode={(actionKey) => {
+          if (actionKey === 'STAFF_REGISTRY') setActiveTab('division-colonies');
+          else if (actionKey === 'CUSTOMERS_CRM') setActiveTab('customers');
+          else if (actionKey === 'PROPERTIES_REGISTRY') setActiveTab('division-colonies');
+          else if (actionKey === 'OFFICES_MASTER') setActiveTab('division-colonies');
+        }}
+      />
 
       {/* Instantaneous Floating Toast Container */}
       {(warningToast || successToast) && (

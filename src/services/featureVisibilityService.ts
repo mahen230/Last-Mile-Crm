@@ -167,6 +167,45 @@ export const FEATURE_CATALOG: FeatureCatalogMeta[] = [
     vendorGroup: 'INDIA_POST',
   },
   {
+    key: 'showcase',
+    label: 'India Post & Bulk Customer Showcase',
+    category: 'Postal & Field',
+    description: 'Postal offerings catalog, promoted bulk customer showcase items, and direct lead capture.',
+    legacyModuleKey: 'schemeLeadsSection',
+    vendorGroup: 'INDIA_POST',
+  },
+  {
+    key: 'productTargets',
+    label: 'Product & Target Dashboard',
+    category: 'Postal & Field',
+    description: 'Live targets vs achievement tracking across postal schemes, bulk parcels, and beat pipelines.',
+    legacyModuleKey: 'schemeLeadsSection',
+    vendorGroup: 'INDIA_POST',
+  },
+  {
+    key: 'reports',
+    label: 'Superior Reporting & MIS Center',
+    category: 'Core Operations',
+    description: 'Scoped team, beat, article reconciliation, conversion, and financial reporting for Superiors.',
+    vendorGroup: 'INDIA_POST',
+  },
+  {
+    key: 'masterSearch',
+    label: 'Unified Master Search Console',
+    category: 'Core Operations',
+    description: 'Global scoped search across citizens, tags, properties, leads, showcase items, and PINs.',
+    legacyModuleKey: 'crmSection',
+    vendorGroup: 'INDIA_POST',
+  },
+  {
+    key: 'lastMileOps',
+    label: 'Last-Mile Field Operations',
+    category: 'Postal & Field',
+    description: 'Postman daily articles, field tasks, verification queue, and statutory field forms.',
+    legacyModuleKey: 'specialBillsSection',
+    vendorGroup: 'INDIA_POST',
+  },
+  {
     key: 'dataBackupCenter',
     label: 'Data Import/Export & Verified Backup Center',
     category: 'Core Operations',
@@ -178,12 +217,12 @@ export const FEATURE_CATALOG: FeatureCatalogMeta[] = [
 export const VENDOR_SYSTEM_DEFINITIONS: Record<string, VendorSystemDefinition> = {
   INDIA_POST: {
     id: 'INDIA_POST',
-    name: 'India Post Vendor System',
+    name: 'India Post Operations System',
     shortLabel: 'India Post System',
     description:
-      'Consolidated Postal Operations workspace (Post Offices, Properties, Members, Beats, Daily Articles, Official Statutory Docs, Schemes & Postal LMS). Enforces white-label neutrality with zero third-party commercial branding.',
+      'Consolidated Postal Operations workspace (Post Offices, Properties, Members, Beats, Daily Articles, Showcase, Product Targets, Superior Reports & Postal LMS). Enforces India Post identity exclusively.',
     defaultWhiteLabel: true,
-    brandTitle: 'India Post Vendor System',
+    brandTitle: 'India Post Operations System',
     brandSubtitle: 'Departmental Operations & Territory CRM',
     includedFeatures: [
       'property',
@@ -192,8 +231,13 @@ export const VENDOR_SYSTEM_DEFINITIONS: Record<string, VendorSystemDefinition> =
       'locationIntelligence',
       'dailyVerification',
       'dailyOperations',
+      'lastMileOps',
       'officialDocuments',
       'leadsAndSchemes',
+      'showcase',
+      'productTargets',
+      'reports',
+      'masterSearch',
       'lms',
       'communication',
       'staffDirectory',
@@ -202,16 +246,19 @@ export const VENDOR_SYSTEM_DEFINITIONS: Record<string, VendorSystemDefinition> =
   },
   COMMERCIAL_PARTNERS: {
     id: 'COMMERCIAL_PARTNERS',
-    name: 'Commercial Partner Network',
-    shortLabel: 'Commercial Network',
-    description: 'Private partner storefronts, commercial CSC/eMitra directory, B2B margins, and marketplace catalog.',
-    defaultWhiteLabel: false,
-    brandTitle: 'Commercial Partner Hub',
-    brandSubtitle: 'Retail & B2B Partner Operations',
+    name: 'India Post Bulk Customer Network',
+    shortLabel: 'Bulk Customer Hub',
+    description: 'India Post bulk customer showcase, promoted catalogs, and Speed Post / Parcel dispatch leads.',
+    defaultWhiteLabel: true,
+    brandTitle: 'India Post Bulk Customer Hub',
+    brandSubtitle: 'Bulk Dispatch & Product Promotion Operations',
     includedFeatures: [
       'commercialDirectory',
       'vendorSection',
       'storefront',
+      'showcase',
+      'productTargets',
+      'masterSearch',
       'leadsAndSchemes',
       'communication',
       'aiAssistant',
@@ -220,24 +267,24 @@ export const VENDOR_SYSTEM_DEFINITIONS: Record<string, VendorSystemDefinition> =
   },
   EV_MOBILITY: {
     id: 'EV_MOBILITY',
-    name: 'EV Mobility & Fleet Franchise',
-    shortLabel: 'EV Fleet Vendor',
-    description: 'Electric vehicle hubs, battery swap points, and last-mile fleet dispatches.',
+    name: 'India Post Parcel & Logistics Desk',
+    shortLabel: 'Parcel & Logistics',
+    description: 'India Post last-mile beat delivery, Speed Post COD, and bulk parcel dispatch.',
     defaultWhiteLabel: true,
-    brandTitle: 'EV Mobility Operations',
-    brandSubtitle: 'Fleet & Hub Territory Portal',
-    includedFeatures: ['property', 'beats', 'dailyOperations', 'commercialDirectory', 'vendorSection'],
+    brandTitle: 'India Post Parcel & Logistics',
+    brandSubtitle: 'Beat Delivery & Dispatch Territory Portal',
+    includedFeatures: ['property', 'beats', 'dailyOperations', 'lastMileOps', 'showcase', 'masterSearch', 'commercialDirectory', 'vendorSection'],
     excludedFeatures: ['officialDocuments', 'lms'],
   },
   SAAS_DIGITAL: {
     id: 'SAAS_DIGITAL',
-    name: 'SaaS & Digital Commerce Hub',
-    shortLabel: 'SaaS Digital Vendor',
-    description: 'Digital service centers, CRM onboarding, and SaaS catalog distribution.',
+    name: 'India Post Digital & e-Services Desk',
+    shortLabel: 'Digital Services Desk',
+    description: 'India Post IPPB, Jeevan Pramaan, Aadhaar CELC, and bulk customer showcase catalog.',
     defaultWhiteLabel: true,
-    brandTitle: 'Digital Services Desk',
-    brandSubtitle: 'SaaS & Territory Distribution',
-    includedFeatures: ['members', 'leadsAndSchemes', 'commercialDirectory', 'vendorSection', 'storefront'],
+    brandTitle: 'India Post Digital Services',
+    brandSubtitle: 'Citizen & Bulk Services Portal',
+    includedFeatures: ['members', 'leadsAndSchemes', 'showcase', 'productTargets', 'masterSearch', 'commercialDirectory', 'vendorSection', 'storefront'],
     excludedFeatures: ['officialDocuments', 'lms'],
   },
 };
@@ -252,10 +299,11 @@ function buildFeatureMap(enabledKeys: FeatureVisibilityKey[]): Record<FeatureVis
 }
 
 const DEFAULT_ROLE_MATRIX: Record<string, Record<FeatureVisibilityKey, boolean>> = {
-  // STRICT DEFAULT FOR POSTMAN & GDS: ONLY Property & Members visible
-  POSTMAN: buildFeatureMap(DEFAULT_POSTMAN_GDS_VISIBLE_FEATURES),
-  GDS: buildFeatureMap(DEFAULT_POSTMAN_GDS_VISIBLE_FEATURES),
-  // Postal office / supervisory tiers operate cleanly inside India Post modules by default
+  // Postman, GDS & Field Staff: Scoped Core + Showcase + Leads + Product Targets + Last-Mile Ops + Master Search
+  POSTMAN: buildFeatureMap([...DEFAULT_POSTMAN_GDS_VISIBLE_FEATURES, 'productTargets']),
+  GDS: buildFeatureMap([...DEFAULT_POSTMAN_GDS_VISIBLE_FEATURES, 'productTargets']),
+  STAFF: buildFeatureMap([...DEFAULT_POSTMAN_GDS_VISIBLE_FEATURES, 'productTargets']),
+  // Postal office / supervisory tiers operate cleanly inside India Post modules with Superior Reporting enabled
   POSTMASTER: buildFeatureMap([
     'property',
     'members',
@@ -263,8 +311,31 @@ const DEFAULT_ROLE_MATRIX: Record<string, Record<FeatureVisibilityKey, boolean>>
     'locationIntelligence',
     'dailyVerification',
     'dailyOperations',
+    'lastMileOps',
     'officialDocuments',
     'leadsAndSchemes',
+    'showcase',
+    'productTargets',
+    'reports',
+    'masterSearch',
+    'lms',
+    'communication',
+    'staffDirectory',
+  ]),
+  SUB_POSTMASTER: buildFeatureMap([
+    'property',
+    'members',
+    'beats',
+    'locationIntelligence',
+    'dailyVerification',
+    'dailyOperations',
+    'lastMileOps',
+    'officialDocuments',
+    'leadsAndSchemes',
+    'showcase',
+    'productTargets',
+    'reports',
+    'masterSearch',
     'lms',
     'communication',
     'staffDirectory',
@@ -276,8 +347,13 @@ const DEFAULT_ROLE_MATRIX: Record<string, Record<FeatureVisibilityKey, boolean>>
     'locationIntelligence',
     'dailyVerification',
     'dailyOperations',
+    'lastMileOps',
     'officialDocuments',
     'leadsAndSchemes',
+    'showcase',
+    'productTargets',
+    'reports',
+    'masterSearch',
     'lms',
     'communication',
     'staffDirectory',
@@ -289,8 +365,13 @@ const DEFAULT_ROLE_MATRIX: Record<string, Record<FeatureVisibilityKey, boolean>>
     'locationIntelligence',
     'dailyVerification',
     'dailyOperations',
+    'lastMileOps',
     'officialDocuments',
     'leadsAndSchemes',
+    'showcase',
+    'productTargets',
+    'reports',
+    'masterSearch',
     'lms',
     'communication',
     'staffDirectory',
@@ -302,8 +383,13 @@ const DEFAULT_ROLE_MATRIX: Record<string, Record<FeatureVisibilityKey, boolean>>
     'locationIntelligence',
     'dailyVerification',
     'dailyOperations',
+    'lastMileOps',
     'officialDocuments',
     'leadsAndSchemes',
+    'showcase',
+    'productTargets',
+    'reports',
+    'masterSearch',
     'lms',
     'communication',
     'staffDirectory',
@@ -316,10 +402,26 @@ const DEFAULT_ROLE_MATRIX: Record<string, Record<FeatureVisibilityKey, boolean>>
     'beats',
     'locationIntelligence',
     'dailyVerification',
+    'dailyOperations',
+    'lastMileOps',
     'leadsAndSchemes',
+    'showcase',
+    'productTargets',
+    'reports',
+    'masterSearch',
     'staffDirectory',
   ]),
-  MARKETING_TEAM: buildFeatureMap(['property', 'members', 'leadsAndSchemes', 'communication', 'locationIntelligence']),
+  MARKETING_TEAM: buildFeatureMap([
+    'property',
+    'members',
+    'leadsAndSchemes',
+    'showcase',
+    'productTargets',
+    'reports',
+    'masterSearch',
+    'communication',
+    'locationIntelligence',
+  ]),
   LAST_MILE_SUPERVISOR: buildFeatureMap([
     'property',
     'members',
@@ -327,10 +429,15 @@ const DEFAULT_ROLE_MATRIX: Record<string, Record<FeatureVisibilityKey, boolean>>
     'locationIntelligence',
     'dailyVerification',
     'dailyOperations',
+    'lastMileOps',
+    'showcase',
+    'productTargets',
+    'reports',
+    'masterSearch',
     'staffDirectory',
   ]),
-  VENDOR: buildFeatureMap(['vendorSection', 'commercialDirectory', 'storefront', 'leadsAndSchemes']),
-  DEO: buildFeatureMap(['property', 'members', 'locationIntelligence', 'dataBackupCenter']),
+  VENDOR: buildFeatureMap(['vendorSection', 'commercialDirectory', 'storefront', 'showcase', 'leadsAndSchemes']),
+  DEO: buildFeatureMap(['property', 'members', 'locationIntelligence', 'showcase', 'masterSearch', 'dataBackupCenter']),
   DISTRICT_MANAGER: buildFeatureMap(ALL_FEATURE_VISIBILITY_KEYS),
   DISTRICT_INCHARGE: buildFeatureMap(ALL_FEATURE_VISIBILITY_KEYS),
   DIVISION_INCHARGE: buildFeatureMap(ALL_FEATURE_VISIBILITY_KEYS),
@@ -339,6 +446,10 @@ const DEFAULT_ROLE_MATRIX: Record<string, Record<FeatureVisibilityKey, boolean>>
     'property',
     'members',
     'leadsAndSchemes',
+    'showcase',
+    'productTargets',
+    'reports',
+    'masterSearch',
     'commercialDirectory',
     'vendorSection',
     'storefront',
@@ -466,14 +577,20 @@ class FeatureVisibilityService {
   public isPlatformSuperUser(user: StaffProfile | null | undefined): boolean {
     if (!user) return false;
     const role = (user.role || '').toUpperCase();
+    const empId = (user.employeeId || '').toUpperCase();
+    const email = (user.email || '').toLowerCase();
     return (
       role === 'OWNER' ||
       role === 'MASTER_ADMIN' ||
       role === 'SUPER_ADMIN' ||
       role === 'DEVELOPER' ||
-      user.email?.toLowerCase() === 'ektamahenmeena@gmail.com' ||
-      user.employeeId?.toUpperCase() === 'MASTER-ADMIN-01' ||
-      user.id === 'STAFF-MASTER-EKTA'
+      email === 'ektamahenmeena@gmail.com' ||
+      email === 'dev@indiapost-portal.in' ||
+      empId === 'MASTER-ADMIN-01' ||
+      empId === 'DEV-01' ||
+      empId === 'OWNER-01' ||
+      user.id === 'STAFF-MASTER-EKTA' ||
+      user.id === 'STAFF-DEV-01'
     );
   }
 
@@ -689,17 +806,18 @@ class FeatureVisibilityService {
   public isFeatureVisible(user: StaffProfile | null | undefined, featureKey: FeatureVisibilityKey): boolean {
     if (!user) return false;
 
-    // Side-line retail/customer storefronts globally when retailServicesActive is false
+    // Owner, Master Admin, and Developer ALWAYS retain full unrestricted control & visibility
+    if (this.isPlatformSuperUser(user)) {
+      return true;
+    }
+
+    // Side-line legacy third-party storefront/commercial directories when retailServicesActive is false
+    // NOTE: 'showcase' is India Post's core Showcase and stays governed by role/user permissions.
     if (
       !this.state.retailServicesActive &&
       (featureKey === 'storefront' || featureKey === 'commercialDirectory')
     ) {
       return false;
-    }
-
-    // Owner, Master Admin, and Developer ALWAYS retain full unrestricted control & visibility
-    if (this.isPlatformSuperUser(user)) {
-      return true;
     }
 
     if (user.permissions?.approvalStatus === 'Revoked') {
@@ -893,8 +1011,20 @@ class FeatureVisibilityService {
     if (path.startsWith('/data-backup-center')) {
       return 'dataBackupCenter';
     }
-    if (path.startsWith('/postman-articles') || path.startsWith('/tasks')) {
-      return 'dailyOperations';
+    if (path.startsWith('/india-post-storefront')) {
+      return 'showcase';
+    }
+    if (path.startsWith('/product-targets')) {
+      return 'productTargets';
+    }
+    if (path.startsWith('/reports')) {
+      return 'reports';
+    }
+    if (path.startsWith('/master-search')) {
+      return 'masterSearch';
+    }
+    if (path.startsWith('/postman-articles') || path.startsWith('/tasks') || path.startsWith('/fuel-bills')) {
+      return 'lastMileOps';
     }
     if (path.startsWith('/official-documents') || path.startsWith('/special-forms') || path.startsWith('/charge-report') || path.startsWith('/official-applications')) {
       return 'officialDocuments';

@@ -83,10 +83,10 @@ export default function StickyTopNavbar({
             </div>
             <div>
               <div className="text-sm sm:text-base font-black text-slate-900 dark:text-white tracking-tight leading-none group-hover:text-red-700 transition">
-                XPOKART
+                INDIA POST
               </div>
               <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-tight hidden sm:block">
-                Kota &amp; Baran Hubs
+                Postal &amp; Bulk Customer Hub
               </div>
             </div>
           </button>

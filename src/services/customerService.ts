@@ -72,11 +72,41 @@ class CustomerService {
     }
 
     // Run audit and normalization on all loaded customer records and default to india-post brand
+    const deriveServiceTags = (c: Customer): string[] => {
+      if (Array.isArray(c.interestedServiceTags) && c.interestedServiceTags.length > 0) {
+        return Array.from(new Set(c.interestedServiceTags.map((t) => String(t).trim()).filter(Boolean)));
+      }
+      const tags = new Set<string>();
+      const hint = `${c.financialInterest || ''} ${c.existingBanking || ''} ${c.type || ''} ${c.occupation || ''} ${(c.products || []).map((p) => `${p.productCode || ''} ${p.productName || ''}`).join(' ')}`.toLowerCase();
+      if (hint.includes('ssa') || hint.includes('sukanya') || hint.includes('ppf') || hint.includes('rd') || hint.includes('mis') || hint.includes('scss') || hint.includes('td') || hint.includes('nsc') || hint.includes('kvp') || hint.includes('saving') || hint.includes('posb')) {
+        tags.add('Small Savings (SSY / PPF / SCSS / MIS / RD / NSC)');
+      }
+      if (hint.includes('pli') || hint.includes('rpli') || hint.includes('insurance')) {
+        tags.add('PLI / RPLI Life Insurance');
+      }
+      if (hint.includes('ippb') || hint.includes('aeps') || hint.includes('qr') || hint.includes('bank')) {
+        tags.add('IPPB Banking, AePS & Merchant QR');
+      }
+      if (hint.includes('aadhaar') || hint.includes('celc') || hint.includes('pension') || hint.includes('retir') || (c.age || 0) >= 60) {
+        tags.add('Aadhaar / CELC & Jeevan Pramaan DLC');
+      }
+      if (hint.includes('shop') || hint.includes('comm') || hint.includes('business') || hint.includes('merchant') || hint.includes('parcel') || hint.includes('bulk')) {
+        tags.add('Speed Post & Registered Mail');
+        tags.add('Parcel & E-Commerce COD');
+      }
+      if (tags.size === 0) {
+        tags.add('Small Savings (SSY / PPF / SCSS / MIS / RD / NSC)');
+        tags.add('IPPB Banking, AePS & Merchant QR');
+      }
+      return Array.from(tags);
+    };
+
     const { auditedCustomers } = auditAndNormalizeCustomerRecords(loadedCusts);
     this.customers = auditedCustomers.map((c) => ({
       ...c,
       brandId: c.brandId || 'india-post',
       brandName: c.brandName || 'India Post',
+      interestedServiceTags: deriveServiceTags(c),
     }));
     this.saveCustomersLocal();
 
@@ -1030,7 +1060,7 @@ class CustomerService {
     if (session && !featureVisibilityService.isFeatureVisible(session, 'members')) {
       return [];
     }
-    if (!session || !staffPermissionService.isPostmanOrGds(session)) {
+    if (!session || staffPermissionService.isSuperAdmin(session)) {
       return this.customers;
     }
 
@@ -1048,6 +1078,9 @@ class CustomerService {
         area: c.area,
         colonyName: c.area,
         sector: c.sector,
+        officeId: c.officeId,
+        subOffice: c.subOfficeMapping,
+        pincode: c.pincode,
       })
     );
   }
@@ -1062,8 +1095,11 @@ class CustomerService {
     if (session && !featureVisibilityService.isFeatureVisible(session, 'property')) {
       return [];
     }
+    if (session && !staffPermissionService.canReadPropertyDetails(session)) {
+      return [];
+    }
     const allProps = this.getProperties();
-    if (!session || !staffPermissionService.isPostmanOrGds(session)) {
+    if (!session || staffPermissionService.isSuperAdmin(session)) {
       return allProps;
     }
 
@@ -1074,6 +1110,7 @@ class CustomerService {
         colonyName: p.area,
         sector: p.sector,
         pincode: p.pincode,
+        officeId: p.officeId,
         businessCategory: p.commercialCategory,
       })
     );
@@ -1115,10 +1152,14 @@ class CustomerService {
 
   public getScopedLeads(activeSession?: any): Lead[] {
     const session = activeSession || staffPermissionService.getActiveSession();
-    if (session && !featureVisibilityService.isFeatureVisible(session, 'leadsAndSchemes')) {
+    if (
+      session &&
+      !featureVisibilityService.isFeatureVisible(session, 'leadsAndSchemes') &&
+      !featureVisibilityService.isFeatureVisible(session, 'showcase')
+    ) {
       return [];
     }
-    if (!session || !staffPermissionService.isPostmanOrGds(session)) {
+    if (!session || staffPermissionService.isSuperAdmin(session)) {
       return this.leads;
     }
     return this.leads.filter(l => {
@@ -1135,6 +1176,7 @@ class CustomerService {
         area: cust?.area || (l as any).area,
         sector: cust?.sector,
         officeId: l.officeId || cust?.officeId,
+        officeName: l.officeName || l.postOfficeName || cust?.subOfficeMapping,
         pincode: l.pincode || cust?.pincode,
       });
     });
@@ -1146,22 +1188,29 @@ class CustomerService {
 
   public getScopedFollowUps(activeSession?: any): FollowUp[] {
     const session = activeSession || staffPermissionService.getActiveSession();
-    if (session && !featureVisibilityService.isFeatureVisible(session, 'leadsAndSchemes')) {
+    if (
+      session &&
+      !featureVisibilityService.isFeatureVisible(session, 'leadsAndSchemes') &&
+      !featureVisibilityService.isFeatureVisible(session, 'showcase')
+    ) {
       return [];
     }
-    if (!session || !staffPermissionService.isPostmanOrGds(session)) {
+    if (!session || staffPermissionService.isSuperAdmin(session)) {
       return this.followUps;
     }
     return this.followUps.filter(f => {
-      const cust = this.getCustomerById(f.customerId);
+      const cust = this.getCustomerById(f.customerId || '');
       return staffPermissionService.matchesUserBeatScope(session, {
-        beatNo: cust?.beatNo,
+        beatNo: f.beatNo || cust?.beatNo,
         createdById: f.createdById,
         assignedToId: f.assignedToId,
-        assignedStaffName: (f as any).assignedTo,
+        assignedStaffName: f.assignedStaffName || (f as any).assignedTo,
+        assignedStaffEmail: f.assignedStaffEmail,
         businessCategory: f.businessCategory || cust?.businessCategory || cust?.category,
         area: cust?.area,
         sector: cust?.sector,
+        officeId: cust?.officeId,
+        pincode: cust?.pincode,
       });
     });
   }
@@ -1360,6 +1409,7 @@ class CustomerService {
       existing.pincode = validPincode;
       existing.street = data.street || existing.street;
       existing.landmark = data.landmark || existing.landmark;
+      if (data.panAddress) existing.panAddress = { ...existing.panAddress, ...data.panAddress };
       if (data.residentialAddress) existing.residentialAddress = { ...existing.residentialAddress, ...data.residentialAddress };
       if (data.permanentAddress) existing.permanentAddress = { ...existing.permanentAddress, ...data.permanentAddress };
       if (typeof data.sameAsResidential === 'boolean') existing.sameAsResidential = data.sameAsResidential;
@@ -1384,6 +1434,17 @@ class CustomerService {
 
       if (data.remarks) {
         existing.remarks = existing.remarks ? `${existing.remarks} | ${data.remarks}` : data.remarks;
+      }
+      if (data.submittedByStaffId) existing.submittedByStaffId = data.submittedByStaffId;
+      if (data.staffAttribution) existing.staffAttribution = data.staffAttribution;
+      if (data.verificationMeta) existing.verificationMeta = data.verificationMeta;
+      if (Array.isArray(data.interestedServiceTags)) {
+        existing.interestedServiceTags = Array.from(
+          new Set([
+            ...(existing.interestedServiceTags || []),
+            ...data.interestedServiceTags.map((t) => t.trim()).filter(Boolean),
+          ])
+        );
       }
       existing.products = updatedProducts;
       existing.updatedAt = new Date().toISOString();
@@ -1492,6 +1553,7 @@ class CustomerService {
         pincode: validPincode,
         street: data.street || '',
         landmark: data.landmark || '',
+        panAddress: data.panAddress,
         address: {
           colony: validColony,
           area: validColony,
@@ -1562,9 +1624,16 @@ class CustomerService {
         assignedStaffId: data.assignedStaffId || '',
         assignedStaffName: data.assignedStaffName || '',
         assignedStaffEmail: data.assignedStaffEmail || '',
+        submittedByStaffId: data.submittedByStaffId || data.enteredBy || '',
+        staffAttribution: data.staffAttribution,
+        verificationMeta: data.verificationMeta,
         brandId: data.brandId || 'india-post',
         brandName: data.brandName || 'India Post',
         businessCategory: data.businessCategory || data.category || 'General',
+        interestedServiceTags:
+          Array.isArray(data.interestedServiceTags) && data.interestedServiceTags.length > 0
+            ? Array.from(new Set(data.interestedServiceTags.map((t) => t.trim()).filter(Boolean)))
+            : ['Small Savings (SSY / PPF / SCSS / MIS / RD / NSC)'],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -1658,28 +1727,101 @@ class CustomerService {
 
   // LEADS LIFECYCLE MANAGEMENT
   public createLead(leadData: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>): Lead {
+    const cleanTags = Array.isArray(leadData.serviceTags)
+      ? Array.from(new Set(leadData.serviceTags.map((t) => String(t).trim()).filter(Boolean)))
+      : [];
     const lead: Lead = {
       ...leadData,
-      id: `LEAD-${Date.now()}`,
+      serviceTags: cleanTags,
+      selectedProducts: Array.isArray(leadData.selectedProducts) ? leadData.selectedProducts : undefined,
+      quantity: leadData.quantity || 1,
+      brandId: leadData.brandId || 'india-post',
+      brandName: leadData.brandName || 'India Post',
+      id: `LEAD-${Date.now()}-${Math.floor(Math.random() * 100)}`,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     };
     this.leads.unshift(lead);
     this.saveLeadsLocal();
+
+    // Sync interestedServiceTags onto the linked customer record
+    const linkedCust =
+      (lead.customerId ? this.getCustomerById(lead.customerId) : undefined) ||
+      (lead.customerMobile ? this.getCustomerByMobile(lead.customerMobile) : undefined);
+    if (linkedCust && cleanTags.length > 0) {
+      linkedCust.interestedServiceTags = Array.from(
+        new Set([...(linkedCust.interestedServiceTags || []), ...cleanTags])
+      );
+      linkedCust.updatedAt = new Date().toISOString();
+      this.saveCustomersLocal();
+    }
+
+    // Automatically schedule a follow-up if nextFollowUpDate is provided
+    if (lead.nextFollowUpDate && lead.customerName) {
+      const existingFol = this.followUps.find(
+        (f) => f.leadId === lead.id && f.scheduledDate === lead.nextFollowUpDate
+      );
+      if (!existingFol) {
+        this.scheduleFollowUp({
+          customerId: linkedCust?.id || lead.customerId,
+          customerName: lead.customerName,
+          customerMobile: lead.customerMobile,
+          customerAddress: lead.customerAddress,
+          leadId: lead.id,
+          productCode: lead.productCode,
+          productName: lead.productName,
+          scheduledDate: lead.nextFollowUpDate,
+          currentStatus: 'Pending',
+          priority: lead.priority === 'Urgent' ? 'Urgent' : lead.priority === 'High' ? 'High' : 'Normal',
+          nextAction: lead.nextAction || `Follow up on ${lead.productName}`,
+          assignedStaffName: lead.assignedStaffName || 'Postal Beat Staff',
+          assignedStaffEmail: lead.assignedStaffEmail,
+          beatNo: lead.beatNo,
+          remarks: lead.notes || `Auto-scheduled from lead ${lead.productName}`,
+        });
+      }
+    }
+
     this.logAudit('LEAD_CREATED', 'Lead', lead.id, lead.customerName, `Created ${lead.productName} lead for ${lead.customerName}`);
     this.notify();
     return lead;
   }
 
   public updateLead(leadId: string, updates: Partial<Lead>): Lead | undefined {
-    const lead = this.leads.find(l => l.id === leadId);
-    if (!lead) return undefined;
+    const idx = this.leads.findIndex(l => l.id === leadId);
+    if (idx === -1) return undefined;
 
-    Object.assign(lead, updates, { updatedAt: new Date().toISOString() });
+    const current = this.leads[idx];
+    const cleanTags = Array.isArray(updates.serviceTags)
+      ? Array.from(new Set(updates.serviceTags.map((t) => String(t).trim()).filter(Boolean)))
+      : current.serviceTags;
+    const updatedLead: Lead = {
+      ...current,
+      ...updates,
+      serviceTags: cleanTags,
+      updatedAt: new Date().toISOString(),
+    };
+    this.leads = [
+      ...this.leads.slice(0, idx),
+      updatedLead,
+      ...this.leads.slice(idx + 1),
+    ];
     this.saveLeadsLocal();
-    this.logAudit('LEAD_UPDATED', 'Lead', lead.id, lead.customerName, `Lead ${lead.id} details updated`);
+
+    const linkedCust =
+      (updatedLead.customerId ? this.getCustomerById(updatedLead.customerId) : undefined) ||
+      (updatedLead.customerMobile ? this.getCustomerByMobile(updatedLead.customerMobile) : undefined);
+    if (linkedCust && cleanTags && cleanTags.length > 0) {
+      linkedCust.interestedServiceTags = Array.from(
+        new Set([...(linkedCust.interestedServiceTags || []), ...cleanTags])
+      );
+      linkedCust.updatedAt = new Date().toISOString();
+      this.saveCustomersLocal();
+    }
+
+    this.logAudit('LEAD_UPDATED', 'Lead', updatedLead.id, updatedLead.customerName, `Lead ${updatedLead.id} details updated`);
     this.notify();
-    return lead;
+    return updatedLead;
   }
 
   public updateLeadStage(leadId: string, stage: Lead['stage'], notes?: string): Lead | undefined {
@@ -2022,6 +2164,9 @@ class CustomerService {
           googleMapsUri: (c as any).googleMapsUri,
           placeId: (c as any).placeId,
           ownerName: isCommercial ? c.name : undefined,
+          submittedByStaffId: c.submittedByStaffId,
+          staffAttribution: c.staffAttribution,
+          verificationMeta: c.verificationMeta,
         });
       } else {
         const prop = propMap.get(pCode)!;
@@ -2038,11 +2183,41 @@ class CustomerService {
       }
     });
 
-    // Apply explicit property overrides (e.g. manually set to Vacant)
+    // Apply explicit property overrides (e.g. manually set to Vacant or directly registered via Common Data Centre)
     this.propertyOverrides.forEach((override, propId) => {
       if (propMap.has(propId)) {
         const current = propMap.get(propId)!;
         propMap.set(propId, { ...current, ...override });
+      } else if (
+        !this.deletedPropertyIds.has(propId) &&
+        (override.address || override.housePlotNumber || override.colony || override.propertyCode)
+      ) {
+        propMap.set(propId, {
+          id: override.id || propId,
+          propertyCode: override.propertyCode || propId,
+          housePlotNumber: override.housePlotNumber || override.houseNo || '',
+          houseNo: override.houseNo || override.housePlotNumber || '',
+          propertyType: override.propertyType || 'House',
+          address: override.address || `${override.housePlotNumber || ''} ${override.colony || ''}`.trim(),
+          sector: override.sector || 'Sector 1',
+          colony: override.colony || override.area || 'Dadabari',
+          area: override.area || override.colony || 'Dadabari',
+          pincode: override.pincode || '324009',
+          beatNo: override.beatNo || '2',
+          officeId: override.officeId || 'DADABARI_SO',
+          status: override.status || 'Occupied',
+          residentNames: override.residentNames || [],
+          residents: override.residents || [],
+          verificationStatus: override.verificationStatus ?? true,
+          notes: override.notes,
+          latitude: override.latitude,
+          longitude: override.longitude,
+          sequenceTag: override.sequenceTag,
+          remark: override.remark,
+          submittedByStaffId: override.submittedByStaffId,
+          staffAttribution: override.staffAttribution,
+          verificationMeta: override.verificationMeta,
+        });
       }
     });
 
@@ -3008,6 +3183,246 @@ class CustomerService {
     if (changedLeads) this.saveLeadsLocal();
     if (count > 0) this.notify();
     return count;
+  }
+
+  public findDuplicateCustomersByMobileOrPanAddress(
+    mobile?: string,
+    panAddress?: {
+      houseDoorFlatNo?: string;
+      buildingPremises?: string;
+      streetRoadLane?: string;
+      areaLocalityPostOffice?: string;
+      pincode?: string;
+    }
+  ): Customer[] {
+    const normMob = normalizeMobile(mobile);
+    const normHouse = (panAddress?.houseDoorFlatNo || '').trim().toLowerCase();
+    const normArea = (panAddress?.areaLocalityPostOffice || '').trim().toLowerCase();
+    const normPin = (panAddress?.pincode || '').trim();
+
+    return this.customers.filter((c) => {
+      if (normMob && c.mobile === normMob) return true;
+      if (normHouse && normArea) {
+        const cHouse = (c.panAddress?.houseDoorFlatNo || c.houseNo || c.address?.houseNumber || '')
+          .trim()
+          .toLowerCase();
+        const cArea = (c.panAddress?.areaLocalityPostOffice || c.colony || c.area || '')
+          .trim()
+          .toLowerCase();
+        const cPin = (c.panAddress?.pincode || c.pincode || '').trim();
+        if (cHouse === normHouse && (cArea.includes(normArea) || normArea.includes(cArea)) && (!normPin || !cPin || cPin === normPin)) {
+          return true;
+        }
+      }
+      return false;
+    });
+  }
+
+  public addPropertyInAllottedArea(
+    userProfile: any,
+    input: {
+      houseNo: string;
+      colony: string;
+      sector?: string;
+      pincode: string;
+      beatNo: string;
+      propertyType: 'House' | 'Commercial' | 'Mixed' | 'Flat / Residency';
+      status: 'Occupied' | 'Vacant' | 'Commercial' | 'Mixed';
+      residentOrOwnerName?: string;
+      mobile?: string;
+      notes?: string;
+    }
+  ): { success: boolean; propertyCode?: string; error?: string } {
+    const territoryCheck = staffPermissionService.isTerritoryAllowedForProperty(userProfile, {
+      beatNo: input.beatNo,
+      pincode: input.pincode,
+      colony: input.colony,
+    });
+    if (!territoryCheck.allowed) {
+      return { success: false, error: territoryCheck.reason };
+    }
+
+    const cleanHouse = (input.houseNo || '').trim();
+    const cleanColony = (input.colony || '').trim();
+    if (!cleanHouse || !cleanColony) {
+      return { success: false, error: 'House / Plot No. and Colony / Area are required.' };
+    }
+
+    const cleanBeat = (input.beatNo || userProfile?.beat || '2').replace(/^Beat\s*/i, '').trim() || '2';
+    const cleanSector = (input.sector || 'Sector 1').trim();
+    const pCode = `PROP-${cleanSector.replace(/\s+/g, '')}-${cleanHouse.replace(/\s+/g, '')}`.toUpperCase();
+
+    const propOverride: Partial<Property> = {
+      id: pCode,
+      propertyCode: pCode,
+      housePlotNumber: cleanHouse,
+      houseNo: cleanHouse,
+      propertyType: input.propertyType,
+      sector: cleanSector,
+      colony: cleanColony,
+      area: cleanColony,
+      pincode: input.pincode || userProfile?.officePincode || '324009',
+      beatNo: cleanBeat,
+      officeId: userProfile?.officeId || 'DADABARI_SO',
+      status: input.status,
+      address: `${cleanHouse}, ${cleanSector}, ${cleanColony}, Kota - ${input.pincode || '324009'}`,
+      notes: input.notes || `Registered by ${userProfile?.name || 'Field Staff'} inside allotted territory.`,
+      verificationStatus: true,
+    };
+
+    if (input.residentOrOwnerName && input.residentOrOwnerName.trim()) {
+      this.addOrUpdateCustomer(
+        {
+          name: input.residentOrOwnerName.trim(),
+          mobile: input.mobile || '',
+          houseNo: cleanHouse,
+          colony: cleanColony,
+          area: cleanColony,
+          sector: cleanSector,
+          pincode: input.pincode || '324009',
+          beatNo: cleanBeat,
+          propertyId: pCode,
+          livingStatus: input.status === 'Vacant' ? 'Vacant' : 'Owner',
+          type: input.propertyType === 'Commercial' ? 'Commercial' : 'Residential',
+          enteredBy: userProfile?.email || userProfile?.id,
+          enteredByName: userProfile?.name || 'Staff',
+          verificationStatus: 'Field Confirmed',
+        },
+        'Allotted Territory Property Entry'
+      );
+    }
+
+    this.propertyOverrides.set(pCode, propOverride);
+    this.savePropertyPreferences();
+    this.logAudit(
+      'PROPERTY_TERRITORY_CREATED',
+      'Property',
+      pCode,
+      cleanHouse,
+      `Added ${input.propertyType} property (${cleanHouse}, ${cleanColony}, Beat ${cleanBeat}) inside allotted territory`
+    );
+    this.notify();
+    return { success: true, propertyCode: pCode };
+  }
+
+  public consolidateOtherBrandsIntoIndiaPost(): {
+    customersMoved: number;
+    leadsMoved: number;
+    followUpsMoved: number;
+    propertiesMoved: number;
+  } {
+    const now = new Date().toISOString();
+    let customersMoved = 0;
+    let leadsMoved = 0;
+    let followUpsMoved = 0;
+    let propertiesMoved = 0;
+
+    const isIndiaPostBrand = (bId?: string, bName?: string) => {
+      const id = (bId || '').trim().toLowerCase();
+      const name = (bName || '').trim().toLowerCase();
+      return (!id && !name) || id === 'india-post' || id === 'india_post' || name === 'india post';
+    };
+
+    const seenPhones = new Set<string>();
+    const nextCustomers: Customer[] = [];
+    for (const c of this.customers) {
+      const moved = !isIndiaPostBrand(c.brandId, c.brandName);
+      if (moved) customersMoved += 1;
+      const normalized: Customer = {
+        ...c,
+        brandId: 'india-post',
+        brandName: 'India Post',
+        ...(moved ? { updatedAt: now } : {}),
+      };
+      const mob = (normalized.mobile || '').replace(/\D/g, '').slice(-10);
+      if (mob && mob.length === 10) {
+        if (seenPhones.has(mob)) continue;
+        seenPhones.add(mob);
+      }
+      nextCustomers.push(normalized);
+    }
+    this.customers = nextCustomers;
+
+    this.leads = this.leads.map((l) => {
+      const moved = !isIndiaPostBrand(l.brandId, l.brandName);
+      if (moved) leadsMoved += 1;
+      return {
+        ...l,
+        brandId: 'india-post',
+        brandName: 'India Post',
+        ...(moved ? { updatedAt: now } : {}),
+      };
+    });
+
+    this.followUps = this.followUps.map((f) => {
+      const moved = !isIndiaPostBrand(f.brandId, f.brandName);
+      if (moved) followUpsMoved += 1;
+      return {
+        ...f,
+        brandId: 'india-post',
+        brandName: 'India Post',
+      };
+    });
+
+    this.propertyOverrides.forEach((prop, key) => {
+      if (prop.brandId && !isIndiaPostBrand(prop.brandId, prop.brandName)) {
+        propertiesMoved += 1;
+        this.propertyOverrides.set(key, {
+          ...prop,
+          brandId: 'india-post',
+          brandName: 'India Post',
+        });
+      }
+    });
+
+    if (customersMoved + leadsMoved + followUpsMoved + propertiesMoved > 0) {
+      this.saveCustomersLocal();
+      this.saveLeadsLocal();
+      this.saveFollowupsLocal();
+      this.savePropertyPreferences();
+      this.logAudit(
+        'CONSOLIDATED_TO_INDIA_POST',
+        'System',
+        'INDIA_POST',
+        'India Post Consolidation',
+        `Consolidated ${customersMoved} customers, ${leadsMoved} leads, ${followUpsMoved} follow-ups, ${propertiesMoved} properties into India Post.`
+      );
+      this.notify();
+    }
+
+    return { customersMoved, leadsMoved, followUpsMoved, propertiesMoved };
+  }
+
+  public resetNonIndiaPostRecords(): {
+    removedCustomers: number;
+    removedLeads: number;
+    removedFollowUps: number;
+  } {
+    const isIndiaPostBrand = (bId?: string, bName?: string) => {
+      const id = (bId || '').trim().toLowerCase();
+      const name = (bName || '').trim().toLowerCase();
+      return (!id && !name) || id === 'india-post' || id === 'india_post' || name === 'india post';
+    };
+
+    const beforeC = this.customers.length;
+    const beforeL = this.leads.length;
+    const beforeF = this.followUps.length;
+
+    this.customers = this.customers.filter((c) => isIndiaPostBrand(c.brandId, c.brandName));
+    this.leads = this.leads.filter((l) => isIndiaPostBrand(l.brandId, l.brandName));
+    this.followUps = this.followUps.filter((f) => isIndiaPostBrand(f.brandId, f.brandName));
+
+    const removedCustomers = beforeC - this.customers.length;
+    const removedLeads = beforeL - this.leads.length;
+    const removedFollowUps = beforeF - this.followUps.length;
+
+    if (removedCustomers + removedLeads + removedFollowUps > 0) {
+      this.saveCustomersLocal();
+      this.saveLeadsLocal();
+      this.saveFollowupsLocal();
+      this.notify();
+    }
+    return { removedCustomers, removedLeads, removedFollowUps };
   }
 }
 

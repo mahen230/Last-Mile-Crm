@@ -1,22 +1,20 @@
 import React, { useState, useRef } from 'react';
 import {
   Landmark,
-  Zap,
-  Shirt,
-  Coffee,
-  Sparkles,
-  Store,
+  BookOpen,
+  Package,
+  Award,
+  HeartPulse,
+  Sprout,
   MapPin,
   Clock,
-  Phone,
   MessageCircle,
   X,
   ShoppingCart,
-  ShieldCheck,
   ArrowRight,
-  ExternalLink,
   ChevronLeft,
   ChevronRight,
+  Building2,
 } from 'lucide-react';
 import { SupportedLanguage, translate } from '../../utils/localization';
 
@@ -50,7 +48,7 @@ export const SERVICE_ECOSYSTEM_STORES: EcosystemStore[] = [
   {
     id: 'eco-banking',
     name: 'Dadabari Sub Post Office & IPPB Banking Hub',
-    categoryTitle: 'Sovereign Banking, SSY & Insurance',
+    categoryTitle: 'Sovereign Banking, SSY, PLI & Beat 2 Delivery',
     badge: 'Official India Post Desk',
     imageSrc: '/src/assets/images/store_banking_finance_1794731363192.jpg',
     gradient: 'from-red-950 via-rose-900 to-slate-900',
@@ -71,108 +69,103 @@ export const SERVICE_ECOSYSTEM_STORES: EcosystemStore[] = [
     ],
   },
   {
-    id: 'eco-ev',
-    name: 'XPEEDO EV & Green Mobility Regional Hub',
-    categoryTitle: 'Electric Scooters, 60V Batteries & Chargers',
-    badge: 'Authorized Hub',
-    imageSrc: '/src/assets/images/ev_scooter_mobility_1794822882283.jpg',
-    gradient: 'from-emerald-950 via-teal-900 to-cyan-950',
-    icon: Zap,
-    address: 'Plot 14, Dadabari Main Commercial Road, PIN 324009',
-    landmark: 'Opposite Sector 2 Commercial Complex',
-    geoCoords: '25.1595° N, 75.8291° E',
-    workingHours: '08:30 AM – 08:30 PM (Daily)',
-    managerName: 'Mahendra Kumar Meena',
-    phone: '8769706002',
-    beatNo: 'Beat 2',
+    id: 'eco-study-dispatch',
+    name: 'Vigyan Nagar S.O. · Academic Bulk Dispatch',
+    categoryTitle: 'Printed Study Modules, Books & BNPL Tariffs',
+    badge: 'Bulk Customer · 324005',
+    imageSrc: '/src/assets/images/prod_b2b_stationery_coaching_1794734844056.jpg',
+    gradient: 'from-blue-950 via-indigo-900 to-slate-900',
+    icon: BookOpen,
+    address: 'Vigyan Nagar Sub Post Office, Kota PIN 324005',
+    landmark: 'Academic & Coaching Parcel Counter',
+    geoCoords: '25.1460° N, 75.8470° E',
+    workingHours: '09:00 AM – 06:00 PM (Mon - Sat)',
+    managerName: 'Academic Fulfillment Desk',
+    phone: '9460020640',
+    beatNo: 'Beat 14',
     catalog: [
-      { sku: 'XPEEDO-EV-X1PRO-54999', title: 'XPEEDO EV X1 Pro Electric Cargo Scooter', price: 54999, mrp: 68999, tag: '90km Range/Charge' },
-      { sku: 'XPEEDO-BATTERY-60V-21999', title: '60V 30Ah LiFePO4 Smart Swappable Battery', price: 21999, mrp: 26500, tag: '3-Year Warranty' },
-      { sku: 'XPEEDO-CHARGER-10A', title: '60V 10A Intelligent Auto-Cut Fast Charger', price: 2899, mrp: 3899, tag: 'Fast 3h Charge' },
-      { sku: 'XPEEDO-GPS-SMART', title: 'Live Vehicle Barcode GPS Anti-Theft Kit', price: 1499, mrp: 2199, tag: 'Speed Post COD' },
+      { sku: 'INP-BULK-STUDY-1299', title: 'Competitive Exam Printed Module Bundle (5 kg)', price: 1299, mrp: 1650, tag: 'BNPL Tariff Ready' },
+      { sku: 'INP-BOOK-POST-45', title: 'Registered Printed Book Parcel Booking', price: 45, mrp: 60, tag: 'Pan-India Tracking' },
     ],
   },
   {
-    id: 'eco-bakery',
-    name: 'Dadabari Fresh Artisanal Bakery & Dairy',
-    categoryTitle: 'A2 Buffalo Milk, Paneer & Fresh Cakes',
-    badge: 'Morning Cold-Chain',
-    imageSrc: '/src/assets/images/local_bakery_dairy_1794822884061.jpg',
-    gradient: 'from-amber-950 via-yellow-900 to-stone-900',
-    icon: Coffee,
-    address: 'Dadabari Chauraha, Sector 3 Corner, PIN 324009',
-    landmark: 'Next to Government Senior Secondary School',
-    geoCoords: '25.1575° N, 75.8280° E',
-    workingHours: '06:00 AM – 10:00 PM (Daily)',
-    managerName: 'Dadabari Dairy Master',
-    phone: '8769706002',
-    beatNo: 'Beat 2',
+    id: 'eco-kota-doria',
+    name: 'Kaithoon S.O. · Kota Doria Weavers Guild',
+    categoryTitle: 'GI-Tagged Kota Doria Sarees & Handloom Parcels',
+    badge: 'Bulk Customer · 325001',
+    imageSrc: '/src/assets/images/store_kota_handloom_1794731364865.jpg',
+    gradient: 'from-amber-950 via-red-900 to-stone-900',
+    icon: Award,
+    address: 'Kaithoon Sub Post Office, Kota Division PIN 325001',
+    landmark: 'Heritage Handloom Cooperative Dispatch',
+    geoCoords: '25.1180° N, 75.9570° E',
+    workingHours: '09:30 AM – 05:30 PM (Mon - Sat)',
+    managerName: 'Heritage Loom Cooperative',
+    phone: '9460020640',
+    beatNo: 'Beat 1',
     catalog: [
-      { sku: 'DAIRY-A2-MILK-2L', title: 'Fresh Desi Buffalo A2 Raw Milk (2 Litres)', price: 140, mrp: 160, tag: 'Morning 7 AM Del' },
-      { sku: 'DAIRY-PANEER-500G', title: 'Fresh Malai Paneer 500g Vacuum Pack', price: 190, mrp: 220, tag: '100% Pure Buffalo' },
-      { sku: 'BAKERY-TRUFFLE-CAKE', title: 'Belgian Dark Truffle Celebration Cake 1kg', price: 549, mrp: 699, tag: 'Same-Evening COD' },
+      { sku: 'INP-BULK-DORIA-2450', title: 'Authentic GI-Tagged Kota Doria Handloom Gift Box', price: 2450, mrp: 3100, tag: 'GI Craft Verified' },
+      { sku: 'INP-HANDLOOM-COD', title: 'Insured Business Parcel COD Handloom Pack', price: 1850, mrp: 2200, tag: 'Speed Post Insured' },
     ],
   },
   {
-    id: 'eco-qsr',
-    name: "Domino's Pizza & Local QSR Food Junction",
-    categoryTitle: 'Hot Pizza Combos, Garlic Bread & Burgers',
-    badge: '35-Min Express COD',
-    imageSrc: '/src/assets/images/brand_qsr_pizza_1794743632250.jpg',
-    gradient: 'from-red-950 via-orange-950 to-slate-900',
-    icon: Store,
-    address: 'Dadabari Circle, Shopping Arcade, PIN 324009',
-    landmark: 'Main Highway Link Junction',
+    id: 'eco-kota-ho',
+    name: 'Kota H.O. · Philately & Corporate MyStamp',
+    categoryTitle: 'My Stamp Sheets, Gangajal & Institutional Mailers',
+    badge: 'Head Post Office · 324001',
+    imageSrc: '/src/assets/images/prod_mystamp_philately_1794734841690.jpg',
+    gradient: 'from-red-950 via-amber-900 to-slate-900',
+    icon: Landmark,
+    address: 'Kota Head Post Office, Civil Lines, PIN 324001',
+    landmark: 'Philately & Bulk Customer Counter',
+    geoCoords: '25.1820° N, 75.8450° E',
+    workingHours: '09:00 AM – 05:30 PM (Mon - Sat)',
+    managerName: 'Philately & Bulk Mail Counter',
+    phone: '9460020640',
+    beatNo: 'Beat 1',
+    catalog: [
+      { sku: 'INP-BULK-MYSTAMP-300', title: 'Personalized India Post My Stamp Sheet (12 Stamps)', price: 300, mrp: 300, tag: 'Official Postage' },
+      { sku: 'INP-BULK-GANGAJAL-60', title: 'Gangotri Sacred Gangajal Pack (250 ml × 2)', price: 60, mrp: 70, tag: 'Counter & Beat Stock' },
+    ],
+  },
+  {
+    id: 'eco-dadabari-med',
+    name: 'Dadabari S.O. · Surgical & Pharma Dispatch',
+    categoryTitle: 'Tamper-Evident Medical Kits & Clinic Supply',
+    badge: 'Bulk Customer · 324009',
+    imageSrc: '/src/assets/images/prod_b2b_pharma_wellness_1794734843342.jpg',
+    gradient: 'from-emerald-950 via-teal-900 to-slate-900',
+    icon: HeartPulse,
+    address: 'Dadabari S.O. Beat 2 Commercial Cluster, PIN 324009',
+    landmark: 'Moisture-Sealed Medical Dispatch Node',
     geoCoords: '25.1588° N, 75.8305° E',
-    workingHours: '11:00 AM – 11:30 PM (Daily)',
-    managerName: 'QSR Delivery Dispatch',
-    phone: '9460020640',
-    beatNo: 'Beat 3',
-    catalog: [
-      { sku: 'DOM-MEAL-COMBO', title: '2 Medium Cheese Burst Pizzas + Garlic Bread', price: 499, mrp: 650, tag: 'Hot Delivery 35m' },
-      { sku: 'DOM-PEPPY-PANEER', title: 'Peppy Paneer Medium Pizza + Choco Lava Cake', price: 349, mrp: 440, tag: 'Student Favorite' },
-    ],
-  },
-  {
-    id: 'eco-fashion',
-    name: "Allen Solly & Levi's Showroom Hub",
-    categoryTitle: 'Polos, Denims, Blazers & Festive Ethnic',
-    badge: 'Showroom Sealed Stock',
-    imageSrc: '/src/assets/images/brand_apparel_fashion_1794743634256.jpg',
-    gradient: 'from-slate-950 via-purple-950 to-indigo-950',
-    icon: Shirt,
-    address: 'Dadabari Commercial Main Road, PIN 324009',
-    landmark: 'Near State Bank of India Dadabari Branch',
-    geoCoords: '25.1579° N, 75.8268° E',
-    workingHours: '10:30 AM – 09:30 PM (Mon - Sun)',
-    managerName: 'Showroom Manager',
-    phone: '9460020640',
+    workingHours: '09:00 AM – 06:30 PM (Mon - Sat)',
+    managerName: 'Mahendra Kumar Meena (Beat 2)',
+    phone: '8769706002',
     beatNo: 'Beat 2',
     catalog: [
-      { sku: 'BRAND-SOLLY-POLO-1799', title: 'Allen Solly Pique Cotton Classic Polo', price: 999, mrp: 1499, tag: '100% Combed Cotton' },
-      { sku: 'LEVI-511-DENIM', title: "Levi's 511 Slim Fit Stretch Denim Jeans", price: 2199, mrp: 3199, tag: 'Showroom Sealed' },
-      { sku: 'FAB-KURTA-SILK', title: 'Fabindia Cotton-Silk Kurta & Pajama Set', price: 1799, mrp: 2499, tag: 'Festive Ready' },
+      { sku: 'INP-BULK-MEDKIT-1499', title: 'Clinic & Home First-Aid + Digital BP Pack', price: 1499, mrp: 1990, tag: 'Beat 2 Fast Dispatch' },
+      { sku: 'INP-BULK-MAILER-1750', title: 'India Post Tamper-Proof Mailers (250 Pack)', price: 1750, mrp: 2350, tag: '70-Micron Seal' },
     ],
   },
   {
-    id: 'eco-laundry',
-    name: 'Dadabari Express Steam Laundry & Hostel Wash',
-    categoryTitle: '24-Hr Steam Dry Cleaning & Ironing',
-    badge: 'Hostel & Family Care',
-    imageSrc: '/src/assets/images/laundry_event_kit_1794822884997.jpg',
-    gradient: 'from-violet-950 via-purple-900 to-fuchsia-950',
-    icon: Sparkles,
-    address: 'Sector 4 Service Lane, Dadabari, PIN 324009',
-    landmark: 'Near Allen Coaching Student Enclave',
-    geoCoords: '25.1568° N, 75.8256° E',
-    workingHours: '07:30 AM – 09:30 PM (Daily)',
-    managerName: 'Dadabari Laundry Lead',
+    id: 'eco-baran-agro',
+    name: 'Baran H.O. · Hadoti Agro & FPO Dispatch',
+    categoryTitle: 'Coriander, Spices & Cold-Pressed Mustard Parcels',
+    badge: 'Baran Division · 325205',
+    imageSrc: '/src/assets/images/prod_b2b_kirana_wholesale_1794734842973.jpg',
+    gradient: 'from-lime-950 via-emerald-900 to-slate-900',
+    icon: Sprout,
+    address: 'Baran Head Post Office, Baran Division PIN 325205',
+    landmark: 'FPO Agro Bulk Parcel Terminal',
+    geoCoords: '25.1011° N, 76.5132° E',
+    workingHours: '09:00 AM – 05:30 PM (Mon - Sat)',
+    managerName: 'FPO Agro Dispatch',
     phone: '9460020640',
-    beatNo: 'Beat 4',
+    beatNo: 'Beat 1',
     catalog: [
-      { sku: 'LAU-STEAM-10PC', title: '10-Garment Express Steam Press & Sanitization', price: 249, mrp: 350, tag: 'Same-Day Return' },
-      { sku: 'LAU-HOSTEL-MONTHLY', title: 'Kota Student Monthly Laundry Plan (24kg)', price: 899, mrp: 1200, tag: 'Weekly Doorstep Pickup' },
-      { sku: 'LAU-DRYCLEAN-SUIT', title: '2-Piece Formal Blazer / Suit Dry Clean', price: 299, mrp: 450, tag: 'Sealed Kraft Pack' },
+      { sku: 'INP-BULK-AGRO-890', title: 'Hadoti Whole Spices & Mustard Oil 5kg Box', price: 890, mrp: 1150, tag: 'Direct FPO Origin' },
+      { sku: 'INP-BULK-MAILER-1750', title: 'Indraprastha RIICO Corrugated Shipping Carton', price: 1750, mrp: 2350, tag: 'Bulk Slab Discount' },
     ],
   },
 ];
@@ -210,17 +203,17 @@ export default function LocalServiceEcosystemCards({
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
         <div>
           <div className="text-xs font-bold uppercase tracking-wider text-red-700 dark:text-red-400 flex items-center gap-1.5">
-            <Store size={14} />
+            <Building2 size={14} />
             <span>{translate('sec_service_ecosystems', lang)} · PIN {activePincode}</span>
           </div>
           <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-            Local Service Ecosystem Hubs
+            India Post Divisional Hubs &amp; Bulk Dispatch Nodes
           </h3>
         </div>
 
         <div className="flex items-center gap-3">
           <span className="text-xs font-medium text-slate-500 dark:text-slate-400 hidden sm:inline">
-            Slide to view verified local centers &amp; full catalogs
+            Slide to inspect postal counters &amp; bulk dispatch desks
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -243,7 +236,7 @@ export default function LocalServiceEcosystemCards({
         </div>
       </div>
 
-      {/* Horizontal Scrolling Row of 6 Ecosystem Hub Cards ("scroll-x" pattern) */}
+      {/* Horizontal Scrolling Row */}
       <div
         ref={scrollContainerRef}
         className="flex overflow-x-auto gap-4 pb-4 pt-1 snap-x snap-mandatory scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
@@ -262,7 +255,7 @@ export default function LocalServiceEcosystemCards({
                     <IconComp size={22} />
                   </div>
                   <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-slate-200 text-[11px] font-mono font-bold">
-                    {store.catalog.length} SKUs Listed
+                    {store.catalog.length} Offerings
                   </span>
                 </div>
 
@@ -285,7 +278,7 @@ export default function LocalServiceEcosystemCards({
                   <span className="truncate">{store.landmark}</span>
                 </span>
                 <span className="font-bold text-red-700 dark:text-amber-400 group-hover:translate-x-0.5 transition flex items-center gap-1 shrink-0 ml-2">
-                  <span>Explore</span>
+                  <span>Inspect</span>
                   <ArrowRight size={13} />
                 </span>
               </div>
@@ -293,25 +286,25 @@ export default function LocalServiceEcosystemCards({
           );
         })}
 
-        {/* View All Centers Card */}
+        {/* View All Hubs Card */}
         <div
           onClick={() => {
-            const el = document.getElementById('vendor-carousels-hub');
+            const el = document.getElementById('bulk-customer-showcase');
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }}
           className="w-[200px] sm:w-[220px] shrink-0 snap-start flex flex-col items-center justify-center text-center p-6 rounded-2xl border-2 border-dashed border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800/40 hover:bg-slate-100 dark:hover:bg-zinc-800 hover:border-red-500 dark:hover:border-amber-400 transition cursor-pointer group shadow-2xs"
           role="button"
           tabIndex={0}
-          aria-label="View All Ecosystem Centers"
+          aria-label="View All Bulk Customer Hubs"
         >
           <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-400 flex items-center justify-center group-hover:scale-110 transition duration-200 mb-3 shadow-xs">
-            <Store size={20} />
+            <Package size={20} />
           </div>
           <h4 className="font-black text-sm text-slate-900 dark:text-white group-hover:text-red-700 dark:group-hover:text-amber-400 transition">
-            View All Centers
+            All Bulk Showcase Hubs
           </h4>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-            13 Pincode Hubs authorized merchant network
+            13 Pincode Post Office &amp; Bulk Dispatch Network
           </p>
           <span className="mt-3 px-3 py-1 rounded-lg bg-slate-900 text-white dark:bg-amber-400 dark:text-slate-950 text-[10px] font-bold group-hover:bg-red-700 dark:group-hover:bg-amber-300 transition">
             Browse Directory
@@ -326,9 +319,8 @@ export default function LocalServiceEcosystemCards({
             className="w-full max-w-2xl bg-white dark:bg-zinc-900 rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-150"
             role="dialog"
             aria-modal="true"
-            aria-label={`${selectedStore.name} Storefront`}
+            aria-label={`${selectedStore.name} Hub`}
           >
-            {/* Modal Header */}
             <div className={`p-5 bg-gradient-to-r ${selectedStore.gradient} text-white flex items-center justify-between`}>
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-11 h-11 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center shrink-0">
@@ -353,12 +345,11 @@ export default function LocalServiceEcosystemCards({
               </button>
             </div>
 
-            {/* Storefront Verification & Routing Details */}
             <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-950/60 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div className="space-y-1">
                 <div className="text-slate-400 flex items-center gap-1 font-semibold text-[11px]">
                   <MapPin size={12} className="text-red-600" />
-                  <span>Physical Address &amp; GPS</span>
+                  <span>Office Address &amp; GPS</span>
                 </div>
                 <div className="font-bold text-slate-800 dark:text-slate-200">{selectedStore.address}</div>
                 <div className="text-slate-500 text-[11px]">{selectedStore.landmark}</div>
@@ -368,18 +359,17 @@ export default function LocalServiceEcosystemCards({
               <div className="space-y-1 sm:border-l sm:border-slate-200 sm:dark:border-zinc-800 sm:pl-3">
                 <div className="text-slate-400 flex items-center gap-1 font-semibold text-[11px]">
                   <Clock size={12} className="text-emerald-600" />
-                  <span>Hours &amp; Beat Contact</span>
+                  <span>Counter Hours &amp; Assigned Desk</span>
                 </div>
                 <div className="font-bold text-slate-800 dark:text-slate-200">{selectedStore.workingHours}</div>
                 <div className="text-slate-500 text-[11px]">Lead: {selectedStore.managerName}</div>
-                <div className="font-mono text-emerald-700 dark:text-emerald-400 font-bold">₹15 Flat Speed Post COD</div>
+                <div className="font-mono text-emerald-700 dark:text-emerald-400 font-bold">Speed Post COD &amp; BNPL Ready</div>
               </div>
             </div>
 
-            {/* Product & Service Catalog for this Store */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 custom-scrollbar">
               <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                Available In-Store Catalog &amp; Services
+                Available Services &amp; Promoted Products
               </div>
 
               <div className="space-y-2">
@@ -387,7 +377,7 @@ export default function LocalServiceEcosystemCards({
                   const mrp = Number(item.mrp) || 0;
                   const price = Number(item.price) || 0;
                   const itemWaText = encodeURIComponent(
-                    `Namaste ${selectedStore.name} (PIN ${activePincode}),\nI want to order:\n*${item.title}* (${item.sku})\nPrice: ₹${price.toLocaleString('en-IN')} (MRP: ₹${mrp.toLocaleString('en-IN')}) · Delivery: ₹15 Beat COD`
+                    `Namaste ${selectedStore.name} (PIN ${activePincode}),\nI want to book / inquire:\n*${item.title}* (${item.sku})\nPrice / Tariff: ₹${price.toLocaleString('en-IN')}`
                   );
 
                   return (
@@ -450,11 +440,10 @@ export default function LocalServiceEcosystemCards({
               </div>
             </div>
 
-            {/* Modal Actions */}
             <div className="p-4 bg-slate-50 dark:bg-zinc-950 border-t border-slate-100 dark:border-zinc-800 flex items-center justify-between gap-3 text-xs">
               <a
                 href={`https://api.whatsapp.com/send?phone=91${selectedStore.phone}&text=${encodeURIComponent(
-                  `Namaste ${selectedStore.name} (PIN ${activePincode}), I need doorstep order support.`
+                  `Namaste ${selectedStore.name} (PIN ${activePincode}), I need doorstep postal or bulk dispatch assistance.`
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -468,7 +457,7 @@ export default function LocalServiceEcosystemCards({
                 onClick={() => setSelectedStore(null)}
                 className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-zinc-800 text-slate-800 dark:text-slate-200 font-bold hover:bg-slate-300 dark:hover:bg-zinc-700 transition cursor-pointer"
               >
-                Close Storefront
+                Close Hub View
               </button>
             </div>
           </div>

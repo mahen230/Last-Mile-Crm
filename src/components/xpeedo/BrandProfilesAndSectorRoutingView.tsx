@@ -749,7 +749,7 @@ export default function BrandProfilesAndSectorRoutingView({
                   <span>Database-to-Sector Routing &amp; Master Admin Reassignment</span>
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Automatically route Department of Post, Xpeedo EV, Xpokart, Drop Dash, and Shop Deck records to their isolated workspaces, or reassign any record manually.
+                  Automatically route Department of Post division, beat, and bulk customer records to their scoped India Post workspaces, or reassign any record manually.
                 </p>
               </div>
               <button
@@ -1001,7 +1001,7 @@ export default function BrandProfilesAndSectorRoutingView({
                   required
                   value={cLoginId}
                   onChange={(e) => setCLoginId(e.target.value)}
-                  placeholder="e.g. freshmart.owner@brand.xpeedo.in"
+                  placeholder="e.g. office.incharge@indiapost-portal.in"
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg font-mono"
                 />
               </div>

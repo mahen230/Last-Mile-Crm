@@ -42,6 +42,7 @@ import {
   Users,
   Wallet,
   Workflow,
+  Truck,
 } from 'lucide-react';
 import {
   FeatureVisibilityKey,
@@ -52,6 +53,7 @@ import {
 import { featureVisibilityService } from '../services/featureVisibilityService';
 import { staffPermissionService } from '../services/staffPermissionService';
 import { BrandStaffSectionKey } from '../types/brandOwner';
+import { canAccessStandaloneStorefront } from '../utils/envMode';
 
 export interface NavSubSubItem {
   id: string;
@@ -228,7 +230,7 @@ export function buildMainShellNav(params: MainShellNavParams): NavSectionGroup[]
             { id: 'cmd-employees', label: 'Employees Directory', to: '/employees', icon: Users },
             { id: 'cmd-departments', label: 'Departments', to: '/departments', icon: Layers },
             ...(isAdmin
-              ? [{ id: 'cmd-staff-master', label: 'Core Staff (Staff 1–5)', to: '/staff-master', icon: Briefcase }]
+              ? [{ id: 'cmd-staff-master', label: 'Staff Master Directory', to: '/staff-master', icon: Briefcase }]
               : []),
           ],
         },
@@ -238,12 +240,25 @@ export function buildMainShellNav(params: MainShellNavParams): NavSectionGroup[]
           to: '/india-post',
           icon: Building,
         },
-        {
-          id: 'cmd-xpeedo-ev',
-          label: 'Xpeedo EV Ops',
-          to: '/xpeedo-ev',
-          icon: Briefcase,
-        },
+        ...(canAccessStandaloneStorefront(userProfile)
+          ? [
+              {
+                id: 'cmd-bulk-showcase',
+                label: 'India Post Storefront',
+                to: '/india-post-storefront',
+                icon: Store,
+              },
+            ]
+          : []),
+        ...(isVisible('productTargets')
+          ? [{ id: 'cmd-product-targets', label: 'Product & Target Dashboard', to: '/product-targets', icon: Target }]
+          : []),
+        ...(isVisible('masterSearch')
+          ? [{ id: 'cmd-master-search', label: 'Master Search Console', to: '/master-search', icon: Search }]
+          : []),
+        ...(isVisible('lastMileOps')
+          ? [{ id: 'cmd-last-mile-ops', label: 'Last-Mile Operations', to: '/last-mile-ops', icon: Route }]
+          : []),
         {
           id: 'cmd-notifications',
           label: 'Notifications',
@@ -261,6 +276,21 @@ export function buildMainShellNav(params: MainShellNavParams): NavSectionGroup[]
       defaultExpanded: true,
       menus: [
         { id: 'staff-dashboard', label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
+        ...(canAccessStandaloneStorefront(userProfile) && isVisible('showcase')
+          ? [{ id: 'staff-showcase', label: 'India Post Storefront', to: '/india-post-storefront', icon: Store }]
+          : []),
+        ...(isVisible('productTargets')
+          ? [{ id: 'staff-product-targets', label: 'Product & Target Dashboard', to: '/product-targets', icon: Target }]
+          : []),
+        ...(isVisible('masterSearch')
+          ? [{ id: 'staff-master-search', label: 'Master Search Console', to: '/master-search', icon: Search }]
+          : []),
+        ...(isVisible('lastMileOps')
+          ? [{ id: 'staff-last-mile-ops', label: 'Last-Mile Operations', to: '/last-mile-ops', icon: Route }]
+          : []),
+        ...(isVisible('reports') || staffPermissionService.isSuperiorRole(userProfile)
+          ? [{ id: 'staff-reports', label: 'Superior Reports & MIS', to: '/reports', icon: BarChart2 }]
+          : []),
         ...(showProperty && isVisible('property')
           ? [{ id: 'staff-properties', label: 'Property Registry', to: '/properties', icon: Building }]
           : []),
@@ -279,203 +309,124 @@ export function buildMainShellNav(params: MainShellNavParams): NavSectionGroup[]
     });
   }
 
-  // 2. Brand Workspaces (3-Level Hierarchy: Brand -> Sub-Menu -> Sub-Sub-Menu)
-  if (isAdmin && !isWhiteLabel && strictVendorId !== 'INDIA_POST' && brandPartners.length > 0) {
+  // 2. India Post Divisional & Bulk Customer Workspaces (3-Level Hierarchy)
+  if (isAdmin && !isWhiteLabel && brandPartners.length > 0) {
+    const indiaPostBrand =
+      brandPartners.find((b) => b.partnerSlug === 'india-post') || brandPartners[0];
     groups.push({
       id: 'cat-brand-workspaces',
-      categoryLabel: 'Workspace & Team',
-      sectionLabel: 'Brand Workspaces (3-Level)',
+      categoryLabel: 'India Post Command',
+      sectionLabel: 'Divisional & Bulk Customer Workspace',
       defaultExpanded: false,
-      menus: brandPartners.map((brand) => {
-        const isIndiaPost = brand.partnerSlug === 'india-post';
-        const isXpokartBrand = brand.partnerSlug === 'xpokart';
-        const baseChildren: NavSubItem[] = isXpokartBrand
-          ? [
-              {
-                id: `brand-${brand.partnerSlug}-portal`,
-                label: 'Xpokart E-Commerce Studio',
-                to: `/brand-portal/${brand.partnerSlug}`,
-                icon: Store,
-                children: [
-                  {
-                    id: `brand-${brand.partnerSlug}-ov`,
-                    label: 'Storefront Overview',
-                    to: `/brand-portal/${brand.partnerSlug}?tab=OVERVIEW`,
-                    icon: LayoutDashboard,
-                  },
-                  {
-                    id: `brand-${brand.partnerSlug}-cat`,
-                    label: 'Product Catalog & Selling',
-                    to: `/brand-portal/${brand.partnerSlug}?tab=XPO_PRODUCTS`,
-                    icon: Package,
-                  },
-                  {
-                    id: `brand-${brand.partnerSlug}-orders`,
-                    label: 'Cart, Orders & Checkout',
-                    to: `/brand-portal/${brand.partnerSlug}?tab=XPO_CUSTOMER_PORTAL`,
-                    icon: Store,
-                  },
-                  {
-                    id: `brand-${brand.partnerSlug}-cfg`,
-                    label: 'Storefront Config',
-                    to: `/brand-portal/${brand.partnerSlug}?tab=XPO_STOREFRONT`,
-                    icon: Sparkles,
-                  },
-                  {
-                    id: `brand-${brand.partnerSlug}-cust`,
-                    label: 'Store Buyers',
-                    to: `/brand-portal/${brand.partnerSlug}?tab=CUSTOMERS`,
-                    icon: Users,
-                  },
-                ],
-              },
-              {
-                id: `brand-${brand.partnerSlug}-public`,
-                label: 'Public E-Commerce Store',
-                to: `/brand/${brand.partnerSlug}`,
-                icon: Store,
-              },
-              {
-                id: `brand-${brand.partnerSlug}-login`,
-                label: 'Merchant Sign-In',
-                to: `/brand-login/${brand.partnerSlug}`,
-                icon: KeyRound,
-              },
-            ]
-          : [
-              {
-                id: `brand-${brand.partnerSlug}-portal`,
-                label: 'Brand Owner Portal',
-                to: `/brand-portal/${brand.partnerSlug}`,
-                icon: Store,
-                children: [
-                  {
-                    id: `brand-${brand.partnerSlug}-ov`,
-                    label: 'Dashboard Overview',
-                    to: `/brand-portal/${brand.partnerSlug}?tab=OVERVIEW`,
-                    icon: LayoutDashboard,
-                  },
-                  {
-                    id: `brand-${brand.partnerSlug}-search`,
-                    label: 'Master Search Console',
-                    to: `/brand-portal/${brand.partnerSlug}?tab=MASTER_SEARCH`,
-                    icon: Search,
-                  },
-                  {
-                    id: `brand-${brand.partnerSlug}-offices`,
-                    label: 'Office Master',
-                    to: `/brand-portal/${brand.partnerSlug}?tab=OFFICES_STORES`,
-                    icon: Building2,
-                  },
-                  {
-                    id: `brand-${brand.partnerSlug}-staff`,
-                    label: 'Master Staff',
-                    to: `/brand-portal/${brand.partnerSlug}?tab=STAFF`,
-                    icon: Users,
-                  },
-                  {
-                    id: `brand-${brand.partnerSlug}-role`,
-                    label: 'Master Role',
-                    to: `/brand-portal/${brand.partnerSlug}?tab=MASTER_ROLE`,
-                    icon: ShieldCheck,
-                  },
-                  {
-                    id: `brand-${brand.partnerSlug}-promo`,
-                    label: 'Promotion Master',
-                    to: `/brand-portal/${brand.partnerSlug}?tab=PROMOTION_MASTER`,
-                    icon: Award,
-                  },
-                  {
-                    id: `brand-${brand.partnerSlug}-cust`,
-                    label: 'Customers & Leads',
-                    to: `/brand-portal/${brand.partnerSlug}?tab=CUSTOMERS`,
-                    icon: Users,
-                  },
-                ],
-              },
-              {
-                id: `brand-${brand.partnerSlug}-partner-ws`,
-                label: 'Partner Scoped CRM',
-                to: `/partner/workspace/${brand.partnerSlug}`,
-                icon: Briefcase,
-                children: [
-                  {
-                    id: `brand-${brand.partnerSlug}-p-dash`,
-                    label: 'Partner Dashboard',
-                    to: `/partner/workspace/${brand.partnerSlug}?tab=DASHBOARD`,
-                    icon: LayoutDashboard,
-                  },
-                  {
-                    id: `brand-${brand.partnerSlug}-p-leads`,
-                    label: 'Leads & Follow-Ups',
-                    to: `/partner/workspace/${brand.partnerSlug}?tab=LEADS`,
-                    icon: TrendingUp,
-                  },
-                  {
-                    id: `brand-${brand.partnerSlug}-p-rbac`,
-                    label: 'Master Staff & Roles',
-                    to: `/partner/workspace/${brand.partnerSlug}?tab=RBAC_TEAM`,
-                    icon: ShieldCheck,
-                  },
-                ],
-              },
-              ...(isIndiaPost
-                ? [
-                    {
-                      id: `brand-${brand.partnerSlug}-ip-modules`,
-                      label: 'Department of Post Governance',
-                      icon: Building,
-                      children: [
-                        {
-                          id: `brand-${brand.partnerSlug}-ip-hier`,
-                          label: 'Divisional Hierarchy',
-                          to: `/brand-portal/india-post?tab=IP_HIERARCHY`,
-                          icon: GitBranch,
-                        },
-                        {
-                          id: `brand-${brand.partnerSlug}-ip-geo`,
-                          label: 'Geo & Data Quality',
-                          to: `/brand-portal/india-post?tab=IP_GEO_QUALITY`,
-                          icon: MapPin,
-                        },
-                        {
-                          id: `brand-${brand.partnerSlug}-ip-docs`,
-                          label: 'Statutory Docs & ACG-61',
-                          to: `/brand-portal/india-post?tab=IP_STATUTORY_DOCS`,
-                          icon: FileText,
-                        },
-                        {
-                          id: `brand-${brand.partnerSlug}-ip-ops`,
-                          label: 'Daily Ops & Surveys',
-                          to: `/brand-portal/india-post?tab=IP_DAILY_OPS`,
-                          icon: UserCheck,
-                        },
-                        {
-                          id: `brand-${brand.partnerSlug}-ip-srm`,
-                          label: 'SRM & Escalations',
-                          to: `/brand-portal/india-post?tab=IP_SRM`,
-                          icon: Ticket,
-                        },
-                      ],
-                    },
-                  ]
-                : []),
-              {
-                id: `brand-${brand.partnerSlug}-login`,
-                label: 'Brand Owner Sign-In',
-                to: `/brand-login/${brand.partnerSlug}`,
-                icon: KeyRound,
-              },
-            ];
-
-        return {
-          id: `brand-menu-${brand.partnerSlug}`,
-          label: brand.displayName,
+      menus: [
+        {
+          id: `brand-menu-${indiaPostBrand.partnerSlug}`,
+          label: 'India Post Operations Hub',
           icon: Building2,
-          accentColor: brand.accentColor,
-          children: baseChildren,
-        };
-      }),
+          accentColor: '#991B1B',
+          children: [
+            {
+              id: `brand-${indiaPostBrand.partnerSlug}-portal`,
+              label: 'India Post Owner Portal',
+              to: `/brand-portal/india-post`,
+              icon: Store,
+              children: [
+                {
+                  id: `brand-${indiaPostBrand.partnerSlug}-ov`,
+                  label: 'Dashboard Overview',
+                  to: `/brand-portal/india-post?tab=OVERVIEW`,
+                  icon: LayoutDashboard,
+                },
+                {
+                  id: `brand-${indiaPostBrand.partnerSlug}-search`,
+                  label: 'Master Search Console',
+                  to: `/brand-portal/india-post?tab=MASTER_SEARCH`,
+                  icon: Search,
+                },
+                {
+                  id: `brand-${indiaPostBrand.partnerSlug}-offices`,
+                  label: 'Office Master',
+                  to: `/brand-portal/india-post?tab=OFFICES_STORES`,
+                  icon: Building2,
+                },
+                {
+                  id: `brand-${indiaPostBrand.partnerSlug}-staff`,
+                  label: 'Master Staff',
+                  to: `/brand-portal/india-post?tab=STAFF`,
+                  icon: Users,
+                },
+                {
+                  id: `brand-${indiaPostBrand.partnerSlug}-role`,
+                  label: 'Master Role',
+                  to: `/brand-portal/india-post?tab=MASTER_ROLE`,
+                  icon: ShieldCheck,
+                },
+                {
+                  id: `brand-${indiaPostBrand.partnerSlug}-promo`,
+                  label: 'Promotion Master',
+                  to: `/brand-portal/india-post?tab=PROMOTION_MASTER`,
+                  icon: Award,
+                },
+                {
+                  id: `brand-${indiaPostBrand.partnerSlug}-cust`,
+                  label: 'Customers & Leads',
+                  to: `/brand-portal/india-post?tab=CUSTOMERS`,
+                  icon: Users,
+                },
+              ],
+            },
+            {
+              id: `brand-${indiaPostBrand.partnerSlug}-ip-modules`,
+              label: 'Department of Post Governance',
+              icon: Building,
+              children: [
+                {
+                  id: `brand-${indiaPostBrand.partnerSlug}-ip-hier`,
+                  label: 'Divisional Hierarchy',
+                  to: `/brand-portal/india-post?tab=IP_HIERARCHY`,
+                  icon: GitBranch,
+                },
+                {
+                  id: `brand-${indiaPostBrand.partnerSlug}-ip-geo`,
+                  label: 'Geo & Data Quality',
+                  to: `/brand-portal/india-post?tab=IP_GEO_QUALITY`,
+                  icon: MapPin,
+                },
+                {
+                  id: `brand-${indiaPostBrand.partnerSlug}-ip-docs`,
+                  label: 'Statutory Docs & ACG-61',
+                  to: `/brand-portal/india-post?tab=IP_STATUTORY_DOCS`,
+                  icon: FileText,
+                },
+                {
+                  id: `brand-${indiaPostBrand.partnerSlug}-ip-ops`,
+                  label: 'Daily Ops & Surveys',
+                  to: `/brand-portal/india-post?tab=IP_DAILY_OPS`,
+                  icon: UserCheck,
+                },
+                {
+                  id: `brand-${indiaPostBrand.partnerSlug}-ip-srm`,
+                  label: 'SRM & Escalations',
+                  to: `/brand-portal/india-post?tab=IP_SRM`,
+                  icon: Ticket,
+                },
+              ],
+            },
+            {
+              id: `brand-${indiaPostBrand.partnerSlug}-storefront`,
+              label: 'Public Bulk Showcase',
+              to: `/brand/india-post`,
+              icon: Store,
+            },
+            {
+              id: `brand-${indiaPostBrand.partnerSlug}-login`,
+              label: 'India Post Staff Login',
+              to: `/partner/login/india-post`,
+              icon: KeyRound,
+            },
+          ],
+        },
+      ],
     });
   }
 
@@ -696,29 +647,27 @@ export function buildMainShellNav(params: MainShellNavParams): NavSectionGroup[]
     }
   }
 
-  // 5. Commercial Network — ONLY if retailServicesActive is true
-  if (retailServicesActive && canShowCommercialNetwork) {
-    const commMenus: NavMenuItem[] = [];
-    if (isAdmin && isVisible('vendorSection')) {
+  // 5. Bulk Customers & Storefront Showcase
+  if (canShowCommercialNetwork || isAdmin) {
+    const commMenus: NavMenuItem[] = canAccessStandaloneStorefront(userProfile)
+      ? [{ id: 'comm-inpost-showcase', label: 'India Post Storefront', to: '/india-post-storefront', icon: Store }]
+      : [];
+    if (retailServicesActive && isAdmin && isVisible('vendorSection')) {
       commMenus.push(
-        { id: 'comm-partner-mgmt', label: 'Partner & Brand Hub', to: '/partner-brand-management', icon: ShieldCheck },
-        { id: 'comm-vendor-eco', label: 'Vendor & Product Ecosystem', to: '/vendor-ecosystem', icon: Store }
+        { id: 'comm-partner-mgmt', label: 'Bulk Customer & Hub Directory', to: '/partner-brand-management', icon: ShieldCheck },
+        { id: 'comm-vendor-eco', label: 'Postal & Bulk Catalog Hub', to: '/vendor-ecosystem', icon: Store }
       );
     }
-    if (isVisible('commercialDirectory')) {
+    if (retailServicesActive && isVisible('commercialDirectory')) {
       commMenus.push(
-        { id: 'comm-dir', label: 'Commercial Store Directory', to: '/commercial-directory', icon: Store },
-        { id: 'comm-intel', label: 'AI Commercial Engine', to: '/commercial-intelligence', icon: Sparkles }
+        { id: 'comm-dir', label: 'Commercial Store Directory', to: '/commercial-directory', icon: Store }
       );
-    }
-    if (isVisible('storefront') && !isViewerOnly) {
-      commMenus.push({ id: 'comm-storefront', label: 'Storefront Studio', to: '/staff-storefront', icon: Store });
     }
     if (commMenus.length > 0) {
       groups.push({
         id: 'cat-commercial-network',
-        categoryLabel: 'Retail & Commercial',
-        sectionLabel: 'Storefronts & Network',
+        categoryLabel: 'Bulk & Storefront',
+        sectionLabel: 'Bulk Customer Promotion',
         defaultExpanded: false,
         menus: commMenus,
       });
@@ -730,12 +679,12 @@ export function buildMainShellNav(params: MainShellNavParams): NavSectionGroup[]
     groups.push({
       id: 'cat-governance',
       categoryLabel: 'Governance & Settings',
-      sectionLabel: 'RBAC, Partners & System',
+      sectionLabel: 'RBAC, Offices & System',
       defaultExpanded: false,
       menus: [
         { id: 'gov-rbac', label: 'Master Control (RBAC)', to: '/role-access-dashboard', icon: Shield },
-        { id: 'gov-partner-hub', label: 'Brand & Partner Directory', to: '/partner-brand-management', icon: ShieldCheck },
-        { id: 'gov-brand-logins', label: 'Brand Profiles & Logins', to: '/settings?tab=BRAND_LOGINS', icon: KeyRound },
+        { id: 'gov-partner-hub', label: 'India Post Bulk & Office Hub', to: '/partner-brand-management', icon: ShieldCheck },
+        { id: 'gov-brand-logins', label: 'India Post Access & Logins', to: '/settings?tab=BRAND_LOGINS', icon: KeyRound },
         { id: 'gov-documents', label: 'Documents Center', to: '/documents', icon: FileText },
         { id: 'gov-finance', label: 'Finance Ledger', to: '/finance', icon: Wallet },
         { id: 'gov-reports', label: 'Reports & Analytics', to: '/reports', icon: BarChart2 },
@@ -781,6 +730,7 @@ export interface BrandPortalNavParams {
     academy?: number;
     notifications?: number;
     tasks?: number;
+    vendors?: number;
   };
 }
 
@@ -808,12 +758,6 @@ export function buildBrandPortalNav(params: BrandPortalNavParams): NavSectionGro
     counts = {},
   } = params;
 
-  const isXpokart = Boolean(
-    params.isXpokart ||
-      params.brandName?.toLowerCase().includes('xpokart') ||
-      params.partnerSlug?.toLowerCase().includes('xpokart')
-  );
-
   const groups: NavSectionGroup[] = [];
 
   if (mode === 'OWNER') {
@@ -822,7 +766,7 @@ export function buildBrandPortalNav(params: BrandPortalNavParams): NavSectionGro
     groups.push({
       id: 'bp-exec',
       categoryLabel: 'Executive',
-      sectionLabel: isXpokart ? 'Storefront Overview' : 'Workspace Overview',
+      sectionLabel: 'India Post Workspace Overview',
       defaultExpanded: true,
       menus: [
         ...(allowed.has('OVERVIEW')
@@ -831,284 +775,204 @@ export function buildBrandPortalNav(params: BrandPortalNavParams): NavSectionGro
       ],
     });
 
-    if (isXpokart) {
-      // Strictly E-Commerce Storefront modules — zero Staff, zero Territory/Beats/Promotions
-      groups.push({
-        id: 'bp-xpokart-ecommerce',
-        categoryLabel: 'Xpokart E-Commerce',
-        sectionLabel: 'Storefront, Catalog & Checkout',
-        defaultExpanded: true,
-        menus: [
-          {
-            id: 'XPO_PRODUCTS',
-            tabKey: 'XPO_PRODUCTS',
-            label: 'Product Catalog & Categories',
-            icon: Package,
-            count: counts.products,
-          },
-          {
-            id: 'XPO_CUSTOMER_PORTAL',
-            tabKey: 'XPO_CUSTOMER_PORTAL',
-            label: 'Cart, Orders & Checkout',
-            icon: Store,
-            count: counts.leads,
-          },
-          {
-            id: 'XPO_STOREFRONT',
-            tabKey: 'XPO_STOREFRONT',
-            label: 'Storefront Settings',
-            icon: Sparkles,
-          },
-          ...(allowed.has('CUSTOMERS')
-            ? [
-                {
-                  id: 'CUSTOMERS',
-                  tabKey: 'CUSTOMERS',
-                  label: 'Store Buyers',
-                  icon: Users,
-                  count: counts.customers,
-                },
-              ]
-            : []),
-        ],
+    // 1. CRM & Operations Section: Customers, Properties, Leads, Master Search Console, Operations & Tasks
+    const crmMenus: NavMenuItem[] = [];
+    if (allowed.has('CUSTOMERS')) {
+      crmMenus.push({
+        id: 'CUSTOMERS',
+        tabKey: 'CUSTOMERS',
+        label: 'Customers',
+        icon: Users,
+        count: counts.customers,
       });
+    }
+    if (allowed.has('PROPERTIES') || isIndiaPost) {
+      crmMenus.push({
+        id: 'PROPERTIES',
+        tabKey: 'PROPERTIES',
+        label: 'Properties',
+        icon: Home,
+        count: counts.properties,
+      });
+    }
+    if (allowed.has('LEADS') || isIndiaPost) {
+      crmMenus.push({
+        id: 'LEADS',
+        tabKey: 'LEADS',
+        label: 'Leads & Schemes',
+        icon: TrendingUp,
+        count: counts.leads,
+      });
+    }
+    if (allowed.has('MASTER_SEARCH') || isIndiaPost) {
+      crmMenus.push({
+        id: 'MASTER_SEARCH',
+        tabKey: 'MASTER_SEARCH',
+        label: 'Master Search Console',
+        icon: Search,
+      });
+    }
+    if (allowed.has('OPERATIONS_TASKS')) {
+      crmMenus.push({
+        id: 'OPERATIONS_TASKS',
+        tabKey: 'OPERATIONS_TASKS',
+        label: 'Operations & Tasks',
+        icon: ClipboardList,
+        count: counts.tasks,
+      });
+    }
+    if (allowed.has('DEPARTMENTS_APPROVALS')) {
+      crmMenus.push({
+        id: 'DEPARTMENTS_APPROVALS',
+        tabKey: 'DEPARTMENTS_APPROVALS',
+        label: 'Departments & Approvals',
+        icon: Layers,
+        count: counts.departments,
+      });
+    }
+    if (crmMenus.length > 0) {
+      groups.push({
+        id: 'bp-crm',
+        categoryLabel: 'CRM & Operations',
+        sectionLabel: 'Properties, Customers, Leads & Master Search',
+        defaultExpanded: true,
+        menus: crmMenus,
+      });
+    }
 
-      const reportMenus: NavMenuItem[] = [];
-      if (allowed.has('REPORTS_EXPORTS')) {
-        reportMenus.push({
-          id: 'REPORTS_EXPORTS',
-          tabKey: 'REPORTS_EXPORTS',
-          label: 'Reports & Exports',
-          icon: FileBarChart2,
-        });
-      }
-      if (allowed.has('AUDIT_HEALTH')) {
-        reportMenus.push({
-          id: 'AUDIT_HEALTH',
-          tabKey: 'AUDIT_HEALTH',
-          label: 'Store Audit & Health',
-          icon: ShieldCheck,
-        });
-      }
-      if (reportMenus.length > 0) {
-        groups.push({
-          id: 'bp-reports-audit',
-          categoryLabel: 'Reports & Audit',
-          sectionLabel: 'Store Exports & Health',
-          defaultExpanded: true,
-          menus: reportMenus,
-        });
-      }
-    } else {
-      // 1. CRM & Operations Section: Customers, Properties, Leads, Master Search Console, Operations & Tasks
-      const crmMenus: NavMenuItem[] = [];
-      if (allowed.has('CUSTOMERS')) {
-        crmMenus.push({
-          id: 'CUSTOMERS',
-          tabKey: 'CUSTOMERS',
-          label: 'Customers',
-          icon: Users,
-          count: counts.customers,
-        });
-      }
-      if (allowed.has('PROPERTIES') || isIndiaPost) {
-        crmMenus.push({
-          id: 'PROPERTIES',
-          tabKey: 'PROPERTIES',
-          label: 'Properties',
-          icon: Home,
-          count: counts.properties,
-        });
-      }
-      if (allowed.has('LEADS') || isIndiaPost) {
-        crmMenus.push({
-          id: 'LEADS',
-          tabKey: 'LEADS',
-          label: 'Leads & Schemes',
-          icon: TrendingUp,
-          count: counts.leads,
-        });
-      }
-      if (allowed.has('MASTER_SEARCH') || isIndiaPost) {
-        crmMenus.push({
-          id: 'MASTER_SEARCH',
-          tabKey: 'MASTER_SEARCH',
-          label: 'Master Search Console',
-          icon: Search,
-        });
-      }
-      if (allowed.has('OPERATIONS_TASKS')) {
-        crmMenus.push({
-          id: 'OPERATIONS_TASKS',
-          tabKey: 'OPERATIONS_TASKS',
-          label: 'Operations & Tasks',
-          icon: ClipboardList,
-          count: counts.tasks,
-        });
-      }
-      if (allowed.has('DEPARTMENTS_APPROVALS')) {
-        crmMenus.push({
-          id: 'DEPARTMENTS_APPROVALS',
-          tabKey: 'DEPARTMENTS_APPROVALS',
-          label: 'Departments & Approvals',
-          icon: Layers,
-          count: counts.departments,
-        });
-      }
-      if (crmMenus.length > 0) {
-        groups.push({
-          id: 'bp-crm',
-          categoryLabel: 'CRM & Operations',
-          sectionLabel: 'Properties, Customers, Leads & Master Search',
-          defaultExpanded: true,
-          menus: crmMenus,
-        });
-      }
+    // 2. Territory & Team Section (4 Cleanly Connected Modules)
+    const territoryTeamMenus: NavMenuItem[] = [];
+    if (allowed.has('OFFICES_STORES')) {
+      territoryTeamMenus.push({
+        id: 'OFFICES_STORES',
+        tabKey: 'OFFICES_STORES',
+        label: 'Office Master',
+        icon: Building2,
+        count: counts.stores,
+      });
+    }
+    if (allowed.has('STAFF')) {
+      territoryTeamMenus.push({
+        id: 'STAFF',
+        tabKey: 'STAFF',
+        label: 'Master Staff',
+        icon: Users,
+        count: counts.team,
+      });
+    }
+    if (allowed.has('MASTER_ROLE') || allowed.has('STAFF')) {
+      territoryTeamMenus.push({
+        id: 'MASTER_ROLE',
+        tabKey: 'MASTER_ROLE',
+        label: 'Master Role',
+        icon: ShieldCheck,
+      });
+    }
+    if (allowed.has('PROMOTION_MASTER') || allowed.has('STAFF')) {
+      territoryTeamMenus.push({
+        id: 'PROMOTION_MASTER',
+        tabKey: 'PROMOTION_MASTER',
+        label: 'Promotion Master',
+        icon: Award,
+      });
+    }
+    territoryTeamMenus.push({
+      id: 'LAST_MILE_VENDORS',
+      tabKey: 'LAST_MILE_VENDORS',
+      label: 'Last Mile Vendors',
+      to: '/last-mile-vendors',
+      icon: Truck,
+      count: counts?.vendors,
+    });
+    if (territoryTeamMenus.length > 0) {
+      groups.push({
+        id: 'bp-assets-team',
+        categoryLabel: 'Territory & Team',
+        sectionLabel: 'Office Master, Master Staff, Role & Promotions',
+        defaultExpanded: true,
+        menus: territoryTeamMenus,
+      });
+    }
 
-      // 2. Territory & Team Section (4 Cleanly Connected Modules)
-      const territoryTeamMenus: NavMenuItem[] = [];
-      if (allowed.has('OFFICES_STORES')) {
-        territoryTeamMenus.push({
-          id: 'OFFICES_STORES',
-          tabKey: 'OFFICES_STORES',
-          label: 'Office Master',
-          icon: Building2,
-          count: counts.stores,
-        });
-      }
-      if (allowed.has('STAFF')) {
-        territoryTeamMenus.push({
-          id: 'STAFF',
-          tabKey: 'STAFF',
-          label: 'Master Staff',
-          icon: Users,
-          count: counts.team,
-        });
-      }
-      if (allowed.has('MASTER_ROLE') || allowed.has('STAFF')) {
-        territoryTeamMenus.push({
-          id: 'MASTER_ROLE',
-          tabKey: 'MASTER_ROLE',
-          label: 'Master Role',
-          icon: ShieldCheck,
-        });
-      }
-      if (allowed.has('PROMOTION_MASTER') || allowed.has('STAFF')) {
-        territoryTeamMenus.push({
-          id: 'PROMOTION_MASTER',
-          tabKey: 'PROMOTION_MASTER',
-          label: 'Promotion Master',
-          icon: Award,
-        });
-      }
-      if (territoryTeamMenus.length > 0) {
-        groups.push({
-          id: 'bp-assets-team',
-          categoryLabel: 'Territory & Team',
-          sectionLabel: 'Office Master, Master Staff, Role & Promotions',
-          defaultExpanded: true,
-          menus: territoryTeamMenus,
-        });
-      }
-
-      // 3. Compliance & Exports
-      const complianceMenus: NavMenuItem[] = [];
-      if (allowed.has('REPORTS_EXPORTS')) {
-        complianceMenus.push({
-          id: 'REPORTS_EXPORTS',
-          tabKey: 'REPORTS_EXPORTS',
-          label: 'Reports & Exports',
-          icon: FileBarChart2,
-        });
-      }
-      if (allowed.has('AUDIT_HEALTH')) {
-        complianceMenus.push({
-          id: 'AUDIT_HEALTH',
-          tabKey: 'AUDIT_HEALTH',
-          label: 'Brand Audit Log & Health',
-          icon: Shield,
-        });
-      }
-      if (complianceMenus.length > 0) {
-        groups.push({
-          id: 'bp-compliance',
-          categoryLabel: 'Compliance & Audit',
-          sectionLabel: 'Reports, Exports & Immutable Audit',
-          defaultExpanded: false,
-          menus: complianceMenus,
-        });
-      }
+    // 3. Compliance & Exports
+    const complianceMenus: NavMenuItem[] = [];
+    if (allowed.has('REPORTS_EXPORTS')) {
+      complianceMenus.push({
+        id: 'REPORTS_EXPORTS',
+        tabKey: 'REPORTS_EXPORTS',
+        label: 'Reports & Exports',
+        icon: FileBarChart2,
+      });
+    }
+    if (allowed.has('AUDIT_HEALTH')) {
+      complianceMenus.push({
+        id: 'AUDIT_HEALTH',
+        tabKey: 'AUDIT_HEALTH',
+        label: 'India Post Audit Log & Health',
+        icon: Shield,
+      });
+    }
+    if (complianceMenus.length > 0) {
+      groups.push({
+        id: 'bp-compliance',
+        categoryLabel: 'Compliance & Audit',
+        sectionLabel: 'Reports, Exports & Immutable Audit',
+        defaultExpanded: false,
+        menus: complianceMenus,
+      });
     }
   } else if (mode === 'PARTNER') {
     groups.push({
       id: 'pw-exec',
       categoryLabel: 'Executive',
-      sectionLabel: 'Workspace Overview',
+      sectionLabel: 'India Post Workspace Overview',
       defaultExpanded: true,
       menus: [{ id: 'DASHBOARD', tabKey: 'DASHBOARD', label: 'Dashboard', icon: LayoutDashboard }],
     });
 
-    if (isXpokart) {
-      groups.push({
-        id: 'pw-xpokart-ecommerce',
-        categoryLabel: 'Xpokart E-Commerce',
-        sectionLabel: 'Catalog, Checkout & Buyers',
-        defaultExpanded: true,
-        menus: [
-          { id: 'PRODUCTS', tabKey: 'PRODUCTS', label: 'Products & Storefront', icon: Package, count: counts.products },
-          { id: 'CUSTOMERS', tabKey: 'CUSTOMERS', label: 'Store Buyers', icon: Users, count: counts.customers },
-          { id: 'LEADS', tabKey: 'LEADS', label: 'Checkout & Order Leads', icon: TrendingUp, count: counts.leads },
-          { id: 'FOLLOW_UPS', tabKey: 'FOLLOW_UPS', label: 'Order Follow-Ups', icon: Calendar, count: counts.followUps },
-          { id: 'NOTIFICATIONS', tabKey: 'NOTIFICATIONS', label: 'Store Alerts', icon: Bell, count: counts.notifications },
-        ],
-      });
-    } else {
-      groups.push({
-        id: 'pw-crm',
-        categoryLabel: 'CRM & Operations',
-        sectionLabel: 'Properties, Customers, Leads & Master Search',
-        defaultExpanded: true,
-        menus: [
-          { id: 'CUSTOMERS', tabKey: 'CUSTOMERS', label: 'Customers', icon: Users, count: counts.customers },
-          { id: 'PROPERTIES', tabKey: 'PROPERTIES', label: 'Properties', icon: MapPin, count: counts.properties },
-          { id: 'LEADS', tabKey: 'LEADS', label: 'Leads & Schemes', icon: TrendingUp, count: counts.leads },
-          { id: 'MASTER_SEARCH', tabKey: 'MASTER_SEARCH', label: 'Master Search Console', icon: Search },
-          { id: 'FOLLOW_UPS', tabKey: 'FOLLOW_UPS', label: 'Follow-Ups', icon: Calendar, count: counts.followUps },
-          {
-            id: 'VERIFICATION',
-            tabKey: 'VERIFICATION',
-            label: 'Verification & Inquiries',
-            icon: ClipboardCheck,
-            count: counts.verifications,
-          },
-          {
-            id: 'DEPARTMENTS_APPROVALS',
-            tabKey: 'DEPARTMENTS_APPROVALS',
-            label: 'Departments & Approvals',
-            icon: Layers,
-            count: counts.departments,
-          },
-        ],
-      });
+    groups.push({
+      id: 'pw-crm',
+      categoryLabel: 'CRM & Operations',
+      sectionLabel: 'Properties, Customers, Leads & Master Search',
+      defaultExpanded: true,
+      menus: [
+        { id: 'CUSTOMERS', tabKey: 'CUSTOMERS', label: 'Customers', icon: Users, count: counts.customers },
+        { id: 'PROPERTIES', tabKey: 'PROPERTIES', label: 'Properties', icon: MapPin, count: counts.properties },
+        { id: 'LEADS', tabKey: 'LEADS', label: 'Leads & Schemes', icon: TrendingUp, count: counts.leads },
+        { id: 'MASTER_SEARCH', tabKey: 'MASTER_SEARCH', label: 'Master Search Console', icon: Search },
+        { id: 'FOLLOW_UPS', tabKey: 'FOLLOW_UPS', label: 'Follow-Ups', icon: Calendar, count: counts.followUps },
+        {
+          id: 'VERIFICATION',
+          tabKey: 'VERIFICATION',
+          label: 'Verification & Inquiries',
+          icon: ClipboardCheck,
+          count: counts.verifications,
+        },
+        {
+          id: 'DEPARTMENTS_APPROVALS',
+          tabKey: 'DEPARTMENTS_APPROVALS',
+          label: 'Departments & Approvals',
+          icon: Layers,
+          count: counts.departments,
+        },
+      ],
+    });
 
-      groups.push({
-        id: 'pw-territory',
-        categoryLabel: 'Territory & Team',
-        sectionLabel: 'Office Master, Master Staff, Role & Promotions',
-        defaultExpanded: true,
-        menus: [
-          { id: 'STORES', tabKey: 'STORES', label: 'Office Master', icon: Building2, count: counts.stores },
-          { id: 'RBAC_TEAM', tabKey: 'RBAC_TEAM', label: 'Master Staff', icon: Users, count: counts.team },
-          { id: 'MASTER_ROLE', tabKey: 'MASTER_ROLE', label: 'Master Role', icon: ShieldCheck },
-          { id: 'PROMOTION_MASTER', tabKey: 'PROMOTION_MASTER', label: 'Promotion Master', icon: Award },
-          ...(retailServicesActive
-            ? [{ id: 'PRODUCTS', tabKey: 'PRODUCTS', label: 'Products & Storefront', icon: Package, count: counts.products }]
-            : []),
-          { id: 'ACADEMY', tabKey: 'ACADEMY', label: 'Skill & Academy', icon: BookOpen, count: counts.academy },
-          { id: 'NOTIFICATIONS', tabKey: 'NOTIFICATIONS', label: 'Notifications', icon: Bell, count: counts.notifications },
-        ],
-      });
-    }
+    groups.push({
+      id: 'pw-territory',
+      categoryLabel: 'Territory & Team',
+      sectionLabel: 'Office Master, Master Staff, Role & Promotions',
+      defaultExpanded: true,
+      menus: [
+        { id: 'STORES', tabKey: 'STORES', label: 'Office Master', icon: Building2, count: counts.stores },
+        { id: 'RBAC_TEAM', tabKey: 'RBAC_TEAM', label: 'Master Staff', icon: Users, count: counts.team },
+        { id: 'MASTER_ROLE', tabKey: 'MASTER_ROLE', label: 'Master Role', icon: ShieldCheck },
+        { id: 'PROMOTION_MASTER', tabKey: 'PROMOTION_MASTER', label: 'Promotion Master', icon: Award },
+        { id: 'PRODUCTS', tabKey: 'PRODUCTS', label: 'Bulk Showcase & Storefront', icon: Package, count: counts.products },
+        { id: 'ACADEMY', tabKey: 'ACADEMY', label: 'Skill & Academy', icon: BookOpen, count: counts.academy },
+        { id: 'NOTIFICATIONS', tabKey: 'NOTIFICATIONS', label: 'Notifications', icon: Bell, count: counts.notifications },
+      ],
+    });
   } else if (mode === 'STAFF') {
     const allowed = new Set(staffAllowedSections);
     groups.push({
@@ -1233,7 +1097,11 @@ export function buildBrandPortalNav(params: BrandPortalNavParams): NavSectionGro
         {
           id: 'IP_LMS_STOREFRONT',
           tabKey: 'IP_LMS_STOREFRONT',
-          label: retailServicesActive ? 'Postal LMS & Storefront' : 'Postal Departmental LMS',
+          label:
+            canAccessStandaloneStorefront(staffPermissionService.getActiveSession()) &&
+            retailServicesActive
+              ? 'Postal LMS & Storefront'
+              : 'Postal Departmental LMS',
           icon: BookOpen,
           children: [
             {
@@ -1243,7 +1111,8 @@ export function buildBrandPortalNav(params: BrandPortalNavParams): NavSectionGro
               label: 'Postal Departmental LMS',
               icon: GraduationCap,
             },
-            ...(retailServicesActive
+            ...(canAccessStandaloneStorefront(staffPermissionService.getActiveSession()) &&
+            retailServicesActive
               ? [
                   {
                     id: 'IP_LMS_STOREFRONT::STOREFRONT',

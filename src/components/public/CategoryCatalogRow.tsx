@@ -171,7 +171,7 @@ export default function CategoryCatalogRow({
             const pincode = activePincode || item.pincode || '324009';
 
             const waText = encodeURIComponent(
-              `Namaste XPOKART Hub Desk (PIN ${pincode}),\n1-Click Order for *${item.title}* (${item.brand} · ${item.sku}).\nMRP: ₹${mrp.toLocaleString('en-IN')} | Offer Price: ₹${retail.toLocaleString('en-IN')} (${discountPct}% Off)\nExpress Beat Delivery: ₹15 Flat Fee`
+              `Namaste India Post Hub Desk (PIN ${pincode}),\n1-Click Order for *${item.title}* (${item.brand} · ${item.sku}).\nMRP: ₹${mrp.toLocaleString('en-IN')} | Offer Price: ₹${retail.toLocaleString('en-IN')} (${discountPct}% Off)\nSpeed Post Beat Dispatch: ₹15 Flat Fee`
             );
 
             return (

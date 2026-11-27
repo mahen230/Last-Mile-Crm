@@ -11,6 +11,7 @@ import {
 import { customerService } from './customerService';
 import { kotaOsHierarchyService } from './kotaOsHierarchyService';
 import { locationSurveyService } from './locationSurveyService';
+import { lastMileVendorService } from './lastMileVendorService';
 
 const EXPORT_HISTORY_KEY = 'kota_os_export_history_v1';
 const LAST_BACKUP_META_KEY = 'kota_os_last_backup_meta_v1';
@@ -488,6 +489,7 @@ class DataGovernanceService {
   ): SystemBackupBundle {
     const locState = locationSurveyService.exportState();
     const orgState = kotaOsHierarchyService.exportState();
+    const vendorState = lastMileVendorService.exportState();
     const customers = customerService.getCustomers();
     const leads = customerService.getLeads();
     const followUps = customerService.getFollowUps();
@@ -507,6 +509,10 @@ class DataGovernanceService {
       houses: locState.houses,
       surveys: locState.surveys,
       surveyDrafts: locState.drafts,
+      propertySurveys: locState.propertySurveys,
+      customerVerifications: locState.customerVerifications,
+      distributionRecords: locState.distributionRecords,
+      lastMileVendors: vendorState,
     };
 
     const entityCounts: Record<string, number> = {
@@ -519,12 +525,16 @@ class DataGovernanceService {
       streets: locState.streets.length,
       houses: locState.houses.length,
       surveys: locState.surveys.length,
+      propertySurveys: locState.propertySurveys.length,
+      customerVerifications: locState.customerVerifications.length,
+      distributionRecords: locState.distributionRecords.length,
+      lastMileVendors: vendorState.length,
     };
 
     const serializedPayload = JSON.stringify(payload);
     const checksum = computeDeterministicChecksum(serializedPayload);
 
-    const bundle: SystemBackupBundle = {
+      const bundle: SystemBackupBundle = {
       schemaVersion: '1.0.0',
       platform: 'KOTA_DIVISION_OS',
       createdAt: new Date().toISOString(),
@@ -537,7 +547,12 @@ class DataGovernanceService {
     try {
       localStorage.setItem(
         LAST_BACKUP_META_KEY,
-        JSON.stringify({ timestamp: bundle.createdAt, checksum, counts: entityCounts })
+        JSON.stringify({
+          timestamp: bundle.createdAt,
+          checksum,
+          counts: entityCounts,
+          backupSyncEmails: ['Ektamahenmeena@gmail.com', 'mahen.comtech@gmail.com'],
+        })
       );
     } catch {
       // ignore storage quota warning
@@ -553,7 +568,7 @@ class DataGovernanceService {
         dataset: 'Full System Verified Backup',
         format: 'JSON_BACKUP',
         recordCount: Object.values(entityCounts).reduce((a, b) => a + b, 0),
-        filtersApplied: `Checksum=${checksum}`,
+        filtersApplied: `Checksum=${checksum} | SyncRecipients=Ektamahenmeena@gmail.com, mahen.comtech@gmail.com`,
         fileName,
       });
     }
@@ -605,7 +620,14 @@ class DataGovernanceService {
       houses: Array.isArray(p.houses) ? p.houses : undefined,
       surveys: Array.isArray(p.surveys) ? p.surveys : undefined,
       drafts: p.surveyDrafts,
+      propertySurveys: Array.isArray(p.propertySurveys) ? p.propertySurveys : undefined,
+      customerVerifications: Array.isArray(p.customerVerifications) ? p.customerVerifications : undefined,
+      distributionRecords: Array.isArray(p.distributionRecords) ? p.distributionRecords : undefined,
     });
+
+    if (Array.isArray(p.lastMileVendors)) {
+      lastMileVendorService.restoreState(p.lastMileVendors);
+    }
 
     // Verify restored counts post-write
     const postLoc = locationSurveyService.exportState();
@@ -616,12 +638,18 @@ class DataGovernanceService {
       streets: postLoc.streets.length,
       houses: postLoc.houses.length,
       surveys: postLoc.surveys.length,
+      propertySurveys: postLoc.propertySurveys.length,
+      customerVerifications: postLoc.customerVerifications.length,
+      distributionRecords: postLoc.distributionRecords.length,
     };
 
     const countMismatch =
       (parsed.entityCounts.streets !== undefined && restoredCounts.streets !== parsed.entityCounts.streets) ||
       (parsed.entityCounts.houses !== undefined && restoredCounts.houses !== parsed.entityCounts.houses) ||
-      (parsed.entityCounts.surveys !== undefined && restoredCounts.surveys !== parsed.entityCounts.surveys);
+      (parsed.entityCounts.surveys !== undefined && restoredCounts.surveys !== parsed.entityCounts.surveys) ||
+      (parsed.entityCounts.propertySurveys !== undefined && restoredCounts.propertySurveys !== parsed.entityCounts.propertySurveys) ||
+      (parsed.entityCounts.customerVerifications !== undefined && restoredCounts.customerVerifications !== parsed.entityCounts.customerVerifications) ||
+      (parsed.entityCounts.distributionRecords !== undefined && restoredCounts.distributionRecords !== parsed.entityCounts.distributionRecords);
 
     if (countMismatch) {
       return {

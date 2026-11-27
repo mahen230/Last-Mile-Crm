@@ -1,24 +1,24 @@
 {
   "sessions": {
-    "STAFF-MASTER-EKTA": {
-      "sessionId": "SESS-1795057073338-218f2ff274ab",
-      "userId": "STAFF-MASTER-EKTA",
-      "tokenHash": "0e6e54238ab3a1a8e0b95b7700571012110f814c2ec6c1a2730abdebee46722b",
+    "STAFF-OWNER-01": {
+      "sessionId": "SESS-1795626983401-dd4f0be7d4e2",
+      "userId": "STAFF-OWNER-01",
+      "tokenHash": "8d142739c3e6b21cc32031c427df78747b28ee6c528ef22d1172731722ce385c",
       "deviceFingerprintHash": "cd795009c844c5555834777abf8ea3a15ad0d693437fa1996bbe59804b5da209",
       "browserProfileId": "BP-aef3ec49-1a95-461f-a1a9-df273a359864",
       "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Mobile Safari/537.36",
       "ipAddress": "127.0.0.1",
       "tier": "ADMIN",
-      "role": "MASTER_ADMIN",
-      "email": "ektamahenmeena@gmail.com",
-      "name": "Ekta Meena",
+      "role": "OWNER",
+      "email": "owner@xpokart.in",
+      "name": "XPOKART Sovereign Owner",
       "assignedBeat": "All Beats",
       "allowedBeats": [
         "All Beats"
       ],
-      "assignedOffice": "All Divisions / Kota Division (324009)",
-      "issuedAt": "2026-11-19T02:57:53.339Z",
-      "expiresAt": 1795085873339,
+      "assignedOffice": "Dadabari S.O. Executive Command (324009)",
+      "issuedAt": "2026-11-25T17:16:23.401Z",
+      "expiresAt": 1795655783401,
       "isRevoked": false
     }
   }

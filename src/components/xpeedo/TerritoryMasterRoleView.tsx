@@ -208,7 +208,7 @@ export default function TerritoryMasterRoleView({
           <div className="text-2xl font-bold text-slate-900 mt-1 font-mono tabular-nums">
             {activeCount} / {members.length}
           </div>
-          <div className="text-xs text-slate-500 mt-1">Zero XPOKART staff leakage</div>
+          <div className="text-xs text-slate-500 mt-1">Strict India Post staff isolation</div>
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-4">
           <div className="text-xs text-slate-500 font-medium">Scope Boundaries</div>

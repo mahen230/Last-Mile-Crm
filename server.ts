@@ -339,10 +339,11 @@ function persistStaffPasswords(): void {
 }
 
 function isAiStudioOrLocalOrigin(req: Request): boolean {
-  if (!IS_PROD) return true;
+  if (IS_PROD) return false;
   const combined = `${req.headers.host || ''} ${req.headers.origin || ''} ${req.headers.referer || ''}`.toLowerCase();
+  if (/ais-pre-/i.test(combined)) return false;
   return (
-    combined.includes('.run.app') ||
+    combined.includes('ais-dev-') ||
     combined.includes('aistudio.google.com') ||
     combined.includes('localhost') ||
     combined.includes('127.0.0.1')

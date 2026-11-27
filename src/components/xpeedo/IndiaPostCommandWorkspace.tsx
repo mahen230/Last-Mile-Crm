@@ -33,6 +33,7 @@ import {
 } from '../../types/xpeedoOps';
 import { OrgHierarchyLevel } from '../../types/models';
 import IndiaPostStaffRolesPromotionsView from './IndiaPostStaffRolesPromotionsView';
+import DashboardQuickActionsFab from '../common/DashboardQuickActionsFab';
 
 const OfficeMasterView = lazy(() => import('../crm/OfficeMasterView'));
 const BeatManagementView = lazy(() => import('../crm/BeatManagementView'));
@@ -98,7 +99,7 @@ export default function IndiaPostCommandWorkspace({
 } = {}) {
   const { userProfile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
 
   const initialTab = (() => {
     const t = (searchParams.get('tab') || '').toUpperCase();
@@ -182,14 +183,14 @@ export default function IndiaPostCommandWorkspace({
       seen.add(key);
       return !o.brandId || o.brandId === 'india-post';
     });
-  }, []);
+  }, [tick]);
 
   const postalStaff = useMemo(
     () =>
       staffPermissionService
         .getAllStaffProfiles()
         .filter((s) => !s.brandId || s.brandId === 'india-post'),
-    []
+    [tick]
   );
 
   const postalCustomers = useMemo(
@@ -197,7 +198,7 @@ export default function IndiaPostCommandWorkspace({
       customerService
         .getCustomers()
         .filter((c) => !c.brandId || c.brandId === 'india-post'),
-    []
+    [tick]
   );
 
   const postalLeads = useMemo(
@@ -205,13 +206,25 @@ export default function IndiaPostCommandWorkspace({
       customerService
         .getLeads()
         .filter((l) => !l.brandId || l.brandId === 'india-post'),
-    []
+    [tick]
   );
 
-  const properties = useMemo(() => customerService.getProperties(), []);
+  const properties = useMemo(() => customerService.getProperties(), [tick]);
   const hierarchyNodes = kotaOsHierarchyService.getOrgHierarchyNodes();
   const srmTickets = xpeedoOpsService.getSrmTickets();
   const attendanceLogs = xpeedoOpsService.getIndiaPostAttendance();
+
+  const schemeBreakdown = useMemo(() => {
+    const counts = { PLI: 0, RPLI: 0, SSA: 0, IPPB: 0 };
+    postalLeads.forEach((l) => {
+      const text = `${l.productCode || ''} ${l.productName || ''}`.toUpperCase();
+      if (text.includes('RPLI')) counts.RPLI += 1;
+      else if (text.includes('PLI')) counts.PLI += 1;
+      if (text.includes('SSA') || text.includes('SUKANYA') || text.includes('SSY')) counts.SSA += 1;
+      if (text.includes('IPPB')) counts.IPPB += 1;
+    });
+    return counts;
+  }, [postalLeads]);
 
   // Duplicate Property / Address Conflict Check
   const duplicateProperties = useMemo(() => {
@@ -571,6 +584,40 @@ export default function IndiaPostCommandWorkspace({
                     <span className="font-mono text-slate-600 tabular-nums">PIN {off.pincode}</span>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">Postal Schemes Pipeline &amp; Territory Summary</h2>
+                <p className="text-xs text-slate-500">Live division pipeline across PLI, RPLI, Sukanya Samriddhi (SSA), and IPPB leads</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('CRM_PRODUCTS')}
+                className="text-xs font-semibold text-blue-700 hover:underline whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                Open Schemes &amp; Leads Pool →
+              </button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
+                <div className="text-slate-500">PLI Leads</div>
+                <div className="text-lg font-bold text-slate-900 tabular-nums mt-0.5">{schemeBreakdown.PLI}</div>
+              </div>
+              <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
+                <div className="text-slate-500">RPLI Leads</div>
+                <div className="text-lg font-bold text-slate-900 tabular-nums mt-0.5">{schemeBreakdown.RPLI}</div>
+              </div>
+              <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
+                <div className="text-slate-500">SSA / Sukanya Leads</div>
+                <div className="text-lg font-bold text-slate-900 tabular-nums mt-0.5">{schemeBreakdown.SSA}</div>
+              </div>
+              <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
+                <div className="text-slate-500">IPPB Banking Leads</div>
+                <div className="text-lg font-bold text-slate-900 tabular-nums mt-0.5">{schemeBreakdown.IPPB}</div>
               </div>
             </div>
           </div>
@@ -1465,6 +1512,9 @@ export default function IndiaPostCommandWorkspace({
             </button>
           </div>
         </div>
+      )}
+      {!indiaPostOwnerAccess && (
+        <DashboardQuickActionsFab onActionCompleted={() => setTick((t) => t + 1)} />
       )}
     </div>
   );

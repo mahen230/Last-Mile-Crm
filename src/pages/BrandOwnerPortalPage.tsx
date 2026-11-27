@@ -46,6 +46,7 @@ import { getConsolidatedProductsForBrand } from '../services/brandDirectoryServi
 import { staffProductService } from '../services/staffProductService';
 import { cartRecoveryService } from '../services/cartRecoveryService';
 import { staffPermissionService } from '../services/staffPermissionService';
+import { canAccessStandaloneStorefront } from '../utils/envMode';
 import { exportCsvWithBom, xpeedoOpsService } from '../services/xpeedoOpsService';
 import { POSTAL_PRODUCTS } from '../data/productsData';
 import { CONSOLIDATED_BEAT_MATRIX } from '../data/consolidatedBeatMatrix';
@@ -165,7 +166,7 @@ export default function BrandOwnerPortalPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { userProfile } = useAuth();
 
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [retailServicesActive, setRetailServicesActive] = useState<boolean>(() =>
@@ -255,7 +256,7 @@ export default function BrandOwnerPortalPage() {
     ) {
       setIpDailyMode(cleanSub);
     } else if (tab === 'IP_LMS_STOREFRONT') {
-      if (cleanSub === 'STOREFRONT' && retailServicesActive) {
+      if (cleanSub === 'STOREFRONT' && canAccessStandaloneStorefront(staffPermissionService.getActiveSession())) {
         setIpLmsMode('STOREFRONT');
       } else {
         setIpLmsMode('LMS');
@@ -303,7 +304,7 @@ export default function BrandOwnerPortalPage() {
   }, [searchParams, activeSubMenu, retailServicesActive]);
 
   useEffect(() => {
-    if (!retailServicesActive && ipLmsMode === 'STOREFRONT') {
+    if (!canAccessStandaloneStorefront(staffPermissionService.getActiveSession()) && ipLmsMode === 'STOREFRONT') {
       setIpLmsMode('LMS');
     }
   }, [retailServicesActive, ipLmsMode]);
@@ -424,7 +425,9 @@ export default function BrandOwnerPortalPage() {
   const isXpokartWorkspace = Boolean(
     activeProfile &&
       (activeProfile.workspaceKey === 'XPOKART' ||
-        activeProfile.partnerSlug.toLowerCase() === 'xpokart')
+        activeProfile.workspaceKey === 'BULK_CUSTOMERS' ||
+        activeProfile.partnerSlug.toLowerCase() === 'xpokart' ||
+        activeProfile.partnerSlug.toLowerCase() === 'bulk-customers')
   );
 
   // Sync XPOKART storefront settings form defaults when profile changes
@@ -479,51 +482,51 @@ export default function BrandOwnerPortalPage() {
   // Scoped datasets
   const scopedCustomers = useMemo(
     () => (activeProfile ? brandOwnerService.getBrandScopedCustomers(activeProfile) : []),
-    [activeProfile]
+    [activeProfile, tick]
   );
   const scopedOffices = useMemo(
     () =>
       activeProfile && !isXpokartWorkspace
         ? brandOwnerService.getBrandScopedOffices(activeProfile)
         : [],
-    [activeProfile, isXpokartWorkspace]
+    [activeProfile, isXpokartWorkspace, tick]
   );
   const scopedStaffRbac = useMemo(
     () =>
       activeProfile && !isXpokartWorkspace
         ? brandOwnerService.getBrandTeamMembersWithRbac(activeProfile.id)
         : [],
-    [activeProfile, isXpokartWorkspace]
+    [activeProfile, isXpokartWorkspace, tick]
   );
   const scopedLeads = useMemo(
     () => (activeProfile ? brandOwnerService.getBrandScopedLeads(activeProfile) : []),
-    [activeProfile]
+    [activeProfile, tick]
   );
   const scopedOps = useMemo(
     () =>
       activeProfile
         ? brandOwnerService.getBrandScopedOperations(activeProfile)
         : { projects: [], tasks: [], workReports: [], srmTickets: [] },
-    [activeProfile]
+    [activeProfile, tick]
   );
   const scopedDepartments = useMemo(
     () =>
       activeProfile && !isXpokartWorkspace
         ? xpeedoOpsService.getDepartments(activeProfile.workspaceKey)
         : [],
-    [activeProfile, isXpokartWorkspace]
+    [activeProfile, isXpokartWorkspace, tick]
   );
   const hierarchyNodes = useMemo(
     () => (isIndiaPostWorkspace ? kotaOsHierarchyService.getOrgHierarchyNodes() : []),
-    [isIndiaPostWorkspace]
+    [isIndiaPostWorkspace, tick]
   );
   const divisionalNotifications = useMemo(
     () => (isIndiaPostWorkspace ? notificationService.getAllNotifications() : []),
-    [isIndiaPostWorkspace]
+    [isIndiaPostWorkspace, tick]
   );
   const xpoConsolidatedStore = useMemo(
     () => (isXpokartWorkspace ? getConsolidatedProductsForBrand('xpokart', '324009') : null),
-    [isXpokartWorkspace]
+    [isXpokartWorkspace, tick]
   );
 
   const showToast = (type: 'ok' | 'err', text: string) => {
@@ -960,7 +963,7 @@ export default function BrandOwnerPortalPage() {
     if (activeSubMenu === 'XPO_PRODUCTS') return 'Product Catalog & Categories';
     if (activeSubMenu === 'XPO_CUSTOMER_PORTAL') return 'Cart, Orders & Checkout';
     if (activeSubMenu === 'XPO_STOREFRONT') return 'Storefront Settings';
-    if (isXpokartWorkspace && activeSubMenu === 'CUSTOMERS') return 'Store Buyers';
+    if (isXpokartWorkspace && activeSubMenu === 'CUSTOMERS') return 'Bulk Buyers';
     return (
       configuredMenus.find((m) => m.key === activeSubMenu)?.label ||
       INDIA_POST_CONSOLIDATED_MENUS.find((m) => m.key === activeSubMenu)?.label ||
@@ -988,7 +991,7 @@ export default function BrandOwnerPortalPage() {
 
   const staffWorkloadMap = new Map<string, number>();
   scopedOps.tasks.forEach((tk) => {
-    if (tk.status === 'Completed' || tk.status === 'Closed') return;
+    if (tk.status === 'Completed' || tk.status === 'Cancelled') return;
     const key = (tk.assigneeName || '').trim().toLowerCase();
     if (key) staffWorkloadMap.set(key, (staffWorkloadMap.get(key) || 0) + 1);
   });
@@ -1268,13 +1271,13 @@ export default function BrandOwnerPortalPage() {
                       </div>
                       <div>
                         <div className="text-[11px] font-mono uppercase tracking-wider text-blue-300 font-semibold">
-                          BRD-XPKRT-01 · E-Commerce Store System
+                          INDIA POST · Bulk Showcase System
                         </div>
                         <h2 className="text-base font-bold text-white mt-0.5">
-                          XPOKART Merchant Storefront Studio
+                          India Post Bulk Customer Showcase Studio
                         </h2>
                         <p className="text-xs text-slate-300 mt-0.5 max-w-2xl">
-                          Strictly focused retail catalog, categories, shopping cart, customer orders &amp; storefront configuration. Zero postal or operational staff clutter.
+                          Strictly focused India Post Bulk Customer catalog, promoted products, dispatch orders &amp; storefront configuration.
                         </p>
                       </div>
                     </div>
@@ -1288,11 +1291,11 @@ export default function BrandOwnerPortalPage() {
                         <span>Manage Catalog</span>
                       </button>
                       <Link
-                        to="/brand/xpokart"
+                        to="/brand/bulk-customers"
                         className="px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs flex items-center gap-1.5 whitespace-nowrap"
                       >
                         <Store size={14} />
-                        <span>Open Public Store</span>
+                        <span>Open Public Showcase</span>
                       </Link>
                     </div>
                   </div>
@@ -1311,7 +1314,7 @@ export default function BrandOwnerPortalPage() {
                       </div>
                     </div>
                     <div className="p-5">
-                      <div className="text-xs font-medium text-slate-500">Store Buyers</div>
+                      <div className="text-xs font-medium text-slate-500">Bulk Buyers</div>
                       <div className="text-2xl font-bold text-slate-900 font-mono tabular-nums mt-1">
                         {scopedCustomers.length}
                       </div>
@@ -1537,19 +1540,19 @@ export default function BrandOwnerPortalPage() {
             </div>
           )}
 
-          {/* XPOKART STRICT E-COMMERCE SECTIONS (ZERO STAFF / ZERO TERRITORY) */}
+          {/* INDIA POST BULK SHOWCASE SECTIONS */}
           {isXpokartWorkspace && activeSubMenu === 'XPO_PRODUCTS' && xpoConsolidatedStore && (
             <div className="space-y-5">
               <div className="bg-white border border-slate-200 rounded-xl p-5 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-[11px] font-mono uppercase text-blue-700 font-semibold">
-                    XPOKART E-Commerce Catalog · {xpoConsolidatedStore.brand.brandName}
+                    India Post Bulk Showcase Catalog · {xpoConsolidatedStore.brand.brandName}
                   </div>
                   <h2 className="text-base font-bold text-slate-900 mt-0.5">
-                    Product Catalog &amp; Categories ({xpoConsolidatedStore.allProducts.length} SKUs)
+                    Promoted Catalog &amp; Categories ({xpoConsolidatedStore.allProducts.length} SKUs)
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Manage active storefront SKUs, pricing, and retail categories synced to /brand/xpokart.
+                    Manage active bulk customer SKUs, tariffs, and categories synced to /brand/bulk-customers.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -1599,15 +1602,15 @@ export default function BrandOwnerPortalPage() {
                     const created = staffProductService.addProduct({
                       sku:
                         xpoNewSku.trim().toUpperCase() ||
-                        `XPO-${Date.now().toString(36).slice(-4).toUpperCase()}`,
+                        `INP-${Date.now().toString(36).slice(-4).toUpperCase()}`,
                       title: xpoNewTitle.trim(),
                       vertical: 'Custom Staff / Partner Products',
                       pricingModel: 'Fixed Price',
                       productType: 'Physical Item',
-                      brandName: 'XPOKART Store',
+                      brandName: 'India Post Bulk Showcase',
                       brandCategoryTag: xpoNewCategory.trim() || 'Featured',
-                      vendorName: 'XPOKART Storefront',
-                      vendorCategory: 'Retail',
+                      vendorName: 'India Post Bulk Showcase',
+                      vendorCategory: 'Bulk Parcel',
                       price,
                       mrpPrice: mrp,
                       sellingMarginPercent: 10,
@@ -1616,13 +1619,13 @@ export default function BrandOwnerPortalPage() {
                       speedPostCharge: 15,
                       commissionRate: '10% Store Margin',
                       description:
-                        xpoNewDesc.trim() || 'Added directly from XPOKART E-Commerce Studio.',
+                        xpoNewDesc.trim() || 'Added directly from India Post Bulk Showcase Studio.',
                       features: [
                         `Category: ${xpoNewCategory.trim() || 'Featured'}`,
-                        'XPOKART Direct Storefront Fulfillment',
+                        'India Post Speed Post Fulfillment',
                       ],
                       thumbnailUrl: xpoConsolidatedStore.brand.coverImage,
-                      staffId: 'XPOKART-OWNER',
+                      staffId: 'INDIA-POST-OWNER',
                       staffName: activeProfile.ownerName,
                       staffMobile: activeProfile.ownerContactNumber || '9414000002',
                       whatsappNumber: activeProfile.ownerContactNumber || '9414000002',
@@ -1631,7 +1634,7 @@ export default function BrandOwnerPortalPage() {
                       sourceOwnership: 'COMPANY_HOUSE',
                     });
                     customerService.logAudit(
-                      'XPOKART_SKU_ADDED',
+                      'INDIA_POST_SKU_ADDED',
                       'Product',
                       created.id,
                       created.title,
@@ -1641,7 +1644,7 @@ export default function BrandOwnerPortalPage() {
                     setXpoNewTitle('');
                     setXpoNewDesc('');
                     setShowAddXpoProduct(false);
-                    showToast('ok', `Published "${created.title}" (${created.sku}) to XPOKART Store.`);
+                    showToast('ok', `Published "${created.title}" (${created.sku}) to India Post Showcase.`);
                   }}
                   className="bg-white border border-slate-200 rounded-xl p-5 grid grid-cols-1 md:grid-cols-6 gap-3 text-xs"
                 >
@@ -1752,10 +1755,10 @@ export default function BrandOwnerPortalPage() {
                       <span>Create Store Order / Checkout Flow</span>
                     </h2>
                     <Link
-                      to="/brand/xpokart"
+                      to="/brand/bulk-customers"
                       className="text-xs font-semibold text-blue-700 hover:underline flex items-center gap-1"
                     >
-                      <span>Storefront</span>
+                      <span>Showcase</span>
                       <ExternalLink size={12} />
                     </Link>
                   </div>
@@ -1771,31 +1774,31 @@ export default function BrandOwnerPortalPage() {
                           mobile,
                           pincode: xpoOrderPincode.trim() || '324009',
                           colony: `PIN ${xpoOrderPincode.trim() || '324009'}`,
-                          brandId: 'xpokart',
-                          brandName: 'Xpokart',
-                          businessCategory: 'E-Commerce Order',
+                          brandId: 'india-post',
+                          brandName: 'India Post',
+                          businessCategory: 'Bulk Showcase Order',
                         },
-                        'XpokartCheckout'
+                        'IndiaPostBulkCheckout'
                       );
                       const createdLead = customerService.createLead({
                         customerId: customer.id || customer.masterId || '',
                         customerName: customer.name,
                         customerMobile: mobile,
-                        productCode: 'XPO-ORD',
+                        productCode: 'INP-ORD',
                         productName: `${xpoOrderItemTitle.trim()} (Qty ${xpoOrderQty})`,
-                        requirement: `XPOKART Store Order · Qty ${xpoOrderQty} · PIN ${xpoOrderPincode}`,
-                        source: 'XPOKART Checkout Studio',
+                        requirement: `India Post Bulk Showcase Order · Qty ${xpoOrderQty} · PIN ${xpoOrderPincode}`,
+                        source: 'India Post Bulk Showcase',
                         sourceChannel: 'Web Portal',
                         stage: 'Under Processing',
                         priority: 'High',
                         leadScore: 85,
                         pincode: xpoOrderPincode.trim() || '324009',
-                        brandId: 'xpokart',
-                        brandName: 'Xpokart',
-                        businessCategory: 'E-Commerce Checkout',
+                        brandId: 'india-post',
+                        brandName: 'India Post',
+                        businessCategory: 'Bulk Showcase Checkout',
                       });
                       customerService.logAudit(
-                        'XPOKART_ORDER_CREATED',
+                        'INDIA_POST_ORDER_CREATED',
                         'Lead',
                         createdLead.id,
                         customer.name,
@@ -1869,7 +1872,7 @@ export default function BrandOwnerPortalPage() {
                   </h2>
                   {scopedLeads.length === 0 ? (
                     <p className="text-xs text-slate-500 py-6 text-center">
-                      No XPOKART checkout orders logged yet. Create a store order or test /brand/xpokart checkout.
+                      No bulk showcase orders logged yet. Create a showcase order or test /brand/bulk-customers checkout.
                     </p>
                   ) : (
                     <div className="divide-y divide-slate-100 text-xs max-h-80 overflow-y-auto">
@@ -1910,10 +1913,10 @@ export default function BrandOwnerPortalPage() {
               <div>
                 <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <Sparkles size={16} className="text-blue-600" />
-                  <span>Merchant Storefront Settings · XPOKART</span>
+                  <span>Showcase Storefront Settings · India Post Bulk Hub</span>
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Configure public merchant storefront identity, category positioning, and accent theme for /brand/xpokart.
+                  Configure public bulk customer showcase identity, category positioning, and accent theme for /brand/bulk-customers.
                 </p>
               </div>
               <form
@@ -1929,7 +1932,7 @@ export default function BrandOwnerPortalPage() {
                     },
                     activeProfile.ownerName
                   );
-                  const partner = partnerBrandService.getPartnerBySlug('xpokart');
+                  const partner = partnerBrandService.getPartnerBySlug('bulk-customers');
                   if (partner) {
                     partnerBrandService.updatePartnerBrandingAndProfile(partner.id, {
                       tagline: xpoCfgTagline,
@@ -1938,7 +1941,7 @@ export default function BrandOwnerPortalPage() {
                       storeBeatHubScope: xpoCfgStoreScope,
                     });
                   }
-                  showToast('ok', 'Saved XPOKART storefront configuration.');
+                  showToast('ok', 'Saved India Post showcase configuration.');
                 }}
                 className="space-y-3 text-xs"
               >
@@ -1952,7 +1955,7 @@ export default function BrandOwnerPortalPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Primary Commerce Category</label>
+                    <label className="block font-semibold text-slate-700 mb-1">Primary Showcase Category</label>
                     <input
                       value={xpoCfgCategory}
                       onChange={(e) => setXpoCfgCategory(e.target.value)}
@@ -1984,10 +1987,10 @@ export default function BrandOwnerPortalPage() {
                     Save Store Settings
                   </button>
                   <Link
-                    to="/brand/xpokart"
+                    to="/brand/bulk-customers"
                     className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50"
                   >
-                    View Live Storefront ↗
+                    View Live Showcase ↗
                   </Link>
                 </div>
               </form>
@@ -2183,7 +2186,7 @@ export default function BrandOwnerPortalPage() {
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
                     <div className="text-[11px] font-mono uppercase text-blue-700 font-semibold">
-                      Master Staff Directory · {activeProfile.brandName} &amp; Xpeedo Services
+                      Master Staff Directory · {activeProfile.brandName} · India Post Operations
                     </div>
                     <h2 className="text-base font-bold text-slate-900 mt-0.5">
                       Master Staff Roster &amp; Duty Assignments ({filteredStaff.length} / {enrichedStaffList.length})
@@ -3446,7 +3449,7 @@ export default function BrandOwnerPortalPage() {
                 >
                   Postal Departmental LMS
                 </button>
-                {retailServicesActive && (
+                {canAccessStandaloneStorefront(staffPermissionService.getActiveSession()) && (
                   <button
                     type="button"
                     onClick={() => setActiveSectionAndSub('IP_LMS_STOREFRONT', 'STOREFRONT')}
@@ -3461,8 +3464,8 @@ export default function BrandOwnerPortalPage() {
                 )}
               </div>
               <Suspense fallback={<EmbeddedLoading />}>
-                {(ipLmsMode === 'LMS' || !retailServicesActive) && <PostalLMSView />}
-                {retailServicesActive && ipLmsMode === 'STOREFRONT' && <IndiaPostStorefrontView />}
+                {(ipLmsMode === 'LMS' || !canAccessStandaloneStorefront(staffPermissionService.getActiveSession())) && <PostalLMSView />}
+                {canAccessStandaloneStorefront(staffPermissionService.getActiveSession()) && ipLmsMode === 'STOREFRONT' && <IndiaPostStorefrontView />}
               </Suspense>
             </div>
           )}

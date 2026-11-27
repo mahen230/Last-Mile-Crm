@@ -11,8 +11,9 @@ import {
   getDeviceFingerprint,
   subscribeToSessionInvalidation,
 } from '../../services/authSecurityService';
-import { StaffProfile } from '../../types/models';
+import { StaffProfile, UserRole } from '../../types/models';
 import { customerAuthService } from '../../services/customerAuthService';
+import { isDevBypassEnvironment } from '../../utils/envMode';
 
 interface AuthContextType {
   user: User | any | null;
@@ -29,7 +30,7 @@ interface AuthContextType {
     email: string;
     password: string;
     employeeId: string;
-    role: 'OWNER' | 'DEVELOPER' | 'POSTMAN' | 'STAFF' | 'ADMIN';
+    role: UserRole;
     designationType?: string;
     beat: string;
     assignedOffice: string;
@@ -119,6 +120,13 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
       // ignore network error during logout
     }
     try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('postman_explicit_signout', '1');
+      }
+    } catch {
+      // ignore storage error
+    }
+    try {
       localStorage.removeItem('postman_auth');
     } catch {
       // ignore storage error
@@ -141,8 +149,23 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
   }, []);
 
   useEffect(() => {
-    // 1. Sync active verified local staff session (no unverified auto-grant)
-    const localSession = staffPermissionService.getActiveSession();
+    // 1. Sync active verified local staff session OR auto-hydrate Developer Mode strictly in dev/AI Studio
+    let localSession = staffPermissionService.getActiveSession();
+    const explicitlySignedOut =
+      typeof sessionStorage !== 'undefined' &&
+      sessionStorage.getItem('postman_explicit_signout') === '1';
+
+    if (!localSession && isDevBypassEnvironment() && !explicitlySignedOut) {
+      const devProfile =
+        staffPermissionService.findStaffProfileByIdentifier('DEV-01') ||
+        staffPermissionService.findStaffProfileByIdentifier('MASTER-ADMIN-01');
+      if (devProfile) {
+        devProfile.mustChangePassword = false;
+        staffPermissionService.setActiveSession(devProfile);
+        localSession = devProfile;
+      }
+    }
+
     if (localSession) {
       setUserProfile(localSession);
       setUser({
@@ -290,7 +313,7 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
       if (result?.user) {
         const matched = staffPermissionService.findStaffProfileByIdentifier(result.user.email || '');
         if (!matched) {
-          setError('This Google account is not registered in the XPOKART Staff Directory. Use Citizen Portal login or register as staff.');
+          setError('This Google account is not registered in the India Post Staff Directory. Use Citizen Portal login or register as staff.');
           return;
         }
         matched.uid = result.user.uid;
@@ -326,7 +349,7 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
         setUser(result.user);
         customerAuthService.signInWithGoogle({
           uid: result.user.uid,
-          displayName: result.user.displayName || result.user.email?.split('@')[0] || 'XPOKART Citizen',
+          displayName: result.user.displayName || result.user.email?.split('@')[0] || 'India Post Citizen',
           email: result.user.email || undefined,
         });
         return true;
@@ -344,7 +367,10 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
 
   const commitAuthorizedSession = useCallback(
     async (profile: StaffProfile, jwtToken?: string) => {
-      if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem('xpokart_customer_only_google');
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('xpokart_customer_only_google');
+        sessionStorage.removeItem('postman_explicit_signout');
+      }
       if (typeof localStorage !== 'undefined') localStorage.removeItem('xpokart_customer_only_google');
       const tokenToPersist =
         jwtToken || `xpokart-sess-${profile.employeeId || profile.id}-${Date.now().toString(36)}`;
@@ -444,8 +470,8 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
       // Network / timeout / iframe policy error -> gracefully fall back to client-side auth below
     }
 
-    // Strict client-side credential verification
-    const authRes = staffPermissionService.authenticateWithPassword(cleanId, cleanPass, {
+    // Strict client-side credential verification (sync + async $sha256$)
+    const authRes = await staffPermissionService.authenticateWithPasswordAsync(cleanId, cleanPass, {
       allowAdminPasswordless: false,
     });
 
@@ -678,7 +704,7 @@ export const FirebaseAuthProvider = ({ children }: { children: React.ReactNode }
     email: string;
     password: string;
     employeeId: string;
-    role: 'OWNER' | 'DEVELOPER' | 'POSTMAN' | 'STAFF' | 'ADMIN';
+    role: UserRole;
     designationType?: string;
     beat: string;
     assignedOffice: string;

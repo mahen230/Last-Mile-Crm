@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowUpRight,
+  BarChart2,
   Briefcase,
   Building2,
   CheckCircle2,
@@ -10,9 +11,10 @@ import {
   FileSpreadsheet,
   FolderKanban,
   Layers,
+  Search,
   ShieldCheck,
+  Target,
   Ticket,
-  Users,
   Zap,
 } from 'lucide-react';
 import {
@@ -28,7 +30,10 @@ import { useAuth } from '../auth/FirebaseAuthProvider';
 import { xpeedoOpsService, PLATFORM_RBAC_ROLE_META } from '../../services/xpeedoOpsService';
 import { customerService } from '../../services/customerService';
 import { staffPermissionService } from '../../services/staffPermissionService';
+import { productTargetService } from '../../services/productTargetService';
 import { ALL_OPS_TASK_STATUSES } from '../../types/xpeedoOps';
+import DashboardQuickActionsFab from '../common/DashboardQuickActionsFab';
+import { PublicShortUrlManager } from '../common/PublicShortUrlManager';
 
 export default function OwnerCommandDashboard() {
   const { userProfile } = useAuth();
@@ -78,7 +83,10 @@ export default function OwnerCommandDashboard() {
   }, [tasks]);
 
   const activeClients = clients.filter((c) => c.moduleScope !== 'BASIC_PROFILE_ONLY');
-  const basicProfileClients = clients.filter((c) => c.moduleScope === 'BASIC_PROFILE_ONLY');
+  const targetProgressRows = useMemo(
+    () => productTargetService.computeScopedTargetProgress(userProfile),
+    [userProfile, postalCustomers.length]
+  );
 
   return (
     <div className="space-y-6" id="owner-command-dashboard">
@@ -86,39 +94,60 @@ export default function OwnerCommandDashboard() {
       <div className="bg-slate-900 text-white rounded-xl border border-slate-800 p-6">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1.5">
-            <div className="text-xs font-mono text-blue-400 tracking-wide uppercase">
-              Xpeedo IT Services · Owner Command Center
+            <div className="text-xs font-mono text-red-400 tracking-wide uppercase">
+              India Post · Owner &amp; Divisional Command Center
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-white">
-              Enterprise Operations &amp; Client Governance
+              Postal Operations &amp; Bulk Customer Governance
             </h1>
             <p className="text-sm text-slate-300 max-w-2xl">
               Signed in as <span className="font-semibold text-white">{userProfile?.name || 'Administrator'}</span> ·{' '}
-              <span className="text-blue-300 font-medium">{PLATFORM_RBAC_ROLE_META[role].label}</span> · Scope:{' '}
-              <span className="font-mono text-slate-200">{activeWorkspace === 'ALL' ? 'All Workspaces' : activeWorkspace}</span>
+              <span className="text-amber-300 font-medium">{PLATFORM_RBAC_ROLE_META[role].label}</span> · Scope:{' '}
+              <span className="font-mono text-slate-200">{activeWorkspace === 'ALL' ? 'All India Post Units' : activeWorkspace}</span>
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
             <Link
               to="/india-post"
-              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition flex items-center gap-1.5"
+              className="px-3.5 py-2 rounded-lg bg-red-700 hover:bg-red-600 text-white text-xs font-semibold transition flex items-center gap-1.5"
             >
-              <Building2 size={15} />
-              <span>India Post Pilot</span>
+              <Building2 size={14} />
+              <span>India Post Command</span>
             </Link>
             <Link
-              to="/xpeedo-ev"
-              className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 text-xs font-semibold transition flex items-center gap-1.5"
+              to="/india-post-storefront"
+              className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 text-xs font-semibold transition flex items-center gap-1.5"
             >
-              <Briefcase size={15} />
-              <span>Xpeedo EV Work Mgmt</span>
+              <Briefcase size={14} />
+              <span>Showcase</span>
+            </Link>
+            <Link
+              to="/product-targets"
+              className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 text-xs font-semibold transition flex items-center gap-1.5"
+            >
+              <Target size={14} />
+              <span>Product Targets</span>
+            </Link>
+            <Link
+              to="/master-search"
+              className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 text-xs font-semibold transition flex items-center gap-1.5"
+            >
+              <Search size={14} />
+              <span>Master Search</span>
+            </Link>
+            <Link
+              to="/reports"
+              className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition flex items-center gap-1.5"
+            >
+              <BarChart2 size={14} />
+              <span>Superior Reports</span>
             </Link>
             <Link
               to="/settings"
-              className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition flex items-center gap-1.5"
+              className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition flex items-center gap-1.5"
             >
-              <FileSpreadsheet size={15} />
-              <span>Data Migration</span>
+              <FileSpreadsheet size={14} />
+              <span>Migration</span>
             </Link>
           </div>
         </div>
@@ -136,7 +165,7 @@ export default function OwnerCommandDashboard() {
           </div>
           <div className="text-2xl font-bold text-slate-900 tabular-nums mt-2">{clients.length}</div>
           <div className="text-xs text-slate-500 mt-1 tabular-nums">
-            {activeClients.length} active systems · {basicProfileClients.length} basic
+            {activeClients.length} active units · {workflows.filter((w) => w.enabled).length} workflows
           </div>
         </Link>
 
@@ -167,8 +196,8 @@ export default function OwnerCommandDashboard() {
         </Link>
 
         <Link
-          to="/xpeedo-ev"
-          className="bg-white rounded-xl border border-slate-200 p-4 hover:border-blue-400 transition"
+          to="/india-post-storefront"
+          className="bg-white rounded-xl border border-slate-200 p-4 hover:border-red-400 transition"
         >
           <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
             <span>Pending Approvals</span>
@@ -213,19 +242,19 @@ export default function OwnerCommandDashboard() {
 
       {/* Active Operations Systems vs Basic Client Profiles */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* India Post Kota Division Live Summary */}
+        {/* India Post Kota Division & Pan-India Live Summary */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col justify-between space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-mono font-semibold text-blue-600 uppercase">
-                Client #1 · Full Operations System
+              <span className="text-xs font-mono font-semibold text-red-700 uppercase">
+                Postal Command · Full Operations System
               </span>
-              <span className="text-xs font-semibold text-emerald-700">Active Pilot</span>
+              <span className="text-xs font-semibold text-emerald-700">Active System</span>
             </div>
             <h2 className="text-lg font-bold text-slate-900">Department of Post — Kota Division</h2>
             <p className="text-xs text-slate-600 leading-relaxed">
               Circle-to-BO postal hierarchy, 10-level geographic registry, CRM, SRM SLA ticketing,
-              beats, attendance, and statutory documents strictly isolated from commercial records.
+              beats, attendance, and statutory documents scaled for local PINs &amp; Pan-India rollout.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-100 text-xs">
@@ -249,7 +278,7 @@ export default function OwnerCommandDashboard() {
           <div className="flex items-center justify-between pt-2 border-t border-slate-100">
             <Link
               to="/india-post"
-              className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+              className="text-xs font-semibold text-red-700 hover:text-red-800 flex items-center gap-1"
             >
               <span>Open India Post System</span>
               <ArrowUpRight size={14} />
@@ -263,111 +292,110 @@ export default function OwnerCommandDashboard() {
           </div>
         </div>
 
-        {/* Xpeedo EV Work Management Live Summary */}
+        {/* India Post Bulk Customer & Product Promotion Hub */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col justify-between space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-mono font-semibold text-blue-600 uppercase">
-                Client #2 · Work Management System
+              <span className="text-xs font-mono font-semibold text-red-700 uppercase">
+                Bulk Promotion · Showcase &amp; Dispatch
               </span>
-              <span className="text-xs font-semibold text-emerald-700">Active System</span>
+              <span className="text-xs font-semibold text-emerald-700">Active Hub</span>
             </div>
-            <h2 className="text-lg font-bold text-slate-900">Xpeedo EV — Work Management</h2>
+            <h2 className="text-lg font-bold text-slate-900">India Post — Bulk Customer Hub</h2>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Departmental work execution, projects, tasks, Daily/Weekly/Monthly employee reports,
-              and 4-stage approval chain (Employee → Team Leader → Project Manager → Owner).
+              Manage verified India Post Bulk Customers, promoted product catalogs, Speed Post &amp; Parcel
+              dispatch inquiries, and direct lead syncing into Citizen CRM.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-100 text-xs">
             <div>
-              <div className="text-slate-500">Departments</div>
+              <div className="text-slate-500">Operational Units</div>
               <div className="text-base font-bold text-slate-900 tabular-nums">
-                {xpeedoOpsService.getDepartments('XPEEDO_EV').length}
+                {departments.length}
               </div>
             </div>
             <div>
-              <div className="text-slate-500">EV Projects</div>
+              <div className="text-slate-500">Active Projects</div>
               <div className="text-base font-bold text-slate-900 tabular-nums">
-                {xpeedoOpsService.getProjects('XPEEDO_EV').length}
+                {activeProjectsCount}
               </div>
             </div>
             <div>
-              <div className="text-slate-500">EV Tasks</div>
+              <div className="text-slate-500">Open Tasks</div>
               <div className="text-base font-bold text-slate-900 tabular-nums">
-                {xpeedoOpsService.getTasks('XPEEDO_EV').length}
+                {openTasksCount}
               </div>
             </div>
             <div>
               <div className="text-slate-500">Work Reports</div>
               <div className="text-base font-bold text-slate-900 tabular-nums">
-                {xpeedoOpsService.getWorkReports('XPEEDO_EV').length}
+                {workReports.length}
               </div>
             </div>
           </div>
           <div className="flex items-center justify-between pt-2 border-t border-slate-100">
             <Link
-              to="/xpeedo-ev"
-              className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+              to="/india-post-storefront"
+              className="text-xs font-semibold text-red-700 hover:text-red-800 flex items-center gap-1"
             >
-              <span>Open Xpeedo EV Workspace</span>
+              <span>Manage Bulk Showcase</span>
               <ArrowUpRight size={14} />
             </Link>
             <Link
-              to="/clients/client-xpeedo-ev"
+              to="/indiapost-portal"
               className="text-xs font-medium text-slate-600 hover:text-slate-900"
             >
-              10-Tab Profile
+              Public Storefront
             </Link>
           </div>
         </div>
 
-        {/* Basic Profile Only Clients */}
+        {/* Product Targets & Superior MIS Card */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col justify-between space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-mono font-semibold text-slate-500 uppercase">
-                Phase-1 Registered Profiles
+              <span className="text-xs font-mono font-semibold text-red-700 uppercase">
+                Target &amp; Performance MIS
               </span>
-              <span className="text-xs font-semibold text-slate-600">Listing Only</span>
+              <span className="text-xs font-semibold text-emerald-700">Live Rollup</span>
             </div>
-            <h2 className="text-lg font-bold text-slate-900">Portfolio Client Registry</h2>
+            <h2 className="text-lg font-bold text-slate-900">Product Targets &amp; Superior MIS</h2>
             <p className="text-xs text-slate-600">
-              Basic profile records ready for future operational module activation.
+              Live unit and revenue progress across Postal Schemes, IPPB, CELC, and Bulk Showcase items.
             </p>
           </div>
 
-          <div className="divide-y divide-slate-100">
-            {basicProfileClients.map((client) => (
-              <div key={client.id} className="py-2.5 flex items-center justify-between gap-2 text-xs">
-                <div className="min-w-0">
-                  <Link
-                    to={`/clients/${client.id}`}
-                    className="font-semibold text-slate-900 hover:text-blue-600 truncate block"
-                  >
-                    {client.name}
-                  </Link>
-                  <div className="text-slate-500 truncate">
-                    {client.code} · {client.industry}
-                  </div>
+          <div className="space-y-2.5">
+            {targetProgressRows.slice(0, 4).map((row) => (
+              <div key={row.target.id} className="space-y-1 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-slate-900 truncate">{row.target.productName}</span>
+                  <span className="font-mono text-[11px] font-bold text-slate-700 shrink-0">
+                    {row.achievedUnits}/{row.target.targetUnits} ({row.unitProgressPct}%)
+                  </span>
                 </div>
-                <span className="text-[11px] font-medium text-slate-500 shrink-0">
-                  {client.futureModuleEnabled ? 'Ready Flag On' : 'Basic Profile'}
-                </span>
+                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-red-700 rounded-full"
+                    style={{ width: `${row.unitProgressPct}%` }}
+                  />
+                </div>
               </div>
             ))}
           </div>
 
-          <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
             <Link
-              to="/clients"
-              className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
+              to="/product-targets"
+              className="text-xs font-semibold text-red-700 hover:text-red-800 flex items-center gap-1"
             >
-              <span>Manage All Clients</span>
+              <span>Target Dashboard</span>
               <ArrowUpRight size={14} />
             </Link>
-            <span className="text-xs text-slate-500 tabular-nums">
-              {workflows.filter((w) => w.enabled).length} workflows active
-            </span>
+            <div className="flex items-center gap-3 text-xs font-medium text-slate-600">
+              <Link to="/master-search" className="hover:text-slate-900">Master Search</Link>
+              <Link to="/reports" className="hover:text-slate-900">Superior Reports</Link>
+            </div>
           </div>
         </div>
       </div>
@@ -395,7 +423,7 @@ export default function OwnerCommandDashboard() {
               <CheckCircle2 size={24} className="text-slate-400" />
               <div className="text-sm font-semibold text-slate-700">No tasks created yet</div>
               <p className="text-xs text-slate-500 max-w-sm">
-                Create a project and task inside Task Management, Xpeedo EV, or India Post to see live
+                Create a project and task inside Task Management or India Post Command to see live
                 status metrics here.
               </p>
               <Link
@@ -472,6 +500,8 @@ export default function OwnerCommandDashboard() {
           <Link to="/settings" className="hover:underline">8-Role RBAC &amp; Migration</Link>
         </div>
       </div>
+      <PublicShortUrlManager />
+      <DashboardQuickActionsFab />
     </div>
   );
 }

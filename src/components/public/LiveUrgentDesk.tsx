@@ -2,16 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Flame,
   Clock,
-  ArrowRight,
   MessageCircle,
   ShoppingCart,
   ChevronLeft,
   ChevronRight,
-  ShieldCheck,
-  Tag,
-  Zap,
 } from 'lucide-react';
 import { SupportedLanguage, translate } from '../../utils/localization';
+import { getPincodeHub } from '../../services/pincodeOperationsService';
 
 export interface UrgentLiveDeal {
   id: string;
@@ -45,79 +42,79 @@ interface LiveUrgentDeskProps {
 
 export const URGENT_LIVE_DEALS: UrgentLiveDeal[] = [
   {
-    id: 'deal-ghee-milk',
-    sku: 'XPO-DAIRY-GHEE-629',
-    categoryTag: 'DAIRY & FRESH',
-    fullTitle: 'Amul Pure Cow Ghee (1L Canteen Pack) + Dadabari Fresh A2 Milk (2L)',
-    vendorName: 'Dadabari Fresh Artisanal Dairy & Sweets',
-    beatNo: 'Beat 2',
-    mrpPrice: 750,
-    flashPrice: 629,
-    deliveryFee: 15,
-    expiresInMinutes: 185,
-    urgencyLabel: 'Cold-Chain 7 AM · 8 Packs Left',
-    imageSrc: '/src/assets/images/local_bakery_dairy_1794822884061.jpg',
-    details: 'Fresh morning buffalo milk combo with unadulterated cow ghee at wholesale rate.',
-  },
-  {
-    id: 'deal-ev-battery',
-    sku: 'XPEEDO-BATTERY-60V-21999',
-    categoryTag: 'EV MOBILITY',
-    fullTitle: 'XPEEDO 60V 30Ah Swappable LiFePO4 Smart Battery Pack with BMS',
-    vendorName: 'XPEEDO EV & Green Mobility Hub',
-    beatNo: 'Beat 2',
-    mrpPrice: 26500,
-    flashPrice: 21999,
-    deliveryFee: 15,
-    expiresInMinutes: 240,
-    urgencyLabel: 'Govt Subsidy · 3 Units Left',
-    imageSrc: '/src/assets/images/ev_lithium_battery_1794822883055.jpg',
-    details: '3-Year replacement warranty, 2000+ lifecycle cells, and doorstep installation in PIN 324009.',
-  },
-  {
     id: 'deal-ippb-cover',
     sku: 'IPPB-ACCIDENT-COVER-399',
     categoryTag: 'SOVEREIGN BANKING',
     fullTitle: 'IPPB Sovereign ₹10 Lakh Group Accidental Insurance Policy (1 Year)',
-    vendorName: 'Dadabari Sub Post Office & IPPB Desk',
+    vendorName: 'Dadabari S.O. & IPPB Desk',
     beatNo: 'Beat 2',
     mrpPrice: 549,
     flashPrice: 399,
     deliveryFee: 0,
     expiresInMinutes: 320,
-    urgencyLabel: 'Drive Offer · Same-Day Cert',
-    imageSrc: '/src/assets/images/store_banking_finance_1794731363192.jpg',
+    urgencyLabel: 'Same-Day Digital Cert',
+    imageSrc: '/src/assets/images/prod_ippb_merchant_qr_1794734841471.jpg',
     details: '₹10,00,000 accidental cover + ₹1,00,000 OPD education benefit. Doorstep biometric enrollment.',
   },
   {
-    id: 'deal-allen-solly',
-    sku: 'SOLLY-POLO-COMBO-1799',
-    categoryTag: 'BRANDED APPAREL',
-    fullTitle: 'Allen Solly Pique Cotton Polo Shirt + Stretch Chino Trouser Combo',
-    vendorName: "Allen Solly & Levi's Showroom",
-    beatNo: 'Beat 2',
-    mrpPrice: 2499,
-    flashPrice: 1799,
+    id: 'deal-study-parcel',
+    sku: 'INP-BULK-STUDY-1299',
+    categoryTag: 'BULK CUSTOMER · BOOKS',
+    fullTitle: 'Competitive Exam Printed Module Bundle (5 kg Speed Post Parcel)',
+    vendorName: 'Kota Academic Study Material Dispatch Hub',
+    beatNo: 'Beat 14',
+    mrpPrice: 1650,
+    flashPrice: 1299,
     deliveryFee: 15,
-    expiresInMinutes: 145,
-    urgencyLabel: 'Showroom Stock · 48h Size Exchange',
-    imageSrc: '/src/assets/images/brand_apparel_fashion_1794743634256.jpg',
-    details: '100% genuine showroom sealed stock with official retail bill and ₹15 doorstep exchange.',
+    expiresInMinutes: 215,
+    urgencyLabel: 'BNPL Tariff Ready',
+    imageSrc: '/src/assets/images/prod_b2b_stationery_coaching_1794734844056.jpg',
+    details: 'Printed academic study set packaged with tamper-proof wrap & India Post barcode tracking.',
   },
   {
-    id: 'deal-philips-led',
-    sku: 'ELE-PHILIPS-LED-349',
-    categoryTag: 'TECH & HOME',
-    fullTitle: 'Philips 9W Smart LED Cool Daylight Bulbs (Pack of 4)',
-    vendorName: 'Reliance Digital Partner Hub',
-    beatNo: 'Beat 2',
-    mrpPrice: 499,
-    flashPrice: 349,
+    id: 'deal-kota-doria',
+    sku: 'INP-BULK-DORIA-2450',
+    categoryTag: 'BULK CUSTOMER · GI CRAFT',
+    fullTitle: 'Kaithoon GI-Tagged Kota Doria Handloom Gift Box (Insured COD)',
+    vendorName: 'Kaithoon Kota Doria Weavers Guild',
+    beatNo: 'Beat 1',
+    mrpPrice: 3100,
+    flashPrice: 2450,
     deliveryFee: 15,
-    expiresInMinutes: 210,
-    urgencyLabel: 'Power Saver · 12 Packs Left',
-    imageSrc: '/src/assets/images/brand_electronics_hub_1794743634422.jpg',
-    details: '90% energy saving, 25,000-hour life, standard B22 base with 1-year replacement warranty.',
+    expiresInMinutes: 260,
+    urgencyLabel: '12% Bulk Rebate (10+)',
+    imageSrc: '/src/assets/images/store_kota_handloom_1794731364865.jpg',
+    details: 'Handwoven pure cotton-silk Kota Doria saree packed directly at Kaithoon loom cooperative.',
+  },
+  {
+    id: 'deal-mystamp-sheet',
+    sku: 'INP-BULK-MYSTAMP-300',
+    categoryTag: 'PHILATELY & CORPORATE',
+    fullTitle: 'Official India Post Personalized My Stamp Sheet (12 Stamps)',
+    vendorName: 'Kota H.O. Philately & Bulk Mail Desk',
+    beatNo: 'Beat 1',
+    mrpPrice: 350,
+    flashPrice: 300,
+    deliveryFee: 15,
+    expiresInMinutes: 290,
+    urgencyLabel: 'Valid Domestic Postage',
+    imageSrc: '/src/assets/images/prod_mystamp_philately_1794734841690.jpg',
+    details: 'Official commemorative postage sheet issued via Kota Head Post Office for events & institutions.',
+  },
+  {
+    id: 'deal-courier-pouches',
+    sku: 'INP-BULK-MAILER-1750',
+    categoryTag: 'BULK PACKAGING · RIICO',
+    fullTitle: 'India Post Tamper-Proof Courier Pouches (Pack of 250 · BNPL Ready)',
+    vendorName: 'Indraprastha Packaging & Industrial Mailers',
+    beatNo: 'Beat 1',
+    mrpPrice: 2350,
+    flashPrice: 1750,
+    deliveryFee: 15,
+    expiresInMinutes: 185,
+    urgencyLabel: 'POD Jacket Included',
+    imageSrc: '/src/assets/images/prod_b2b_cod_logistics_1794734840043.jpg',
+    details: '70-micron tamper-evident shipping mailers engineered for Speed Post COD and BNPL shippers.',
   },
 ];
 
@@ -131,6 +128,7 @@ export default function LiveUrgentDesk({
   const [timeLefts, setTimeLefts] = useState<number[]>(() =>
     URGENT_LIVE_DEALS.map((d) => d.expiresInMinutes * 60)
   );
+  const hub = getPincodeHub(activePincode);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -215,7 +213,7 @@ export default function LiveUrgentDesk({
         </div>
       </div>
 
-      {/* Sleek Horizontal Scrolling Row ("scroll-x" pattern) */}
+      {/* Horizontal Scrolling Row */}
       <div
         ref={scrollContainerRef}
         className="flex overflow-x-auto gap-3 pb-1 pt-1 snap-x snap-mandatory scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
@@ -226,7 +224,7 @@ export default function LiveUrgentDesk({
             (dealSavings / Math.max(1, Number(deal.mrpPrice) || 0)) * 100
           );
           const waText = encodeURIComponent(
-            `Namaste XPOKART Dadabari S.O. Desk (PIN ${activePincode}),\nI want to claim Live Urgent Deal:\n*${deal.fullTitle}*\nOffer: ₹${(Number(deal.flashPrice) || 0).toLocaleString('en-IN')} (MRP: ₹${(Number(deal.mrpPrice) || 0).toLocaleString('en-IN')}) · Save ₹${dealSavings.toLocaleString('en-IN')} (${dealPct}% Off)\nStore: ${deal.vendorName} · ${deal.beatNo}`
+            `Namaste India Post Hub Desk (${hub.officeName} · PIN ${activePincode}),\nI want to book / inquire about:\n*${deal.fullTitle}*\nTariff / Offer: ₹${(Number(deal.flashPrice) || 0).toLocaleString('en-IN')} (MRP: ₹${(Number(deal.mrpPrice) || 0).toLocaleString('en-IN')})\nBulk Partner / Desk: ${deal.vendorName} · ${deal.beatNo}`
           );
 
           return (
@@ -296,11 +294,11 @@ export default function LiveUrgentDesk({
                   className="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-amber-400 dark:hover:bg-amber-300 dark:text-slate-950 text-white font-bold flex items-center justify-center gap-1 transition text-[11px] cursor-pointer"
                 >
                   <ShoppingCart size={11} className="text-amber-400 dark:text-slate-950" />
-                  <span>Claim · COD</span>
+                  <span>Book · COD</span>
                 </button>
 
                 <a
-                  href={`https://api.whatsapp.com/send?phone=919460020640&text=${waText}`}
+                  href={`https://api.whatsapp.com/send?phone=${hub.whatsappPhone}&text=${waText}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center justify-center gap-1 transition text-[11px]"

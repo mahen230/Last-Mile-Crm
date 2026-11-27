@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { 
   Lock, User, ShieldCheck, KeyRound, UserPlus, 
-  ArrowRight, CheckCircle2, AlertCircle, Phone, Mail, Building, Flame 
+  ArrowRight, CheckCircle2, AlertCircle, Phone, Mail, Building, Flame, Check 
 } from 'lucide-react';
 import { DEFAULT_STAFF_FALLBACK_PASSWORD, staffPermissionService } from '../../services/staffPermissionService';
 import { staffRegistrationService } from '../../services/staffRegistrationService';
+import { partnerBrandService } from '../../services/partnerBrandService';
 import { useAuth } from './FirebaseAuthProvider';
+import { StaffProfile } from '../../types/models';
 
 interface LoginModalProps {
   onLoginSuccess: () => void;
@@ -17,31 +19,61 @@ const isElevatedRoleInput = (val: string): boolean => {
     clean === 'ektamahenmeena@gmail.com' ||
     clean === 'master-admin-01' ||
     clean === 'staff-master-ekta' ||
-    clean === 'owner@xpokart.in' ||
     clean === 'owner-01' ||
-    clean === 'dev@xpokart.in' ||
     clean === 'dev-01'
   );
 };
+
+const SYSTEM_BRANDS = [
+  { id: 'PLATFORM_ADMIN', name: 'India Post (Master Admin & Developer)', badge: 'Admin / Dev' },
+  { id: 'india-post', name: 'India Post (Divisional & Beat Operations)', badge: 'Postal Ops' },
+  { id: 'bulk-customers', name: 'India Post (Bulk Customer & Showcase Hub)', badge: 'Bulk Hub' },
+];
 
 export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
   const { userProfile, signInWithPassword, signInAsMasterAdminNoPassword, signInStaffDirect } = useAuth();
   const isAiStudioContext = staffPermissionService.isAiStudioOrLocalPreview();
   const [viewMode, setViewMode] = useState<'LOGIN' | 'FIRST_LOGIN_CHANGE' | 'REGISTER' | 'FORGOT_PASSWORD'>('LOGIN');
-  const directoryStaffList = useMemo(() => staffPermissionService.getDirectoryStaff(), []);
+
+  // Progressive Login State
+  const [selectedBrandId, setSelectedBrandId] = useState<string>('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Live Staff Account Lookup for Step 3 (Auto-Fill Name & Enable Password)
+  const matchedStaffAccount = useMemo((): StaffProfile | null => {
+    const q = username.trim();
+    if (!q) return null;
+    const found = staffPermissionService.findStaffProfileByIdentifier(q);
+    if (found) return found;
+    if (isElevatedRoleInput(q)) {
+      return {
+        id: 'ADMIN-EKTAMEENA',
+        employeeId: 'EKTAMEENA-01',
+        name: 'Ekta Meena (Master Admin & Developer)',
+        email: 'Ektamahenmeena@gmail.com',
+        role: 'ADMIN',
+        designation: 'Master Admin',
+        status: 'Active',
+        permissions: {
+          canViewAllRecords: true,
+          serviceModules: {},
+          allowedBeats: ['All Beats'],
+          allowedOffices: ['All Offices'],
+        },
+      } as StaffProfile;
+    }
+    return null;
+  }, [username]);
 
   useEffect(() => {
     if (userProfile) {
       onLoginSuccess();
     }
   }, [userProfile, onLoginSuccess]);
-
-  // Login Form State
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [statusMessage, setStatusMessage] = useState('');
-  const [loading, setLoading] = useState(false);
 
   // First Login Password Change State
   const [pendingEmployeeId, setPendingEmployeeId] = useState('');
@@ -84,30 +116,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  const handleQuickSelectDirectoryStaff = async (empId: string) => {
-    if (!empId) return;
-    if (!isAiStudioContext) {
-      setUsername(empId);
-      setPassword(DEFAULT_STAFF_FALLBACK_PASSWORD);
-      return;
-    }
-    setError('');
-    setStatusMessage('');
-    setLoading(true);
-    try {
-      const ok = await signInStaffDirect(empId);
-      setLoading(false);
-      if (ok) {
-        onLoginSuccess();
-      } else {
-        setError('Unable to sign in selected staff member.');
-      }
-    } catch {
-      setLoading(false);
-      setError('Unable to sign in selected staff member.');
-    }
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -115,6 +123,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
     const rawUser = username.trim();
     const rawPass = password.trim();
 
+    if (!selectedBrandId) {
+      setError('Please select a Brand / Workspace before signing in.');
+      return;
+    }
     if (!rawUser || !rawPass) {
       setError('Please enter Employee ID / Mobile / Email and Password.');
       return;
@@ -223,8 +235,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
           <div className="w-14 h-14 bg-red-600/20 border border-red-500/30 rounded-2xl flex items-center justify-center text-red-400 mb-3 shadow-inner">
             <ShieldCheck className="w-8 h-8" />
           </div>
-          <h2 className="text-xl sm:text-2xl font-black tracking-tight">XPOKART</h2>
-          <p className="text-xs text-slate-400 mt-0.5">Sovereign B2B &amp; E-Commerce Marketplace • Dadabari S.O. • PIN 324009</p>
+          <h2 className="text-xl sm:text-2xl font-black tracking-tight">INDIA POST OPERATIONS</h2>
+          <p className="text-xs text-slate-400 mt-0.5">Divisional Operations &amp; Bulk Customer Hub • Secure Portal Access</p>
         </div>
 
         {error && (
@@ -239,153 +251,151 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
           </div>
         )}
 
-        {/* MODE 1: STANDARD LOGIN */}
+        {/* MODE 1: STANDARD PROGRESSIVE LOGIN FLOW */}
         {viewMode === 'LOGIN' && (
           <form onSubmit={handleLogin} className="space-y-4">
-            {/* Instant 5-Role Quick Access Grid (Pilot Mode Only) */}
+            {/* Pilot Mode Instant Admin shortcut */}
             {isAiStudioContext && (
-              <div className="space-y-2">
+              <div className="pb-3 border-b border-slate-800">
                 <button
                   type="button"
                   onClick={handleInstantAdminLogin}
                   disabled={loading}
-                  className="w-full py-2.5 px-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg cursor-pointer disabled:opacity-50"
+                  className="w-full py-2 px-3 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-bold rounded-xl text-xs transition flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Flame className="w-4 h-4 shrink-0" />
-                  <span>Instant Master Admin Login (AI Studio · Pilot)</span>
+                  <Flame className="w-4 h-4 shrink-0 text-emerald-400" />
+                  <span>Instant Master Admin Sign-In (Pilot Mode)</span>
                 </button>
-                <div className="grid grid-cols-3 gap-1.5">
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() => void handleQuickSelectDirectoryStaff('OWNER-01')}
-                    className="py-1.5 px-2 bg-amber-400/20 hover:bg-amber-400/30 border border-amber-400/40 text-amber-300 rounded-lg text-[10px] font-bold transition cursor-pointer"
-                  >
-                    Owner
-                  </button>
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() => void handleQuickSelectDirectoryStaff('DEV-01')}
-                    className="py-1.5 px-2 bg-sky-400/20 hover:bg-sky-400/30 border border-sky-400/40 text-sky-300 rounded-lg text-[10px] font-bold transition cursor-pointer"
-                  >
-                    Developer
-                  </button>
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() => void handleQuickSelectDirectoryStaff('50457421')}
-                    className="py-1.5 px-2 bg-rose-400/20 hover:bg-rose-400/30 border border-rose-400/40 text-rose-200 rounded-lg text-[10px] font-bold transition cursor-pointer"
-                  >
-                    Beat 2 Staff
-                  </button>
-                </div>
               </div>
             )}
 
-            {/* Quick Select Employee from Directory */}
+            {/* STEP 1: Brand Selection Dropdown Only */}
             <div>
-              <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                {isAiStudioContext
-                  ? `Quick Select Employee from Directory (${directoryStaffList.length} Staff · Pilot Instant Sign-In)`
-                  : `Select Employee from Directory (${directoryStaffList.length} Staff)`}
+              <label className="block text-xs font-bold text-slate-300 mb-1">
+                1. Select India Post Scope *
               </label>
               <select
-                value=""
-                disabled={loading}
+                value={selectedBrandId}
                 onChange={(e) => {
-                  if (e.target.value) {
-                    void handleQuickSelectDirectoryStaff(e.target.value);
-                  }
+                  setSelectedBrandId(e.target.value);
+                  setUsername('');
+                  setPassword('');
+                  setError('');
                 }}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-red-500 transition cursor-pointer"
+                className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs sm:text-sm font-bold text-white focus:outline-none focus:border-red-500 transition cursor-pointer"
+                required
               >
-                <option value="">-- Choose Employee ({directoryStaffList.length} Dadabari S.O. Staff) --</option>
-                {directoryStaffList.map((emp) => {
-                  const empId = emp.employeeId || emp.id.replace(/^STAFF-/, '');
-                  return (
-                    <option key={emp.id} value={empId}>
-                      {emp.beat} • {emp.name} (ID: {empId} | Mob: {emp.contact})
-                    </option>
-                  );
-                })}
+                <option value="">-- Choose Brand / Workspace --</option>
+                {SYSTEM_BRANDS.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} [{b.badge}]
+                  </option>
+                ))}
               </select>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">Employee ID / Mobile / Email</label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
-                  <User className="w-4 h-4" />
-                </span>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="e.g. 50457421, 8769706002, ektamahenmeena@gmail.com"
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-red-500 transition text-white"
-                  required
-                />
-              </div>
-            </div>
+            {/* STEP 2: Employee ID / Login ID (Revealed once brand is selected) */}
+            {selectedBrandId && (
+              <div className="animate-fadeIn space-y-3 pt-1">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    2. Employee ID / Login ID / Mobile / Email *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
+                      <User className="w-4 h-4" />
+                    </span>
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="e.g. 50457421, 8769706002, ektamahenmeena@gmail.com"
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-red-500 transition text-white"
+                      required
+                    />
+                  </div>
+                </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-medium text-slate-300">
-                  {isElevatedRoleInput(username)
-                    ? 'Command Role Password *'
-                    : `Password (Default: ${DEFAULT_STAFF_FALLBACK_PASSWORD})`}
-                </label>
+                {/* STEP 3: Auto-Fill Name & Enable Password When Account Exists */}
+                {username.trim() && (
+                  <div className="p-3 bg-slate-800/80 border border-slate-700/80 rounded-xl space-y-2">
+                    {matchedStaffAccount ? (
+                      <div className="flex items-center gap-2 text-xs text-emerald-400 font-semibold">
+                        <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                        <span>Account Verified: <strong className="text-white">{matchedStaffAccount.name}</strong></span>
+                        <span className="ml-auto text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-full font-mono">
+                          {matchedStaffAccount.role || 'Staff'}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-xs text-amber-400 font-medium">
+                        <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+                        <span>Account identifier not pre-cached. Ensure correct ID or register request.</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-slate-300">
+                      {isElevatedRoleInput(username)
+                        ? 'Command Role Password *'
+                        : `3. Password (Default: ${DEFAULT_STAFF_FALLBACK_PASSWORD})`}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => { setViewMode('FORGOT_PASSWORD'); setError(''); }}
+                      className="text-[11px] text-slate-400 hover:text-red-400 transition"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
+                      <Lock className="w-4 h-4" />
+                    </span>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={!username.trim()}
+                      placeholder={
+                        !username.trim()
+                          ? 'Enter Employee ID above first...'
+                          : isElevatedRoleInput(username)
+                          ? 'Enter command role password'
+                          : `Default: ${DEFAULT_STAFF_FALLBACK_PASSWORD} or custom password`
+                      }
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-red-500 transition text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      required
+                    />
+                  </div>
+                </div>
+
                 <button
-                  type="button"
-                  onClick={() => { setViewMode('FORGOT_PASSWORD'); setError(''); }}
-                  className="text-[11px] text-slate-400 hover:text-red-400 transition"
+                  type="submit"
+                  disabled={loading || !username.trim() || !password.trim()}
+                  className="w-full py-3 bg-red-700 hover:bg-red-600 text-white font-bold rounded-xl text-xs sm:text-sm transition shadow-lg shadow-red-700/30 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Forgot Password?
+                  {loading ? 'Authenticating...' : 'Authenticate & Enter Workspace'}
                 </button>
               </div>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500">
-                  <Lock className="w-4 h-4" />
-                </span>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={
-                    isElevatedRoleInput(username)
-                      ? 'Enter command role password'
-                      : `Default: ${DEFAULT_STAFF_FALLBACK_PASSWORD} or custom password`
-                  }
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs sm:text-sm focus:outline-none focus:border-red-500 transition text-white"
-                  required
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-red-700 hover:bg-red-600 text-white font-bold rounded-xl text-xs sm:text-sm transition shadow-lg shadow-red-700/30 cursor-pointer disabled:opacity-50"
-            >
-              {loading ? 'Authenticating...' : 'Authenticate & Enter XPOKART'}
-            </button>
+            )}
 
             {/* Registration Request Link */}
             <div className="pt-4 border-t border-slate-800 text-center space-y-2">
               <button
                 type="button"
                 onClick={() => { setViewMode('REGISTER'); setError(''); setRegSuccess(null); }}
-                className="text-xs text-red-400 hover:text-red-300 font-bold transition flex items-center justify-center gap-1.5 mx-auto"
+                className="text-xs text-red-400 hover:text-red-300 font-bold transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer"
               >
                 <UserPlus size={14} />
-                <span>New Staff? Request Registration</span>
+                <span>New Staff / Brand Partner? Submit Registration Request</span>
               </button>
 
               <div className="text-[11px] text-slate-500">
-                Sign in with your <span className="text-slate-300 font-mono">Employee ID</span>, Mobile, or Email (default <span className="text-slate-300 font-mono">Post@1234</span>).
-                <br />
-                Master Admin: <span className="text-slate-300 font-mono">ektamahenmeena@gmail.com</span>
+                Master Admin & Developer: <span className="text-slate-300 font-mono">Ektamahenmeena@gmail.com</span>
               </div>
             </div>
           </form>
@@ -395,7 +405,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
         {viewMode === 'FIRST_LOGIN_CHANGE' && (
           <form onSubmit={handleFirstPasswordChange} className="space-y-4">
             <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-300 text-center">
-              <strong>First Login Detected:</strong> For postal security, you must set a new personal password before accessing field records.
+              <strong>First Login Detected:</strong> For security, you must set a new personal password before accessing field records.
             </div>
 
             <div>
@@ -435,7 +445,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
         {viewMode === 'REGISTER' && (
           <form onSubmit={handleRegisterSubmit} className="space-y-3">
             <div className="text-center pb-2 border-b border-slate-800">
-              <h3 className="text-sm font-bold text-white">Staff Registration Request</h3>
+              <h3 className="text-sm font-bold text-white">Staff / Brand Registration Request</h3>
               <p className="text-[11px] text-slate-400">Awaiting approval by Admin Ekta Meena</p>
             </div>
 
@@ -463,7 +473,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
                 type="text"
                 value={regName}
                 onChange={e => setRegName(e.target.value)}
-                placeholder="As per postal service book"
+                placeholder="As per service record"
                 className="w-full p-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white"
                 required
               />
@@ -488,7 +498,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
                   type="email"
                   value={regEmail}
                   onChange={e => setRegEmail(e.target.value)}
-                  placeholder="name@indiapost.gov.in"
+                  placeholder="name@indiapost-portal.in"
                   className="w-full p-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white"
                 />
               </div>
@@ -504,14 +514,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
                 >
                   <option value="Postman">Postman</option>
                   <option value="GDS (BPM / ABPM / Dak Sevak)">GDS</option>
-                  <option value="PA (Postal Assistant)">Postal Assistant (PA)</option>
-                  <option value="MTS (Multi Tasking Staff)">MTS</option>
-                  <option value="Mail Guard">Mail Guard</option>
+                  <option value="Postal Assistant">Postal Assistant (PA)</option>
+                  <option value="Field Operations Executive">Field Operations Executive</option>
+                  <option value="Bulk Customer Coordinator">Bulk Customer Coordinator</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-[11px] font-medium text-slate-300 mb-1">Requested Beat</label>
+                <label className="block text-[11px] font-medium text-slate-300 mb-1">Assigned Beat / Territory</label>
                 <select
                   value={regBeat}
                   onChange={e => setRegBeat(e.target.value)}
@@ -534,7 +544,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
             <button
               type="button"
               onClick={() => { setViewMode('LOGIN'); setError(''); }}
-              className="w-full py-2 text-xs text-slate-400 hover:text-white transition"
+              className="w-full py-2 text-xs text-slate-400 hover:text-white transition cursor-pointer"
             >
               ← Back to Login
             </button>
@@ -545,14 +555,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
         {viewMode === 'FORGOT_PASSWORD' && (
           <div className="space-y-4">
             <div className="text-center pb-2 border-b border-slate-800">
-              <h3 className="text-sm font-bold text-white">Reset Employee Password</h3>
+              <h3 className="text-sm font-bold text-white">Reset Account Password</h3>
               <p className="text-[11px] text-slate-400">Verify identity via Employee ID OTP</p>
             </div>
 
             {otpStep === 'ID' ? (
               <form onSubmit={handleForgotIdSubmit} className="space-y-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Enter Employee ID</label>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Enter Employee ID / Login ID</label>
                   <input
                     type="text"
                     value={forgotId}
@@ -564,7 +574,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
                 </div>
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-red-700 hover:bg-red-600 text-white font-bold rounded-xl text-xs transition"
+                  className="w-full py-2.5 bg-red-700 hover:bg-red-600 text-white font-bold rounded-xl text-xs transition cursor-pointer"
                 >
                   Generate Verification OTP
                 </button>
@@ -601,7 +611,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 bg-red-700 hover:bg-red-600 text-white font-bold rounded-xl text-xs transition"
+                  className="w-full py-2.5 bg-red-700 hover:bg-red-600 text-white font-bold rounded-xl text-xs transition cursor-pointer"
                 >
                   Confirm & Reset Password
                 </button>
@@ -611,7 +621,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
             <button
               type="button"
               onClick={() => { setViewMode('LOGIN'); setError(''); setOtpStep('ID'); }}
-              className="w-full py-1 text-xs text-slate-400 hover:text-white transition"
+              className="w-full py-1 text-xs text-slate-400 hover:text-white transition cursor-pointer"
             >
               ← Back to Login
             </button>

@@ -6,6 +6,11 @@ export type UserRole =
   | 'SUPER_ADMIN' 
   | 'DEVELOPER' 
   | 'ADMIN' 
+  | 'SSP'
+  | 'ASP'
+  | 'IPO'
+  | 'PA'
+  | 'LAST_MILE_STAFF'
   | 'DIVISIONAL_HEAD'
   | 'ASST_DIVISIONAL_ADMIN'
   | 'SUBDIVISION_INCHARGE'
@@ -40,6 +45,11 @@ export type UserRole =
   | string;
 
 export type OfficialPostType =
+  | 'SSP'
+  | 'ASP'
+  | 'IPO'
+  | 'Postal Assistant'
+  | 'Last-Mile Staff'
   | 'Divisional Head'
   | 'Assistant Divisional Admin'
   | 'Subdivision Incharge'
@@ -186,6 +196,16 @@ export interface Address {
   fullAddress?: string;
   city?: string;
   state?: string;
+}
+
+export interface PanAlignedAddress {
+  houseDoorFlatNo: string;
+  buildingPremises: string;
+  streetRoadLane: string;
+  areaLocalityPostOffice: string;
+  pincode: string;
+  cityDistrict: string;
+  state: string;
 }
 
 export type AddressExceptionSeverity = 'CRITICAL' | 'WARNING' | 'INFO';
@@ -400,6 +420,7 @@ export interface Customer {
   occupation?: string;
   category?: string; // General, SC, ST, OBC, Senior Citizen, etc.
   address?: Address | any;
+  panAddress?: PanAlignedAddress;
   residentialAddress?: Address;
   permanentAddress?: Address;
   sameAsResidential?: boolean;
@@ -452,13 +473,220 @@ export interface Customer {
   assignedStaffId?: string;
   assignedStaffName?: string;
   assignedStaffEmail?: string;
+  submittedByStaffId?: string;
+  staffAttribution?: StaffAttributionRecord;
+  verificationMeta?: ThreeLayerVerificationMetadata;
   brandId?: string;
   brandName?: string;
   createdById?: string;
   assignedToId?: string;
   businessCategory?: string;
+  interestedServiceTags?: string[];
+  occupancyType?: 'Tenant' | 'Owner' | 'Owner Family' | string;
+  residesAtThisAddress?: boolean;
+  hasMultipleProperties?: boolean;
+  isCurrentResidenceAddress?: boolean;
+  currentResidenceSpecificAddress?: string;
+  addressRemark?: string;
+  addressTags?: string[];
   createdAt: string;
   updatedAt?: string;
+}
+
+export const OCCUPANCY_TAG_OPTIONS = ['Tenant', 'Owner', 'Owner Family'] as const;
+export type OccupancyTagType = (typeof OCCUPANCY_TAG_OPTIONS)[number];
+
+export const RESIDENCE_STATUS_TAG_OPTIONS = [
+  'Resides at This Address',
+  'Multiple Properties',
+  'Current Residence Address',
+] as const;
+export type ResidenceStatusTagType = (typeof RESIDENCE_STATUS_TAG_OPTIONS)[number];
+
+// India Post Kota Division Central Contact & Lead/Support Number
+export const KOTA_DIVISION_CENTRAL_CONTACT = '9460062100';
+export const KOTA_DIVISION_CENTRAL_CONTACT_LABEL = '+91 9460062100';
+export const KOTA_DIVISION_CENTRAL_HELPDESK_TITLE = 'India Post Kota Division Central Helpline (9460062100)';
+
+// Official 13 Regional PIN Codes Scoped to Kota & Baran Division
+export const KOTA_DIVISION_OFFICIAL_PINS = [
+  '324001',
+  '324002',
+  '324003',
+  '324004',
+  '324005',
+  '324006',
+  '324007',
+  '324008',
+  '324009',
+  '324010',
+  '325001',
+  '325003',
+  '325205',
+] as const;
+export type KotaDivisionOfficialPin = (typeof KOTA_DIVISION_OFFICIAL_PINS)[number];
+
+// Central Lead & Support Collection Ticket (9460062100 Hub)
+export type CentralLeadSupportChannel =
+  | 'WHATSAPP'
+  | 'VOICE_CALL'
+  | 'SMS'
+  | 'PORTAL_INQUIRY'
+  | 'DOORSTEP_REQUEST';
+
+export type CentralLeadServiceCategory =
+  | 'SPEED_POST'
+  | 'PARCEL_COD'
+  | 'SAVINGS_SCHEMES'
+  | 'PLI_RPLI'
+  | 'IPPB_BANKING'
+  | 'AADHAAR_CELC'
+  | 'BULK_COMMERCIAL'
+  | 'DOORSTEP_SURVEY'
+  | 'GENERAL_SUPPORT';
+
+export type CentralTicketStatus =
+  | 'NEW'
+  | 'ROUTED'
+  | 'IN_PROGRESS'
+  | 'RESOLVED'
+  | 'CLOSED';
+
+export interface CentralLeadSupportTicket {
+  id: string; // e.g. KOTA-9460062100-001
+  centralContactNumber: string; // '9460062100'
+  callerName: string;
+  callerMobile: string;
+  whatsappOptIn: boolean;
+  channel: CentralLeadSupportChannel;
+  serviceCategory: CentralLeadServiceCategory;
+  serviceTitle: string;
+  pincode: string;
+  subOffice: string;
+  beatNo: string;
+  colonyOrArea?: string;
+  specificAddress?: string;
+  inquiryDetails: string;
+  assignedStaffId?: string;
+  assignedStaffName?: string;
+  assignedRole?: string;
+  priority: 'NORMAL' | 'HIGH' | 'URGENT';
+  status: CentralTicketStatus;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt?: string;
+  resolutionNotes?: string;
+  sourceTag: string; // 'Central 9460062100 Desk'
+}
+
+// Kota Division Managed Tree Structure (Division -> Sub-Division/PIN -> Post Office/Beat -> Role & Work Queue)
+export interface KotaManagedTreeNode {
+  id: string;
+  title: string;
+  level: 'DIVISION' | 'SUBDIVISION' | 'PINCODE_HUB' | 'POST_OFFICE' | 'BEAT' | 'WORK_QUEUE';
+  code: string;
+  pincode?: string;
+  parentCode?: string;
+  inchargeName?: string;
+  inchargeRole?: string;
+  inchargePhone?: string;
+  totalBeats?: number;
+  totalStaff?: number;
+  activeSurveysCount?: number;
+  pendingWorkQueueCount?: number;
+  centralLeadsCount?: number;
+  children?: KotaManagedTreeNode[];
+}
+
+export interface KotaWorkQueueItem {
+  id: string;
+  title: string;
+  category: 'DAILY_BEAT_TASK' | 'CUSTOMER_VERIFICATION' | 'PROPERTY_SURVEY' | 'STICKER_DISTRIBUTION' | 'CENTRAL_9460062100_LEAD' | 'PARCEL_DELIVERY';
+  pincode: string;
+  subOffice: string;
+  beatNo: string;
+  assignedStaffName: string;
+  assignedRole: string;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FLAGGED';
+  dueDate: string;
+  customerName?: string;
+  customerMobile?: string;
+  addressSummary?: string;
+  priority: 'ROUTINE' | 'PRIORITY' | 'URGENT';
+}
+
+export const POSTAL_SERVICE_TAG_OPTIONS: readonly string[] = [
+  'Speed Post & Registered Mail',
+  'Parcel & E-Commerce COD',
+  'Small Savings (SSY / PPF / SCSS / MIS / RD / NSC)',
+  'PLI / RPLI Life Insurance',
+  'IPPB Banking, AePS & Merchant QR',
+  'Aadhaar / CELC & Jeevan Pramaan DLC',
+  'Bulk Customer & Promoted Showcase',
+  'MyStamp, Gangajal & Retail Counter',
+] as const;
+
+export interface LeadSelectedProductItem {
+  id: string;
+  code: string;
+  title: string;
+  sourceType: 'POSTAL_SCHEME' | 'SHOWCASE_OFFERING' | 'BULK_PROMOTED';
+  category: string;
+  unitPrice?: number;
+  quantity?: number;
+  commissionOrRate?: string;
+  sla?: string;
+  bulkCustomerName?: string;
+  pincode?: string;
+}
+
+export interface ProductTargetRecord {
+  id: string;
+  productCode: string;
+  productName: string;
+  serviceTag: string;
+  period: string;
+  targetUnits: number;
+  targetRevenueInr: number;
+  scopeType: 'DIVISION' | 'OFFICE' | 'BEAT' | 'STAFF';
+  officeId?: string;
+  officeName?: string;
+  pincode?: string;
+  beatNo?: string;
+  assignedStaffId?: string;
+  assignedStaffName?: string;
+  notes?: string;
+  createdBy: string;
+  updatedAt: string;
+}
+
+export interface StaffAttributionRecord {
+  staffId: string;
+  employeeId?: string;
+  staffName: string;
+  role: string;
+  officialPost?: string;
+  officeName: string;
+  officeId?: string;
+  pincode: string;
+  beat: string;
+  contact?: string;
+  email?: string;
+  profilePath: string;
+  recordedAt: string;
+}
+
+export interface ThreeLayerVerificationMetadata {
+  layer1Passed: boolean;
+  layer1Details: string;
+  layer2Passed: boolean;
+  layer2Details: string;
+  layer3Passed: boolean;
+  layer3Details: string;
+  verifiedAt: string;
+  duplicateMatchDetected: boolean;
+  duplicateRemark?: string;
+  matchedRecordIds?: string[];
 }
 
 export interface ProductDefinition {
@@ -557,6 +785,12 @@ export interface Lead {
   createdById?: string;
   assignedToId?: string;
   businessCategory?: string;
+  serviceTags?: string[];
+  selectedProducts?: LeadSelectedProductItem[];
+  quantity?: number;
+  commissionInfo?: string;
+  sla?: string;
+  officeName?: string;
   reassignmentHistory?: LeadReassignmentLog[];
   createdAt: string;
   updatedAt: string;
@@ -688,11 +922,14 @@ export interface Household {
 
 export interface Property {
   id: string;
+  brandId?: string;
+  brandName?: string;
+  clientId?: string;
   propertyCode?: string; // e.g. KP-S7-H0445
   propertyNo?: string;
   housePlotNumber?: string;
   houseNo?: string;
-  propertyType?: 'House' | 'Flat' | 'Shop' | 'Office' | 'Commercial' | 'Other';
+  propertyType?: 'House' | 'Flat' | 'Shop' | 'Office' | 'Commercial' | 'Mixed' | 'Flat / Residency' | 'Other';
   street?: string;
   address?: string;
   sector?: string;
@@ -702,7 +939,7 @@ export interface Property {
   pincode: string;
   beatNo?: string;
   officeId?: string;
-  status: 'Occupied' | 'Vacant' | 'Rented' | 'Commercial' | 'Address Left';
+  status: 'Occupied' | 'Vacant' | 'Rented' | 'Commercial' | 'Mixed' | 'Address Left';
   residentNames?: string[];
   residents?: {
     name: string;
@@ -720,6 +957,12 @@ export interface Property {
   googleMapsUri?: string;
   placeId?: string;
   ownerName?: string;
+  contactNumber?: string;
+  sequenceTag?: string;
+  remark?: string;
+  submittedByStaffId?: string;
+  staffAttribution?: StaffAttributionRecord;
+  verificationMeta?: ThreeLayerVerificationMetadata;
 }
 
 export interface AuditLog {
@@ -819,10 +1062,22 @@ export type FeatureVisibilityKey =
   | 'vendorSection'
   | 'staffDirectory'
   | 'storefront'
+  | 'showcase'
+  | 'productTargets'
+  | 'reports'
+  | 'masterSearch'
+  | 'lastMileOps'
   | 'aiAssistant'
   | 'dataBackupCenter';
 
-export const DEFAULT_POSTMAN_GDS_VISIBLE_FEATURES: FeatureVisibilityKey[] = ['property', 'members'];
+export const DEFAULT_POSTMAN_GDS_VISIBLE_FEATURES: FeatureVisibilityKey[] = [
+  'property',
+  'members',
+  'showcase',
+  'leadsAndSchemes',
+  'lastMileOps',
+  'masterSearch',
+];
 
 export const ALL_FEATURE_VISIBILITY_KEYS: FeatureVisibilityKey[] = [
   'property',
@@ -839,6 +1094,11 @@ export const ALL_FEATURE_VISIBILITY_KEYS: FeatureVisibilityKey[] = [
   'vendorSection',
   'staffDirectory',
   'storefront',
+  'showcase',
+  'productTargets',
+  'reports',
+  'masterSearch',
+  'lastMileOps',
   'aiAssistant',
   'dataBackupCenter',
 ];
@@ -1313,6 +1573,13 @@ export interface StaffPermission {
   canAssignStaff: boolean;
   canExportData: boolean;
   canAccessSettings: boolean;
+  propertyDetailsRead?: boolean;
+  propertySearch?: boolean;
+  allottedTerritory?: {
+    beatNos?: string[];
+    pincodes?: string[];
+    colonies?: string[];
+  };
   approvalStatus?: 'Approved' | 'Pending Approval' | 'Revoked';
   serviceModules?: ServiceModulePermissions;
   allowedBeats?: string[];
@@ -1758,7 +2025,7 @@ export interface LogisticsDispatchOrder {
   pincodeManagerId: string;
   pincodeManagerName: string;
   pincodeManagerContact: string;
-  serviceType: 'Speed Post COD' | 'XPOKART Local Parcel' | 'Xpeedo Local Parcel' | 'Doorstep Service Pickup';
+  serviceType: 'Speed Post COD' | 'India Post Speed Post' | 'Bulk Customer Parcel & COD' | 'Doorstep Service Pickup' | 'XPOKART Local Parcel' | 'Xpeedo Local Parcel';
   status: 'PENDING_PICKUP' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'COD_SETTLED' | 'CANCELLED';
   speedPostBarcode?: string;
   codAmount: number;
@@ -1823,7 +2090,7 @@ export interface StaffProductItem {
   lastCheckedDate?: string;
   commercialStoreId?: string;
   ippbSettlementRef?: string;
-  logisticsServiceType?: 'Speed Post COD' | 'XPOKART Local Parcel' | 'Xpeedo Local Parcel' | 'Doorstep Service Pickup';
+  logisticsServiceType?: 'Speed Post COD' | 'India Post Speed Post' | 'Bulk Customer Parcel & COD' | 'Doorstep Service Pickup' | 'XPOKART Local Parcel' | 'Xpeedo Local Parcel';
   listingStatus?: ProductListingStatus;
   stockQuantity?: number;
   sourceOwnership?: ProductSourceType;
@@ -2057,6 +2324,24 @@ export interface PartnerTeamPermissions {
   canCreateCrm: boolean;
   canEditCrm: boolean;
   canDeleteCrm: boolean;
+  canViewAllBrandCustomers?: boolean;
+  canCreateOrEditCustomer?: boolean;
+  canAccessLeads?: boolean;
+  canExportData?: boolean;
+}
+
+export interface PartnerCrmCustomer {
+  id: string;
+  partnerId: string;
+  brandId?: string;
+  brandName?: string;
+  name: string;
+  mobile: string;
+  email?: string;
+  address?: string;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Brand {
@@ -2234,6 +2519,16 @@ export interface PropertyRecord {
   createdById?: string;
   assignedToId?: string;
   businessCategory?: string;
+  sequenceTag?: string;
+  houseNo?: string;
+  colony?: string;
+  sector?: string;
+  beatNo?: string;
+  pincode?: string;
+  remark?: string;
+  submittedByStaffId?: string;
+  staffAttribution?: StaffAttributionRecord;
+  verificationMeta?: ThreeLayerVerificationMetadata;
   updatedAt: string;
 }
 
@@ -2287,7 +2582,191 @@ export interface BrandRbacRoleConfig {
   updatedAt: string;
 }
 
+// ============================================================================
+// INDIA POST BULK CUSTOMER & PRODUCT PROMOTION SHOWCASE MODELS
+// ============================================================================
 
+export type IndiaPostBulkCustomerCategory =
+  | 'Books & Study Material'
+  | 'Handloom & Textiles'
+  | 'Agro & Regional Goods'
+  | 'Medical & Diagnostics'
+  | 'Industrial & Packaging'
+  | 'Government & Institutional'
+  | 'e-Commerce & BNPL Merchant';
 
+export interface IndiaPostBulkCustomer {
+  id: string;
+  businessName: string;
+  category: IndiaPostBulkCustomerCategory | string;
+  contactPerson: string;
+  contactPhone?: string;
+  pincode: string;
+  officeName: string;
+  beatNo: string;
+  division: string;
+  tagline: string;
+  highlights: string[];
+  bnplOrAccountRef?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
+export interface IndiaPostPromotedProduct {
+  id: string;
+  sku: string;
+  bulkCustomerId: string;
+  bulkCustomerName: string;
+  title: string;
+  category: string;
+  pincode: string;
+  officeName: string;
+  beatCoverage: string;
+  priceDisplay: string;
+  mrpPrice: number;
+  retailPrice: number;
+  bulkOfferDetails: string;
+  minOrderOrUnit: string;
+  highlights: string[];
+  description: string;
+  imageUrl: string;
+  isActive: boolean;
+  isFeatured: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
+export interface PublicInquiryStatusResult {
+  found: boolean;
+  referenceId: string;
+  serviceOrProduct: string;
+  status: string;
+  pincode: string;
+  beatNo: string;
+  maskedPhone: string;
+  updatedAt: string;
+  note?: string;
+}
+
+// ============================================================================
+// 3-TAB SURVEY MODULE MODELS (PROPERTIES, CUSTOMER VERIFICATION, STICKER/CARD)
+// ============================================================================
+
+export type PropertySurveyType =
+  | 'Residential'
+  | 'Commercial'
+  | 'Coaching'
+  | 'Institution'
+  | 'Hostel'
+  | 'Mixed';
+
+export type PropertySurveyStatus =
+  | 'Assigned'
+  | 'In Progress'
+  | 'Verification Pending'
+  | 'Verified'
+  | 'Rejected/Correction Required'
+  | 'Completed';
+
+export interface PropertySurveyRecord {
+  id: string;
+  propertyType: PropertySurveyType;
+  houseOrBuildingNo: string;
+  address: string;
+  colony: string;
+  landmark?: string;
+  ownerOrOccupantName: string;
+  ownerOrOccupantMobile?: string;
+  officePincode: string;
+  officeName?: string;
+  beatNo: string;
+  latitude?: number;
+  longitude?: number;
+  gpsStatus: 'CAPTURED' | 'NOT_CAPTURED';
+  verificationStatus: PropertySurveyStatus;
+  notes?: string;
+  surveyedById: string;
+  surveyedByName: string;
+  verifiedBy?: string;
+  verifiedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CustomerVerificationStatus =
+  | 'Pending'
+  | 'Verified'
+  | 'Mismatch'
+  | 'Unreachable';
+
+export interface CustomerVerificationSurveyRecord {
+  id: string;
+  customerId?: string;
+  customerName: string;
+  customerMobile: string;
+  houseOrPropertyRef?: string;
+  colony: string;
+  officePincode: string;
+  beatNo: string;
+  idVerified: boolean;
+  addressVerified: boolean;
+  occupancyVerified: boolean;
+  verificationStatus: CustomerVerificationStatus;
+  remarks?: string;
+  verifiedByStaffId: string;
+  verifiedByStaffName: string;
+  verifiedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type DistributionItemType = 'Sticker' | 'Visiting Card' | 'Both';
+
+export interface StickerVisitingCardDistributionRecord {
+  id: string;
+  itemType: DistributionItemType;
+  quantity: number;
+  recipientName: string;
+  recipientCategory:
+    | 'Household'
+    | 'Shop / Merchant'
+    | 'Coaching / Hostel'
+    | 'Office / Institution';
+  recipientMobile?: string;
+  houseOrShopNo: string;
+  colony: string;
+  officePincode: string;
+  beatNo: string;
+  distributionDate: string;
+  notes?: string;
+  distributedByStaffId: string;
+  distributedByStaffName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LastMileVendorRecord {
+  id: string;
+  vendorCode: string;
+  vendorName: string;
+  contactPerson?: string;
+  mobile: string;
+  email?: string;
+  serviceCoveragePincodes: string[];
+  assignedBeats: string[];
+  serviceCategory:
+    | 'Logistics & Courier'
+    | 'Bulk Delivery'
+    | 'Last Mile Fleet'
+    | 'Retail Partner'
+    | 'Other';
+  status: 'Active' | 'Inactive' | 'Pending Review';
+  assignedTasksCount?: number;
+  notes?: string;
+  officePincode?: string;
+  officeName?: string;
+  createdAt: string;
+  updatedAt: string;
+  enteredBy?: string;
+}

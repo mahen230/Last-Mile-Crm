@@ -25,14 +25,21 @@ import {
   UserCheck,
   Users,
   X,
+  Tag,
+  Sparkles,
 } from 'lucide-react';
-import { CONSOLIDATED_BEAT_MATRIX, ConsolidatedBeatEntry } from '../../data/consolidatedBeatMatrix';
+import { CONSOLIDATED_BEAT_MATRIX } from '../../data/consolidatedBeatMatrix';
 import { staffPermissionService } from '../../services/staffPermissionService';
 import { customerService } from '../../services/customerService';
 import { POSTAL_PRODUCTS } from '../../data/productsData';
-import { b2bPartnershipService, B2BPartnershipApplication } from '../../services/b2bPartnershipService';
+import { b2bPartnershipService } from '../../services/b2bPartnershipService';
 import { exportCsvWithBom, xpeedoOpsService } from '../../services/xpeedoOpsService';
-import { StaffProfile, Customer, Property, Lead } from '../../types/models';
+import { commonDataCentreService } from '../../services/commonDataCentreService';
+import { indiaPostBulkShowcaseService } from '../../services/indiaPostBulkShowcaseService';
+import { useAuth } from '../auth/FirebaseAuthProvider';
+import { StaffAttributionLink } from '../common/StaffAttributionModal';
+import { SearchConsoleDuplicatePanel } from '../common/SearchConsoleDuplicatePanel';
+import { StaffProfile, Customer, Lead, POSTAL_SERVICE_TAG_OPTIONS } from '../../types/models';
 
 type SearchInspectionSection =
   | 'STAFF'
@@ -120,8 +127,16 @@ const SEEDED_MARKETING_AGENTS: B2BMarketingAgent[] = [
 ];
 
 export default function IndiaPostMasterSearchAndInspectionView() {
+  const { userProfile } = useAuth();
+  const activeUser = staffPermissionService.getActiveSession() || userProfile;
+  const isSuperAdmin = staffPermissionService.isSuperAdmin(activeUser);
+
   const [activeSection, setActiveSection] = useState<SearchInspectionSection>('STAFF');
   const [copiedText, setCopiedText] = useState<string | null>(null);
+  const [globalMasterQuery, setGlobalMasterQuery] = useState('');
+  const [globalSearchCategory, setGlobalSearchCategory] = useState<
+    'ALL' | 'CITIZENS' | 'TAGS' | 'PROPERTIES' | 'LEADS' | 'SHOWCASE' | 'STAFF' | 'PINS'
+  >('ALL');
 
   // ---------------------------------------------------------------------------
   // PANEL 1: STAFF SEARCH & DRILL-DOWN STATE
@@ -158,19 +173,32 @@ export default function IndiaPostMasterSearchAndInspectionView() {
   const [refreshTick, setRefreshTick] = useState(0);
   const [actionBanner, setActionBanner] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [quickTaskNote, setQuickTaskNote] = useState('');
+  const [custModalRemark, setCustModalRemark] = useState('');
+  const [custModalError, setCustModalError] = useState<string | null>(null);
 
   const showActionToast = (kind: 'ok' | 'err', text: string) => {
     setActionBanner({ kind, text });
     window.setTimeout(() => setActionBanner(null), 5000);
   };
 
-  // Datasets
+  // Strictly Scoped Datasets
   const allStaff = useMemo(() => {
     void refreshTick;
     return staffPermissionService
       .getAllStaffProfiles()
-      .filter((s) => !s.brandId || s.brandId === 'india-post');
-  }, [refreshTick]);
+      .filter(
+        (s) =>
+          (!s.brandId || s.brandId === 'india-post') &&
+          staffPermissionService.matchesUserBeatScope(activeUser, {
+            beatNo: s.beat,
+            officeId: s.officeId,
+            officeName: s.assignedOffice,
+            pincode: s.officePincode,
+            assignedStaffId: s.employeeId || s.id,
+            assignedStaffEmail: s.email,
+          })
+      );
+  }, [refreshTick, activeUser]);
 
   const allOffices = useMemo(() => {
     void refreshTick;
@@ -180,27 +208,38 @@ export default function IndiaPostMasterSearchAndInspectionView() {
       const key = (o.officeId || o.id || o.officeName).toUpperCase();
       if (seen.has(key)) return false;
       seen.add(key);
-      return !o.brandId || o.brandId === 'india-post';
+      if (o.brandId && o.brandId !== 'india-post') return false;
+      if (isSuperAdmin) return true;
+      return staffPermissionService.matchesUserBeatScope(activeUser, {
+        officeId: o.officeId || o.id,
+        officeName: o.officeName,
+        pincode: o.pincode,
+      });
     });
-  }, [refreshTick]);
+  }, [refreshTick, activeUser, isSuperAdmin]);
 
   const allCustomers = useMemo(() => {
     void refreshTick;
     return customerService
-      .getCustomers()
+      .getScopedCustomers(activeUser)
       .filter((c) => !c.brandId || c.brandId === 'india-post');
-  }, [refreshTick]);
+  }, [refreshTick, activeUser]);
 
   const allProperties = useMemo(() => {
     void refreshTick;
-    return customerService.getProperties();
-  }, [refreshTick]);
+    return customerService.getScopedProperties(activeUser);
+  }, [refreshTick, activeUser]);
 
   const allLeads = useMemo(() => {
     void refreshTick;
     return customerService
-      .getLeads()
+      .getScopedLeads(activeUser)
       .filter((l) => !l.brandId || l.brandId === 'india-post');
+  }, [refreshTick, activeUser]);
+
+  const showcaseCatalog = useMemo(() => {
+    void refreshTick;
+    return indiaPostBulkShowcaseService.getUnifiedShowcaseCatalog();
   }, [refreshTick]);
 
   const handleQuickScheduleFollowUp = (target: {
@@ -273,11 +312,16 @@ export default function IndiaPostMasterSearchAndInspectionView() {
   };
 
   const handleQuickConvertLead = (lead: Lead) => {
-    const resCust = customerService.addOrUpdateCustomer(
+    const activeProfile = staffPermissionService.getActiveSession();
+    const resCust = commonDataCentreService.verifyAndCommitCustomer(
+      activeProfile,
       {
         name: lead.customerName,
         mobile: lead.customerMobile || '9000000000',
         beatNo: lead.beatNo || 'Beat 2',
+        pincode: lead.pincode || '324009',
+        colony: lead.postOfficeName || 'Dadabari',
+        area: lead.postOfficeName || 'Dadabari',
         brandId: 'india-post',
         brandName: 'India Post',
         address: {
@@ -290,29 +334,39 @@ export default function IndiaPostMasterSearchAndInspectionView() {
         verificationStatus: 'Field Confirmed',
         source: 'Master Search Conversion',
       },
-      'Master Search Console'
+      {
+        remark: `Lead converted from Master Search Console (${lead.productName})`,
+        isIntentionalEdit: true,
+        source: 'Master Search Console',
+      }
     );
 
-    customerService.convertLeadToProduct(lead.id, `IP-${Date.now().toString().slice(-6)}`);
-    xpeedoOpsService.logExternalActivity({
-      actor: 'Master Search Console',
-      actorRole: 'CLIENT_ADMIN',
-      workspaceId: 'INDIA_POST',
-      entityType: 'Lead',
-      entityId: lead.id,
-      action: 'CONVERT_LEAD_TO_CUSTOMER',
-      summary: `Converted Lead ${lead.customerName} (${lead.productName}) -> Customer ${resCust.customer.masterId || resCust.customer.id}`,
-    });
+    if (!resCust.success || !resCust.data) {
+      showActionToast('err', resCust.error || 'Three-Layer Verification blocked lead conversion.');
+      return;
+    }
 
+    customerService.convertLeadToProduct(lead.id, `IP-${Date.now().toString().slice(-6)}`);
     setRefreshTick((t) => t + 1);
-    showActionToast('ok', `Lead "${lead.customerName}" converted to active India Post customer (${resCust.customer.masterId || resCust.customer.id}) and logged in audit_logs.`);
+    showActionToast(
+      'ok',
+      `3-Layer Verified: Lead "${lead.customerName}" converted to active India Post customer (${resCust.data.masterId || resCust.data.id}) and synced to Common Data Centre.`
+    );
   };
 
   const b2bApplications = useMemo(() => {
     return b2bPartnershipService
       .getApplications()
-      .filter((app) => !app.targetBrandSlug || app.targetBrandSlug === 'india-post');
-  }, []);
+      .filter(
+        (app) =>
+          (!app.targetBrandSlug || app.targetBrandSlug === 'india-post') &&
+          (isSuperAdmin ||
+            staffPermissionService.matchesUserBeatScope(activeUser, {
+              pincode: app.targetPincode,
+              officeName: app.officeName,
+            }))
+      );
+  }, [activeUser, isSuperAdmin]);
 
   const uniqueOfficeNames = useMemo(() => {
     return Array.from(new Set(allOffices.map((o) => o.officeName))).sort();
@@ -368,14 +422,14 @@ export default function IndiaPostMasterSearchAndInspectionView() {
     });
   }, [allStaff, staffOfficeFilter, staffBeatFilter, staffRoleFilter, staffSearchQuery]);
 
-  // Filtered Customers
+  // Filtered Customers (including service interest tags)
   const filteredCustomers = useMemo(() => {
     return allCustomers.filter((c) => {
       if (custPinFilter !== 'ALL' && c.pincode !== custPinFilter) return false;
       if (custColonyFilter !== 'ALL' && (c.colony || c.area) !== custColonyFilter) return false;
       if (custBeatFilter !== 'ALL' && c.beatNo !== custBeatFilter) return false;
       if (custSchemeFilter !== 'ALL') {
-        const blob = `${c.activeScheme || ''} ${c.schemeHistory?.join(' ') || ''}`.toLowerCase();
+        const blob = `${c.activeScheme || ''} ${c.schemeHistory?.join(' ') || ''} ${(c.interestedServiceTags || []).join(' ')}`.toLowerCase();
         if (!blob.includes(custSchemeFilter.toLowerCase())) return false;
       }
       if (custSearchQuery.trim()) {
@@ -385,12 +439,127 @@ export default function IndiaPostMasterSearchAndInspectionView() {
           c.mobile.includes(q) ||
           (c.houseNo && c.houseNo.toLowerCase().includes(q)) ||
           (c.colony && c.colony.toLowerCase().includes(q)) ||
-          (c.propertyId && c.propertyId.toLowerCase().includes(q));
+          (c.propertyId && c.propertyId.toLowerCase().includes(q)) ||
+          (c.interestedServiceTags && c.interestedServiceTags.join(' ').toLowerCase().includes(q));
         if (!hit) return false;
       }
       return true;
     });
   }, [allCustomers, custPinFilter, custColonyFilter, custBeatFilter, custSchemeFilter, custSearchQuery]);
+
+  // Unified Global Master Search index across Citizens, Tags, Properties, Leads, Showcase, Staff, and PINs
+  const globalSearchHits = useMemo(() => {
+    const q = globalMasterQuery.trim().toLowerCase();
+    if (!q) return null;
+
+    const citizenHits =
+      globalSearchCategory === 'ALL' || globalSearchCategory === 'CITIZENS' || globalSearchCategory === 'TAGS'
+        ? allCustomers
+            .filter((c) => {
+              const tagText = (c.interestedServiceTags || []).join(' ').toLowerCase();
+              if (globalSearchCategory === 'TAGS') return tagText.includes(q);
+              return (
+                c.name.toLowerCase().includes(q) ||
+                c.mobile.includes(q) ||
+                (c.colony || '').toLowerCase().includes(q) ||
+                (c.pincode || '').includes(q) ||
+                (c.beatNo || '').toLowerCase().includes(q) ||
+                tagText.includes(q)
+              );
+            })
+            .slice(0, 6)
+        : [];
+
+    const propertyHits =
+      globalSearchCategory === 'ALL' || globalSearchCategory === 'PROPERTIES'
+        ? allProperties
+            .filter((p) =>
+              `${p.houseNo} ${p.propertyId} ${p.colony || ''} ${p.area || ''} ${p.beatNo || ''} ${p.pincode || ''}`
+                .toLowerCase()
+                .includes(q)
+            )
+            .slice(0, 6)
+        : [];
+
+    const leadHits =
+      globalSearchCategory === 'ALL' || globalSearchCategory === 'LEADS' || globalSearchCategory === 'TAGS'
+        ? allLeads
+            .filter((l) =>
+              `${l.customerName} ${l.customerMobile} ${l.productName} ${(l.serviceTags || []).join(' ')} ${l.pincode || ''} ${l.beatNo || ''}`
+                .toLowerCase()
+                .includes(q)
+            )
+            .slice(0, 6)
+        : [];
+
+    const showcaseHits =
+      globalSearchCategory === 'ALL' || globalSearchCategory === 'SHOWCASE'
+        ? showcaseCatalog
+            .filter((s) =>
+              `${s.title} ${s.code} ${s.category} ${s.bulkCustomerName || ''} ${s.pincode || ''} ${s.suggestedServiceTags.join(' ')}`
+                .toLowerCase()
+                .includes(q)
+            )
+            .slice(0, 6)
+        : [];
+
+    const staffHits =
+      globalSearchCategory === 'ALL' || globalSearchCategory === 'STAFF'
+        ? allStaff
+            .filter((s) =>
+              `${s.name} ${s.employeeId || s.id} ${s.contact || ''} ${s.role} ${s.assignedOffice} ${s.beat || ''} ${s.officePincode || ''}`
+                .toLowerCase()
+                .includes(q)
+            )
+            .slice(0, 6)
+        : [];
+
+    const officeHits =
+      globalSearchCategory === 'ALL' || globalSearchCategory === 'PINS'
+        ? allOffices
+            .filter((o) => `${o.officeName} ${o.pincode} ${o.division || ''}`.toLowerCase().includes(q))
+            .slice(0, 6)
+        : [];
+
+    return {
+      citizenHits,
+      propertyHits,
+      leadHits,
+      showcaseHits,
+      staffHits,
+      officeHits,
+      total:
+        citizenHits.length +
+        propertyHits.length +
+        leadHits.length +
+        showcaseHits.length +
+        staffHits.length +
+        officeHits.length,
+    };
+  }, [globalMasterQuery, globalSearchCategory, allCustomers, allProperties, allLeads, showcaseCatalog, allStaff, allOffices]);
+
+  const duplicateMobileCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    allCustomers.forEach((c) => {
+      const m = String(c.mobile || '').replace(/\D/g, '').slice(-10);
+      if (m.length === 10) {
+        counts.set(m, (counts.get(m) || 0) + 1);
+      }
+    });
+    return counts;
+  }, [allCustomers]);
+
+  const selectedCustDupCheck = useMemo(() => {
+    if (!selectedCustForModal) return null;
+    return commonDataCentreService.detectCustomerDuplicates({
+      excludeId: selectedCustForModal.id,
+      mobile: selectedCustForModal.mobile,
+      name: selectedCustForModal.name,
+      houseNo: selectedCustForModal.houseNo,
+      colony: selectedCustForModal.colony || selectedCustForModal.area,
+      propertyId: selectedCustForModal.propertyId,
+    });
+  }, [selectedCustForModal]);
 
   // Filtered Products
   const filteredProducts = useMemo(() => {
@@ -529,23 +698,22 @@ export default function IndiaPostMasterSearchAndInspectionView() {
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="px-2.5 py-1 rounded-md bg-amber-400 text-slate-950 font-black tracking-wide uppercase text-[10px] flex items-center gap-1 shadow-xs">
                 <ShieldCheck size={12} />
-                <span>Master Brand Owner View Mode</span>
+                <span>{isSuperAdmin ? 'Master Admin / Owner View' : 'Scoped Master Search'}</span>
               </span>
               <span className="text-amber-300 font-mono font-semibold">BRD-INPOST-01</span>
               <span className="text-slate-400">·</span>
-              <span className="text-slate-300">Department of Post Sovereign System</span>
-              <span className="text-slate-400">·</span>
-              <span className="text-emerald-400 font-bold flex items-center gap-1">
-                <CheckCircle2 size={12} />
-                <span>Single-Device Session Guard Active</span>
+              <span className="text-slate-300">
+                {isSuperAdmin
+                  ? 'Department of Post Sovereign System'
+                  : `${activeUser?.subOffice || activeUser?.assignedOffice || 'Assigned Office'} (${activeUser?.officePincode || activeUser?.pincode || '324009'}) · ${activeUser?.beat || 'Scoped Jurisdiction'}`}
               </span>
             </div>
             
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-2.5">
-              <span>Department of Post · Master Operations &amp; Inspection Dashboard</span>
+              <span>Department of Post · Master Search &amp; Inspection Console</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-3xl leading-relaxed">
-              Consolidated command &amp; deep search engine spanning all 34 Delivery Beats, 40+ Staff Roster, 2,798+ Properties, Citizen Directory, and B2B Revenue Networks across Kota Division (324009 &amp; All Pincodes).
+              Unified search across your permitted citizens, service interest tags, properties, leads, showcase catalog, rostered staff, and post office PINs.
             </p>
           </div>
 
@@ -635,6 +803,213 @@ export default function IndiaPostMasterSearchAndInspectionView() {
           </button>
         </div>
       )}
+
+      {/* UNIFIED GLOBAL MASTER SEARCH CONSOLE BAR */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center gap-3">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-red-700" />
+            <input
+              type="text"
+              value={globalMasterQuery}
+              onChange={(e) => setGlobalMasterQuery(e.target.value)}
+              placeholder="Unified Master Search: search citizen, mobile, house/plot, service tag (SSA/IPPB/Parcel), showcase item, staff ID, or PIN..."
+              className="w-full pl-10 pr-9 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-600/20 focus:border-red-600"
+            />
+            {globalMasterQuery && (
+              <button
+                type="button"
+                onClick={() => setGlobalMasterQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 cursor-pointer"
+                title="Clear search"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(['ALL', 'CITIZENS', 'TAGS', 'PROPERTIES', 'LEADS', 'SHOWCASE', 'STAFF', 'PINS'] as const).map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setGlobalSearchCategory(cat)}
+                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                  globalSearchCategory === cat
+                    ? 'bg-red-800 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {cat === 'ALL' ? 'All Records' : cat}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Quick Service Tag Chips */}
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          <span className="font-bold text-slate-500 flex items-center gap-1 mr-1">
+            <Tag size={12} className="text-red-700" /> Quick Tag Lookup:
+          </span>
+          {POSTAL_SERVICE_TAG_OPTIONS.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => {
+                setGlobalSearchCategory('TAGS');
+                setGlobalMasterQuery(tag.split('(')[0].trim());
+              }}
+              className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-red-50 hover:text-red-800 text-slate-700 font-medium border border-slate-200 transition cursor-pointer"
+            >
+              {tag.split('(')[0].trim()}
+            </button>
+          ))}
+        </div>
+
+        {/* Live Unified Results */}
+        {globalSearchHits && (
+          <div className="pt-3 border-t border-slate-200 space-y-3">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-slate-800">
+                Unified Search Matches: <span className="text-red-700 font-mono">{globalSearchHits.total}</span>
+              </span>
+              <span className="text-[11px] text-slate-500">Click any hit to inspect or jump straight to its section</span>
+            </div>
+
+            {globalSearchHits.total === 0 ? (
+              <div className="p-4 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-xs text-slate-500 text-center">
+                No scoped records matched &ldquo;{globalMasterQuery}&rdquo;.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                {globalSearchHits.citizenHits.map((c) => (
+                  <button
+                    key={`g-c-${c.id}`}
+                    type="button"
+                    onClick={() => {
+                      setActiveSection('CUSTOMERS_PROPERTIES');
+                      setCustSearchQuery(c.name);
+                      setSelectedCustForModal(c);
+                      setCustModalRemark(c.remarks || '');
+                    }}
+                    className="p-3 rounded-xl bg-blue-50/70 hover:bg-blue-100/80 border border-blue-200 text-left transition cursor-pointer space-y-1"
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-bold text-blue-800 uppercase">
+                      <span>Citizen · {c.beatNo}</span>
+                      <span className="font-mono">{c.pincode}</span>
+                    </div>
+                    <div className="font-bold text-slate-900 truncate">{c.name}</div>
+                    <div className="text-[11px] text-slate-600 font-mono truncate">{c.mobile} · {c.colony || c.area || 'Assigned Beat'}</div>
+                    {c.interestedServiceTags && c.interestedServiceTags.length > 0 && (
+                      <div className="text-[10px] text-blue-700 truncate font-semibold">
+                        Tags: {c.interestedServiceTags.join(', ')}
+                      </div>
+                    )}
+                  </button>
+                ))}
+
+                {globalSearchHits.propertyHits.map((p) => (
+                  <button
+                    key={`g-p-${p.id}`}
+                    type="button"
+                    onClick={() => {
+                      setActiveSection('CUSTOMERS_PROPERTIES');
+                      setCustSearchQuery(p.houseNo || p.propertyId || '');
+                    }}
+                    className="p-3 rounded-xl bg-emerald-50/70 hover:bg-emerald-100/80 border border-emerald-200 text-left transition cursor-pointer space-y-1"
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-bold text-emerald-800 uppercase">
+                      <span>Property · {p.beatNo}</span>
+                      <span className="font-mono">{p.pincode}</span>
+                    </div>
+                    <div className="font-bold text-slate-900 truncate">{p.houseNo} · {p.colony || p.area}</div>
+                    <div className="text-[11px] text-slate-600 font-mono truncate">{p.propertyId}</div>
+                  </button>
+                ))}
+
+                {globalSearchHits.leadHits.map((l) => (
+                  <button
+                    key={`g-l-${l.id}`}
+                    type="button"
+                    onClick={() => {
+                      setActiveSection('B2B_MARKETING');
+                      setB2bSubTab('LEADS');
+                      setB2bSearchQuery(l.customerName);
+                    }}
+                    className="p-3 rounded-xl bg-amber-50/70 hover:bg-amber-100/80 border border-amber-200 text-left transition cursor-pointer space-y-1"
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-bold text-amber-900 uppercase">
+                      <span>Lead · {l.stage}</span>
+                      <span className="font-mono">{l.pincode}</span>
+                    </div>
+                    <div className="font-bold text-slate-900 truncate">{l.customerName}</div>
+                    <div className="text-[11px] text-slate-700 truncate">{l.productName}</div>
+                  </button>
+                ))}
+
+                {globalSearchHits.showcaseHits.map((s) => (
+                  <button
+                    key={`g-sh-${s.id}`}
+                    type="button"
+                    onClick={() => {
+                      setActiveSection('PRODUCTS_SCHEMES');
+                      setProductSearchQuery(s.code);
+                    }}
+                    className="p-3 rounded-xl bg-rose-50/70 hover:bg-rose-100/80 border border-rose-200 text-left transition cursor-pointer space-y-1"
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-bold text-rose-800 uppercase">
+                      <span className="flex items-center gap-1"><Sparkles size={10} /> Showcase · {s.sourceType}</span>
+                      <span className="font-mono">{s.code}</span>
+                    </div>
+                    <div className="font-bold text-slate-900 truncate">{s.title}</div>
+                    <div className="text-[11px] text-slate-600 truncate">
+                      {s.bulkCustomerName || s.category} · ₹{s.unitPrice.toLocaleString('en-IN')}
+                    </div>
+                  </button>
+                ))}
+
+                {globalSearchHits.staffHits.map((st) => (
+                  <button
+                    key={`g-st-${st.id}`}
+                    type="button"
+                    onClick={() => {
+                      setActiveSection('STAFF');
+                      setStaffSearchQuery(st.name);
+                      setSelectedStaffForModal(st);
+                    }}
+                    className="p-3 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-left transition cursor-pointer space-y-1"
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-700 uppercase">
+                      <span>Staff · {st.role}</span>
+                      <span className="font-mono">{st.officePincode || '324009'}</span>
+                    </div>
+                    <div className="font-bold text-slate-900 truncate">{st.name}</div>
+                    <div className="text-[11px] text-slate-600 truncate">{st.assignedOffice} · {st.beat || 'Office Desk'}</div>
+                  </button>
+                ))}
+
+                {globalSearchHits.officeHits.map((o) => (
+                  <button
+                    key={`g-of-${o.id}`}
+                    type="button"
+                    onClick={() => {
+                      setActiveSection('STAFF');
+                      setStaffOfficeFilter(o.officeName);
+                    }}
+                    className="p-3 rounded-xl bg-indigo-50/70 hover:bg-indigo-100/80 border border-indigo-200 text-left transition cursor-pointer space-y-1"
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-bold text-indigo-800 uppercase">
+                      <span>Post Office / PIN</span>
+                      <span className="font-mono">{o.pincode}</span>
+                    </div>
+                    <div className="font-bold text-slate-900 truncate">{o.officeName}</div>
+                    <div className="text-[11px] text-slate-600 truncate">{o.division || 'Kota Division'}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* 4 Multi-Level Inspection Navigation Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
@@ -1002,56 +1377,86 @@ export default function IndiaPostMasterSearchAndInspectionView() {
                   <th className="p-3">Colony &amp; PIN</th>
                   <th className="p-3">Beat</th>
                   <th className="p-3">Active Scheme Interest</th>
+                  <th className="p-3">Staff Attribution</th>
                   <th className="p-3">Status</th>
                   <th className="p-3 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredCustomers.slice(0, 50).map((cust) => (
-                  <tr key={cust.id} className="hover:bg-slate-50/80 transition">
-                    <td className="p-3 font-bold text-slate-900">{cust.name}</td>
-                    <td className="p-3 font-mono">
-                      <div className="flex items-center gap-1.5">
-                        <span>{cust.mobile}</span>
-                        <a
-                          href={`https://api.whatsapp.com/send?phone=91${cust.mobile.replace(/\D/g, '')}&text=Namaste%20${encodeURIComponent(
-                            cust.name
-                          )},%20this%20is%20Department%20of%20Post%20Dadabari%20324009.`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-emerald-600 hover:text-emerald-700"
+                {filteredCustomers.slice(0, 50).map((cust) => {
+                  const cleanMob = String(cust.mobile || '').replace(/\D/g, '').slice(-10);
+                  const isDupRow =
+                    (cleanMob.length === 10 && (duplicateMobileCounts.get(cleanMob) || 0) > 1) ||
+                    Boolean(cust.hasConflict);
+                  return (
+                    <tr key={cust.id} className="hover:bg-slate-50/80 transition">
+                      <td className="p-3 font-bold text-slate-900">
+                        <div>{cust.name}</div>
+                        {isDupRow && (
+                          <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 text-[10px] font-bold border border-amber-300">
+                            Already Exists / Duplicate Match
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 font-mono">
+                        <div className="flex items-center gap-1.5">
+                          <span>{cust.mobile}</span>
+                          <a
+                            href={`https://api.whatsapp.com/send?phone=91${cust.mobile.replace(/\D/g, '')}&text=Namaste%20${encodeURIComponent(
+                              cust.name
+                            )},%20this%20is%20Department%20of%20Post%20Dadabari%20324009.`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-emerald-600 hover:text-emerald-700"
+                          >
+                            <MessageCircle size={13} />
+                          </a>
+                        </div>
+                      </td>
+                      <td className="p-3 text-slate-700">{cust.houseNo || 'Plot Verified'}</td>
+                      <td className="p-3 text-slate-700">
+                        <span className="font-medium">{cust.colony || cust.area || 'Dadabari'}</span>{' '}
+                        <span className="font-mono text-slate-500 text-[11px]">({cust.pincode})</span>
+                      </td>
+                      <td className="p-3 font-bold text-amber-800">{cust.beatNo}</td>
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-800 font-semibold text-[11px]">
+                          {cust.activeScheme || 'Postal Savings / IPPB'}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        {cust.staffAttribution || cust.submittedByStaffId || cust.enteredByName || cust.assignedStaffName ? (
+                          <StaffAttributionLink
+                            attribution={cust.staffAttribution}
+                            staffId={cust.submittedByStaffId || cust.assignedStaffId}
+                            fallbackName={cust.enteredByName || cust.assignedStaffName}
+                            compact
+                          />
+                        ) : (
+                          <span className="text-[11px] text-slate-400">Dadabari S.O.</span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
+                          {cust.verificationStatus || 'Verified Citizen'}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedCustForModal(cust);
+                            setCustModalRemark(cust.remarks || '');
+                            setCustModalError(null);
+                          }}
+                          className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold cursor-pointer transition"
                         >
-                          <MessageCircle size={13} />
-                        </a>
-                      </div>
-                    </td>
-                    <td className="p-3 text-slate-700">{cust.houseNo || 'Plot Verified'}</td>
-                    <td className="p-3 text-slate-700">
-                      <span className="font-medium">{cust.colony || cust.area || 'Dadabari'}</span>{' '}
-                      <span className="font-mono text-slate-500 text-[11px]">({cust.pincode})</span>
-                    </td>
-                    <td className="p-3 font-bold text-amber-800">{cust.beatNo}</td>
-                    <td className="p-3">
-                      <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-800 font-semibold text-[11px]">
-                        {cust.activeScheme || 'Postal Savings / IPPB'}
-                      </span>
-                    </td>
-                    <td className="p-3">
-                      <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                        {cust.verificationStatus || 'Verified Citizen'}
-                      </span>
-                    </td>
-                    <td className="p-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedCustForModal(cust)}
-                        className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold cursor-pointer transition"
-                      >
-                        Inspect
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                          Inspect
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1559,8 +1964,8 @@ export default function IndiaPostMasterSearchAndInspectionView() {
 
       {/* Customer & Linked Property Inspection Modal */}
       {selectedCustForModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200 text-xs">
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200 text-xs max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div className="space-y-0.5">
                 <div className="font-mono text-red-700 font-bold uppercase text-[10px]">
@@ -1621,6 +2026,92 @@ export default function IndiaPostMasterSearchAndInspectionView() {
                 <div className="font-bold text-emerald-700">
                   {selectedCustForModal.verificationStatus || 'Verified Citizen'}
                 </div>
+              </div>
+              {selectedCustForModal.interestedServiceTags &&
+                selectedCustForModal.interestedServiceTags.length > 0 && (
+                  <div className="col-span-2 pt-2 border-t border-slate-200">
+                    <div className="text-slate-500 mb-1">Interested Postal Service Tags:</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedCustForModal.interestedServiceTags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[10px] font-semibold"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              {(selectedCustForModal.staffAttribution ||
+                selectedCustForModal.submittedByStaffId ||
+                selectedCustForModal.enteredByName ||
+                selectedCustForModal.assignedStaffName) && (
+                <div className="col-span-2 pt-2 border-t border-slate-200">
+                  <div className="text-slate-500 mb-0.5">Submitted / Verified By Staff:</div>
+                  <StaffAttributionLink
+                    attribution={selectedCustForModal.staffAttribution}
+                    staffId={selectedCustForModal.submittedByStaffId || selectedCustForModal.assignedStaffId}
+                    fallbackName={selectedCustForModal.enteredByName || selectedCustForModal.assignedStaffName}
+                    compact
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Search Console Duplicate & Mandatory Remark Update Section */}
+            <div className="space-y-2.5 pt-2 border-t border-slate-200">
+              <SearchConsoleDuplicatePanel
+                entityType="CUSTOMER"
+                customerCheck={selectedCustDupCheck}
+                remark={custModalRemark}
+                onRemarkChange={setCustModalRemark}
+                forceShowRemark
+                layer1Ok={Boolean(selectedCustForModal.name && selectedCustForModal.mobile)}
+                layer2Ok={Boolean(staffPermissionService.getActiveSession())}
+                layer2Reason="Active authenticated staff session is required to re-verify or update master records."
+              />
+
+              {custModalError && (
+                <div className="p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-700 font-medium">
+                  {custModalError}
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustModalError(null);
+                    const activeProfile = staffPermissionService.getActiveSession();
+                    const res = commonDataCentreService.verifyAndCommitCustomer(
+                      activeProfile,
+                      {
+                        ...selectedCustForModal,
+                        verificationStatus: 'Field Confirmed',
+                        remarks: custModalRemark,
+                      },
+                      {
+                        remark: custModalRemark,
+                        isIntentionalEdit: true,
+                        source: 'Master Search Console Re-Verification',
+                      }
+                    );
+                    if (!res.success || !res.data) {
+                      setCustModalError(res.error || 'Three-Layer Verification failed.');
+                      return;
+                    }
+                    setSelectedCustForModal(res.data);
+                    setRefreshTick((t) => t + 1);
+                    showActionToast(
+                      'ok',
+                      `3-Layer Verified: "${res.data.name}" synced across Common Data Centre with Remark.`
+                    );
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold cursor-pointer"
+                >
+                  Verify &amp; Sync Remark to Master Store
+                </button>
               </div>
             </div>
 

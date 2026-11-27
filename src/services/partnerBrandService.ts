@@ -12,6 +12,7 @@ import {
   PartnerTeamMemberStatus,
   PartnerTeamPermissions,
   PartnerTeamRole,
+  PartnerCrmCustomer,
   SanitizedPartnerTeamMember,
   Store,
   StoreCrmRecord,
@@ -103,95 +104,18 @@ export const CORE_STRATEGIC_PARTNERS: CoreStrategicPartnerSpec[] = [
   {
     slug: 'india-post',
     name: 'India Post',
-    category: 'Postal, Banking & Citizen Services',
-    tagline: 'Anchor Network Pillar · Beat & PIN Coverage',
-    roleInSystem: 'Brand Partner (Anchor / Network Pillar)',
+    category: 'Postal, Banking, Bulk Customer & Citizen Services',
+    tagline: 'Pan-India & Division Network · Beats, PIN Coverage & Bulk Customer Promotion',
+    roleInSystem: 'Primary Sovereign Postal Operations Network',
     coreProductsServices:
-      'Postal schemes, savings/banking touchpoints, parcel/speed post & last-mile delivery points, citizen services',
+      'Postal schemes (SSA/PPF/SCSS/PLI/RPLI), IPPB doorstep banking, Speed Post & Business Parcel COD, Bulk Customer Promotion',
     storeBeatHubScope:
-      'Beats (e.g., Beat 2) & PINs (e.g., 324009, all 34 beats) via Beat Management & Postal Schemes & Catalog',
+      'All Division PINs & Beats (324001–325205 & Pan-India) via Office Master, Beat Management & Bulk Customer Showcase',
     marketingGrowthReturn:
-      'High-trust citizen & household reach, beat-wise ground credibility, aur verified local touchpoints',
+      'High-trust citizen, bulk shipper & household reach with verified doorstep postal touchpoints',
     accentColor: '#991B1B',
     themePresetName: 'Crimson Pillar',
     logoPresetId: 'POSTAL_PILLAR',
-    pincode: '324009',
-  },
-  {
-    slug: 'xpeedo-logistics',
-    name: 'Xpeedo Logistics',
-    category: 'Hyperlocal & B2B Fulfillment',
-    tagline: 'Regional Hubs, Pickup/Drop & Dispatch Network',
-    roleInSystem: 'Brand + Hub/Store Partner',
-    coreProductsServices:
-      'Hyperlocal pickup & drop, last-mile dispatch, business/B2B delivery, beat-linked logistics fulfillment',
-    storeBeatHubScope:
-      'Regional hubs, pickup/drop points & commercial zones via Commercial Store Directory',
-    marketingGrowthReturn:
-      'Repeat merchant delivery demand, order fulfillment backbone, aur business lead capture',
-    accentColor: '#0F172A',
-    themePresetName: 'Command Slate',
-    logoPresetId: 'LOGISTICS_HUB',
-    pincode: '324009',
-  },
-  {
-    slug: 'xpeedo-ev',
-    name: 'Xpeedo EV',
-    category: 'Electric Mobility & Fleet',
-    tagline: 'EV Two/Three-Wheelers, Spares & Fleet Rentals',
-    roleInSystem: 'Brand + Store Partner',
-    coreProductsServices:
-      'Electric two-wheelers & three-wheelers, EV components/spares, fleet rentals, test-ride/service touchpoints',
-    storeBeatHubScope:
-      'EV showroom/service/rental points across PINs & beats via All Vendors & Partner Storefront Studio',
-    marketingGrowthReturn:
-      'High-ticket retail & fleet leads, product catalog showcase, aur local promotional reach',
-    accentColor: '#065F46',
-    themePresetName: 'EV Emerald',
-    logoPresetId: 'EV_MOBILITY',
-    pincode: '324009',
-  },
-  {
-    slug: 'xpokart',
-    name: 'Xpokart',
-    category: 'B2B Commerce & Hyperlocal Fulfillment',
-    tagline: 'Merchant Catalog, Stores & B2B Orders',
-    roleInSystem: 'Brand + Commerce Partner',
-    coreProductsServices:
-      'B2B wholesale catalog, local merchant storefronts, hyperlocal fulfillment via Kota Division hubs',
-    storeBeatHubScope: 'All 13 regional commercial & postal hubs',
-    marketingGrowthReturn: 'Direct merchant retention, B2B lead pipeline & local COD velocity',
-    accentColor: '#1D4ED8',
-    themePresetName: 'Commerce Blue',
-    logoPresetId: 'STORE_FRONT',
-    pincode: '324009',
-  },
-  {
-    slug: 'drop-dash',
-    name: 'Drop Dash',
-    category: 'Express Parcel & Micro-Fulfillment',
-    tagline: 'Last-Mile Parcel & Hyperlocal Dispatch',
-    roleInSystem: 'Brand + Dispatch Partner',
-    coreProductsServices: 'Express parcel pickup, intracity beat dispatch & POD tracking',
-    storeBeatHubScope: 'Beat-linked dispatch hubs & express drop counters',
-    marketingGrowthReturn: 'High-frequency daily parcels & repeat SLA fulfillment',
-    accentColor: '#0F172A',
-    themePresetName: 'Command Slate',
-    logoPresetId: 'LOGISTICS_HUB',
-    pincode: '324009',
-  },
-  {
-    slug: 'shop-deck',
-    name: 'Shop Deck',
-    category: 'Retail Merchandising & Catalog SaaS',
-    tagline: 'Storefront Merchandising & Customer CRM',
-    roleInSystem: 'Brand + Retail SaaS Partner',
-    coreProductsServices: 'Digital retail catalog, local store CRM, follow-ups & promotions',
-    storeBeatHubScope: 'Local merchant storefronts across Kota & Baran beats',
-    marketingGrowthReturn: 'Storefront conversion & repeat neighborhood shopping',
-    accentColor: '#7C3AED',
-    themePresetName: 'Retail Violet',
-    logoPresetId: 'STORE_FRONT',
     pincode: '324009',
   },
 ];
@@ -1310,6 +1234,69 @@ class PartnerBrandService {
         return { success: true, session };
       }
 
+      // Fallback: Single-Brand All-Staff Single Sign-In against unified Master Staff Directory
+      const brandProfile = brandOwnerService.getBrandProfileBySlugOrKey(partner.partnerSlug);
+      if (brandProfile) {
+        const brandStaffAuth = brandOwnerService.authenticateBrandScopedStaff(
+          brandProfile.id,
+          identifier,
+          cleanPass
+        );
+        if (!('error' in brandStaffAuth)) {
+          const staffSession = brandStaffAuth.session;
+          const staffMemberId = staffSession.actorId;
+          if (checkSingleDeviceConflict(staffMemberId)) {
+            return {
+              success: false,
+              code: 'SINGLE_SESSION_CONFLICT',
+              error: `Single-Device Lock is active for ${staffSession.actorName} inside "${partner.displayName}". Confirm device takeover to sign out the other session.`,
+            };
+          }
+          const staffRole: PartnerTeamRole = staffSession.permissions?.canManageOfficesOrBeats
+            ? 'STORE_MANAGER'
+            : staffSession.permissions?.canCreateCustomerOrLead
+            ? 'CRM_OPERATOR'
+            : 'SALES_EXECUTIVE';
+          const sessionToken = this.issueSingleDeviceLock(partner.id, staffMemberId);
+          const session: PartnerAuthSession = {
+            partnerId: partner.id,
+            partnerSlug: partner.partnerSlug,
+            brandId: partner.brandId,
+            memberId: staffMemberId,
+            memberName: staffSession.actorName,
+            memberRole: staffRole,
+            assignedStoreIds: [],
+            permissions: {
+              ...DEFAULT_ROLE_PERMISSIONS[staffRole],
+              canViewAllBrandCustomers: Boolean(staffSession.permissions?.canViewAllBrandCustomers),
+              canCreateOrEditCustomer: Boolean(staffSession.permissions?.canCreateCustomerOrLead),
+              canAccessLeads: true,
+              canExportData: Boolean(staffSession.permissions?.canExportReports),
+            },
+            signedInAt: new Date().toISOString(),
+            sessionToken,
+            deviceFingerprint: this.getDeviceFingerprint(),
+          };
+          writeJson(SESSION_KEY, session);
+          this.notify();
+          return { success: true, session };
+        }
+        // If user was found in staff directory but had a wrong password, surface that specific error
+        const matchedAnyStaff = staffPermissionService
+          .getAllStaffProfiles()
+          .some((s) => {
+            const norm = cleanId;
+            return (
+              (s.email || '').toLowerCase() === norm ||
+              (s.employeeId || '').toLowerCase() === norm ||
+              (cleanPhone.length >= 6 && normalizeMobile10(s.contact || '') === cleanPhone)
+            );
+          });
+        if (matchedAnyStaff) {
+          return { success: false, error: brandStaffAuth.error };
+        }
+      }
+
       return {
         success: false,
         error: `No account found matching "${identifier.trim()}" inside ${partner.displayName}. Verify your Email, 10-digit Mobile, or Brand Login ID.`,
@@ -2168,6 +2155,170 @@ class PartnerBrandService {
       ...rows.map((r) => r.map(escapeCell).join(',')),
     ].join('\n');
     return `\uFEFF${csvBody}`;
+  }
+
+  public consolidateOtherBrandsRecordsIntoIndiaPost(): {
+    teamMembersMigrated: number;
+    crmCustomersMigrated: number;
+    followUpsMigrated: number;
+    verificationsMigrated: number;
+  } {
+    const accounts = this.getAllPartnerAccounts();
+    const indiaPostPartner = accounts.find((a) => a.partnerSlug === 'india-post');
+    if (!indiaPostPartner) {
+      return {
+        teamMembersMigrated: 0,
+        crmCustomersMigrated: 0,
+        followUpsMigrated: 0,
+        verificationsMigrated: 0,
+      };
+    }
+    const now = new Date().toISOString();
+    let teamMembersMigrated = 0;
+    let crmCustomersMigrated = 0;
+    let followUpsMigrated = 0;
+    let verificationsMigrated = 0;
+
+    // 1. Move non-owner team members to India Post partner (keep PARTNER_OWNER accounts intact)
+    const team = readJson<PartnerTeamMember[]>(TEAM_KEY, []);
+    const seenEmails = new Set<string>(
+      team.filter((m) => m.partnerId === indiaPostPartner.id).map((m) => m.email.toLowerCase())
+    );
+    const nextTeam: PartnerTeamMember[] = [];
+    for (const m of team) {
+      if (m.partnerId === indiaPostPartner.id || m.role === 'PARTNER_OWNER') {
+        nextTeam.push(m);
+        continue;
+      }
+      teamMembersMigrated += 1;
+      const emailKey = m.email.toLowerCase();
+      if (emailKey && seenEmails.has(emailKey)) continue;
+      if (emailKey) seenEmails.add(emailKey);
+      nextTeam.push({
+        ...m,
+        partnerId: indiaPostPartner.id,
+        brandId: indiaPostPartner.brandId,
+        updatedAt: now,
+      });
+    }
+    if (teamMembersMigrated > 0) writeJson(TEAM_KEY, nextTeam);
+
+    // 2. Consolidate partner CRM customers into India Post
+    const crm = readJson<PartnerCrmCustomer[]>(CRM_KEY, []);
+    const nextCrm = crm.map((c) => {
+      if (c.partnerId === indiaPostPartner.id || c.brandId === indiaPostPartner.brandId) return c;
+      crmCustomersMigrated += 1;
+      return {
+        ...c,
+        partnerId: indiaPostPartner.id,
+        brandId: indiaPostPartner.brandId,
+        updatedAt: now,
+      };
+    });
+    if (crmCustomersMigrated > 0) writeJson(CRM_KEY, nextCrm);
+
+    // 3. Consolidate partner follow-ups into India Post
+    const fups = readJson<BrandFollowUpTask[]>(FOLLOWUPS_KEY, []);
+    const nextFups = fups.map((f) => {
+      if (f.partnerId === indiaPostPartner.id || f.brandId === indiaPostPartner.brandId) return f;
+      followUpsMigrated += 1;
+      return {
+        ...f,
+        partnerId: indiaPostPartner.id,
+        brandId: indiaPostPartner.brandId,
+        updatedAt: now,
+      };
+    });
+    if (followUpsMigrated > 0) writeJson(FOLLOWUPS_KEY, nextFups);
+
+    // 4. Consolidate partner verifications into India Post
+    const verifs = readJson<BrandVerificationInquiry[]>(VERIFICATIONS_KEY, []);
+    const nextVerifs = verifs.map((v) => {
+      if (v.partnerId === indiaPostPartner.id || v.brandId === indiaPostPartner.brandId) return v;
+      verificationsMigrated += 1;
+      return {
+        ...v,
+        partnerId: indiaPostPartner.id,
+        brandId: indiaPostPartner.brandId,
+        brandName: indiaPostPartner.displayName,
+        updatedAt: now,
+      };
+    });
+    if (verificationsMigrated > 0) writeJson(VERIFICATIONS_KEY, nextVerifs);
+
+    if (
+      teamMembersMigrated +
+        crmCustomersMigrated +
+        followUpsMigrated +
+        verificationsMigrated >
+      0
+    ) {
+      this.notify();
+    }
+
+    return {
+      teamMembersMigrated,
+      crmCustomersMigrated,
+      followUpsMigrated,
+      verificationsMigrated,
+    };
+  }
+
+  public resetNonIndiaPostOperationalRecords(): {
+    removedTeamMembers: number;
+    removedCrmCustomers: number;
+    removedFollowUps: number;
+    removedVerifications: number;
+  } {
+    const accounts = this.getAllPartnerAccounts();
+    const indiaPostPartner = accounts.find((a) => a.partnerSlug === 'india-post');
+    const indiaPostId = indiaPostPartner?.id || 'PRT-INDIAPOST-01';
+    const indiaPostBrandId = indiaPostPartner?.brandId || 'BRD-INPOST-01';
+
+    const team = readJson<PartnerTeamMember[]>(TEAM_KEY, []);
+    const keptTeam = team.filter(
+      (m) => m.partnerId === indiaPostId || m.role === 'PARTNER_OWNER'
+    );
+    const removedTeamMembers = team.length - keptTeam.length;
+    if (removedTeamMembers > 0) writeJson(TEAM_KEY, keptTeam);
+
+    const crm = readJson<PartnerCrmCustomer[]>(CRM_KEY, []);
+    const keptCrm = crm.filter(
+      (c) => c.partnerId === indiaPostId || c.brandId === indiaPostBrandId
+    );
+    const removedCrmCustomers = crm.length - keptCrm.length;
+    if (removedCrmCustomers > 0) writeJson(CRM_KEY, keptCrm);
+
+    const fups = readJson<BrandFollowUpTask[]>(FOLLOWUPS_KEY, []);
+    const keptFups = fups.filter(
+      (f) => f.partnerId === indiaPostId || f.brandId === indiaPostBrandId
+    );
+    const removedFollowUps = fups.length - keptFups.length;
+    if (removedFollowUps > 0) writeJson(FOLLOWUPS_KEY, keptFups);
+
+    const verifs = readJson<BrandVerificationInquiry[]>(VERIFICATIONS_KEY, []);
+    const keptVerifs = verifs.filter(
+      (v) => v.partnerId === indiaPostId || v.brandId === indiaPostBrandId
+    );
+    const removedVerifications = verifs.length - keptVerifs.length;
+    if (removedVerifications > 0) writeJson(VERIFICATIONS_KEY, keptVerifs);
+
+    if (
+      removedTeamMembers +
+        removedCrmCustomers +
+        removedFollowUps +
+        removedVerifications >
+      0
+    ) {
+      this.notify();
+    }
+
+    return {
+      removedTeamMembers,
+      removedCrmCustomers,
+      removedFollowUps,
+      removedVerifications,
+    };
   }
 }
 

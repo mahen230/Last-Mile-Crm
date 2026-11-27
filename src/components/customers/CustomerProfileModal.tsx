@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Customer, CustomerProductRelation, VerificationStatus } from '../../types/models';
+import { Customer, CustomerProductRelation, VerificationStatus, POSTAL_SERVICE_TAG_OPTIONS } from '../../types/models';
 import { 
   X, User, Phone, MapPin, Building, Shield, CheckCircle2, 
   AlertTriangle, Clock, Calendar, FileText, Plus, ArrowUpRight, 
@@ -10,6 +10,7 @@ import { customerService } from '../../services/customerService';
 import { POSTAL_PRODUCTS } from '../../data/productsData';
 import DirectMessageModal from '../crm/DirectMessageModal';
 import { useAuth } from '../auth/FirebaseAuthProvider';
+import { StaffAttributionLink } from '../common/StaffAttributionModal';
 
 interface Props {
   customer: Customer;
@@ -31,6 +32,28 @@ export default function CustomerProfileModal({ customer: initialCustomerProp, on
   const [newProductAmount, setNewProductAmount] = useState('');
   const [newProductRemarks, setNewProductRemarks] = useState('');
   const [profileNotice, setProfileNotice] = useState<string | null>(null);
+  const [customTagInput, setCustomTagInput] = useState('');
+  const [serviceTags, setServiceTags] = useState<string[]>(
+    initialCustomerProp.interestedServiceTags || []
+  );
+
+  const persistServiceTags = (nextTags: string[]) => {
+    const clean = Array.from(new Set(nextTags.map((t) => t.trim()).filter(Boolean)));
+    setServiceTags(clean);
+    const updated = customerService.addOrUpdateCustomer(
+      {
+        id: customer.id,
+        interestedServiceTags: clean,
+        financialInterest: clean.join(', ') || customer.financialInterest,
+      },
+      userProfile?.name || 'Service Tag Update'
+    );
+    if (updated) {
+      setCustomer({ ...updated });
+    }
+    setProfileNotice('Interested India Post Service Tags updated!');
+    setTimeout(() => setProfileNotice(null), 2500);
+  };
 
   // Permanent vs Residential Address inline editor state
   const [editingAddresses, setEditingAddresses] = useState(false);
@@ -396,6 +419,22 @@ export default function CustomerProfileModal({ customer: initialCustomerProp, on
                   <div><strong>Lead Score:</strong> {customer.leadScore || 75}/100</div>
                   <div><strong>Follow-up Status:</strong> {customer.followUpStatus || 'Not Scheduled'}</div>
                   <div><strong>Next Follow-up:</strong> {customer.nextFollowUpDate || 'None'}</div>
+                  {(customer.staffAttribution || customer.submittedByStaffId || customer.enteredByName || customer.assignedStaffName) && (
+                    <div className="pt-1 border-t border-slate-200">
+                      <div className="font-bold text-slate-700 mb-0.5">Submitted / Verified By:</div>
+                      <StaffAttributionLink
+                        attribution={customer.staffAttribution}
+                        staffId={customer.submittedByStaffId || customer.assignedStaffId}
+                        fallbackName={customer.enteredByName || customer.assignedStaffName}
+                        compact
+                      />
+                    </div>
+                  )}
+                  {customer.verificationMeta?.verifiedAt && (
+                    <div className="text-[10px] font-semibold text-emerald-700 flex items-center gap-1 pt-0.5">
+                      <CheckCircle2 size={11} /> 3-Layer Master Verified ({customer.verificationMeta.verifiedAt.slice(0, 10)})
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -594,6 +633,81 @@ export default function CustomerProfileModal({ customer: initialCustomerProp, on
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Interested India Post Service Tags (Interactive Quick Tagging) */}
+              <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
+                    <Tag size={14} className="text-red-700" />
+                    <span>Interested India Post Services &amp; Scheme Tags</span>
+                  </h4>
+                  <span className="text-[10px] font-mono text-slate-500">{serviceTags.length} active</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {POSTAL_SERVICE_TAG_OPTIONS.map((tag) => {
+                    const active = serviceTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => {
+                          const next = active
+                            ? serviceTags.filter((t) => t !== tag)
+                            : [...serviceTags, tag];
+                          persistServiceTags(next);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
+                          active
+                            ? 'bg-red-700 text-white border-red-800'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {active ? '✓ ' : '+ '}
+                        {tag}
+                      </button>
+                    );
+                  })}
+                  {serviceTags
+                    .filter((t) => !POSTAL_SERVICE_TAG_OPTIONS.includes(t as any))
+                    .map((custom) => (
+                      <button
+                        key={custom}
+                        type="button"
+                        onClick={() => persistServiceTags(serviceTags.filter((t) => t !== custom))}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-700 text-white border border-indigo-800 cursor-pointer"
+                      >
+                        ✓ {custom} ×
+                      </button>
+                    ))}
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <input
+                    type="text"
+                    value={customTagInput}
+                    onChange={(e) => setCustomTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && customTagInput.trim()) {
+                        e.preventDefault();
+                        persistServiceTags([...serviceTags, customTagInput.trim()]);
+                        setCustomTagInput('');
+                      }
+                    }}
+                    placeholder="Add custom tag (e.g. Bulk Speed Post, NPS)..."
+                    className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!customTagInput.trim()) return;
+                      persistServiceTags([...serviceTags, customTagInput.trim()]);
+                      setCustomTagInput('');
+                    }}
+                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold cursor-pointer"
+                  >
+                    + Add
+                  </button>
+                </div>
               </div>
 
               {/* Remarks & Field Notes */}

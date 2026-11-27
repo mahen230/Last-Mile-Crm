@@ -8,6 +8,7 @@ import { staffPermissionService } from '../../services/staffPermissionService';
 import { staffRegistrationService, ProfileApprovalRequest } from '../../services/staffRegistrationService';
 import { fetchServerCsrfToken, getDeviceFingerprint } from '../../services/authSecurityService';
 import StaffProductStudioView from '../crm/StaffProductStudioView';
+import { ProfilePasswordPanel } from '../common/ProfilePasswordPanel';
 
 export default function MyProfileView() {
   const { userProfile, switchStaffProfile } = useAuth();
@@ -214,59 +215,20 @@ export default function MyProfileView() {
         </div>
       )}
 
-      {/* Tab 2: Change Password */}
-      {activeTab === 'password' && (
-        <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-6">
-          <h2 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
-            <KeyRound size={16} className="text-red-700" />
-            <span>Secure Password Update (SHA-256 Hashed)</span>
-          </h2>
-
-          {passError && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs">
-              {passError}
-            </div>
-          )}
-
-          {passSuccess && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold">
-              {passSuccess}
-            </div>
-          )}
-
-          <form onSubmit={handlePasswordChange} className="space-y-4 max-w-md">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">New Password</label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={e => setNewPassword(e.target.value)}
-                placeholder="Minimum 6 characters..."
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-red-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Confirm New Password</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={e => setConfirmPassword(e.target.value)}
-                placeholder="Re-enter new password..."
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-red-500"
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="px-5 py-2.5 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-bold transition shadow-md cursor-pointer flex items-center gap-1.5"
-            >
-              <Lock size={14} /> Update & Hash Password
-            </button>
-          </form>
-        </div>
+      {/* Tab 2: Profile & Password Panel */}
+      {activeTab === 'password' && userProfile && (
+        <ProfilePasswordPanel
+          actorType="STAFF"
+          identifierOrId={empId || userProfile.email}
+          displayName={userProfile.name}
+          roleLabel={userProfile.designationType || userProfile.role}
+          email={userProfile.email}
+          mobile={userProfile.contact}
+          brandName={userProfile.partnerOrganization || 'India Post'}
+          officeLabel={userProfile.subOffice || userProfile.assignedOffice || 'Dadabari S.O.'}
+          allottedTerritoryLabel={`${userProfile.beat || 'Beat 2'} · ${userProfile.officePincode || '324009'}`}
+          mustChangePassword={userProfile.mustChangePassword}
+        />
       )}
 
       {/* Tab 3: Request Profile Changes */}

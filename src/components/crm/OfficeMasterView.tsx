@@ -680,7 +680,7 @@ export default function OfficeMasterView({
     const wb = XLSX.utils.book_new();
     const sheetName = targetDivision ? targetDivision.replace(' Division', '') : 'All_Offices';
     XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
-    const filename = `Xpeedo_Office_Master_${sheetName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+    const filename = `IndiaPost_Office_Master_${sheetName}_${new Date().toISOString().split('T')[0]}.xlsx`;
     XLSX.writeFile(wb, filename);
   };
 
@@ -1990,7 +1990,7 @@ export default function OfficeMasterView({
                             <div>
                               <div className="font-bold text-slate-900">{st.storeName}</div>
                               <div className="text-[11px] text-slate-500">
-                                {st.sourceOwnership === 'COMPANY_HOUSE' ? 'XPEEDO / XPO KART Direct' : 'Partner Vendor'} · {st.category}
+                                {st.sourceOwnership === 'COMPANY_HOUSE' ? 'India Post Direct' : 'Bulk Showcase'} · {st.category}
                               </div>
                             </div>
                             <Link
@@ -2095,7 +2095,7 @@ export default function OfficeMasterView({
 
             <div className="p-4 bg-white border-t border-slate-200 flex items-center justify-between shrink-0">
               <span className="text-[11px] text-slate-500">
-                Xpeedo Unified Office Master • {selectedOffice.circle} · {selectedOffice.division}
+                India Post Unified Office Master • {selectedOffice.circle} · {selectedOffice.division}
               </span>
               <button
                 onClick={() => setSelectedOfficeId(null)}
@@ -2142,7 +2142,7 @@ export default function OfficeMasterView({
                           <span>Deletion Blocked — {assignedList.length} Active Staff Assigned</span>
                         </div>
                         <p>
-                          Per Xpeedo Safe Deletion Rules, an office can only be permanently deleted when its real assigned staff count is{' '}
+                          Per India Post Safe Deletion Rules, an office can only be permanently deleted when its real assigned staff count is{' '}
                           <strong>0 (Vacant)</strong>.
                         </p>
                         <div className="text-[11px] font-bold pt-1">
@@ -2554,7 +2554,7 @@ export default function OfficeMasterView({
                   <input
                     value={editBusinessSectionName}
                     onChange={(e) => setEditBusinessSectionName(e.target.value)}
-                    placeholder="e.g. XPOKART Dispatch Desk"
+                    placeholder="e.g. Speed Post & Bulk Dispatch Desk"
                     className="w-full px-3 py-2 border border-indigo-200 rounded-xl bg-white"
                   />
                 </div>

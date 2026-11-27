@@ -68,15 +68,15 @@ export const INVENTORY_CATEGORY_META: {
 
 export const STAFF_CATEGORY_OPTIONS: string[] = [
   'Operations & Hub Command',
-  'Speed Post & Parcel COD',
-  'Daily Kirana & Ration',
-  'Fresh Dairy & Bakery QSR',
-  'Electronics & Smart Tech',
-  'Medical & Pharmacy',
-  'Sabji Mandi & Farm Fresh',
-  'Fashion & Footwear',
-  'EV Mobility & Batteries',
-  'Citizen Desk (e-Mitra & IPPB)',
+  'Speed Post & Bulk Parcel',
+  'Postal Savings, PLI & RPLI',
+  'IPPB & Doorstep Banking',
+  'Bulk Customer BNPL & COD',
+  'Books & Study Material Dispatch',
+  'Handloom & Regional Goods',
+  'Medical & Diagnostic Parcels',
+  'Philately & My Stamp Counter',
+  'Citizen Desk (Aadhaar / CELC & DLC)',
 ];
 
 export const PINCODE_OFFICE_HUBS: PincodeOfficeHub[] = [
@@ -265,10 +265,10 @@ export const PINCODE_OFFICE_HUBS: PincodeOfficeHub[] = [
   },
 ];
 
-const ACTIVE_PINCODE_STORAGE_KEY = 'xpokart_active_pincode_v2';
-const PINCODE_CONFIRMED_STORAGE_KEY = 'xpokart_pincode_confirmed_v2';
-const INVENTORY_STATE_STORAGE_KEY = 'xpokart_pincode_inventory_v2';
-const STAFF_ROSTER_STORAGE_KEY = 'xpokart_onboarded_staff_v2';
+const ACTIVE_PINCODE_STORAGE_KEY = 'indiapost_active_pincode_v2';
+const PINCODE_CONFIRMED_STORAGE_KEY = 'indiapost_pincode_confirmed_v2';
+const INVENTORY_STATE_STORAGE_KEY = 'indiapost_pincode_inventory_v2';
+const STAFF_ROSTER_STORAGE_KEY = 'indiapost_onboarded_staff_v2';
 
 function createDefaultCategoryInventory(): CategoryInventoryMap {
   return {
@@ -317,7 +317,7 @@ const DEFAULT_STAFF_ROSTER: OnboardedStaffMember[] = [
     id: 'stf_postman_324009',
     name: 'Rajesh Sharma',
     roleTier: 'Beat Postman',
-    category: 'Speed Post & Parcel COD',
+    category: 'Speed Post & Bulk Parcel',
     pincode: '324009',
     beatNumber: 'Beat 4',
     contactPhone: '9829000004',
@@ -328,7 +328,7 @@ const DEFAULT_STAFF_ROSTER: OnboardedStaffMember[] = [
     id: 'stf_delivery_324005',
     name: 'Vikram Solanki',
     roleTier: 'Delivery Executive',
-    category: 'Sabji Mandi & Farm Fresh',
+    category: 'Books & Study Material Dispatch',
     pincode: '324005',
     beatNumber: 'Beat 1',
     contactPhone: '9829000015',
@@ -337,9 +337,9 @@ const DEFAULT_STAFF_ROSTER: OnboardedStaffMember[] = [
   },
   {
     id: 'stf_vendor_324009_med',
-    name: 'Dadabari Care Pharmacy Desk',
+    name: 'Dadabari Medical Parcel Desk',
     roleTier: 'Local Vendor',
-    category: 'Medical & Pharmacy',
+    category: 'Medical & Diagnostic Parcels',
     pincode: '324009',
     beatNumber: 'Beat 2',
     contactPhone: '9829000022',

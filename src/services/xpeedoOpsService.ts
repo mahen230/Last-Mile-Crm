@@ -98,6 +98,9 @@ export const ALL_RBAC_CAPABILITIES: Array<{ key: RbacCapabilityKey; label: strin
   { key: 'importMigration', label: 'Run Excel/CSV Migration' },
   { key: 'exportReports', label: 'Export CSV Reports' },
   { key: 'manageRbac', label: 'Configure RBAC Matrix' },
+  { key: 'masterDataCentre', label: 'Developer Master Data Centre' },
+  { key: 'propertyDetailsRead', label: 'Property Details Access' },
+  { key: 'propertySearch', label: 'Property Search Access' },
 ];
 
 const DEFAULT_ROLE_MATRIX: RolePermissionMatrix = {
@@ -118,6 +121,9 @@ const DEFAULT_ROLE_MATRIX: RolePermissionMatrix = {
     importMigration: true,
     exportReports: true,
     manageRbac: true,
+    masterDataCentre: true,
+    propertyDetailsRead: true,
+    propertySearch: true,
   },
   BUSINESS_ADMIN: {
     viewOwnerCommand: true,
@@ -136,6 +142,9 @@ const DEFAULT_ROLE_MATRIX: RolePermissionMatrix = {
     importMigration: true,
     exportReports: true,
     manageRbac: false,
+    masterDataCentre: true,
+    propertyDetailsRead: true,
+    propertySearch: true,
   },
   CLIENT_ADMIN: {
     viewOwnerCommand: false,
@@ -154,6 +163,9 @@ const DEFAULT_ROLE_MATRIX: RolePermissionMatrix = {
     importMigration: true,
     exportReports: true,
     manageRbac: false,
+    masterDataCentre: true,
+    propertyDetailsRead: true,
+    propertySearch: true,
   },
   PROJECT_MANAGER: {
     viewOwnerCommand: false,
@@ -172,6 +184,9 @@ const DEFAULT_ROLE_MATRIX: RolePermissionMatrix = {
     importMigration: false,
     exportReports: true,
     manageRbac: false,
+    masterDataCentre: false,
+    propertyDetailsRead: true,
+    propertySearch: true,
   },
   DEPARTMENT_MANAGER: {
     viewOwnerCommand: false,
@@ -190,6 +205,9 @@ const DEFAULT_ROLE_MATRIX: RolePermissionMatrix = {
     importMigration: false,
     exportReports: true,
     manageRbac: false,
+    masterDataCentre: false,
+    propertyDetailsRead: true,
+    propertySearch: true,
   },
   TEAM_LEADER: {
     viewOwnerCommand: false,
@@ -208,6 +226,9 @@ const DEFAULT_ROLE_MATRIX: RolePermissionMatrix = {
     importMigration: false,
     exportReports: true,
     manageRbac: false,
+    masterDataCentre: false,
+    propertyDetailsRead: false,
+    propertySearch: false,
   },
   EMPLOYEE: {
     viewOwnerCommand: false,
@@ -226,6 +247,9 @@ const DEFAULT_ROLE_MATRIX: RolePermissionMatrix = {
     importMigration: false,
     exportReports: false,
     manageRbac: false,
+    masterDataCentre: false,
+    propertyDetailsRead: false,
+    propertySearch: false,
   },
   VIEWER: {
     viewOwnerCommand: false,
@@ -244,6 +268,9 @@ const DEFAULT_ROLE_MATRIX: RolePermissionMatrix = {
     importMigration: false,
     exportReports: true,
     manageRbac: false,
+    masterDataCentre: false,
+    propertyDetailsRead: false,
+    propertySearch: false,
   },
 };
 
@@ -255,98 +282,18 @@ const SEEDED_CLIENTS: WorkspaceClient[] = [
     code: 'IND-POST-KOTA',
     name: 'India Post',
     workspaceKey: 'INDIA_POST',
-    industry: 'Government Postal, Banking & Citizen Services',
+    industry: 'Government Postal, Banking & Bulk Customer Services',
     status: 'Active System',
     moduleScope: 'FULL_INDIA_POST',
     futureModuleEnabled: true,
     accountManager: 'Mahendra Kumar Meena',
-    contactName: 'Kota Division Operations Desk',
+    contactName: 'India Post Division Operations Desk',
     contactEmail: 'kotadivision@indiapost.gov.in',
     contactPhone: '',
-    city: 'Kota',
-    regionLabel: 'Kota Division, Rajasthan Pilot',
+    city: 'Kota / Pan-India',
+    regionLabel: 'India Post Operations & Bulk Customer Network',
     notes:
-      'Complete Postal & Last-Mile Operations Management System covering Kota Division HPO/SO/BO hierarchy, 10-level geography, CRM, SRM, beats, and statutory documents.',
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: 'client-xpeedo-ev',
-    code: 'XPD-EV-WORK',
-    name: 'Xpeedo EV',
-    workspaceKey: 'XPEEDO_EV',
-    industry: 'Electric Mobility Operations & Fleet Engineering',
-    status: 'Active System',
-    moduleScope: 'EV_WORK_MGMT',
-    futureModuleEnabled: true,
-    accountManager: 'Ekta Meena',
-    contactName: 'Xpeedo EV Operations PMO',
-    contactEmail: 'ev-ops@xpeedo.in',
-    contactPhone: '',
-    city: 'Kota / Jaipur',
-    regionLabel: 'Rajasthan Operations',
-    notes:
-      'Internal & client-facing EV Work Management System covering 7 departments, projects, tasks, Daily/Weekly/Monthly work reports, and multi-tier approvals.',
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: 'client-xpokart',
-    code: 'XPK-LIST-03',
-    name: 'Xpokart',
-    workspaceKey: 'XPOKART',
-    industry: 'B2B Commerce & Hyperlocal Fulfillment',
-    status: 'Basic Profile Only',
-    moduleScope: 'BASIC_PROFILE_ONLY',
-    futureModuleEnabled: false,
-    accountManager: 'Mahendra Kumar Meena',
-    contactName: 'Xpokart Client Profile',
-    contactEmail: 'ops@xpokart.in',
-    contactPhone: '',
-    city: 'Kota',
-    regionLabel: 'Rajasthan',
-    notes:
-      'Registered client profile only for current phase. Operational storefront/order engine deferred to future activation phase.',
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: 'client-drop-dash',
-    code: 'DRP-LIST-04',
-    name: 'Drop Dash',
-    workspaceKey: 'DROP_DASH',
-    industry: 'Express Parcel & Micro-Fulfillment',
-    status: 'Basic Profile Only',
-    moduleScope: 'BASIC_PROFILE_ONLY',
-    futureModuleEnabled: false,
-    accountManager: 'Ekta Meena',
-    contactName: 'Drop Dash Client Profile',
-    contactEmail: 'ops@dropdash.in',
-    contactPhone: '',
-    city: 'Kota',
-    regionLabel: 'Rajasthan',
-    notes:
-      'Registered client profile only for current phase. Full logistics workspace can be activated in a subsequent phase.',
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: 'client-shop-deck',
-    code: 'SHP-LIST-05',
-    name: 'Shop Deck',
-    workspaceKey: 'SHOP_DECK',
-    industry: 'Retail Merchandising & Catalog SaaS',
-    status: 'Basic Profile Only',
-    moduleScope: 'BASIC_PROFILE_ONLY',
-    futureModuleEnabled: false,
-    accountManager: 'Mahendra Kumar Meena',
-    contactName: 'Shop Deck Client Profile',
-    contactEmail: 'ops@shopdeck.in',
-    contactPhone: '',
-    city: 'Jaipur / Kota',
-    regionLabel: 'Rajasthan',
-    notes:
-      'Registered client profile only for current phase. Storefront and merchandising modules deferred.',
+      'Complete India Post Operations Management System covering Circle/Region/Division/HPO/SO/BO hierarchy, 10-level geography, CRM, Bulk Customer Showcase, SRM, beats, and statutory documents.',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   },
@@ -422,14 +369,10 @@ export function buildStandardDepartmentsForWorkspace(
   }));
 }
 
-// Pre-seeded standard 7-department matrices for all core workspaces
+// Pre-seeded standard 7-department matrices for India Post operations
 const SEEDED_STANDARD_DEPARTMENTS: OpsDepartment[] = [
-  ...buildStandardDepartmentsForWorkspace('GLOBAL', 'client-xpeedo-global', 'XPD'),
-  ...buildStandardDepartmentsForWorkspace('XPEEDO_EV', 'client-xpeedo-ev', 'EV'),
+  ...buildStandardDepartmentsForWorkspace('GLOBAL', 'client-india-post', 'INP'),
   ...buildStandardDepartmentsForWorkspace('INDIA_POST', 'client-india-post', 'INPOST'),
-  ...buildStandardDepartmentsForWorkspace('XPOKART', 'client-xpokart', 'XPO'),
-  ...buildStandardDepartmentsForWorkspace('DROP_DASH', 'client-drop-dash', 'DRP'),
-  ...buildStandardDepartmentsForWorkspace('SHOP_DECK', 'client-shop-deck', 'SHP'),
 ];
 
 export const SEEDED_WORK_REPORTS: WorkReport[] = [
@@ -459,82 +402,6 @@ export const SEEDED_WORK_REPORTS: WorkReport[] = [
     createdAt: '2026-11-23T14:30:00.000Z',
     updatedAt: '2026-11-23T14:30:00.000Z',
   },
-  {
-    id: 'WRP-SEED-02',
-    workspaceId: 'XPEEDO_EV',
-    clientId: 'client-xpeedo-ev',
-    departmentId: 'dept-xpeedo-ev-tech',
-    employeeId: 'STAFF-TECH-01',
-    employeeName: 'Rohan Joshi',
-    periodType: 'Weekly',
-    reportDate: '2026-11-22',
-    hoursLogged: 40,
-    tasksCompletedCount: 8,
-    summary: 'Completed CAN-bus telematics firmware sync for 25 Kota fleet e-bikes. Zero communication drops.',
-    approvalStage: 'PENDING_PM',
-    approvalHistory: [
-      {
-        stage: 'PENDING_TL',
-        decision: 'Submitted',
-        actor: 'Rohan Joshi',
-        actorRole: 'FIELD_AGENT',
-        note: 'Weekly technical report submitted.',
-        timestamp: '2026-11-22T17:00:00.000Z',
-      },
-      {
-        stage: 'PENDING_PM',
-        decision: 'Approved (Tier-1)',
-        actor: 'Pooja Verma (Team Leader)',
-        actorRole: 'TEAM_LEADER',
-        note: 'Firmware verification confirmed on test bench.',
-        timestamp: '2026-11-22T18:15:00.000Z',
-      },
-    ],
-    createdAt: '2026-11-22T17:00:00.000Z',
-    updatedAt: '2026-11-22T18:15:00.000Z',
-  },
-  {
-    id: 'WRP-SEED-03',
-    workspaceId: 'XPOKART',
-    clientId: 'client-xpokart',
-    departmentId: 'dept-xpokart-sls',
-    employeeId: 'STAFF-SLS-02',
-    employeeName: 'Pooja Verma',
-    periodType: 'Monthly',
-    reportDate: '2026-11-21',
-    hoursLogged: 160,
-    tasksCompletedCount: 32,
-    summary: 'Onboarded 12 new wholesale kirana merchants with Speed Post COD integration in Dadabari & Vigyan Nagar.',
-    approvalStage: 'PENDING_OWNER',
-    approvalHistory: [
-      {
-        stage: 'PENDING_TL',
-        decision: 'Submitted',
-        actor: 'Pooja Verma',
-        actorRole: 'FIELD_AGENT',
-        note: 'Monthly sales and partner onboarding report.',
-        timestamp: '2026-11-21T18:00:00.000Z',
-      },
-      {
-        stage: 'PENDING_PM',
-        decision: 'Approved (Tier-1)',
-        actor: 'Vikram Singh Hada',
-        actorRole: 'TEAM_LEADER',
-        note: 'Verified all 12 merchant GST and address documents.',
-        timestamp: '2026-11-21T19:00:00.000Z',
-      },
-      {
-        stage: 'PENDING_OWNER',
-        decision: 'Approved (Tier-2)',
-        actor: 'Rajesh Sharma (Project Manager)',
-        actorRole: 'PROJECT_MANAGER',
-        note: 'Approved for final Brand Owner review and performance incentive release.',
-        timestamp: '2026-11-22T10:00:00.000Z',
-      },
-    ],
-    createdAt: '2026-11-21T18:00:00.000Z',
-    updatedAt: '2026-11-22T10:00:00.000Z',
-  },
 ];
 
 const SEEDED_WORKFLOWS: AutomationWorkflow[] = [
@@ -551,12 +418,12 @@ const SEEDED_WORKFLOWS: AutomationWorkflow[] = [
     createdAt: '2026-01-01T00:00:00.000Z',
   },
   {
-    id: 'wf-ev-report-tl-route',
-    name: 'EV Work Report Tier-1 Approval Routing',
-    workspaceId: 'XPEEDO_EV',
+    id: 'wf-postal-report-tl-route',
+    name: 'India Post Work Report Tier-1 Approval Routing',
+    workspaceId: 'INDIA_POST',
     trigger: 'WORK_REPORT_SUBMITTED',
     conditionSummary: 'Period in [Daily, Weekly, Monthly]',
-    actionSummary: 'Set stage PENDING_TL and notify Team Leader queue',
+    actionSummary: 'Set stage PENDING_TL and notify Sub-Office / Team Leader queue',
     enabled: true,
     runCount: 0,
     createdBy: 'System Blueprint',
@@ -568,7 +435,7 @@ const SEEDED_WORKFLOWS: AutomationWorkflow[] = [
     workspaceId: 'ALL',
     trigger: 'TASK_BLOCKED',
     conditionSummary: 'Task status changed to Blocked',
-    actionSummary: 'Create priority notification for Project Manager & Owner',
+    actionSummary: 'Create priority notification for Divisional Supervisor & Owner',
     enabled: true,
     runCount: 0,
     createdBy: 'System Blueprint',
@@ -676,8 +543,10 @@ class XpeedoOpsService {
         return fallback;
       }
       const parsed = JSON.parse(raw) as Partial<XpeedoOpsStoreState>;
-      const existingClients = Array.isArray(parsed.clients) ? parsed.clients : [];
-      // Ensure the 5 initial clients always exist cleanly without overwriting edits
+      const legacyWs = new Set(['XPEEDO_EV', 'XPOKART', 'DROP_DASH', 'SHOP_DECK']);
+      const existingClients = (Array.isArray(parsed.clients) ? parsed.clients : []).filter(
+        (c) => !legacyWs.has((c.workspaceKey || '').toUpperCase())
+      );
       const mergedClients = [...existingClients];
       SEEDED_CLIENTS.forEach((seed) => {
         if (!mergedClients.some((c) => c.id === seed.id || c.workspaceKey === seed.workspaceKey)) {
@@ -685,7 +554,9 @@ class XpeedoOpsService {
         }
       });
 
-      const existingDepts = Array.isArray(parsed.departments) ? parsed.departments : [];
+      const existingDepts = (Array.isArray(parsed.departments) ? parsed.departments : []).filter(
+        (d) => !legacyWs.has((d.workspaceId || '').toUpperCase())
+      );
       const mergedDepts = [...existingDepts];
       SEEDED_STANDARD_DEPARTMENTS.forEach((d) => {
         const alreadyExists = mergedDepts.some(
@@ -698,7 +569,6 @@ class XpeedoOpsService {
         }
       });
 
-      // Strict department deduplication
       const dedupedDepts: OpsDepartment[] = [];
       const seenDeptKeys = new Set<string>();
       for (const d of mergedDepts) {
@@ -720,12 +590,13 @@ class XpeedoOpsService {
       return {
         ...fallback,
         ...parsed,
+        activeWorkspaceFilter: 'INDIA_POST',
         clients: mergedClients,
         departments: dedupedDepts,
         workReports: mergedReports,
         workflows:
           Array.isArray(parsed.workflows) && parsed.workflows.length > 0
-            ? parsed.workflows
+            ? parsed.workflows.filter((w) => !legacyWs.has((w.workspaceId || '').toUpperCase()))
             : fallback.workflows,
         rolePermissions: parsed.rolePermissions || fallback.rolePermissions,
       };
@@ -902,17 +773,7 @@ class XpeedoOpsService {
     if (role === 'OWNER_SUPER_ADMIN' || role === 'BUSINESS_ADMIN') {
       return 'ALL';
     }
-    if (this.state.simulatedClientId) {
-      const cli = this.state.clients.find((c) => c.id === this.state.simulatedClientId);
-      if (cli) return [cli.workspaceKey];
-    }
-    const assignedVendor = userProfile?.vendorScope?.assignedVendorId;
-    if (assignedVendor === 'INDIA_POST') return ['INDIA_POST'];
-    if (assignedVendor === 'EV_MOBILITY') return ['XPEEDO_EV'];
-    const brandId = (userProfile?.brandId || '').toUpperCase();
-    if (brandId.includes('INDIA')) return ['INDIA_POST'];
-    if (brandId.includes('EV')) return ['XPEEDO_EV'];
-    return ['INDIA_POST', 'XPEEDO_EV'];
+    return ['INDIA_POST'];
   }
 
   // --------------------------------------------------------------------------
@@ -1611,7 +1472,7 @@ class XpeedoOpsService {
       title: `Work Report Awaiting Team Leader Approval`,
       message: `${report.employeeName} submitted ${report.periodType} report (${report.hoursLogged}h).`,
       category: 'Approval',
-      linkPath: '/xpeedo-ev',
+      linkPath: '/india-post',
     });
     this.saveAndNotify();
     return report;
@@ -2344,6 +2205,87 @@ class XpeedoOpsService {
     });
     this.saveAndNotify();
     return true;
+  }
+
+  public seedDemoBrandWorkReports(): number {
+    return 0;
+  }
+
+  public resetNonIndiaPostOperationalRecords(actorName = 'Master Admin'): {
+    removedProjects: number;
+    removedTasks: number;
+    removedWorkReports: number;
+    removedFinanceEntries: number;
+    removedDocuments: number;
+    removedCommunications: number;
+    removedRequirements: number;
+    removedDeliverables: number;
+  } {
+    const isIndiaPostWs = (ws?: string) => (ws || '').trim().toUpperCase() === 'INDIA_POST';
+
+    const beforeProjects = this.state.projects.length;
+    const beforeTasks = this.state.tasks.length;
+    const beforeReports = this.state.workReports.length;
+    const beforeFinance = this.state.financeEntries.length;
+    const beforeDocs = this.state.clientDocuments.length;
+    const beforeComms = this.state.clientCommunications.length;
+    const beforeReqs = this.state.clientRequirements.length;
+    const beforeDelivs = this.state.clientDeliverables.length;
+
+    this.state.projects = this.state.projects.filter((p) => isIndiaPostWs(p.workspaceId));
+    this.state.tasks = this.state.tasks.filter((t) => isIndiaPostWs(t.workspaceId));
+    this.state.workReports = this.state.workReports.filter((r) => isIndiaPostWs(r.workspaceId));
+    this.state.financeEntries = this.state.financeEntries.filter((f) => isIndiaPostWs(f.workspaceId));
+    this.state.clientDocuments = this.state.clientDocuments.filter((d) => isIndiaPostWs(d.workspaceId));
+    this.state.clientCommunications = this.state.clientCommunications.filter((c) => isIndiaPostWs(c.workspaceId));
+    this.state.clientRequirements = this.state.clientRequirements.filter((r) => isIndiaPostWs(r.workspaceId));
+    this.state.clientDeliverables = this.state.clientDeliverables.filter((d) => isIndiaPostWs(d.workspaceId));
+    this.state.notifications = this.state.notifications.filter(
+      (n) => isIndiaPostWs(n.workspaceId) || n.workspaceId === 'ALL'
+    );
+
+    const removedProjects = beforeProjects - this.state.projects.length;
+    const removedTasks = beforeTasks - this.state.tasks.length;
+    const removedWorkReports = beforeReports - this.state.workReports.length;
+    const removedFinanceEntries = beforeFinance - this.state.financeEntries.length;
+    const removedDocuments = beforeDocs - this.state.clientDocuments.length;
+    const removedCommunications = beforeComms - this.state.clientCommunications.length;
+    const removedRequirements = beforeReqs - this.state.clientRequirements.length;
+    const removedDeliverables = beforeDelivs - this.state.clientDeliverables.length;
+
+    const totalRemoved =
+      removedProjects +
+      removedTasks +
+      removedWorkReports +
+      removedFinanceEntries +
+      removedDocuments +
+      removedCommunications +
+      removedRequirements +
+      removedDeliverables;
+
+    if (totalRemoved > 0) {
+      this.recordActivity({
+        actor: actorName,
+        actorRole: 'MASTER_ADMIN',
+        workspaceId: 'ALL',
+        entityType: 'System',
+        entityId: 'NON_INDIAPOST_RESET',
+        action: 'NON_DESTRUCTIVE_BRAND_RESET',
+        summary: `Cleared ${totalRemoved} non-India-Post sample/operational records while preserving all schemas, clients, and departments.`,
+      });
+      this.saveAndNotify();
+    }
+
+    return {
+      removedProjects,
+      removedTasks,
+      removedWorkReports,
+      removedFinanceEntries,
+      removedDocuments,
+      removedCommunications,
+      removedRequirements,
+      removedDeliverables,
+    };
   }
 }
 

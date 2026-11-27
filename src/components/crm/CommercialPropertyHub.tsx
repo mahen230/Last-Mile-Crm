@@ -110,7 +110,7 @@ function sanitizeWhatsappUrl(phone: string, storeName: string): string | null {
   if (digits.length < 10) return null;
   const full = digits.length === 10 ? `91${digits}` : digits;
   const msg = encodeURIComponent(
-    `Namaste from XPOKART · India Post (Dadabari S.O. 324009) regarding ${storeName}.`
+    `Namaste from India Post (Dadabari S.O. 324009) regarding ${storeName}.`
   );
   return `https://wa.me/${full}?text=${msg}`;
 }
@@ -424,7 +424,7 @@ export default function CommercialPropertyHub() {
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-1.5">
               <span className="px-2.5 py-0.5 rounded-lg bg-red-700 text-white text-[11px] font-black uppercase tracking-wide">
-                XPOKART · Commercial GIS Hub
+                India Post · Commercial &amp; Bulk GIS Hub
               </span>
               <span className="px-2.5 py-0.5 rounded-lg bg-amber-100 text-amber-900 text-[11px] font-bold border border-amber-200">
                 Dadabari S.O. 324009 · Beat 1–34

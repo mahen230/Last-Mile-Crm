@@ -95,7 +95,7 @@ export default function ClientsDirectoryView() {
             Client Listing &amp; Workspace Governance
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            India Post (Full System), Xpeedo EV (Work Mgmt), and Phase-1 Basic Client Profiles (Xpokart, Drop Dash, Shop Deck).
+            India Post (Full Postal Management System) and Bulk Customer / Division Operations Workspaces.
           </p>
         </div>
 
@@ -137,7 +137,7 @@ export default function ClientsDirectoryView() {
             [
               { key: 'ALL', label: 'All Clients' },
               { key: 'FULL_INDIA_POST', label: 'India Post Full System' },
-              { key: 'EV_WORK_MGMT', label: 'Xpeedo EV Work Mgmt' },
+              { key: 'EV_WORK_MGMT', label: 'Division Operations Mgmt' },
               { key: 'BASIC_PROFILE_ONLY', label: 'Basic Profile Only' },
             ] as const
           ).map((tab) => (
@@ -263,16 +263,7 @@ export default function ClientsDirectoryView() {
                       {client.workspaceKey === 'INDIA_POST' && (
                         <Link
                           to="/india-post"
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold"
-                        >
-                          <span>Workspace</span>
-                          <ExternalLink size={11} />
-                        </Link>
-                      )}
-                      {client.workspaceKey === 'XPEEDO_EV' && (
-                        <Link
-                          to="/xpeedo-ev"
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-semibold"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-red-700 hover:bg-red-800 text-white text-[11px] font-semibold"
                         >
                           <span>Workspace</span>
                           <ExternalLink size={11} />

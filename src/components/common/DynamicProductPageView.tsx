@@ -310,7 +310,7 @@ export default function DynamicProductPageView({
       categoryMode === 'BANKING_FINANCE'
         ? `[SOVEREIGN BANKING LEAD] Estimate Basis: ₹${calcAmount.toLocaleString('en-IN')} · ${custNote.trim() || 'Requested Doorstep Account / Policy KYC'}`
         : categoryMode === 'LOCAL_B2B_VENDOR'
-        ? `[XPOKART COD ORDER] Qty: ${retailOrderMetrics.qty} · Total ₹${retailOrderMetrics.totalQuote.toLocaleString('en-IN')} · Store: ${storeProd?.vendorName || beatMeta.staffName}`
+        ? `[INDIA POST BULK COD ORDER] Qty: ${retailOrderMetrics.qty} · Total ₹${retailOrderMetrics.totalQuote.toLocaleString('en-IN')} · Bulk Hub: ${storeProd?.vendorName || beatMeta.staffName}`
         : `[RETAIL SPEED POST ORDER] Qty: ${retailQty} · Total ₹${(basePrice * retailQty).toLocaleString('en-IN')} · ${custNote.trim() || 'Doorstep Delivery'}`;
 
     const { inquiry } = customerService.submitCustomerInquiry({
@@ -327,7 +327,7 @@ export default function DynamicProductPageView({
     if (categoryMode !== 'BANKING_FINANCE') {
       const dispatch = aiCommercialVerificationService.createLogisticsDispatch({
         storeId: matchedVendorStore?.id || storeProd?.commercialStoreId || storeProd?.staffId || 'HUB-DESK',
-        storeName: storeProd?.vendorName || 'XPOKART Dispatch Hub',
+        storeName: storeProd?.vendorName || 'India Post Dispatch Hub',
         productId: storeProd?.id || scheme?.id,
         productTitle: title,
         productSku: codeOrSku,
@@ -713,8 +713,8 @@ export default function DynamicProductPageView({
                   <div className="space-y-1">
                     <div className="text-xs font-bold uppercase tracking-wider text-amber-700">
                       {isBrandStore
-                        ? 'Official Brand Store · Centralized XPOKART Checkout'
-                        : 'Verified Neighborhood Store · Express Delivery'}
+                        ? 'India Post Bulk Customer · Speed Post COD Checkout'
+                        : 'Verified Postal Partner · Express Delivery'}
                     </div>
                     <h2 className="text-lg font-black text-slate-900">
                       {matchedVendorStore?.storeName || storeProd.vendorName || storeProd.staffName}
@@ -752,7 +752,7 @@ export default function DynamicProductPageView({
                 {/* Clean Retail Quantity Configurator */}
                 <div className="space-y-3">
                   <div className="text-xs font-black text-slate-900 uppercase">
-                    Select Quantity · Centralized XPOKART COD Pricing
+                    Select Quantity · India Post Speed Post COD Pricing
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {[1, 2, 3, 5].map((q) => (

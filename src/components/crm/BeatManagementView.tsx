@@ -319,7 +319,7 @@ export default function BeatManagementView({
     return Array.from(map.values());
   }, [dynamicOffices]);
 
-  // Operational staff pool for lookup & reassignment (excluding Owner/Master Admin/Developer & XPOKART)
+  // Operational staff pool for lookup & reassignment (excluding Owner/Master Admin/Developer)
   const assignableStaffPool = useMemo(() => {
     return allStaffProfiles
       .filter((s) => {

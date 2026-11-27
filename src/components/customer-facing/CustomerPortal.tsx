@@ -5,10 +5,15 @@ import {
   Calculator, UserCheck, AlertCircle, RefreshCw, ChevronRight, X, Copy, Check, Truck
 } from 'lucide-react';
 import { POSTAL_PRODUCTS } from '../../data/productsData';
-import { ProductDefinition, Customer, LogisticsDispatchOrder } from '../../types/models';
+import {
+  ProductDefinition,
+  LogisticsDispatchOrder,
+  PublicInquiryStatusResult,
+} from '../../types/models';
 import { customerService } from '../../services/customerService';
 import { customerAuthService } from '../../services/customerAuthService';
 import { aiCommercialVerificationService } from '../../services/aiCommercialVerificationService';
+import { indiaPostBulkShowcaseService } from '../../services/indiaPostBulkShowcaseService';
 
 export default function CustomerPortal({ onSwitchToStaff, onBackToCRM }: { onSwitchToStaff?: () => void; onBackToCRM?: () => void }) {
   const handleReturnToStaff = onBackToCRM || onSwitchToStaff;
@@ -30,21 +35,20 @@ export default function CustomerPortal({ onSwitchToStaff, onBackToCRM }: { onSwi
   const [inquirySuccess, setInquirySuccess] = useState<string | null>(null);
   const [inquiryError, setInquiryError] = useState<string | null>(null);
 
-  // Tracker State
+  // Sanitized Tracker State (Requires Reference/Barcode ID + Registered Mobile)
+  const [trackRefId, setTrackRefId] = useState('');
   const [trackPhone, setTrackPhone] = useState('');
   const [trackResult, setTrackResult] = useState<{
-    customer?: Customer;
-    inquiries?: any[];
-    leads?: any[];
-    dispatches?: LogisticsDispatchOrder[];
+    inquiryStatus?: PublicInquiryStatusResult;
+    dispatchMatch?: LogisticsDispatchOrder | null;
     searched: boolean;
   }>({ searched: false });
   const [copiedRef, setCopiedRef] = useState(false);
 
   const activeCustomer = customerAuthService.getActiveCustomer();
-  const referralCode = activeCustomer?.id ? `XPO-${activeCustomer.id.slice(-6).toUpperCase()}` : 'XPO-324009-REF';
+  const referralCode = activeCustomer?.id ? `INP-${activeCustomer.id.slice(-6).toUpperCase()}` : 'INP-324009-REF';
   const referralUrl =
-    typeof window !== 'undefined' ? `${window.location.origin}/?ref=${referralCode}` : `https://xpokart.in/?ref=${referralCode}`;
+    typeof window !== 'undefined' ? `${window.location.origin}/?ref=${referralCode}` : `https://indiapost-hub.in/?ref=${referralCode}`;
 
   // Filter products
   const filteredProducts = POSTAL_PRODUCTS.filter(prod => {
@@ -96,25 +100,45 @@ export default function CustomerPortal({ onSwitchToStaff, onBackToCRM }: { onSwi
 
   const handleTrackSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!trackPhone) return;
+    const cleanRef = trackRefId.trim().toUpperCase();
+    const cleanDigits = trackPhone.replace(/\D/g, '');
+    if (!cleanRef || (cleanDigits.length !== 10 && cleanDigits.length !== 4)) {
+      setTrackResult({
+        inquiryStatus: {
+          found: false,
+          referenceId: cleanRef,
+          serviceOrProduct: '',
+          status: '',
+          pincode: '',
+          beatNo: '',
+          maskedPhone: '',
+          updatedAt: '',
+          note: 'Enter both your Reference / Barcode ID and either your 10-digit mobile number or last 4 digits.',
+        },
+        dispatchMatch: null,
+        searched: true,
+      });
+      return;
+    }
 
-    const cleanQuery = trackPhone.trim();
-    const cust = customerService.getCustomerByMobile(cleanQuery);
-    const allInquiries = customerService.getInquiries().filter(i => i.mobile.includes(cleanQuery.slice(-10)));
-    const allLeads = customerService.getLeads().filter(l => l.customerMobile.includes(cleanQuery.slice(-10)));
-    const allDispatches = aiCommercialVerificationService.getAllDispatches().filter(
-      (d) =>
-        d.customerMobile.includes(cleanQuery.slice(-10)) ||
-        (d.speedPostBarcode || '').toLowerCase().includes(cleanQuery.toLowerCase()) ||
-        d.id.toLowerCase().includes(cleanQuery.toLowerCase())
+    const inquiryStatus = indiaPostBulkShowcaseService.lookupPublicInquiryStatus(
+      cleanRef,
+      cleanDigits
     );
 
+    const last4 = cleanDigits.slice(-4);
+    const dispatchMatch =
+      aiCommercialVerificationService.getAllDispatches().find(
+        (d) =>
+          ((d.speedPostBarcode || '').toUpperCase() === cleanRef ||
+            d.id.toUpperCase() === cleanRef) &&
+          (d.customerMobile || '').replace(/\D/g, '').slice(-4) === last4
+      ) || null;
+
     setTrackResult({
-      customer: cust,
-      inquiries: allInquiries,
-      leads: allLeads,
-      dispatches: allDispatches,
-      searched: true
+      inquiryStatus,
+      dispatchMatch,
+      searched: true,
     });
   };
 
@@ -124,11 +148,11 @@ export default function CustomerPortal({ onSwitchToStaff, onBackToCRM }: { onSwi
       <div className="bg-gradient-to-r from-red-800 via-red-700 to-amber-700 text-white px-4 py-2.5 text-xs md:text-sm flex flex-wrap items-center justify-between gap-2 shadow-sm">
         <div className="flex items-center gap-2 font-medium">
           <Shield size={16} className="text-amber-300" />
-          <span>XPOKART — Sovereign B2B &amp; E-Commerce Marketplace · Dadabari S.O. (PIN 324009) · 34 Active Beats</span>
+          <span>India Post — Citizen Services &amp; Bulk Customer Hub · Dadabari S.O. (PIN 324009)</span>
         </div>
         <div className="flex items-center gap-4">
           <span className="hidden sm:inline-block bg-red-900/60 px-2 py-0.5 rounded text-amber-200">
-            {activeCustomer ? `Buyer: ${activeCustomer.name}` : 'Speed Post COD · Doorstep Banking & B2B'}
+            {activeCustomer ? `Citizen: ${activeCustomer.name}` : 'Speed Post COD · Doorstep Banking & Bulk Dispatch'}
           </span>
           {onSwitchToStaff && (
             <button 
@@ -150,8 +174,8 @@ export default function CustomerPortal({ onSwitchToStaff, onBackToCRM }: { onSwi
               📮
             </div>
             <div>
-              <h1 className="font-bold text-slate-900 text-base md:text-lg leading-tight">XPOKART Buyer &amp; Citizen Hub</h1>
-              <p className="text-xs text-slate-500">Sovereign Postal Schemes, Speed Post COD &amp; Verified B2B Orders</p>
+              <h1 className="font-bold text-slate-900 text-base md:text-lg leading-tight">India Post Citizen &amp; Bulk Hub</h1>
+              <p className="text-xs text-slate-500">Sovereign Postal Schemes, Speed Post COD &amp; Bulk Customer Services</p>
             </div>
           </div>
 
@@ -257,7 +281,7 @@ export default function CustomerPortal({ onSwitchToStaff, onBackToCRM }: { onSwi
               {/* ₹100/Referral Affiliate Link Banner */}
               <div className="p-3.5 rounded-2xl bg-slate-900 text-white flex flex-wrap items-center justify-between gap-3 text-xs">
                 <div>
-                  <div className="font-bold text-amber-300">Share XPOKART &amp; Earn ₹100 / Successful Referral</div>
+                  <div className="font-bold text-amber-300">Share India Post Citizen &amp; Bulk Hub Link</div>
                   <div className="font-mono text-[11px] text-slate-300 mt-0.5 truncate max-w-xs sm:max-w-md">{referralUrl}</div>
                 </div>
                 <button
@@ -709,107 +733,101 @@ export default function CustomerPortal({ onSwitchToStaff, onBackToCRM }: { onSwi
         </div>
       )}
 
-      {/* Tracker Modal */}
+      {/* Sanitized Tracker Modal (Ticket / Barcode + Registered Mobile Verification) */}
       {showTrackerModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div>
-                <h3 className="font-bold text-lg text-slate-900">Track Inquiries & Account Status</h3>
-                <p className="text-xs text-slate-500">Enter your registered 10-digit mobile number</p>
+                <h3 className="font-bold text-lg text-slate-900">
+                  Track Inquiry &amp; Speed Post Status
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Enter your Ticket/Barcode ID and registered 10-digit mobile (or last 4 digits)
+                </p>
               </div>
-              <button onClick={() => setShowTrackerModal(false)} className="text-slate-400 hover:text-slate-700">
+              <button
+                type="button"
+                onClick={() => setShowTrackerModal(false)}
+                className="text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleTrackSubmit} className="mt-4 flex gap-2">
-              <input
-                type="tel"
-                required
-                value={trackPhone}
-                onChange={(e) => setTrackPhone(e.target.value)}
-                placeholder="Enter 10-digit mobile number..."
-                className="flex-1 p-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-red-600"
-              />
+            <form onSubmit={handleTrackSubmit} className="mt-4 space-y-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input
+                  type="text"
+                  required
+                  value={trackRefId}
+                  onChange={(e) => setTrackRefId(e.target.value)}
+                  placeholder="Ticket ID or Barcode (INQ-... / SP-...)"
+                  className="p-2.5 border border-slate-300 rounded-xl text-xs font-mono focus:ring-2 focus:ring-red-600"
+                />
+                <input
+                  type="tel"
+                  required
+                  maxLength={10}
+                  value={trackPhone}
+                  onChange={(e) => setTrackPhone(e.target.value.replace(/\D/g, ''))}
+                  placeholder="10-Digit Mobile or Last 4 Digits"
+                  className="p-2.5 border border-slate-300 rounded-xl text-xs font-mono focus:ring-2 focus:ring-red-600"
+                />
+              </div>
               <button
                 type="submit"
-                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl"
+                className="w-full px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl cursor-pointer"
               >
-                Search Records
+                Verify &amp; Check Status
               </button>
             </form>
 
             {trackResult.searched && (
-              <div className="mt-5 space-y-4 max-h-72 overflow-y-auto pr-1">
-                {trackResult.customer ? (
-                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900 text-sm">{trackResult.customer.name}</span>
-                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-semibold rounded">
-                        {trackResult.customer.verificationStatus}
+              <div className="mt-5 space-y-3 max-h-72 overflow-y-auto pr-1 text-xs">
+                {trackResult.inquiryStatus?.found && (
+                  <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono font-bold text-emerald-900">
+                        {trackResult.inquiryStatus.referenceId}
+                      </span>
+                      <span className="font-semibold text-emerald-700">
+                        {trackResult.inquiryStatus.status}
                       </span>
                     </div>
-                    <div className="text-slate-600">
-                      <strong>Address:</strong> {trackResult.customer.address?.fullAddress || trackResult.customer.houseNo || 'Not specified'}
+                    <div className="font-bold text-slate-900">
+                      {trackResult.inquiryStatus.serviceOrProduct}
                     </div>
-                    <div className="text-slate-600">
-                      <strong>Beat / Post Office:</strong> Beat {trackResult.customer.beatNo || '2'}, {trackResult.customer.officeId || 'DADABARI_SO'}
+                    <div className="text-slate-600 tabular-nums">
+                      PIN {trackResult.inquiryStatus.pincode} · {trackResult.inquiryStatus.beatNo} · Mobile{' '}
+                      {trackResult.inquiryStatus.maskedPhone}
                     </div>
-
-                    {trackResult.customer.products && trackResult.customer.products.length > 0 && (
-                      <div className="pt-2">
-                        <span className="font-semibold text-slate-800 block mb-1">Active Accounts / Inquiries:</span>
-                        <div className="space-y-1">
-                          {trackResult.customer.products.map((p, i) => (
-                            <div key={i} className="p-2 bg-white rounded border border-slate-200 flex justify-between">
-                              <span>{p.productName}</span>
-                              <span className="font-semibold text-red-700">{p.status}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    <div className="text-slate-700">{trackResult.inquiryStatus.note}</div>
                   </div>
-                ) : (
+                )}
+
+                {trackResult.dispatchMatch && (
+                  <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-1.5">
+                    <div className="flex items-center justify-between font-bold text-slate-900">
+                      <span className="flex items-center gap-1.5">
+                        <Truck size={14} className="text-red-700" />
+                        <span>{trackResult.dispatchMatch.productTitle}</span>
+                      </span>
+                      <span className="font-mono text-emerald-800">
+                        {trackResult.dispatchMatch.status.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <div className="text-[11px] font-mono text-slate-600 tabular-nums">
+                      Barcode: {trackResult.dispatchMatch.speedPostBarcode} · PIN{' '}
+                      {trackResult.dispatchMatch.pincode} · COD ₹{trackResult.dispatchMatch.codAmount}
+                    </div>
+                  </div>
+                )}
+
+                {!trackResult.inquiryStatus?.found && !trackResult.dispatchMatch && (
                   <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs">
-                    No verified customer record found for mobile {trackPhone}. You can submit a callback inquiry to get started.
-                  </div>
-                )}
-
-                {trackResult.dispatches && trackResult.dispatches.length > 0 && (
-                  <div className="space-y-2">
-                    <h5 className="font-bold text-xs text-slate-700 flex items-center gap-1.5">
-                      <Truck size={14} className="text-red-700" />
-                      <span>Speed Post COD Parcel Orders ({trackResult.dispatches.length}):</span>
-                    </h5>
-                    {trackResult.dispatches.map((d) => (
-                      <div key={d.id} className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl text-xs space-y-1">
-                        <div className="flex justify-between font-bold text-slate-900">
-                          <span>{d.productTitle}</span>
-                          <span className="font-mono text-emerald-800">{d.status}</span>
-                        </div>
-                        <div className="text-[11px] font-mono text-slate-600">
-                          Barcode: {d.speedPostBarcode} · COD ₹{d.codAmount} · {d.beatNo} ({d.pincodeManagerName})
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {trackResult.inquiries && trackResult.inquiries.length > 0 && (
-                  <div className="space-y-2">
-                    <h5 className="font-bold text-xs text-slate-700">Submitted Web Inquiries:</h5>
-                    {trackResult.inquiries.map((inq: any) => (
-                      <div key={inq.id} className="p-3 bg-white border border-slate-200 rounded-xl text-xs space-y-1">
-                        <div className="flex justify-between font-semibold">
-                          <span>{inq.ticketNumber} ({inq.productInterested})</span>
-                          <span className="text-blue-700">{inq.status}</span>
-                        </div>
-                        <p className="text-slate-500">{inq.requirement}</p>
-                        <p className="text-[11px] text-slate-400">Assigned To: {inq.assignedStaffName}</p>
-                      </div>
-                    ))}
+                    {trackResult.inquiryStatus?.note ||
+                      'No matching inquiry or Speed Post record found for that Ticket ID and mobile verification.'}
                   </div>
                 )}
               </div>
@@ -944,12 +962,12 @@ export default function CustomerPortal({ onSwitchToStaff, onBackToCRM }: { onSwi
       <footer className="bg-slate-900 text-slate-400 py-8 border-t border-slate-800 text-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-4">
           <div>
-            <span className="font-bold text-white text-sm">XPOKART — Sovereign B2B &amp; E-Commerce Marketplace</span>
+            <span className="font-bold text-white text-sm">India Post — Citizen Services &amp; Bulk Customer Hub</span>
             <p className="text-slate-500 mt-0.5">Dadabari S.O. • Kota Division, Rajasthan Circle • PIN 324009 (34 Active Beats)</p>
           </div>
           <div className="flex items-center gap-6">
             <span>Speed Post COD</span>
-            <span>₹100 Referral Bonus</span>
+            <span>IPPB Doorstep Banking</span>
             <span>Aadhaar CELC Certified</span>
           </div>
         </div>

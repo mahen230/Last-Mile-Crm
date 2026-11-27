@@ -31,32 +31,32 @@ const TRACK_OPTIONS: {
 }[] = [
   {
     id: 'BULK_BUYER',
-    title: 'Bulk & Institutional Buyer',
-    subtitle: 'Hostels, cafes, corporate pantries, schools & wholesale crates',
+    title: 'Bulk Customer & BNPL Shipper',
+    subtitle: 'Coaching institutes, publishers, cooperatives & high-volume parcel dispatchers',
     icon: Package,
   },
   {
     id: 'FRANCHISE_PARTNER',
-    title: 'Franchise & Delivery Hub Partner',
-    subtitle: 'Operate brand counters & regional stocking hubs across Kota & Baran',
+    title: 'Institutional Mail & Philately Account',
+    subtitle: 'Corporate MyStamp sheets, Gangajal cartons & Divisional BNPL contracts',
     icon: Building2,
   },
   {
     id: 'LOCAL_MERCHANT',
-    title: 'Local Merchant Onboarding',
-    subtitle: 'Sell groceries, pharmacy, apparel or QSR stock via Speed Post COD',
+    title: 'Regional Seller Showcase Onboarding',
+    subtitle: 'Promote Kota Doria, Hadoti agro, stationery & diagnostic kits via Speed Post COD',
     icon: Store,
   },
 ];
 
 const B2B_CATEGORY_OPTIONS = [
-  'Daily Kirana & Bulk Ration',
-  'Fresh Dairy, Bakery & QSR',
-  'Electronics, Chargers & Smart Appliances',
-  'Apparel, Footwear & Uniforms',
-  'Medical, Pharmacy & Wellness',
-  'EV Mobility, Batteries & Logistics',
-  'Kota Doria Handloom & Artisanal Goods',
+  'Books & Academic Study Material',
+  'Handloom, Kota Doria & Artisanal Goods',
+  'Medical, Pharmacy & Diagnostics',
+  'Agro, Spices & Regional FPO Goods',
+  'Industrial Packaging & Courier Mailers',
+  'Speed Post COD, BNPL & Business Parcel',
+  'Philately, My Stamp & Official Counter Items',
 ];
 
 export default function B2BPartnerPortalPage() {
@@ -163,20 +163,20 @@ export default function B2BPartnerPortalPage() {
               <span>Retail Storefront</span>
             </button>
             <span className="text-sm sm:text-base font-black tracking-tight text-slate-900 whitespace-nowrap">
-              XPOKART <span className="text-red-700">B2B &amp; Partner Desk</span>
+              India Post <span className="text-red-700">Bulk Customer &amp; Institutional Desk</span>
             </span>
           </div>
 
           <a
             href={`https://api.whatsapp.com/send?phone=${selectedHub.whatsappPhone}&text=${encodeURIComponent(
-              `Namaste XPOKART B2B Desk (PIN ${selectedHub.pincode} · ${selectedHub.officeName}),\nI am inquiring about a B2B Bulk Order / Merchant / Franchise Partnership.`
+              `Namaste India Post Bulk Desk (PIN ${selectedHub.pincode} · ${selectedHub.officeName}),\nI am inquiring about a Bulk Customer / BNPL / Product Showcase onboarding.`
             )}`}
             target="_blank"
             rel="noopener noreferrer"
             className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold flex items-center gap-1.5 whitespace-nowrap"
           >
             <MessageCircle size={14} />
-            <span>WhatsApp Partner Desk</span>
+            <span>WhatsApp Bulk Desk</span>
           </a>
         </div>
       </header>
@@ -187,29 +187,29 @@ export default function B2BPartnerPortalPage() {
           <div className="lg:col-span-8 space-y-3">
             <div className="flex flex-wrap items-center gap-2 text-xs text-amber-300 font-semibold">
               <ShieldCheck size={15} />
-              <span>Kota &amp; Baran Division Commercial Network</span>
+              <span>Department of Posts · Kota &amp; Baran Division</span>
               <span aria-hidden="true">·</span>
-              <span>13 Regional Postal Delivery Hubs</span>
+              <span>13 Regional Postal Hubs</span>
             </div>
             <h1
               className="text-2xl sm:text-4xl font-black tracking-tight text-white"
               style={{ textWrap: 'balance' }}
             >
-              Wholesale Supply, Brand Franchise &amp; Merchant Partnership Portal
+              India Post Bulk Customer, BNPL Contract &amp; Product Showcase Portal
             </h1>
             <p className="text-sm text-slate-300 max-w-2xl leading-relaxed">
-              Submit institutional bulk purchase inquiries, regional stocking partner applications,
-              or local storefront onboarding requests across all 13 Kota and Baran pincode hubs.
+              Submit institutional bulk mailing inquiries, Speed Post BNPL tariff onboarding,
+              or regional product promotion requests across all 13 Kota and Baran pincode hubs.
             </p>
           </div>
 
           <div className="lg:col-span-4 bg-white/5 border border-white/15 rounded-2xl p-5 space-y-2.5 text-xs">
-            <div className="text-amber-300 font-bold">Active Target Hub Preview</div>
+            <div className="text-amber-300 font-bold">Active Target Postal Hub</div>
             <div className="text-sm font-black text-white">
               PIN {selectedHub.pincode} · {selectedHub.officeName}
             </div>
             <div className="text-slate-300">
-              Stocking Partner: <strong className="text-emerald-300">{selectedHub.localStockingPartner}</strong>
+              Dispatch Desk: <strong className="text-emerald-300">{selectedHub.localStockingPartner}</strong>
             </div>
             <div className="text-slate-400 pt-1 flex items-center gap-1.5">
               <Truck size={13} className="text-amber-400" />
@@ -225,7 +225,7 @@ export default function B2BPartnerPortalPage() {
               <div className="p-6 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-4">
                 <div className="flex items-center gap-2.5 text-emerald-900 font-black text-lg">
                   <CheckCircle2 size={22} className="text-emerald-600 shrink-0" />
-                  <span>Partnership Application Registered</span>
+                  <span>Bulk Customer Application Registered</span>
                 </div>
                 <p className="text-sm text-slate-700 leading-relaxed">
                   Thank you, <strong>{submittedApp.contactName}</strong>. Your inquiry for{' '}
@@ -241,12 +241,12 @@ export default function B2BPartnerPortalPage() {
                     </div>
                     <div className="text-[11px] text-slate-600 font-mono space-y-0.5 pt-1">
                       <div>
-                        Routed Sector: <strong>{submittedApp.targetBrandName || 'Xpokart'}</strong>
-                        {submittedApp.crmLeadId ? ` · CRM Lead: ${submittedApp.crmLeadId} (B2B_FORM)` : ''}
+                        Routed Desk: <strong>{submittedApp.targetBrandName || 'India Post Bulk Desk'}</strong>
+                        {submittedApp.crmLeadId ? ` · CRM Lead: ${submittedApp.crmLeadId}` : ''}
                       </div>
                       {submittedApp.pendingBrandCode && (
                         <div className="text-amber-700 font-semibold">
-                          Pending Brand Login Code: {submittedApp.pendingBrandCode} (Queued for Master Admin Approval)
+                          Pending Account Code: {submittedApp.pendingBrandCode} (Queued for Master Admin Approval)
                         </div>
                       )}
                     </div>
@@ -254,7 +254,7 @@ export default function B2BPartnerPortalPage() {
                   <div className="flex items-center gap-2">
                     <a
                       href={`https://api.whatsapp.com/send?phone=${selectedHub.whatsappPhone}&text=${encodeURIComponent(
-                        `Namaste XPOKART B2B Desk,\nApplication Ref: *${submittedApp.referenceId}*\nBusiness: ${submittedApp.businessName}\nTrack: ${submittedApp.track}\nHub: PIN ${submittedApp.targetPincode} (${submittedApp.officeName})\nCategory: ${submittedApp.category}`
+                        `Namaste India Post Bulk Desk,\nApplication Ref: *${submittedApp.referenceId}*\nBusiness: ${submittedApp.businessName}\nTrack: ${submittedApp.track}\nHub: PIN ${submittedApp.targetPincode} (${submittedApp.officeName})\nCategory: ${submittedApp.category}`
                       )}`}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -438,7 +438,7 @@ export default function B2BPartnerPortalPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block font-bold text-slate-700 mb-1.5">
-                      Target Brand Sector Routing
+                      India Post Service Routing
                     </label>
                     <select
                       value={targetBrandSlug}
@@ -446,10 +446,8 @@ export default function B2BPartnerPortalPage() {
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-semibold"
                     >
                       <option value="">Auto-Detect from Category</option>
-                      <option value="xpokart">Xpokart (Marketplace &amp; Merchants)</option>
-                      <option value="xpeedo-ev">Xpeedo EV (Mobility &amp; Fleet)</option>
-                      <option value="xpeedo-logistics">Xpeedo Logistics (Dispatch &amp; Courier)</option>
-                      <option value="india-post">India Post (Postal &amp; COD Hubs)</option>
+                      <option value="india-post">India Post (Speed Post COD &amp; Postal Hubs)</option>
+                      <option value="bulk-customers">India Post Bulk Showcase (BNPL &amp; Product Promotion)</option>
                     </select>
                   </div>
                   <div className="flex items-end pb-1">
@@ -461,7 +459,7 @@ export default function B2BPartnerPortalPage() {
                         className="mt-0.5 accent-red-700"
                       />
                       <span className="text-[11px] font-semibold text-slate-700 leading-snug">
-                        Request Brand / Partner Portal Login Access (queued for Master Admin approval)
+                        Request India Post Portal Access (queued for Master Admin approval)
                       </span>
                     </label>
                   </div>

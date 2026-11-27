@@ -344,7 +344,7 @@ export default function SpecialFormsView() {
   const [appEnvironment, setAppEnvironment] = useState('PMA v4.2 + DakPay + IPPB MicroATM');
   const [dataClaimAmount, setDataClaimAmount] = useState<number>(250);
   const [deviceIncentiveAmount, setDeviceIncentiveAmount] = useState<number>(200);
-  const [operatorName, setOperatorName] = useState('Reliance Jio 5G');
+  const [operatorName, setOperatorName] = useState('BSNL / Mobile Data Plan');
   const [byodInvoiceFile, setByodInvoiceFile] = useState<string>('Mobile_Data_Bill_Receipt.pdf');
 
   const byodTotalAmount = (Number(dataClaimAmount) || 0) + (Number(deviceIncentiveAmount) || 0);

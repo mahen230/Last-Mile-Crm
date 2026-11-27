@@ -155,7 +155,7 @@ export default function CitizenDocumentationDesk({
     e.preventDefault();
     if (!selectedService || !applicantName.trim() || !mobileNumber.trim()) return;
 
-    const refCode = `XPO-${selectedService.id.toUpperCase().slice(0, 4)}-${Math.floor(100000 + Math.random() * 900000)}`;
+    const refCode = `INP-${selectedService.id.toUpperCase().slice(0, 4)}-${Math.floor(100000 + Math.random() * 900000)}`;
     const newBooking = {
       refCode,
       serviceId: selectedService.id,
@@ -170,8 +170,8 @@ export default function CitizenDocumentationDesk({
     };
 
     try {
-      const existing = JSON.parse(safeStorage.getItem('xpokart_citizen_applications') || '[]');
-      safeStorage.setItem('xpokart_citizen_applications', JSON.stringify([newBooking, ...existing].slice(0, 25)));
+      const existing = JSON.parse(safeStorage.getItem('indiapost_citizen_applications') || '[]');
+      safeStorage.setItem('indiapost_citizen_applications', JSON.stringify([newBooking, ...existing].slice(0, 25)));
     } catch {
       // ignore
     }

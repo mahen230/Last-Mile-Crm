@@ -1,6 +1,8 @@
 import { DailyArticleEntry, SpecialBillRecord, SpecialBillType, FuelLedgerEntry, ArticleQuantityPatch } from '../types/models';
 import { customerService } from './customerService';
 import { staffPermissionService } from './staffPermissionService';
+import { locationSurveyService } from './locationSurveyService';
+import { lastMileVendorService } from './lastMileVendorService';
 import { getBeatFuelMapping, buildAll33BeatsFuelDirectory, BeatFuelMapping } from '../data/beatFuelData';
 import {
   MAHEN_FUEL_REFERENCE_ROWS,
@@ -1717,6 +1719,9 @@ class OperationsService {
       'Bills_Claims',
       'Tasks',
       'Leads',
+      'Survey_Properties',
+      'Customer_Verification',
+      'Sticker_Distribution',
     ];
 
     let spreadsheetId = this.backupState.linkedSpreadsheetId;
@@ -1915,6 +1920,84 @@ class OperationsService {
       ]),
     ];
 
+    // 7. Prepare Survey Tab 1: Survey_Properties
+    const surveyState = locationSurveyService.exportState();
+    const surveyPropRows: (string | number)[][] = [
+      ['Survey ID', 'Property Type', 'House/Building No', 'Address', 'Colony', 'Owner/Occupant', 'Mobile', 'PIN', 'Beat', 'GPS', 'Status', 'Surveyed By'],
+      ...surveyState.propertySurveys.map((p) => [
+        p.id,
+        p.propertyType,
+        p.houseOrBuildingNo,
+        p.address,
+        p.colony,
+        p.ownerOrOccupantName,
+        p.ownerOrOccupantMobile || '',
+        p.officePincode,
+        p.beatNo,
+        p.gpsStatus,
+        p.verificationStatus,
+        p.surveyedByName,
+      ]),
+    ];
+
+    // 8. Prepare Survey Tab 2: Customer_Verification
+    const custVerifRows: (string | number)[][] = [
+      ['Verification ID', 'Customer Name', 'Mobile', 'House Ref', 'Colony', 'PIN', 'Beat', 'ID Verified', 'Address Verified', 'Occupancy Verified', 'Status', 'Verified By'],
+      ...surveyState.customerVerifications.map((v) => [
+        v.id,
+        v.customerName,
+        v.customerMobile,
+        v.houseOrPropertyRef || '',
+        v.colony,
+        v.officePincode,
+        v.beatNo,
+        v.idVerified ? 'YES' : 'NO',
+        v.addressVerified ? 'YES' : 'NO',
+        v.occupancyVerified ? 'YES' : 'NO',
+        v.verificationStatus,
+        v.verifiedByStaffName,
+      ]),
+    ];
+
+    // 9. Prepare Survey Tab 3: Sticker_Distribution
+    const stickerDistRows: (string | number)[][] = [
+      ['Distribution ID', 'Item Type', 'Quantity', 'Recipient Name', 'Category', 'Mobile', 'House/Shop No', 'Colony', 'PIN', 'Beat', 'Date', 'Distributed By'],
+      ...surveyState.distributionRecords.map((d) => [
+        d.id,
+        d.itemType,
+        d.quantity,
+        d.recipientName,
+        d.recipientCategory,
+        d.recipientMobile || '',
+        d.houseOrShopNo,
+        d.colony,
+        d.officePincode,
+        d.beatNo,
+        d.distributionDate,
+        d.distributedByStaffName,
+      ]),
+    ];
+
+    // 10. Prepare Tab 10: Last_Mile_Vendors
+    const vendorState = lastMileVendorService.exportState();
+    const vendorSheetRows: (string | number)[][] = [
+      ['Vendor ID', 'Vendor Code', 'Vendor Name', 'Contact Person', 'Mobile', 'Email', 'Category', 'Status', 'PINs', 'Beats', 'Tasks Count', 'Office PIN'],
+      ...vendorState.map((v) => [
+        v.id,
+        v.vendorCode,
+        v.vendorName,
+        v.contactPerson || '',
+        v.mobile,
+        v.email || '',
+        v.serviceCategory,
+        v.status,
+        v.serviceCoveragePincodes.join(', '),
+        v.assignedBeats.join(', '),
+        v.assignedTasksCount || 0,
+        v.officePincode || '',
+      ]),
+    ];
+
     await Promise.all([
       writeSheetTabValues(accessToken, spreadsheetId, 'Customers', customerRows),
       writeSheetTabValues(accessToken, spreadsheetId, 'Properties', propertyRows),
@@ -1922,6 +2005,10 @@ class OperationsService {
       writeSheetTabValues(accessToken, spreadsheetId, 'Bills_Claims', billRows),
       writeSheetTabValues(accessToken, spreadsheetId, 'Tasks', taskRows),
       writeSheetTabValues(accessToken, spreadsheetId, 'Leads', leadRows),
+      writeSheetTabValues(accessToken, spreadsheetId, 'Survey_Properties', surveyPropRows),
+      writeSheetTabValues(accessToken, spreadsheetId, 'Customer_Verification', custVerifRows),
+      writeSheetTabValues(accessToken, spreadsheetId, 'Sticker_Distribution', stickerDistRows),
+      writeSheetTabValues(accessToken, spreadsheetId, 'Last_Mile_Vendors', vendorSheetRows),
     ]);
 
     const totalRowsSynced =
@@ -1930,7 +2017,11 @@ class OperationsService {
       this.dailyEntries.length +
       this.specialBills.length +
       tasks.length +
-      leads.length;
+      leads.length +
+      surveyState.propertySurveys.length +
+      surveyState.customerVerifications.length +
+      surveyState.distributionRecords.length +
+      vendorState.length;
 
     const nowStr = new Date().toLocaleString('en-IN', {
       dateStyle: 'medium',
@@ -1946,7 +2037,7 @@ class OperationsService {
       timestamp: nowStr,
       type: 'SHEETS_SYNC',
       status: 'Success',
-      summary: `Synced ${totalRowsSynced} total records across 6 tabs (Customers, Properties, Daily_Entries, Bills_Claims, Tasks, Leads) to Google Sheets.`,
+      summary: `Synced ${totalRowsSynced} total records across 9 tabs (including Survey_Properties, Customer_Verification, Sticker_Distribution) to Google Sheets.`,
     });
     this.saveBackupState();
     this.notify();
@@ -1964,14 +2055,17 @@ class OperationsService {
    */
   public async sendEmailActivitySummary(
     accessToken: string,
-    reportPeriod: 'Daily' | 'Weekly' = 'Daily'
+    reportPeriod: 'Daily' | 'Weekly' = 'Daily',
+    options?: { includeSecondaryBackupEmail?: boolean }
   ): Promise<void> {
+    const includeMirror = options?.includeSecondaryBackupEmail !== false;
     const customers = customerService.getCustomers();
     const properties = customerService.getProperties();
     const leads = customerService.getLeads();
     const tasks = customerService.getTasks();
     const followUps = customerService.getFollowUps();
     const staffProfiles = staffPermissionService.getStaffProfiles();
+    const surveyState = locationSurveyService.exportState();
 
     const pendingTasks = tasks.filter((t: any) => t.status !== 'Completed').length;
     const pendingFollowUps = followUps.filter((f) => f.currentStatus !== 'Completed').length;
@@ -2003,7 +2097,7 @@ class OperationsService {
             Department of Posts • Dadabari Sub-Post Office (324009)
           </div>
           <h2 style="margin: 6px 0 4px; font-size: 20px;">${reportPeriod} CRM & Postman Operations Backup Report</h2>
-          <p style="margin: 0; font-size: 12px; color: #fecaca;">Master Admin Account: Ektamahenmeena@gmail.com • Generated on ${dateLabel}</p>
+          <p style="margin: 0; font-size: 12px; color: #fecaca;">Master Admin: Ektamahenmeena@gmail.com • Backup Sync: mahen.comtech@gmail.com • Generated on ${dateLabel}</p>
         </div>
         <div style="padding: 24px; background: #ffffff; color: #0f172a;">
           <h3 style="margin-top: 0; font-size: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">1. Core CRM & Master Database Totals</h3>
@@ -2019,6 +2113,12 @@ class OperationsService {
               <td style="padding: 8px; border: 1px solid #cbd5e1;">${leads.length}</td>
               <td style="padding: 8px; border: 1px solid #cbd5e1; background: #f8fafc;"><strong>Registered Staff Profiles</strong></td>
               <td style="padding: 8px; border: 1px solid #cbd5e1;">${staffProfiles.length}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px; border: 1px solid #cbd5e1; background: #f8fafc;"><strong>Property Surveys / KYC Verif.</strong></td>
+              <td style="padding: 8px; border: 1px solid #cbd5e1;">${surveyState.propertySurveys.length} / ${surveyState.customerVerifications.length}</td>
+              <td style="padding: 8px; border: 1px solid #cbd5e1; background: #f8fafc;"><strong>Sticker &amp; Card Distributions</strong></td>
+              <td style="padding: 8px; border: 1px solid #cbd5e1;">${surveyState.distributionRecords.length}</td>
             </tr>
             <tr>
               <td style="padding: 8px; border: 1px solid #cbd5e1; background: #f8fafc;"><strong>Pending Field Tasks</strong></td>
@@ -2047,6 +2147,13 @@ class OperationsService {
     `;
 
     await sendGmailMessage(accessToken, 'Ektamahenmeena@gmail.com', subject, htmlBody);
+    if (includeMirror) {
+      try {
+        await sendGmailMessage(accessToken, 'mahen.comtech@gmail.com', subject, htmlBody);
+      } catch {
+        // Keep primary Master Admin dispatch resilient if secondary mirror fails
+      }
+    }
 
     const nowStr = new Date().toLocaleString('en-IN', {
       dateStyle: 'medium',
@@ -2059,7 +2166,7 @@ class OperationsService {
       timestamp: nowStr,
       type: 'GMAIL_BACKUP',
       status: 'Success',
-      summary: `Dispatched ${reportPeriod} CRM Activity & Backup Summary email to Ektamahenmeena@gmail.com.`,
+      summary: `Dispatched ${reportPeriod} CRM Activity & Backup Summary email to Ektamahenmeena@gmail.com${includeMirror ? ' & mahen.comtech@gmail.com' : ''}.`,
     });
     this.saveBackupState();
     this.notify();
@@ -2071,6 +2178,7 @@ class OperationsService {
   public async exportFullDatabaseWorkbook(): Promise<void> {
     const XLSX = await import('xlsx');
     const wb = XLSX.utils.book_new();
+    const vendorState = lastMileVendorService.exportState();
 
     const customers = customerService.getCustomers().map((c) => ({
       'Master ID': c.masterId || c.id,
@@ -2161,6 +2269,70 @@ class OperationsService {
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(leads), 'Leads');
 
+    const surveyState = locationSurveyService.exportState();
+    const surveyPropSheet = surveyState.propertySurveys.map((p) => ({
+      'Survey ID': p.id,
+      'Property Type': p.propertyType,
+      'House/Building No': p.houseOrBuildingNo,
+      Address: p.address,
+      Colony: p.colony,
+      Owner: p.ownerOrOccupantName,
+      Mobile: p.ownerOrOccupantMobile || '',
+      PIN: p.officePincode,
+      Beat: p.beatNo,
+      Status: p.verificationStatus,
+      'Surveyed By': p.surveyedByName,
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(surveyPropSheet), 'Survey_Properties');
+
+    const custVerifSheet = surveyState.customerVerifications.map((v) => ({
+      'Verification ID': v.id,
+      'Customer Name': v.customerName,
+      Mobile: v.customerMobile,
+      'House Ref': v.houseOrPropertyRef || '',
+      Colony: v.colony,
+      PIN: v.officePincode,
+      Beat: v.beatNo,
+      'ID Verified': v.idVerified ? 'YES' : 'NO',
+      'Address Verified': v.addressVerified ? 'YES' : 'NO',
+      'Occupancy Verified': v.occupancyVerified ? 'YES' : 'NO',
+      Status: v.verificationStatus,
+      'Verified By': v.verifiedByStaffName,
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(custVerifSheet), 'Customer_Verification');
+
+    const distSheet = surveyState.distributionRecords.map((d) => ({
+      'Distribution ID': d.id,
+      'Item Type': d.itemType,
+      Quantity: d.quantity,
+      'Recipient Name': d.recipientName,
+      Category: d.recipientCategory,
+      Mobile: d.recipientMobile || '',
+      'House/Shop No': d.houseOrShopNo,
+      Colony: d.colony,
+      PIN: d.officePincode,
+      Beat: d.beatNo,
+      Date: d.distributionDate,
+      'Distributed By': d.distributedByStaffName,
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(distSheet), 'Sticker_Distribution');
+
+    const vendorExcelSheet = vendorState.map((v) => ({
+      'Vendor ID': v.id,
+      'Vendor Code': v.vendorCode,
+      'Vendor Name': v.vendorName,
+      'Contact Person': v.contactPerson || '',
+      Mobile: v.mobile,
+      Email: v.email || '',
+      Category: v.serviceCategory,
+      Status: v.status,
+      'PINs': v.serviceCoveragePincodes.join(', '),
+      Beats: v.assignedBeats.join(', '),
+      'Tasks Count': v.assignedTasksCount || 0,
+      'Office PIN': v.officePincode || '',
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(vendorExcelSheet), 'Last_Mile_Vendors');
+
     const fileName = `INDIA_POST_CRM_FULL_BACKUP_${new Date().toISOString().split('T')[0]}.xlsx`;
     XLSX.writeFile(wb, fileName);
 
@@ -2173,7 +2345,7 @@ class OperationsService {
       timestamp: nowStr,
       type: 'EXCEL_EXPORT',
       status: 'Success',
-      summary: `Downloaded full 6-sheet Excel Master Backup (${fileName}).`,
+      summary: `Downloaded full 9-sheet Excel Master Backup (${fileName}).`,
     });
     this.saveBackupState();
     this.notify();

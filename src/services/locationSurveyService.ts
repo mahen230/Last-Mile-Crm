@@ -1,8 +1,12 @@
 import {
+  CustomerVerificationSurveyRecord,
   DoorstepSurveyRecord,
   DoorstepSurveyStatus,
   HouseMasterRecord,
+  PropertySurveyRecord,
+  PropertySurveyStatus,
   StaffProfile,
+  StickerVisitingCardDistributionRecord,
   StreetMasterRecord,
 } from '../types/models';
 import { featureVisibilityService } from './featureVisibilityService';
@@ -12,6 +16,9 @@ const STREETS_KEY = 'kota_os_street_master_v1';
 const HOUSES_KEY = 'kota_os_house_master_v1';
 const SURVEYS_KEY = 'kota_os_doorstep_surveys_v1';
 const SURVEY_DRAFTS_KEY = 'kota_os_doorstep_survey_drafts_v1';
+const PROPERTY_SURVEYS_KEY = 'kota_os_property_surveys_v1';
+const CUSTOMER_VERIFICATIONS_KEY = 'kota_os_customer_verifications_v1';
+const STICKER_DISTRIBUTIONS_KEY = 'kota_os_sticker_distributions_v1';
 
 export const DOORSTEP_SURVEY_STAGES: DoorstepSurveyStatus[] = [
   'Assigned',
@@ -28,6 +35,9 @@ class LocationSurveyService {
   private houses: HouseMasterRecord[] = [];
   private surveys: DoorstepSurveyRecord[] = [];
   private drafts: Record<string, Partial<DoorstepSurveyRecord>> = {};
+  private propertySurveys: PropertySurveyRecord[] = [];
+  private customerVerifications: CustomerVerificationSurveyRecord[] = [];
+  private distributionRecords: StickerVisitingCardDistributionRecord[] = [];
   private listeners: Set<() => void> = new Set();
 
   constructor() {
@@ -47,11 +57,23 @@ class LocationSurveyService {
 
       const draftRaw = localStorage.getItem(SURVEY_DRAFTS_KEY);
       this.drafts = draftRaw ? JSON.parse(draftRaw) : {};
+
+      const psRaw = localStorage.getItem(PROPERTY_SURVEYS_KEY);
+      this.propertySurveys = psRaw ? JSON.parse(psRaw) : [];
+
+      const cvRaw = localStorage.getItem(CUSTOMER_VERIFICATIONS_KEY);
+      this.customerVerifications = cvRaw ? JSON.parse(cvRaw) : [];
+
+      const distRaw = localStorage.getItem(STICKER_DISTRIBUTIONS_KEY);
+      this.distributionRecords = distRaw ? JSON.parse(distRaw) : [];
     } catch {
       this.streets = [];
       this.houses = [];
       this.surveys = [];
       this.drafts = {};
+      this.propertySurveys = [];
+      this.customerVerifications = [];
+      this.distributionRecords = [];
     }
   }
 
@@ -61,6 +83,9 @@ class LocationSurveyService {
       localStorage.setItem(HOUSES_KEY, JSON.stringify(this.houses));
       localStorage.setItem(SURVEYS_KEY, JSON.stringify(this.surveys));
       localStorage.setItem(SURVEY_DRAFTS_KEY, JSON.stringify(this.drafts));
+      localStorage.setItem(PROPERTY_SURVEYS_KEY, JSON.stringify(this.propertySurveys));
+      localStorage.setItem(CUSTOMER_VERIFICATIONS_KEY, JSON.stringify(this.customerVerifications));
+      localStorage.setItem(STICKER_DISTRIBUTIONS_KEY, JSON.stringify(this.distributionRecords));
     } catch (e) {
       console.warn('LocationSurveyService persist error:', e);
     }
@@ -382,12 +407,171 @@ class LocationSurveyService {
     return { success: true, message: `Survey moved to "${nextStatus}".`, record: updated };
   }
 
+  // ============================================================================
+  // TAB 1: PROPERTY SURVEYS CRUD
+  // ============================================================================
+  public getPropertySurveys(viewer?: StaffProfile | null): PropertySurveyRecord[] {
+    if (!viewer || !staffPermissionService.isPostmanOrGds(viewer)) {
+      return this.propertySurveys;
+    }
+    return this.propertySurveys.filter((p) =>
+      staffPermissionService.matchesUserBeatScope(viewer, {
+        beatNo: p.beatNo,
+        colonyName: p.colony,
+        area: p.address,
+      })
+    );
+  }
+
+  public upsertPropertySurvey(
+    input: Omit<PropertySurveyRecord, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
+  ): PropertySurveyRecord {
+    const now = new Date().toISOString();
+    const id = input.id || `PSURV-${Date.now().toString(36).toUpperCase()}`;
+    const idx = this.propertySurveys.findIndex((p) => p.id === id);
+    const saved: PropertySurveyRecord = {
+      ...input,
+      id,
+      createdAt: idx >= 0 ? this.propertySurveys[idx].createdAt : now,
+      updatedAt: now,
+    };
+    if (idx >= 0) {
+      this.propertySurveys[idx] = saved;
+    } else {
+      this.propertySurveys.unshift(saved);
+    }
+    this.saveAndNotify();
+    return saved;
+  }
+
+  public transitionPropertySurveyStatus(
+    id: string,
+    nextStatus: PropertySurveyStatus,
+    actor: StaffProfile | null | undefined,
+    notes?: string
+  ): { success: boolean; message: string; record?: PropertySurveyRecord } {
+    const idx = this.propertySurveys.findIndex((p) => p.id === id);
+    if (idx < 0) return { success: false, message: 'Property survey record not found.' };
+    if (
+      (nextStatus === 'Verified' ||
+        nextStatus === 'Rejected/Correction Required' ||
+        nextStatus === 'Completed') &&
+      !this.canSupervisorVerifySurvey(actor)
+    ) {
+      return {
+        success: false,
+        message: 'Only authorized supervisors/postmasters/admins can verify or reject property surveys.',
+      };
+    }
+    const now = new Date().toISOString();
+    const updated: PropertySurveyRecord = {
+      ...this.propertySurveys[idx],
+      verificationStatus: nextStatus,
+      notes: notes || this.propertySurveys[idx].notes,
+      verifiedBy:
+        nextStatus === 'Verified' || nextStatus === 'Completed'
+          ? actor?.name || 'Supervisor'
+          : this.propertySurveys[idx].verifiedBy,
+      verifiedAt:
+        nextStatus === 'Verified' || nextStatus === 'Completed'
+          ? now
+          : this.propertySurveys[idx].verifiedAt,
+      updatedAt: now,
+    };
+    this.propertySurveys[idx] = updated;
+    this.saveAndNotify();
+    return { success: true, message: `Property survey marked "${nextStatus}".`, record: updated };
+  }
+
+  // ============================================================================
+  // TAB 2: CUSTOMER VERIFICATION SURVEYS CRUD
+  // ============================================================================
+  public getCustomerVerifications(
+    viewer?: StaffProfile | null
+  ): CustomerVerificationSurveyRecord[] {
+    if (!viewer || !staffPermissionService.isPostmanOrGds(viewer)) {
+      return this.customerVerifications;
+    }
+    return this.customerVerifications.filter((v) =>
+      staffPermissionService.matchesUserBeatScope(viewer, {
+        beatNo: v.beatNo,
+        colonyName: v.colony,
+      })
+    );
+  }
+
+  public upsertCustomerVerification(
+    input: Omit<CustomerVerificationSurveyRecord, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
+  ): CustomerVerificationSurveyRecord {
+    const now = new Date().toISOString();
+    const id = input.id || `CVER-${Date.now().toString(36).toUpperCase()}`;
+    const idx = this.customerVerifications.findIndex((c) => c.id === id);
+    const saved: CustomerVerificationSurveyRecord = {
+      ...input,
+      id,
+      verifiedAt:
+        input.verificationStatus === 'Verified' ? input.verifiedAt || now : input.verifiedAt,
+      createdAt: idx >= 0 ? this.customerVerifications[idx].createdAt : now,
+      updatedAt: now,
+    };
+    if (idx >= 0) {
+      this.customerVerifications[idx] = saved;
+    } else {
+      this.customerVerifications.unshift(saved);
+    }
+    this.saveAndNotify();
+    return saved;
+  }
+
+  // ============================================================================
+  // TAB 3: STICKER & VISITING CARD DISTRIBUTION CRUD
+  // ============================================================================
+  public getDistributionRecords(
+    viewer?: StaffProfile | null
+  ): StickerVisitingCardDistributionRecord[] {
+    if (!viewer || !staffPermissionService.isPostmanOrGds(viewer)) {
+      return this.distributionRecords;
+    }
+    return this.distributionRecords.filter((d) =>
+      staffPermissionService.matchesUserBeatScope(viewer, {
+        beatNo: d.beatNo,
+        colonyName: d.colony,
+      })
+    );
+  }
+
+  public upsertDistributionRecord(
+    input: Omit<StickerVisitingCardDistributionRecord, 'id' | 'createdAt' | 'updatedAt'> & {
+      id?: string;
+    }
+  ): StickerVisitingCardDistributionRecord {
+    const now = new Date().toISOString();
+    const id = input.id || `DIST-${Date.now().toString(36).toUpperCase()}`;
+    const idx = this.distributionRecords.findIndex((d) => d.id === id);
+    const saved: StickerVisitingCardDistributionRecord = {
+      ...input,
+      id,
+      createdAt: idx >= 0 ? this.distributionRecords[idx].createdAt : now,
+      updatedAt: now,
+    };
+    if (idx >= 0) {
+      this.distributionRecords[idx] = saved;
+    } else {
+      this.distributionRecords.unshift(saved);
+    }
+    this.saveAndNotify();
+    return saved;
+  }
+
   public exportState() {
     return {
       streets: this.streets,
       houses: this.houses,
       surveys: this.surveys,
       drafts: this.drafts,
+      propertySurveys: this.propertySurveys,
+      customerVerifications: this.customerVerifications,
+      distributionRecords: this.distributionRecords,
     };
   }
 
@@ -396,11 +580,21 @@ class LocationSurveyService {
     houses?: HouseMasterRecord[];
     surveys?: DoorstepSurveyRecord[];
     drafts?: Record<string, Partial<DoorstepSurveyRecord>>;
+    propertySurveys?: PropertySurveyRecord[];
+    customerVerifications?: CustomerVerificationSurveyRecord[];
+    distributionRecords?: StickerVisitingCardDistributionRecord[];
   }): void {
     if (Array.isArray(bundle.streets)) this.streets = bundle.streets;
     if (Array.isArray(bundle.houses)) this.houses = bundle.houses;
     if (Array.isArray(bundle.surveys)) this.surveys = bundle.surveys;
     if (bundle.drafts) this.drafts = bundle.drafts;
+    if (Array.isArray(bundle.propertySurveys)) this.propertySurveys = bundle.propertySurveys;
+    if (Array.isArray(bundle.customerVerifications)) {
+      this.customerVerifications = bundle.customerVerifications;
+    }
+    if (Array.isArray(bundle.distributionRecords)) {
+      this.distributionRecords = bundle.distributionRecords;
+    }
     this.saveAndNotify();
   }
 }

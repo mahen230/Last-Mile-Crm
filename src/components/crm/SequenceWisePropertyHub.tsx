@@ -843,6 +843,26 @@ export default function SequenceWisePropertyHub() {
     setEditingBeat(null);
   };
 
+  const hasPropertyHubAccess =
+    staffPermissionService.canReadPropertyDetails(currentProfile) ||
+    staffPermissionService.canSearchProperties(currentProfile);
+
+  if (!hasPropertyHubAccess) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-white p-6 text-slate-800">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          RBAC Territory Restriction
+        </p>
+        <h3 className="text-base font-bold text-slate-900 mt-1">
+          Property Details & Search Restricted for Basic Staff
+        </h3>
+        <p className="text-xs text-slate-600 mt-1">
+          Your role allows Customer Entry & Search and Property Entry strictly inside your allotted Beat/PIN area via CRM Properties. Property registry browsing requires Admin RBAC enablement.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6 bg-slate-50 min-h-screen font-sans">
       {/* Top Hero Banner */}

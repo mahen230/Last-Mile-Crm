@@ -702,7 +702,7 @@ export default function StaffProductStudioView({ embeddedInProfile = false }: St
                 </div>
                 <a
                   href={`https://api.whatsapp.com/send?phone=${item.whatsappNumber}&text=${encodeURIComponent(
-                    `Namaste ${item.staffName}, I am interested in "${item.title}" (SKU: ${item.sku}) via XPOKART Marketplace.`
+                    `Namaste ${item.staffName}, I am interested in "${item.title}" (SKU: ${item.sku}) via India Post Showcase.`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -843,7 +843,7 @@ export default function StaffProductStudioView({ embeddedInProfile = false }: St
                   <h2 className="text-lg font-black text-slate-900">
                     {editingProduct ? 'Edit Storefront Product' : 'Create New Storefront Product'}
                   </h2>
-                  <p className="text-xs text-slate-500">XPOKART • Multi-Vendor Sovereign E-Commerce Studio</p>
+                  <p className="text-xs text-slate-500">India Post • Bulk Customer &amp; Postal Product Studio</p>
                 </div>
               </div>
               <button

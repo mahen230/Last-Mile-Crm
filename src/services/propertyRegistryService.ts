@@ -185,7 +185,7 @@ class PropertyRegistryService {
       brandId: resolvedBrandId,
       brandName: resolvedBrandName,
       propertyType: record.propertyType || 'Residential',
-      beatOrPin: record.beatOrPin || '324009',
+      beatOrPin: record.beatOrPin || record.pincode || '324009',
       officeId: record.officeId || 'DADABARI_SO',
       addressLine: record.addressLine.trim(),
       landmark: record.landmark?.trim() || '',
@@ -194,21 +194,31 @@ class PropertyRegistryService {
       linkedUnitNotes: record.linkedUnitNotes?.trim() || '',
       linkedCustomerIds: record.linkedCustomerIds || [],
       linkedLeadIds: record.linkedLeadIds || [],
-      createdById: record.createdById,
+      createdById: record.createdById || record.submittedByStaffId,
       assignedToId: record.assignedToId,
       businessCategory: record.businessCategory,
+      sequenceTag: record.sequenceTag?.trim() || undefined,
+      houseNo: record.houseNo?.trim() || undefined,
+      colony: record.colony?.trim() || undefined,
+      sector: record.sector?.trim() || undefined,
+      beatNo: record.beatNo?.trim() || undefined,
+      pincode: record.pincode?.trim() || record.beatOrPin || undefined,
+      remark: record.remark?.trim() || undefined,
+      submittedByStaffId: record.submittedByStaffId,
+      staffAttribution: record.staffAttribution,
+      verificationMeta: record.verificationMeta,
       updatedAt: new Date().toISOString(),
     };
 
-    const idx = this.properties.findIndex((p) => p.id === id);
+    const idx = this.properties.findIndex((p) => p.id === id || (record.propertyCode && p.propertyCode === record.propertyCode));
     if (idx >= 0) {
-      this.properties[idx] = { ...this.properties[idx], ...newRecord };
+      this.properties[idx] = { ...this.properties[idx], ...newRecord, id: this.properties[idx].id };
     } else {
       this.properties.unshift(newRecord);
     }
 
     this.saveProperties(true);
-    return newRecord;
+    return idx >= 0 ? this.properties[idx] : newRecord;
   }
 
   public deleteProperty(id: string): boolean {
@@ -219,6 +229,66 @@ class PropertyRegistryService {
       return true;
     }
     return false;
+  }
+
+  public consolidateOtherBrandsIntoIndiaPost(): { migratedCount: number; totalCount: number } {
+    let migratedCount = 0;
+    const now = new Date().toISOString();
+    const seenCodes = new Set<string>();
+    const nextList: PropertyRecord[] = [];
+
+    for (const p of this.properties) {
+      const cleanBrand = (p.brandId || '').trim().toLowerCase();
+      const isIndiaPost = cleanBrand === 'india-post' || p.clientId === 'CLIENT-INDIA-POST-KOTA';
+      const normalized: PropertyRecord = isIndiaPost
+        ? {
+            ...p,
+            brandId: 'india-post',
+            brandName: 'India Post',
+            clientId: 'CLIENT-INDIA-POST-KOTA',
+          }
+        : {
+            ...p,
+            brandId: 'india-post',
+            brandName: 'India Post',
+            clientId: 'CLIENT-INDIA-POST-KOTA',
+            linkedUnitNotes: [
+              p.linkedUnitNotes,
+              p.brandName ? `Consolidated from ${p.brandName}` : '',
+            ]
+              .filter(Boolean)
+              .join(' · '),
+            updatedAt: now,
+          };
+
+      if (!isIndiaPost) {
+        migratedCount += 1;
+      }
+
+      const dedupeKey = (normalized.propertyCode || normalized.id || '').trim().toUpperCase();
+      if (dedupeKey && seenCodes.has(dedupeKey)) continue;
+      if (dedupeKey) seenCodes.add(dedupeKey);
+      nextList.push(normalized);
+    }
+
+    this.properties = nextList;
+    if (migratedCount > 0) {
+      this.saveProperties(true);
+    }
+    return { migratedCount, totalCount: this.properties.length };
+  }
+
+  public resetNonIndiaPostProperties(): { removedCount: number } {
+    const before = this.properties.length;
+    this.properties = this.properties.filter((p) => {
+      const b = (p.brandId || '').trim().toLowerCase();
+      return !b || b === 'india-post' || p.clientId === 'CLIENT-INDIA-POST-KOTA';
+    });
+    const removedCount = before - this.properties.length;
+    if (removedCount > 0) {
+      this.saveProperties(true);
+    }
+    return { removedCount };
   }
 }
 

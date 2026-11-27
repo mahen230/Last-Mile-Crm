@@ -41,7 +41,7 @@ export function DepartmentsDirectoryView() {
   const [code, setCode] = useState('');
   const [headName, setHeadName] = useState('');
   const [description, setDescription] = useState('');
-  const [targetClientId, setTargetClientId] = useState('client-xpeedo-ev');
+  const [targetClientId, setTargetClientId] = useState('client-india-post');
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => xpeedoOpsService.subscribe(() => setTick((t) => t + 1)), []);
@@ -60,7 +60,7 @@ export function DepartmentsDirectoryView() {
     xpeedoOpsService.upsertDepartment(
       {
         clientId: cli?.id || targetClientId,
-        workspaceId: cli?.workspaceKey || 'XPEEDO_EV',
+        workspaceId: cli?.workspaceKey || 'INDIA_POST',
         name: name.trim(),
         code: code.trim().toUpperCase(),
         headName: headName.trim() || 'Unassigned (Configure Head)',
@@ -90,7 +90,7 @@ export function DepartmentsDirectoryView() {
             <span>Departments Directory</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Workspace-scoped functional departments across Xpeedo EV and registered client systems
+            Workspace-scoped functional departments across India Post divisions and registered bulk workspaces
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -153,7 +153,7 @@ export function DepartmentsDirectoryView() {
               required
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              placeholder="EV-QA"
+              placeholder="INP-QA"
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono uppercase"
             />
           </div>
@@ -327,7 +327,7 @@ export function EmployeesDirectoryView() {
           >
             <option value="ALL">All Permitted Workspaces</option>
             <option value="INDIA_POST">India Post (Kota Division)</option>
-            <option value="XPEEDO_EV">Xpeedo EV</option>
+            <option value="BULK_CUSTOMERS">India Post Bulk Showcase</option>
           </select>
           <button
             type="button"
@@ -846,7 +846,7 @@ export function FinanceLedgerView() {
   const { userProfile } = useAuth();
   const [, setTick] = useState(0);
   const [wsFilter, setWsFilter] = useState('ALL');
-  const [clientId, setClientId] = useState('client-xpeedo-ev');
+  const [clientId, setClientId] = useState('client-india-post');
   const [type, setType] = useState<OpsFinanceEntry['type']>('Milestone Billing');
   const [referenceNo, setReferenceNo] = useState('');
   const [description, setDescription] = useState('');
@@ -872,7 +872,7 @@ export function FinanceLedgerView() {
     xpeedoOpsService.addFinanceEntry(
       {
         clientId: cli?.id || clientId,
-        workspaceId: cli?.workspaceKey || 'XPEEDO_EV',
+        workspaceId: cli?.workspaceKey || 'INDIA_POST',
         type,
         referenceNo: referenceNo.trim().toUpperCase(),
         description: description.trim(),
@@ -921,7 +921,7 @@ export function FinanceLedgerView() {
             type="button"
             onClick={() =>
               exportCsvWithBom(
-                `xpeedo_finance_ledger_${new Date().toISOString().split('T')[0]}.csv`,
+                `indiapost_finance_ledger_${new Date().toISOString().split('T')[0]}.csv`,
                 ['Reference', 'Workspace', 'Type', 'Description', 'Amount (INR)', 'Status', 'Due Date'],
                 entries.map((f) => [
                   f.referenceNo,
@@ -1102,14 +1102,14 @@ export function ReportsCenterView() {
 
   const exportClients = () =>
     exportCsvWithBom(
-      'xpeedo_clients_registry.csv',
-      ['Code', 'Client Name', 'Workspace', 'Industry', 'Status', 'Module Scope', 'Account Manager'],
+      'indiapost_units_registry.csv',
+      ['Code', 'Unit Name', 'Workspace', 'Division', 'Status', 'Module Scope', 'Account Manager'],
       clients.map((c) => [c.code, c.name, c.workspaceKey, c.industry, c.status, c.moduleScope, c.accountManager])
     );
 
   const exportProjectsAndTasks = () =>
     exportCsvWithBom(
-      'xpeedo_tasks_export.csv',
+      'indiapost_tasks_export.csv',
       ['Task Code', 'Title', 'Workspace', 'Project ID', 'Assignee', 'Status', 'Priority', 'Est Hours', 'Logged Hours', 'Due Date'],
       tasks.map((t) => [
         t.code,
@@ -1127,7 +1127,7 @@ export function ReportsCenterView() {
 
   const exportWorkReports = () =>
     exportCsvWithBom(
-      'xpeedo_ev_work_reports.csv',
+      'indiapost_field_work_reports.csv',
       ['ID', 'Employee', 'Period', 'Date', 'Hours', 'Tasks Completed', 'Approval Stage', 'Summary'],
       workReports.map((w) => [
         w.id,
@@ -1161,16 +1161,16 @@ export function ReportsCenterView() {
 
   const exportAudit = () =>
     exportCsvWithBom(
-      'xpeedo_activity_audit_logs.csv',
+      'indiapost_activity_audit_logs.csv',
       ['Timestamp', 'Actor', 'Role', 'Workspace', 'Entity Type', 'Action', 'Summary'],
       auditLogs.map((a) => [a.timestamp, a.actor, a.actorRole, a.workspaceId, a.entityType, a.action, a.summary])
     );
 
   const packs = [
     {
-      title: 'Clients Portfolio Registry',
+      title: 'Postal Units Portfolio Registry',
       count: clients.length,
-      desc: 'Registered clients, module scopes, and account managers',
+      desc: 'Registered units, module scopes, and nodal officers',
       action: exportClients,
     },
     {
@@ -1180,7 +1180,7 @@ export function ReportsCenterView() {
       action: exportProjectsAndTasks,
     },
     {
-      title: 'Xpeedo EV Work Reports & Approvals',
+      title: 'India Post Work Reports & Approvals',
       count: workReports.length,
       desc: 'Daily/Weekly/Monthly submissions across 4-tier approval stages',
       action: exportWorkReports,

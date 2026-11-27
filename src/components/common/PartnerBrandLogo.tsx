@@ -114,8 +114,8 @@ export const PREDEFINED_LOGO_PRESETS: PredefinedLogoPreset[] = [
   },
   {
     id: 'EV_MOBILITY',
-    label: 'EV Volt',
-    description: 'Electric mobility emblem',
+    label: 'Express Dispatch',
+    description: 'High-speed parcel mark',
     icon: Zap,
   },
   {

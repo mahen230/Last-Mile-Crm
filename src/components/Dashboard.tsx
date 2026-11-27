@@ -40,6 +40,8 @@ import {
   Wallet,
   Shield,
   Home,
+  BarChart2,
+  Tag,
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { customerService } from '../services/customerService';
@@ -53,7 +55,15 @@ import { staffProductService } from '../services/staffProductService';
 import { propertyRegistryService } from '../services/propertyRegistryService';
 import { academyTrainingService } from '../services/academyTrainingService';
 import { partnerBrandService } from '../services/partnerBrandService';
+import {
+  indiaPostBulkShowcaseService,
+  UnifiedShowcaseCatalogItem,
+} from '../services/indiaPostBulkShowcaseService';
+import { productTargetService } from '../services/productTargetService';
+import { CANONICAL_BACKUP_SYNC_EMAILS } from '../services/dataConsolidationService';
 import { useAuth } from './auth/FirebaseAuthProvider';
+
+const CANONICAL_BACKUP_EMAIL = CANONICAL_BACKUP_SYNC_EMAILS[1];
 import {
   Customer,
   Lead,
@@ -62,6 +72,7 @@ import {
   DailyArticleEntry,
   SpecialBillRecord,
   Property,
+  POSTAL_SERVICE_TAG_OPTIONS,
 } from '../types/models';
 import CustomerProfileModal from './customers/CustomerProfileModal';
 import AddCustomerModal from './customers/AddCustomerModal';
@@ -69,6 +80,7 @@ import PostmanAllDayArticlesOverview from './postman/PostmanAllDayArticlesOvervi
 import OfficialStaffDocumentsHub from './crm/OfficialStaffDocumentsHub';
 import DailyOperationsHub from './crm/DailyOperationsHub';
 import PartnerBrandManagementHub from './admin/PartnerBrandManagementHub';
+import DashboardQuickActionsFab from './common/DashboardQuickActionsFab';
 
 export default function Dashboard({
   onSwitchToCustomerPortal,
@@ -110,14 +122,30 @@ export default function Dashboard({
 
   // Hero 1-Click Quick Lead Form Toggle & State
   const [showQuickLeadForm, setShowQuickLeadForm] = useState(false);
+  const [showcaseCatalog, setShowcaseCatalog] = useState<UnifiedShowcaseCatalogItem[]>(() =>
+    indiaPostBulkShowcaseService.getUnifiedShowcaseCatalog()
+  );
+  const [selectedCatalogCode, setSelectedCatalogCode] = useState<string>(() => {
+    const items = indiaPostBulkShowcaseService.getUnifiedShowcaseCatalog();
+    return items[0]?.code || 'SSA';
+  });
   const [activeServiceHubCat, setActiveServiceHubCat] = useState<
     'ALL' | 'IPPB' | 'SMALL_SAVINGS' | 'INSURANCE' | 'AADHAAR_CELC' | 'MAIL_PARCEL'
   >('ALL');
   const [leadCustName, setLeadCustName] = useState('');
   const [leadCustMobile, setLeadCustMobile] = useState('');
   const [leadCustAddress, setLeadCustAddress] = useState('Keshavpura Sector 7, Kota');
-  const [leadScheme, setLeadScheme] = useState('Sukanya Samriddhi Account (SSA)');
+  const [leadPincode, setLeadPincode] = useState(userProfile?.officePincode || '324009');
+  const [leadScheme, setLeadScheme] = useState(() => {
+    const items = indiaPostBulkShowcaseService.getUnifiedShowcaseCatalog();
+    return items[0]?.title || 'Sukanya Samriddhi Account (SSA)';
+  });
+  const [leadQuantity, setLeadQuantity] = useState<number>(1);
   const [leadEstValue, setLeadEstValue] = useState<number>(50000);
+  const [leadServiceTags, setLeadServiceTags] = useState<string[]>(() => {
+    const items = indiaPostBulkShowcaseService.getUnifiedShowcaseCatalog();
+    return items[0]?.suggestedServiceTags || [POSTAL_SERVICE_TAG_OPTIONS[2]];
+  });
   const [leadPriority, setLeadPriority] = useState<'High' | 'Urgent' | 'Medium'>('High');
   const [leadRequirement, setLeadRequirement] = useState('Doorstep KYC & Account Opening');
   const [heroBannerNotice, setHeroBannerNotice] = useState<string | null>(null);
@@ -299,6 +327,12 @@ export default function Dashboard({
       setVisibilityTick((v) => v + 1);
       refreshData();
     });
+    const unsubShowcase = indiaPostBulkShowcaseService.subscribe(() => {
+      setShowcaseCatalog(indiaPostBulkShowcaseService.getUnifiedShowcaseCatalog());
+    });
+    const unsubTargets = productTargetService.subscribe(() => {
+      setVisibilityTick((v) => v + 1);
+    });
     return () => {
       unsubCust();
       unsubOps();
@@ -306,6 +340,8 @@ export default function Dashboard({
       unsubStaffReg();
       unsubVerif();
       unsubVis();
+      unsubShowcase();
+      unsubTargets();
     };
   }, [userProfile]);
 
@@ -351,16 +387,44 @@ export default function Dashboard({
   const eligibleDistanceKm = workingDaysThisMonth * fixedKm;
   const eligibleFuelAllowance = beatFuelSummary.monthlyFuelAllowance || Math.round(eligibleDistanceKm * (beatFuelSummary.fuelRatePerKm || 3.6));
 
+  const handleSelectQuickCatalogProduct = (code: string) => {
+    setSelectedCatalogCode(code);
+    const match = showcaseCatalog.find((i) => i.code === code);
+    if (match) {
+      setLeadScheme(match.title);
+      const qty = Math.max(1, Number(leadQuantity) || 1);
+      if (match.unitPrice && match.unitPrice > 0) {
+        setLeadEstValue(match.unitPrice * qty);
+      }
+      if (match.suggestedServiceTags.length > 0) {
+        setLeadServiceTags(match.suggestedServiceTags);
+      }
+    }
+  };
+
+  const toggleQuickLeadTag = (tag: string) => {
+    setLeadServiceTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  };
+
   const handleQuickLeadSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!leadCustName.trim() || !leadCustMobile.trim()) return;
+
+    const matchedProduct = showcaseCatalog.find((i) => i.code === selectedCatalogCode);
+    const productTitle = matchedProduct?.title || leadScheme;
+    const productCode = matchedProduct?.code || leadScheme.split(' ')[0].toUpperCase();
+    const qty = Math.max(1, Number(leadQuantity) || 1);
 
     const custRes = customerService.addOrUpdateCustomer(
       {
         name: leadCustName.trim(),
         mobile: leadCustMobile.trim(),
         beatNo: activeBeat,
-        financialInterest: leadScheme,
+        pincode: leadPincode.trim() || userProfile?.officePincode || '324009',
+        financialInterest: productTitle,
+        interestedServiceTags: leadServiceTags,
         enteredBy: userProfile?.email || 'Ektamahenmeena@gmail.com',
         enteredByName: userProfile?.name || 'Postal Staff',
         verificationStatus: 'Verified',
@@ -373,8 +437,33 @@ export default function Dashboard({
       customerName: leadCustName.trim(),
       customerMobile: leadCustMobile.trim(),
       customerAddress: leadCustAddress.trim(),
-      productCode: leadScheme.split(' ')[0].toUpperCase(),
-      productName: leadScheme,
+      pincode: leadPincode.trim() || userProfile?.officePincode || '324009',
+      postOfficeName: userProfile?.subOffice || 'Dadabari S.O.',
+      officeName: userProfile?.subOffice || 'Dadabari S.O.',
+      beatNo: activeBeat,
+      productCode,
+      productName: productTitle,
+      quantity: qty,
+      selectedProducts: matchedProduct
+        ? [
+            {
+              id: matchedProduct.id,
+              code: matchedProduct.code,
+              title: matchedProduct.title,
+              sourceType: matchedProduct.sourceType,
+              category: matchedProduct.category,
+              unitPrice: matchedProduct.unitPrice,
+              quantity: qty,
+              commissionOrRate: matchedProduct.commissionOrRate,
+              sla: matchedProduct.sla,
+              bulkCustomerName: matchedProduct.bulkCustomerName,
+              pincode: matchedProduct.pincode,
+            },
+          ]
+        : undefined,
+      commissionInfo: matchedProduct?.commissionOrRate,
+      sla: matchedProduct?.sla,
+      serviceTags: leadServiceTags,
       requirement: leadRequirement,
       source: 'Hero 1-Click Quick Capture',
       stage: 'New',
@@ -382,15 +471,18 @@ export default function Dashboard({
       leadScore: 90,
       estimatedValue: Number(leadEstValue) || 25000,
       assignedStaffName: userProfile?.name || 'Mahendra Kumar Meena',
+      assignedStaffId: userProfile?.employeeId || userProfile?.id,
+      assignedStaffEmail: userProfile?.email,
       nextAction: 'Immediate Doorstep KYC & Proposal Form Collection',
       nextFollowUpDate: todayStr,
     });
 
     setHeroBannerNotice(
-      `Scheme Lead Captured: ${createdLead.customerName} (${createdLead.productName}) added to Pipeline & Backup Queue!`
+      `Lead Captured: ${createdLead.customerName} (${createdLead.productName} × ${qty}) added to Pipeline & Backup Queue!`
     );
     setLeadCustName('');
     setLeadCustMobile('');
+    setLeadQuantity(1);
     setShowQuickLeadForm(false);
     refreshData();
   };
@@ -661,11 +753,21 @@ export default function Dashboard({
   const showMembers = featureVisibilityService.isFeatureVisible(userProfile, 'members');
   const showBeats = featureVisibilityService.isFeatureVisible(userProfile, 'beats');
   const showDailyOps = featureVisibilityService.isFeatureVisible(userProfile, 'dailyOperations');
+  const showLastMileOps =
+    featureVisibilityService.isFeatureVisible(userProfile, 'lastMileOps') || showDailyOps;
   const showOfficialDocs = featureVisibilityService.isFeatureVisible(userProfile, 'officialDocuments');
   const showLeads = featureVisibilityService.isFeatureVisible(userProfile, 'leadsAndSchemes');
+  const showShowcase = featureVisibilityService.isFeatureVisible(userProfile, 'showcase');
+  const showProductTargets = featureVisibilityService.isFeatureVisible(userProfile, 'productTargets');
+  const showMasterSearch = featureVisibilityService.isFeatureVisible(userProfile, 'masterSearch');
+  const showReports = featureVisibilityService.isFeatureVisible(userProfile, 'reports');
   const showVerification = featureVisibilityService.isFeatureVisible(userProfile, 'dailyVerification');
   const showCommunication = featureVisibilityService.isFeatureVisible(userProfile, 'communication');
   const showStaffDir = featureVisibilityService.isFeatureVisible(userProfile, 'staffDirectory');
+  const isSuperior =
+    staffPermissionService.isSuperAdmin(userProfile) ||
+    staffPermissionService.isSuperiorRole(userProfile);
+
   const showCommercial =
     !isWhiteLabel &&
     strictVendorId !== 'INDIA_POST' &&
@@ -683,6 +785,7 @@ export default function Dashboard({
     !isAdmin &&
     !showBeats &&
     !showDailyOps &&
+    !showLastMileOps &&
     !showOfficialDocs &&
     !showLeads &&
     !showVerification &&
@@ -729,16 +832,12 @@ export default function Dashboard({
                   </span>
                 </div>
                 <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
-                  <span>
-                    {strictVendorId === 'INDIA_POST' || isWhiteLabel
-                      ? 'India Post Vendor System — Operations Control'
-                      : 'XPOKART — Sovereign B2B & E-Commerce Marketplace'}
-                  </span>
+                  <span>India Post — Divisional &amp; Bulk Customer Operations Control</span>
                 </h1>
                 <p className="text-xs text-slate-300 max-w-2xl">
                   {strictVendorId === 'INDIA_POST' || isWhiteLabel
                     ? 'Scoped Postal Operations Desk: manage offices, beats, properties, members, daily articles, and statutory documents within your assigned postal jurisdiction.'
-                    : 'Rajasthan Circle · Kota Division Operations Desk. Centralized jurisdictional command: review staff registrations, monitor API health & DB sync logs, manage vendor monetization, and audit Beat Speed Post COD settlements.'}
+                    : 'Rajasthan Circle · Kota Division & Pan-India Operations Desk. Centralized command: review staff registrations, monitor API health & DB sync logs, manage Bulk Customer promotions, and audit Speed Post COD settlements.'}
                 </p>
                 <div className="text-xs text-red-200 flex flex-wrap items-center gap-2 pt-1 font-mono">
                   <span>Division: Kota Postal Circle</span>
@@ -1157,13 +1256,45 @@ export default function Dashboard({
                   </button>
                 )}
 
-                <Link
-                  to="/india-post-storefront"
-                  className="px-3.5 py-2.5 bg-gradient-to-r from-red-700 to-red-800 hover:from-red-600 hover:to-red-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm whitespace-nowrap"
-                >
-                  <Store size={15} />
-                  <span>India Post Storefront</span>
-                </Link>
+                {showShowcase && (
+                  <Link
+                    to="/india-post-storefront"
+                    className="px-3.5 py-2.5 bg-gradient-to-r from-red-700 to-red-800 hover:from-red-600 hover:to-red-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                  >
+                    <Store size={15} />
+                    <span>India Post Showcase</span>
+                  </Link>
+                )}
+
+                {showProductTargets && (
+                  <Link
+                    to="/product-targets"
+                    className="px-3.5 py-2.5 bg-slate-950/90 hover:bg-slate-900 text-amber-300 border border-amber-400/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                  >
+                    <Target size={15} />
+                    <span>Targets</span>
+                  </Link>
+                )}
+
+                {showMasterSearch && (
+                  <Link
+                    to="/master-search"
+                    className="px-3.5 py-2.5 bg-slate-800/90 hover:bg-slate-700 text-white border border-slate-600 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                  >
+                    <Search size={15} />
+                    <span>Master Search</span>
+                  </Link>
+                )}
+
+                {(showReports || isSuperior) && (
+                  <Link
+                    to="/reports"
+                    className="px-3.5 py-2.5 bg-indigo-900/90 hover:bg-indigo-800 text-white border border-indigo-400/40 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                  >
+                    <BarChart2 size={15} />
+                    <span>Superior Reports</span>
+                  </Link>
+                )}
               </div>
             </div>
 
@@ -1258,22 +1389,22 @@ export default function Dashboard({
             </div>
           )}
 
-        {/* Collapsible 1-Click Quick Scheme Lead Form (Only if leadsAndSchemes is visible) */}
+        {/* Collapsible 1-Click Quick Showcase & Scheme Lead Form */}
         {showLeads && showQuickLeadForm && (
           <form
             onSubmit={handleQuickLeadSubmit}
             className="p-6 bg-slate-950 border-b border-slate-800 space-y-4"
           >
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-sm font-bold text-amber-400">
-                1-Click Scheme Lead Capture (PLI / RPLI / SSA / IPPB / SCSS / Post Office Savings)
+                Quick Lead Capture — Showcase Offerings, Bulk Promoted Products &amp; Postal Schemes
               </div>
               <span className="text-xs text-slate-400">
                 Auto-tagged to {userProfile?.name} · {activeBeat}
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
               <div>
                 <label className="block text-[11px] font-bold text-slate-300 mb-1">
                   Citizen / Customer Name *
@@ -1302,40 +1433,68 @@ export default function Dashboard({
                 />
               </div>
 
-              <div>
+              <div className="lg:col-span-2">
                 <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                  Target Scheme (PLI / SSA / IPPB)
+                  Product / Offering / Bulk Showcase Item *
                 </label>
                 <select
-                  value={leadScheme}
-                  onChange={(e) => setLeadScheme(e.target.value)}
+                  value={selectedCatalogCode}
+                  onChange={(e) => handleSelectQuickCatalogProduct(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-amber-400"
                 >
-                  <option value="Sukanya Samriddhi Account (SSA)">Sukanya Samriddhi (SSA - 8.2%)</option>
-                  <option value="Postal Life Insurance (PLI Suraksha)">PLI Suraksha / Santosh</option>
-                  <option value="Rural PLI (RPLI Gram Suraksha)">RPLI Gram Suraksha</option>
-                  <option value="IPPB Premium Doorstep Account">IPPB Account / CELC Aadhaar</option>
-                  <option value="Senior Citizen Savings (SCSS)">Senior Citizen (SCSS - 8.2%)</option>
-                  <option value="5-Year Recurring Deposit (RD)">5-Year Recurring Deposit (RD)</option>
-                  <option value="Monthly Income Scheme (POMIS)">Monthly Income Scheme (MIS)</option>
+                  <optgroup label="India Post Service Offerings">
+                    {showcaseCatalog
+                      .filter((i) => i.sourceType === 'SHOWCASE_OFFERING')
+                      .map((item) => (
+                        <option key={item.id} value={item.code}>
+                          {item.title} ({item.commissionOrRate})
+                        </option>
+                      ))}
+                  </optgroup>
+                  <optgroup label="Bulk Customer & Promoted Products">
+                    {showcaseCatalog
+                      .filter((i) => i.sourceType === 'BULK_PROMOTED')
+                      .map((item) => (
+                        <option key={item.id} value={item.code}>
+                          {item.title} — {item.bulkCustomerName}
+                        </option>
+                      ))}
+                  </optgroup>
+                  <optgroup label="Sovereign Postal Schemes">
+                    {showcaseCatalog
+                      .filter((i) => i.sourceType === 'POSTAL_SCHEME')
+                      .map((item) => (
+                        <option key={item.id} value={item.code}>
+                          {item.title} ({item.commissionOrRate})
+                        </option>
+                      ))}
+                  </optgroup>
                 </select>
               </div>
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                  House No & Locality
+                  Qty / Units
                 </label>
                 <input
-                  type="text"
-                  value={leadCustAddress}
-                  onChange={(e) => setLeadCustAddress(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-amber-400"
+                  type="number"
+                  min={1}
+                  value={leadQuantity}
+                  onChange={(e) => {
+                    const q = Math.max(1, Number(e.target.value) || 1);
+                    setLeadQuantity(q);
+                    const match = showcaseCatalog.find((i) => i.code === selectedCatalogCode);
+                    if (match?.unitPrice && match.unitPrice > 0) {
+                      setLeadEstValue(match.unitPrice * q);
+                    }
+                  }}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-amber-400 tabular-nums"
                 />
               </div>
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                  Est. Deposit / Sum Assured (₹)
+                  Est. Value (₹)
                 </label>
                 <input
                   type="number"
@@ -1351,17 +1510,81 @@ export default function Dashboard({
                   className="w-full py-2 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <CheckCircle2 size={15} />
-                  <span>Save Lead Now</span>
+                  <span>Save Lead</span>
                 </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                  House No &amp; Locality
+                </label>
+                <input
+                  type="text"
+                  value={leadCustAddress}
+                  onChange={(e) => setLeadCustAddress(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-amber-400"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                  Office PIN Code
+                </label>
+                <input
+                  type="text"
+                  value={leadPincode}
+                  onChange={(e) => setLeadPincode(e.target.value)}
+                  placeholder="324009"
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-amber-400"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                  Requirement / Follow-up Note
+                </label>
+                <input
+                  type="text"
+                  value={leadRequirement}
+                  onChange={(e) => setLeadRequirement(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-amber-400"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                <Tag size={12} className="text-amber-400" />
+                <span>Interested Postal Service Tags (Auto-synced to Citizen Profile)</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {POSTAL_SERVICE_TAG_OPTIONS.map((tag) => {
+                  const selected = leadServiceTags.includes(tag);
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => toggleQuickLeadTag(tag)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition cursor-pointer ${
+                        selected
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold'
+                          : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500'
+                      }`}
+                    >
+                      {selected ? '✓ ' : '+ '}
+                      {tag}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </form>
         )}
 
-        {/* Clean Property & Members Focused Strip for Restricted Postman/GDS Mode */}
+        {/* Clean Property, Members & Staff Showcase/Search Strip for Focused Mode */}
         {isPropertyMembersOnlyMode ? (
-          <div className="p-6 bg-slate-900/50">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-6 bg-slate-900/50 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {showProperty && (
                 <Link
                   to="/properties"
@@ -1379,7 +1602,7 @@ export default function Dashboard({
                     </div>
                   </div>
                   <div className="px-3.5 py-2 rounded-xl bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shrink-0">
-                    <span>Open Property</span>
+                    <span>Open</span>
                     <ArrowRight size={14} />
                   </div>
                 </Link>
@@ -1402,8 +1625,100 @@ export default function Dashboard({
                     </div>
                   </div>
                   <div className="px-3.5 py-2 rounded-xl bg-emerald-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shrink-0">
-                    <span>Open Members</span>
+                    <span>Open</span>
                     <ArrowRight size={14} />
+                  </div>
+                </Link>
+              )}
+
+              {showShowcase && (
+                <Link
+                  to="/india-post-storefront"
+                  className="p-5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-red-400/60 transition flex items-center justify-between gap-4"
+                >
+                  <div className="space-y-1">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-red-400">
+                      India Post Showcase
+                    </div>
+                    <div className="text-3xl font-black text-white font-mono tabular-nums">
+                      {showcaseCatalog.length}
+                    </div>
+                    <div className="text-xs text-slate-300">
+                      Offerings &amp; bulk promoted products
+                    </div>
+                  </div>
+                  <div className="px-3.5 py-2 rounded-xl bg-red-600 text-white font-bold text-xs flex items-center gap-1.5 shrink-0">
+                    <span>Browse</span>
+                    <ArrowRight size={14} />
+                  </div>
+                </Link>
+              )}
+
+              {showMasterSearch && (
+                <Link
+                  to="/master-search"
+                  className="p-5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-sky-400/60 transition flex items-center justify-between gap-4"
+                >
+                  <div className="space-y-1">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-sky-400">
+                      Unified Master Search
+                    </div>
+                    <div className="text-sm font-black text-white">
+                      Citizens, Tags, PINs &amp; Beats
+                    </div>
+                    <div className="text-xs text-slate-300">
+                      Scoped search across your assigned beat/PIN
+                    </div>
+                  </div>
+                  <div className="px-3.5 py-2 rounded-xl bg-sky-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 shrink-0">
+                    <span>Search</span>
+                    <Search size={14} />
+                  </div>
+                </Link>
+              )}
+
+              {showProductTargets && (
+                <Link
+                  to="/product-targets"
+                  className="p-5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-amber-400/60 transition flex items-center justify-between gap-4"
+                >
+                  <div className="space-y-1">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-amber-300">
+                      Product Targets
+                    </div>
+                    <div className="text-sm font-black text-white">
+                      Targets vs Achievement
+                    </div>
+                    <div className="text-xs text-slate-300">
+                      Live scheme &amp; bulk product progress
+                    </div>
+                  </div>
+                  <div className="px-3.5 py-2 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 shrink-0">
+                    <span>View</span>
+                    <Target size={14} />
+                  </div>
+                </Link>
+              )}
+
+              {(showReports || isSuperior) && (
+                <Link
+                  to="/reports"
+                  className="p-5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-indigo-400/60 transition flex items-center justify-between gap-4"
+                >
+                  <div className="space-y-1">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-indigo-300">
+                      Superior Reporting MIS
+                    </div>
+                    <div className="text-sm font-black text-white">
+                      Team, Beat &amp; Revenue Reports
+                    </div>
+                    <div className="text-xs text-slate-300">
+                      Scoped operational &amp; CSV exports
+                    </div>
+                  </div>
+                  <div className="px-3.5 py-2 rounded-xl bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shrink-0">
+                    <span>Reports</span>
+                    <BarChart2 size={14} />
                   </div>
                 </Link>
               )}
@@ -1532,7 +1847,17 @@ export default function Dashboard({
               </div>
 
               {/* Quick-Action Shortcut Grid & Real-Time Activity Feed Card (Cascaded by Visibility) */}
-              {(showCommercial || showDailyOps || showOfficialDocs || showStorefront || (isAdmin && !strictVendorId)) && (
+              {(showCommercial ||
+                showDailyOps ||
+                showLastMileOps ||
+                showOfficialDocs ||
+                showStorefront ||
+                showShowcase ||
+                showProductTargets ||
+                showMasterSearch ||
+                showReports ||
+                isSuperior ||
+                (isAdmin && !strictVendorId)) && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   <div className="bg-white rounded-3xl border border-slate-200 p-5 shadow-sm space-y-4 lg:col-span-2">
                     <h2 className="text-sm font-black text-slate-900 uppercase tracking-wide flex items-center gap-2">
@@ -1541,32 +1866,77 @@ export default function Dashboard({
                     </h2>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {showCommercial && (
+                      {showShowcase && (
                         <Link
-                          to="/commercial-intelligence"
-                          className="p-4 rounded-2xl bg-gradient-to-br from-indigo-50 to-violet-100 border border-indigo-200 hover:border-indigo-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                          to="/india-post-storefront"
+                          className="p-4 rounded-2xl bg-gradient-to-br from-red-50 to-rose-100 border border-red-200 hover:border-red-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
                         >
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-700 text-white flex items-center justify-center font-bold shadow-sm">
-                            <Sparkles size={20} />
+                          <div className="w-10 h-10 rounded-xl bg-red-700 text-white flex items-center justify-center font-bold shadow-sm">
+                            <Store size={20} />
                           </div>
                           <div>
-                            <div className="text-xs font-black text-indigo-950">AI Commercial Hub</div>
-                            <div className="text-[11px] text-indigo-700 mt-0.5">4-Factor &amp; COD Dispatch</div>
+                            <div className="text-xs font-black text-red-950">India Post Showcase</div>
+                            <div className="text-[11px] text-red-800 mt-0.5">Offerings &amp; bulk items</div>
                           </div>
                         </Link>
                       )}
 
-                      {showDailyOps && (
+                      {showProductTargets && (
                         <Link
-                          to="/postman-articles"
+                          to="/product-targets"
+                          className="p-4 rounded-2xl bg-gradient-to-br from-amber-50 to-yellow-100 border border-amber-200 hover:border-amber-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-amber-600 text-white flex items-center justify-center font-bold shadow-sm">
+                            <Target size={20} />
+                          </div>
+                          <div>
+                            <div className="text-xs font-black text-slate-900">Product Targets</div>
+                            <div className="text-[11px] text-slate-600 mt-0.5">Units &amp; revenue progress</div>
+                          </div>
+                        </Link>
+                      )}
+
+                      {showMasterSearch && (
+                        <Link
+                          to="/master-search"
+                          className="p-4 rounded-2xl bg-gradient-to-br from-sky-50 to-indigo-100 border border-sky-200 hover:border-sky-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-sky-700 text-white flex items-center justify-center font-bold shadow-sm">
+                            <Search size={20} />
+                          </div>
+                          <div>
+                            <div className="text-xs font-black text-slate-900">Master Search</div>
+                            <div className="text-[11px] text-slate-600 mt-0.5">Citizens, tags &amp; PINs</div>
+                          </div>
+                        </Link>
+                      )}
+
+                      {(showReports || isSuperior) && (
+                        <Link
+                          to="/reports"
+                          className="p-4 rounded-2xl bg-gradient-to-br from-indigo-50 to-violet-100 border border-indigo-200 hover:border-indigo-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-indigo-700 text-white flex items-center justify-center font-bold shadow-sm">
+                            <BarChart2 size={20} />
+                          </div>
+                          <div>
+                            <div className="text-xs font-black text-indigo-950">Superior Reports</div>
+                            <div className="text-[11px] text-indigo-700 mt-0.5">Scoped MIS &amp; CSV</div>
+                          </div>
+                        </Link>
+                      )}
+
+                      {(showDailyOps || showLastMileOps) && (
+                        <Link
+                          to="/last-mile-ops"
                           className="p-4 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-100 border border-amber-200 hover:border-amber-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
                         >
                           <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shadow-sm">
                             <Fuel size={20} />
                           </div>
                           <div>
-                            <div className="text-xs font-black text-slate-900">Fuel &amp; Articles Hub</div>
-                            <div className="text-[11px] text-slate-600 mt-0.5">31-day log &amp; lock</div>
+                            <div className="text-xs font-black text-slate-900">Last-Mile Ops</div>
+                            <div className="text-[11px] text-slate-600 mt-0.5">Articles, DSS &amp; fuel</div>
                           </div>
                         </Link>
                       )}
@@ -1601,21 +1971,6 @@ export default function Dashboard({
                         </Link>
                       )}
 
-                      {showCommercial && (
-                        <Link
-                          to="/commercial-directory"
-                          className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-100 border border-emerald-200 hover:border-emerald-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
-                        >
-                          <div className="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center font-bold shadow-sm">
-                            <Store size={20} />
-                          </div>
-                          <div>
-                            <div className="text-xs font-black text-slate-900">Commercial GIS Hub</div>
-                            <div className="text-[11px] text-slate-600 mt-0.5">Commercial directory</div>
-                          </div>
-                        </Link>
-                      )}
-
                       {showOfficialDocs && (
                         <Link
                           to="/official-documents"
@@ -1627,21 +1982,6 @@ export default function Dashboard({
                           <div>
                             <div className="text-xs font-black text-slate-900">Statutory Reports</div>
                             <div className="text-[11px] text-slate-600 mt-0.5">Official templates</div>
-                          </div>
-                        </Link>
-                      )}
-
-                      {showStorefront && (
-                        <Link
-                          to="/staff-storefront"
-                          className="p-4 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-100 border border-orange-200 hover:border-orange-400 hover:-translate-y-0.5 transition flex flex-col justify-between space-y-3 group cursor-pointer shadow-xs"
-                        >
-                          <div className="w-10 h-10 rounded-xl bg-orange-600 text-white flex items-center justify-center font-bold shadow-sm">
-                            <Store size={20} />
-                          </div>
-                          <div>
-                            <div className="text-xs font-black text-slate-900">Partner E-Store Studio</div>
-                            <div className="text-[11px] text-slate-600 mt-0.5">Products &amp; QR kits</div>
                           </div>
                         </Link>
                       )}
@@ -1884,18 +2224,10 @@ export default function Dashboard({
          ===================================================================== */}
       {isAdmin && !isWhiteLabel && strictVendorId !== 'INDIA_POST' && (() => {
         const allRegistryProps = propertyRegistryService.getAllProperties();
-        const allBrands = partnerBrandService.getAllBrands();
-        const pendingBrandApprovals = partnerBrandService.getPendingBrandApprovals();
-        const xpoPlatformTeamCount = staffPermissionService.getXpoKartPlatformStaff().length;
-        const brandOpsStaffCount = staffPermissionService.getBrandOperationalStaff().length;
         const academyCourses = academyTrainingService.getAllCourses();
         const indiaPostCustomersCount = customerService.getCustomersByBrand('india-post').length;
-        const xpeedoEvCount =
-          customerService.getCustomersByBrand('xpeedo-ev').length +
-          propertyRegistryService.getPropertiesByBrand('xpeedo-ev').length;
-        const xpeedoLogisticsCount =
-          customerService.getCustomersByBrand('xpeedo-logistics').length +
-          propertyRegistryService.getPropertiesByBrand('xpeedo-logistics').length;
+        const postalStaffCount = staffPermissionService.getIndiaPostOperationalProfiles().length;
+        const postalAdminCount = staffPermissionService.getXpoKartPlatformStaff().length;
 
         return (
           <section
@@ -1905,96 +2237,91 @@ export default function Dashboard({
             <div className="px-6 py-4 bg-slate-950 text-white flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               <div>
                 <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400">
-                  OWNER FIRST ARCHITECTURE · DEFAULT SCOPE: RAJASTHAN (SCALABLE PAN-INDIA)
+                  INDIA POST COMMAND ARCHITECTURE · KOTA DIVISION &amp; PAN-INDIA READY
                 </div>
                 <h2 className="text-lg font-black tracking-tight">
-                  XPO KART Owner Dashboard — Global Brand &amp; Team Separation
+                  India Post Owner Dashboard — Operations &amp; Bulk Customer Hub
                 </h2>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="px-3 py-1 rounded-lg bg-slate-800 border border-slate-700 text-amber-300 font-bold">
-                  Scope: Rajasthan Default · Pan-India Ready
+                  Scope: Kota Division · Pan-India Ready
                 </span>
                 <Link
                   to="/staff-master"
-                  className="px-3 py-1.5 rounded-lg bg-[#EA580C] hover:bg-orange-600 text-white font-bold transition"
+                  className="px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-800 text-white font-bold transition"
                 >
-                  Self Staff Mgmt (XPO KART: {xpoPlatformTeamCount})
+                  Master Staff ({postalStaffCount})
                 </Link>
                 <Link
-                  to="/staff-directory"
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 font-bold transition"
+                  to="/india-post-storefront"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold transition"
                 >
-                  Brand Ops Staff ({brandOpsStaffCount})
+                  Bulk Showcase Ops
                 </Link>
               </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 border-b border-slate-200 text-xs">
               <div className="p-4">
-                <div className="text-slate-500 font-semibold">Active Brands</div>
+                <div className="text-slate-500 font-semibold">Postal Citizens</div>
                 <div className="text-2xl font-black text-slate-900 font-mono tabular-nums mt-1">
-                  {allBrands.length}
+                  {indiaPostCustomersCount}
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">India Post · EV · Logistics</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">India Post Master Registry</div>
               </div>
               <div className="p-4">
                 <div className="text-slate-500 font-semibold">Traceable Properties</div>
                 <div className="text-2xl font-black text-indigo-700 font-mono tabular-nums mt-1">
                   {allRegistryProps.length}
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">PropertyRegistry Master</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Property &amp; Geo Hub</div>
               </div>
               <div className="p-4">
                 <div className="text-slate-500 font-semibold">Pending Follow-Ups</div>
                 <div className="text-2xl font-black text-amber-700 font-mono tabular-nums mt-1">
                   {pendingFollowUps.length}
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">Across Scoped Teams</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Across Postal Beats</div>
               </div>
               <div className="p-4">
-                <div className="text-slate-500 font-semibold">Pending Login Approvals</div>
+                <div className="text-slate-500 font-semibold">Pending Approvals</div>
                 <div className="text-2xl font-black text-rose-700 font-mono tabular-nums mt-1">
-                  {pendingBrandApprovals.pendingPartners.length +
-                    pendingBrandApprovals.pendingTeamLogins.length +
-                    pendingRegsCount}
+                  {pendingRegsCount}
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">Brands + Team + Staff</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Staff Onboarding Queue</div>
               </div>
               <div className="p-4">
-                <div className="text-slate-500 font-semibold">XPO KART Tech vs Brand Ops</div>
+                <div className="text-slate-500 font-semibold">Admin vs Field Staff</div>
                 <div className="text-2xl font-black text-slate-900 font-mono tabular-nums mt-1">
-                  {xpoPlatformTeamCount} <span className="text-sm text-slate-400">/</span> {brandOpsStaffCount}
+                  {postalAdminCount} <span className="text-sm text-slate-400">/</span> {postalStaffCount}
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">Platform vs Operational</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Command vs Beat Force</div>
               </div>
               <div className="p-4">
                 <div className="text-slate-500 font-semibold">Academy Modules</div>
                 <div className="text-2xl font-black text-emerald-700 font-mono tabular-nums mt-1">
                   {academyCourses.length}
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">Active Certification Tracks</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Postal Certification Tracks</div>
               </div>
             </div>
 
             <div className="px-6 py-3 bg-slate-50 flex flex-wrap items-center justify-between gap-3 text-xs">
               <div className="flex flex-wrap items-center gap-3">
-                <span className="font-bold text-slate-700">Brand-Tagged Customer Sync:</span>
+                <span className="font-bold text-slate-700">Unified India Post Sync:</span>
                 <span className="px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 text-red-900 font-bold">
-                  India Post: {indiaPostCustomersCount} Records
-                </span>
-                <span className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-300 text-slate-800 font-bold">
-                  Xpeedo Logistics: {xpeedoLogisticsCount} Scoped (Shared Blueprint · Zero Leakage)
+                  India Post Citizens: {indiaPostCustomersCount} Records
                 </span>
                 <span className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 font-bold">
-                  Xpeedo EV: {xpeedoEvCount} Scoped (Clean Ready State)
+                  Auto-Sync: {CANONICAL_BACKUP_EMAIL}
                 </span>
               </div>
               <Link
-                to="/partner/login/india-post"
-                className="font-bold text-[#1D4ED8] hover:underline flex items-center gap-1"
+                to="/indiapost-portal"
+                className="font-bold text-red-700 hover:underline flex items-center gap-1"
               >
-                <span>Launch Brand White-Label Login</span>
+                <span>Open Public Bulk Showcase</span>
                 <ExternalLink size={12} />
               </Link>
             </div>
@@ -2935,7 +3262,7 @@ export default function Dashboard({
                   <button
                     type="button"
                     onClick={async () => {
-                      const url = `${typeof window !== 'undefined' ? window.location.origin : 'https://xpokart.in'}/?ref=${staffReferralCode}`;
+                      const url = `${typeof window !== 'undefined' ? window.location.origin : 'https://indiapost-portal.in'}/?ref=${staffReferralCode}`;
                       try {
                         await navigator.clipboard.writeText(url);
                       } catch {
@@ -2969,7 +3296,7 @@ export default function Dashboard({
             <div className="space-y-1">
               <div className="text-[11px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
                 <Server size={13} />
-                <span>Developer &amp; Master Admin Telemetry · XPOKART Core Runtime</span>
+                <span>Developer &amp; Master Admin Telemetry · India Post Core Runtime</span>
               </div>
               <h2 className="text-lg font-black text-white flex items-center gap-2">
                 <span>Live API Health &amp; RBAC Database Sync Console</span>
@@ -3632,6 +3959,8 @@ export default function Dashboard({
           </div>
         </div>
       )}
+
+      <DashboardQuickActionsFab onActionCompleted={refreshData} />
     </div>
   );
 }

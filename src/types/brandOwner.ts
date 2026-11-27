@@ -20,6 +20,8 @@ export type BrandPortalSubMenuKey =
   | 'OPERATIONS_TASKS'
   | 'REPORTS_EXPORTS'
   | 'AUDIT_HEALTH'
+  | 'MASTER_DATA_CENTRE'
+  | 'PROFILE_PASSWORD'
   | 'XPO_PRODUCTS'
   | 'XPO_CUSTOMER_PORTAL'
   | 'XPO_STOREFRONT';
@@ -38,6 +40,7 @@ export const XPOKART_ECOMMERCE_SUBMENUS: BrandPortalSubMenuKey[] = [
   'CUSTOMERS',
   'REPORTS_EXPORTS',
   'AUDIT_HEALTH',
+  'PROFILE_PASSWORD',
 ];
 
 export const ALL_BRAND_PORTAL_SUBMENUS: BrandSubMenuDefinition[] = [
@@ -106,6 +109,16 @@ export const ALL_BRAND_PORTAL_SUBMENUS: BrandSubMenuDefinition[] = [
     label: 'Brand Audit Log & Health',
     shortDesc: 'Immutable audit trail, change diffs & health inspection',
   },
+  {
+    key: 'MASTER_DATA_CENTRE',
+    label: 'Master Data Centre',
+    shortDesc: 'Brand-scoped Excel/CSV templates, bulk import & safe upsert',
+  },
+  {
+    key: 'PROFILE_PASSWORD',
+    label: 'Profile & Password',
+    shortDesc: 'Manage brand owner credentials, passcode & workspace info',
+  },
 ];
 
 export interface BrandOwnerProfile {
@@ -121,6 +134,8 @@ export interface BrandOwnerProfile {
   passwordHash: string;
   passcodeHash: string;
   passcodeLength: number;
+  mustChangePassword?: boolean;
+  defaultPasswordApplied?: boolean;
   status: BrandProfileStatus;
   singleSessionOnly: boolean;
   activeSessionToken: string | null;
@@ -154,6 +169,7 @@ export interface BrandOwnerSession {
   sessionToken: string;
   passcodeVerified: boolean;
   sensitiveUnlocked: boolean;
+  mustChangePassword?: boolean;
   signedInAt: string;
   lastVerifiedAt?: string;
 }
@@ -274,6 +290,8 @@ export const BRAND_STAFF_ROLE_PRESETS: Array<{
       canViewOpsQueue: true,
       canManageOfficesOrBeats: true,
       canExportReports: true,
+      canReadPropertyDetails: true,
+      canSearchProperties: true,
       allowedSections: ['OVERVIEW', 'CUSTOMERS', 'LEADS', 'OPERATIONS', 'PROPERTIES', 'BEATS', 'REPORTS', 'MY_PROFILE'],
     },
   },
@@ -291,6 +309,8 @@ export const BRAND_STAFF_ROLE_PRESETS: Array<{
       canViewOpsQueue: true,
       canManageOfficesOrBeats: false,
       canExportReports: true,
+      canReadPropertyDetails: true,
+      canSearchProperties: true,
       allowedSections: ['OVERVIEW', 'CUSTOMERS', 'LEADS', 'OPERATIONS', 'PROPERTIES', 'BEATS', 'REPORTS', 'MY_PROFILE'],
     },
   },
@@ -308,6 +328,8 @@ export const BRAND_STAFF_ROLE_PRESETS: Array<{
       canViewOpsQueue: true,
       canManageOfficesOrBeats: false,
       canExportReports: false,
+      canReadPropertyDetails: false,
+      canSearchProperties: false,
       allowedSections: ['OVERVIEW', 'CUSTOMERS', 'LEADS', 'OPERATIONS', 'MY_PROFILE'],
     },
   },
@@ -325,6 +347,8 @@ export const BRAND_STAFF_ROLE_PRESETS: Array<{
       canViewOpsQueue: true,
       canManageOfficesOrBeats: false,
       canExportReports: false,
+      canReadPropertyDetails: false,
+      canSearchProperties: false,
       allowedSections: ['OVERVIEW', 'CUSTOMERS', 'PROPERTIES', 'BEATS', 'OPERATIONS', 'MY_PROFILE'],
     },
   },
@@ -342,6 +366,8 @@ export const BRAND_STAFF_ROLE_PRESETS: Array<{
       canViewOpsQueue: true,
       canManageOfficesOrBeats: false,
       canExportReports: false,
+      canReadPropertyDetails: false,
+      canSearchProperties: false,
       allowedSections: ['OVERVIEW', 'CUSTOMERS', 'LEADS', 'OPERATIONS', 'MY_PROFILE'],
     },
   },
@@ -355,6 +381,9 @@ export interface BrandMemberPermissions {
   canViewOpsQueue: boolean;
   canManageOfficesOrBeats?: boolean;
   canExportReports?: boolean;
+  canReadPropertyDetails?: boolean;
+  canSearchProperties?: boolean;
+  allottedTerritory?: string[];
   allowedSections?: BrandStaffSectionKey[];
 }
 
@@ -434,6 +463,7 @@ export interface BrandScopedPortalSession {
   beat?: string;
   pincode?: string;
   customerMasterId?: string;
+  mustChangePassword?: boolean;
   permissions: BrandMemberPermissions;
   signedInAt: string;
 }

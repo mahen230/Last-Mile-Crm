@@ -172,7 +172,7 @@ export default function BrandScopedPortalPage() {
             Customer Self-Service Portals Paused
           </h1>
           <p className="text-xs text-slate-600 leading-relaxed">
-            Public retail and customer workflows are currently inactive on Xpeedo Services. Sign out to return to the operational login portal.
+            Public retail and customer workflows are currently paused on this India Post Operations Portal. Sign out to return to the operational login portal.
           </p>
           <button
             type="button"

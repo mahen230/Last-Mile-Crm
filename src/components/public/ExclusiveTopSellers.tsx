@@ -43,108 +43,108 @@ interface ExclusiveTopSellersProps {
 
 export const EXCLUSIVE_TOP_SELLING_ITEMS: TopSellingItem[] = [
   {
-    id: 'top-haldiram-festive',
-    sku: 'SNK-HALDIRAM-800G',
-    title: "Haldiram's Ratlami Sev & Kaju Katli Festive Sweet Box (800g)",
-    brand: "Haldiram's Sweets & Snacks",
-    categoryTag: 'Snacks & Sweets',
-    mrpPrice: 599,
-    retailPrice: 499,
-    beatNo: 'Beat 2',
-    pincode: '324009',
-    imageSrc: '/src/assets/images/prod_b2b_kirana_wholesale_1794734842973.jpg',
-    badge: '#1 Best Seller Snack',
-  },
-  {
-    id: 'top-philips-led-pack',
-    sku: 'ELE-PHILIPS-LED-9W',
-    title: 'Philips 9W Smart LED Cool Daylight Bulbs (Pack of 4)',
-    brand: 'Philips India Home Tech',
-    categoryTag: 'Home Electricals',
-    mrpPrice: 499,
-    retailPrice: 349,
-    beatNo: 'Beat 2',
-    pincode: '324009',
-    imageSrc: '/src/assets/images/brand_electronics_hub_1794743634422.jpg',
-    badge: 'Energy Saver 9W',
-  },
-  {
-    id: 'top-godrej-aer-pocket',
-    sku: 'HOU-GODREJ-AER-5PK',
-    title: 'Godrej aer Pocket Bathroom Fragrance Assorted (Pack of 5)',
-    brand: 'Godrej Household',
-    categoryTag: 'Daily Essentials',
-    mrpPrice: 300,
-    retailPrice: 240,
-    beatNo: 'Beat 2',
-    pincode: '324009',
-    imageSrc: '/src/assets/images/brand_home_gadgets_1794747072023.jpg',
-    badge: '30-Day Fragrance',
-  },
-  {
-    id: 'top-fabindia-kurta',
-    sku: 'FAS-FABINDIA-KURTA',
-    title: 'Fabindia Hand-Block Printed Pure Cotton Short Kurta (Sizes M-XXL)',
-    brand: 'Fabindia Artisanal',
-    categoryTag: 'Traditional Fashion',
-    mrpPrice: 1599,
-    retailPrice: 1199,
-    beatNo: 'Beat 2',
-    pincode: '324009',
-    imageSrc: '/src/assets/images/store_kota_handloom_1794731364865.jpg',
-    badge: 'Handloom Cotton',
-  },
-  {
-    id: 'top-parker-pen-gold',
-    sku: 'STA-PARKER-GOLD-GT',
-    title: 'Parker Classic Gold GT Ball Pen with India Post Sovereign Seal',
-    brand: 'Parker Stationery',
-    categoryTag: 'Stationery & Gifts',
-    mrpPrice: 550,
-    retailPrice: 420,
-    beatNo: 'Beat 2',
-    pincode: '324009',
+    id: 'top-inp-study-bundle',
+    sku: 'INP-BULK-STUDY-1299',
+    title: 'Competitive Exam Printed Module Bundle (5 kg Business Parcel)',
+    brand: 'Kota Academic Study Material Dispatch Hub',
+    categoryTag: 'Books & Study Material',
+    mrpPrice: 1650,
+    retailPrice: 1299,
+    beatNo: 'Beat 14',
+    pincode: '324005',
     imageSrc: '/src/assets/images/prod_b2b_stationery_coaching_1794734844056.jpg',
-    badge: 'Laser Engraved',
+    badge: 'BNPL Bulk Dispatch',
   },
   {
-    id: 'top-dabur-raw-honey',
-    sku: 'WEL-DABUR-HONEY-550',
-    title: 'Dabur 100% Pure Raw Forest Honey (500g Jar + 50g Free Extra)',
-    brand: 'Dabur Wellness',
-    categoryTag: 'Health & Wellness',
-    mrpPrice: 265,
-    retailPrice: 215,
+    id: 'top-inp-kota-doria',
+    sku: 'INP-BULK-DORIA-2450',
+    title: 'Authentic GI-Tagged Kota Doria Handloom Gift Box',
+    brand: 'Kaithoon Kota Doria Weavers Guild',
+    categoryTag: 'Handloom & Textiles',
+    mrpPrice: 3100,
+    retailPrice: 2450,
+    beatNo: 'Beat 1',
+    pincode: '325001',
+    imageSrc: '/src/assets/images/store_kota_handloom_1794731364865.jpg',
+    badge: 'GI Craft Verified',
+  },
+  {
+    id: 'top-inp-medkit',
+    sku: 'INP-BULK-MEDKIT-1499',
+    title: 'Clinic & Home First-Aid + Digital BP Monitoring Pack',
+    brand: 'Dadabari Surgical & Pharmacy Distributors',
+    categoryTag: 'Medical & Diagnostics',
+    mrpPrice: 1990,
+    retailPrice: 1499,
     beatNo: 'Beat 2',
     pincode: '324009',
     imageSrc: '/src/assets/images/prod_b2b_pharma_wellness_1794734843342.jpg',
-    badge: 'Immunity Booster',
+    badge: 'Beat 2 Fast Dispatch',
   },
   {
-    id: 'top-boat-bassheads',
-    sku: 'ELE-BOAT-BASS-100',
-    title: 'boAt BassHeads 100 Wired In-Ear Earphones with HD Mic',
-    brand: 'boAt Audio Lifestyle',
-    categoryTag: 'Audio Gadgets',
-    mrpPrice: 999,
-    retailPrice: 399,
-    beatNo: 'Beat 2',
-    pincode: '324009',
-    imageSrc: '/src/assets/images/brand_electronics_hub_1794743634422.jpg',
-    badge: '60% Mega Discount',
+    id: 'top-inp-hadoti-agro',
+    sku: 'INP-BULK-AGRO-890',
+    title: 'Hadoti Whole Spices & Cold-Pressed Mustard Oil 5kg Box',
+    brand: 'Hadoti Spice & Agro Producers Collective',
+    categoryTag: 'Agro & Regional Goods',
+    mrpPrice: 1150,
+    retailPrice: 890,
+    beatNo: 'Beat 1',
+    pincode: '325205',
+    imageSrc: '/src/assets/images/prod_b2b_kirana_wholesale_1794734842973.jpg',
+    badge: 'Direct FPO Origin',
   },
   {
-    id: 'top-gangotri-gangajal',
-    sku: 'PHIL-GANGAJAL-2PK',
-    title: 'Gangotri Gangajal Sacred Sealed Holy Water (250ml Pack of 2)',
-    brand: 'India Post Sovereign Philately',
-    categoryTag: 'Spiritual & Philately',
-    mrpPrice: 90,
-    retailPrice: 70,
+    id: 'top-inp-mailers',
+    sku: 'INP-BULK-MAILER-1750',
+    title: 'India Post Pre-Printed Tamper-Proof Courier Pouches (250 Pack)',
+    brand: 'Indraprastha Packaging & Industrial Mailers',
+    categoryTag: 'Industrial & Packaging',
+    mrpPrice: 2350,
+    retailPrice: 1750,
+    beatNo: 'Beat 1',
+    pincode: '324003',
+    imageSrc: '/src/assets/images/prod_b2b_cod_logistics_1794734840043.jpg',
+    badge: '70-Micron Seal',
+  },
+  {
+    id: 'top-inp-mystamp',
+    sku: 'INP-BULK-MYSTAMP-300',
+    title: 'Personalized India Post My Stamp Sheet (12 Official Stamps)',
+    brand: 'Kota GPO Philately & Corporate MyStamp Desk',
+    categoryTag: 'Philately & Official',
+    mrpPrice: 300,
+    retailPrice: 300,
+    beatNo: 'Beat 1',
+    pincode: '324001',
+    imageSrc: '/src/assets/images/prod_mystamp_philately_1794734841690.jpg',
+    badge: 'Official Postage',
+  },
+  {
+    id: 'top-inp-gangajal',
+    sku: 'INP-BULK-GANGAJAL-60',
+    title: 'India Post Gangotri Sacred Gangajal Pack (250 ml × 2)',
+    brand: 'India Post Official Counter',
+    categoryTag: 'Postal Counter Item',
+    mrpPrice: 70,
+    retailPrice: 60,
     beatNo: 'Beat 2',
     pincode: '324009',
     imageSrc: '/src/assets/images/prod_gangajal_sacred_1794734840915.jpg',
-    badge: 'Hermetically Sealed',
+    badge: 'Bottled at Gangotri',
+  },
+  {
+    id: 'top-inp-dlc',
+    sku: 'INP-CITIZEN-DLC-70',
+    title: 'Jeevan Pramaan Digital Life Certificate (Doorstep Biometric)',
+    brand: 'India Post & IPPB Pensioner Desk',
+    categoryTag: 'Citizen Banking',
+    mrpPrice: 70,
+    retailPrice: 70,
+    beatNo: 'Beat 2',
+    pincode: '324009',
+    imageSrc: '/src/assets/images/prod_jeevan_pramaan_dlc_1794734841567.jpg',
+    badge: 'Doorstep Service',
   },
 ];
 
@@ -169,7 +169,7 @@ export default function ExclusiveTopSellers({
     if (onViewMore) {
       onViewMore();
     } else {
-      const el = document.getElementById('top-trending-deals');
+      const el = document.getElementById('bulk-customer-showcase');
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
@@ -190,13 +190,13 @@ export default function ExclusiveTopSellers({
             ) : null}
           </div>
           <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-            Exclusive Top-Selling Essentials
+            Featured Bulk Customer &amp; India Post Offerings
           </h3>
         </div>
 
         <div className="flex items-center gap-3">
           <span className="text-xs font-medium text-slate-500 dark:text-slate-400 hidden sm:inline">
-            ₹15 Flat Beat Delivery · Speed Post COD
+            Speed Post COD &amp; Business Parcel Dispatch
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -219,7 +219,7 @@ export default function ExclusiveTopSellers({
         </div>
       </div>
 
-      {/* Horizontal Scrolling Row ("scroll-x" pattern) */}
+      {/* Horizontal Scrolling Row */}
       <div
         ref={scrollContainerRef}
         className={`flex overflow-x-auto gap-3.5 pb-4 pt-1 snap-x snap-mandatory scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${
@@ -233,7 +233,7 @@ export default function ExclusiveTopSellers({
           const displayPin = activePincode || item.pincode;
 
           const waText = encodeURIComponent(
-            `Namaste XPOKART Hub Desk (PIN ${displayPin}),\n1-Click Order for Top-Selling Item:\n*${item.title}* (${item.brand} · ${item.sku})\nMRP: ₹${mrp.toLocaleString('en-IN')} | Offer Price: ₹${retail.toLocaleString('en-IN')} (${discountPct}% Off)\nExpress Beat Delivery: ₹15 Flat Fee`
+            `Namaste India Post Hub Desk (${hub.officeName} · PIN ${displayPin}),\nBooking / Bulk Inquiry for:\n*${item.title}* (${item.brand} · ${item.sku})\nMRP: ₹${mrp.toLocaleString('en-IN')} | Tariff / Offer: ₹${retail.toLocaleString('en-IN')}\nSpeed Post Dispatch`
           );
 
           return (
@@ -277,7 +277,7 @@ export default function ExclusiveTopSellers({
                       {item.categoryTag}
                     </span>
                     <span className="font-mono text-emerald-700 dark:text-emerald-400 font-bold shrink-0 tabular-nums">
-                      PIN {displayPin} · ₹15 Del
+                      PIN {displayPin} · Speed Post
                     </span>
                   </div>
 
@@ -342,25 +342,25 @@ export default function ExclusiveTopSellers({
           );
         })}
 
-        {/* Prominent "View More" Card at the end of the row */}
+        {/* View More Card */}
         <div
           onClick={handleTriggerViewMore}
           className="w-[200px] sm:w-[220px] shrink-0 snap-start flex flex-col items-center justify-center text-center p-6 rounded-2xl border-2 border-dashed border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800/40 hover:bg-slate-100 dark:hover:bg-zinc-800 hover:border-red-500 dark:hover:border-amber-400 transition cursor-pointer group shadow-2xs"
           role="button"
           tabIndex={0}
-          aria-label="View More Top Sellers"
+          aria-label="View More Promoted Items"
         >
           <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-400 flex items-center justify-center group-hover:scale-110 transition duration-200 mb-3 shadow-xs">
             <ArrowRight size={20} />
           </div>
           <h4 className="font-black text-sm text-slate-900 dark:text-white group-hover:text-red-700 dark:group-hover:text-amber-400 transition">
-            View More Top Sellers
+            Explore Bulk Showcase
           </h4>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
-            Explore 150+ verified items across 13 Pincode Hubs
+            Browse verified India Post Bulk Customers &amp; promoted products
           </p>
           <span className="mt-3 px-3 py-1 rounded-lg bg-slate-900 text-white dark:bg-amber-400 dark:text-slate-950 text-[10px] font-bold group-hover:bg-red-700 dark:group-hover:bg-amber-300 transition">
-            See All SKUs
+            See All Products
           </span>
         </div>
       </div>

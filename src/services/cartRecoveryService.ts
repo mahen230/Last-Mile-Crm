@@ -37,10 +37,10 @@ export interface CartRecoverySession {
   createdAt: string;
 }
 
-const ACTIVE_SESSION_KEY = 'xpokart_cart_recovery_active_v1';
-const RECOVERY_LOG_KEY = 'xpokart_cart_recovery_log_v1';
-const SESSION_UID_KEY = 'xpokart_recovery_uid_v1';
-const SHARED_CART_KEY = 'xpokart_speedpost_cart_v1';
+const ACTIVE_SESSION_KEY = 'indiapost_cart_recovery_active_v1';
+const RECOVERY_LOG_KEY = 'indiapost_cart_recovery_log_v1';
+const SESSION_UID_KEY = 'indiapost_recovery_uid_v1';
+const SHARED_CART_KEY = 'indiapost_speedpost_cart_v1';
 
 type RecoveryListener = () => void;
 
@@ -67,7 +67,7 @@ class CartRecoveryService {
   public getOrCreateSessionId(): string {
     const existing = safeStorage.getItem(SESSION_UID_KEY);
     if (existing) return existing;
-    const generated = `XPO-SES-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const generated = `INP-SES-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
     safeStorage.setItem(SESSION_UID_KEY, generated);
     return generated;
   }
@@ -174,7 +174,7 @@ class CartRecoveryService {
     }
     safeStorage.removeItem(ACTIVE_SESSION_KEY);
     // Rotate session UID after conversion so future carts get fresh session IDs
-    const nextUid = `XPO-SES-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const nextUid = `INP-SES-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
     safeStorage.setItem(SESSION_UID_KEY, nextUid);
     this.notify();
   }
@@ -194,7 +194,7 @@ class CartRecoveryService {
       .join('\n');
     const recipientLine = session.customerName ? `Customer: ${session.customerName}\n` : '';
     const text = encodeURIComponent(
-      `Namaste XPOKART Express Desk (${hub.officeName} · PIN ${hub.pincode}),\n` +
+      `Namaste India Post Express Desk (${hub.officeName} · PIN ${hub.pincode}),\n` +
         `Please help me complete my saved Speed Post COD cart (Session ${session.sessionId}):\n\n` +
         `${recipientLine}` +
         `${itemsSummary}\n\n` +

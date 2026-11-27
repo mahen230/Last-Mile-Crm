@@ -22,7 +22,9 @@ export default function BrandStaffCustomerLoginPage() {
   const navigate = useNavigate();
 
   const [profiles, setProfiles] = useState<SanitizedBrandOwnerProfile[]>(() =>
-    brandOwnerService.getAllBrandProfiles()
+    brandOwnerService
+      .getAllBrandProfiles()
+      .filter((p) => p.partnerSlug === 'india-post' || p.workspaceKey === 'INDIA_POST')
   );
 
   const initialBrand =
@@ -52,7 +54,11 @@ export default function BrandStaffCustomerLoginPage() {
 
   useEffect(() => {
     const unsubBrand = brandOwnerService.subscribe(() => {
-      setProfiles(brandOwnerService.getAllBrandProfiles());
+      setProfiles(
+        brandOwnerService
+          .getAllBrandProfiles()
+          .filter((p) => p.partnerSlug === 'india-post' || p.workspaceKey === 'INDIA_POST')
+      );
     });
     const unsubVis = featureVisibilityService.subscribe(() => {
       const next = featureVisibilityService.isRetailServicesActive();
@@ -135,7 +141,7 @@ export default function BrandStaffCustomerLoginPage() {
         {/* Login Hierarchy Strip */}
         <div
           className={`bg-white border border-slate-200 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 ${
-            retailActive ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
+            retailActive ? 'lg:grid-cols-3' : 'lg:grid-cols-2'
           } gap-3 text-xs`}
         >
           <Link
@@ -145,13 +151,18 @@ export default function BrandStaffCustomerLoginPage() {
             <div className="font-mono text-[11px] text-slate-500">Tier 1 · Platform Control</div>
             <div className="font-bold text-slate-900 mt-0.5">Master Admin Gateway →</div>
           </Link>
-          <Link
-            to={selectedProfile ? `/brand-login/${selectedProfile.partnerSlug}` : '/brand-login'}
-            className="p-2.5 rounded-lg border border-slate-200 hover:border-slate-400 transition block"
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedSlug('india-post');
+              setAccessMode('BRAND_STAFF');
+              setErrorMsg(null);
+            }}
+            className="p-2.5 rounded-lg border border-red-200 bg-red-50 hover:border-red-400 text-left transition cursor-pointer"
           >
-            <div className="font-mono text-[11px] text-slate-500">Tier 2 · Workspace Admin</div>
-            <div className="font-bold text-slate-900 mt-0.5">Brand Owner Single Login →</div>
-          </Link>
+            <div className="font-mono text-[11px] text-red-700">Quick Entry · Kota Division</div>
+            <div className="font-bold text-red-900 mt-0.5">India Post Single Sign-In →</div>
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -164,7 +175,7 @@ export default function BrandStaffCustomerLoginPage() {
                 : 'border-slate-200 hover:border-slate-400'
             }`}
           >
-            <div className="font-mono text-[11px] text-slate-500">Tier 3 · Operational Staff</div>
+            <div className="font-mono text-[11px] text-slate-500">Tier 3 · Single-Brand All-Staff SSO</div>
             <div className="font-bold text-slate-900 mt-0.5">Brand Staff Sign-In</div>
           </button>
           {retailActive && (
@@ -235,10 +246,10 @@ export default function BrandStaffCustomerLoginPage() {
               </div>
 
               <p className="text-xs text-slate-300 leading-relaxed">
-                Authentication is strictly isolated per brand. Only verified{' '}
+                Authentication is strictly isolated per brand. All active{' '}
                 <strong>{selectedProfile?.brandName || 'selected brand'}</strong>{' '}
-                {retailActive ? 'staff or registered customers' : 'operational staff (Staff 1–Staff 5)'}{' '}
-                can sign in here—cross-brand credentials are automatically blocked.
+                {retailActive ? 'staff and registered customers' : 'staff members'}{' '}
+                sign in through this single portal—cross-brand credentials are automatically blocked.
               </p>
 
               <div className="space-y-2 pt-1">
@@ -281,13 +292,7 @@ export default function BrandStaffCustomerLoginPage() {
 
             <div className="pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
               <Link to="/" className="hover:text-white transition font-medium">
-                {retailActive ? 'Public Citizen Home' : 'Xpeedo Services Home'}
-              </Link>
-              <Link
-                to={selectedProfile ? `/brand-login/${selectedProfile.partnerSlug}` : '/brand-login'}
-                className="hover:text-white transition font-medium"
-              >
-                Brand Owner Portal →
+                {retailActive ? 'Public Citizen Home' : 'India Post Operations Home'}
               </Link>
             </div>
           </div>

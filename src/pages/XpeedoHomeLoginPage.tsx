@@ -1,25 +1,23 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
   ArrowRight,
   Building2,
+  CheckCircle2,
   Eye,
   EyeOff,
   KeyRound,
   Lock,
   ShieldCheck,
-  Users,
 } from 'lucide-react';
 import { useAuth } from '../components/auth/FirebaseAuthProvider';
-import {
-  DEFAULT_STAFF_FALLBACK_PASSWORD,
-  staffPermissionService,
-} from '../services/staffPermissionService';
+import { staffPermissionService } from '../services/staffPermissionService';
 import { brandOwnerService } from '../services/brandOwnerService';
 import { partnerBrandService } from '../services/partnerBrandService';
+import IndiaPostLogo from '../components/common/IndiaPostLogo';
 
-type HomeLoginRole = 'admin' | 'brand' | 'partner' | 'developer';
+type HomeLoginRole = 'admin' | 'brand' | 'partner' | 'staff' | 'developer';
 
 const ROLE_OPTIONS: Array<{
   value: HomeLoginRole;
@@ -28,31 +26,37 @@ const ROLE_OPTIONS: Array<{
 }> = [
   {
     value: 'admin',
-    label: 'Admin — Company / Platform Owner',
-    summary: 'Full platform operations, executive KPIs, client governance, and staff allocations.',
+    label: 'Master Admin — India Post Owner & Control',
+    summary: 'Full operational oversight, divisional KPIs, Bulk Customer Hub, and RBAC governance.',
   },
   {
     value: 'brand',
-    label: 'Brand — Brand Workspace Owner',
-    summary: 'Single Brand Owner login with password and 4–6 digit security PIN unlock.',
+    label: 'Office / Hub Incharge — India Post Portal',
+    summary: 'Single Office / Division Owner login with password and 4–6 digit security PIN unlock.',
   },
   {
     value: 'partner',
-    label: 'Partner — Partner Brand Workspace',
-    summary: 'Scoped CRM, leads, follow-ups, properties, and team controls per partner brand.',
+    label: 'Bulk Hub Coordinator — Showcase Workspace',
+    summary: 'Scoped Bulk Customer catalog, dispatch inquiries, and beat-linked lead tracking.',
+  },
+  {
+    value: 'staff',
+    label: 'Staff — India Post All-Staff Single Sign-In',
+    summary: 'Unified sign-in for India Post delivery, counter, IPPB, and field staff scoped to assigned office & beat.',
   },
   {
     value: 'developer',
-    label: 'Developer — Xpeedo Services Diagnostics & Master Editor',
-    summary: 'Master control console, RBAC policies, visibility switches, and system audits.',
+    label: 'Developer — India Post Diagnostics & Master Editor',
+    summary: 'System diagnostics, RBAC policy controls, backup auto-sync, and data migration tools.',
   },
 ];
 
 export default function XpeedoHomeLoginPage() {
   const navigate = useNavigate();
-  const { userProfile, signInWithPassword, signOut } = useAuth();
+  const location = useLocation();
+  const { userProfile, signInWithPassword, signOut, error: authError, clearError } = useAuth();
 
-  const [selectedRole, setSelectedRole] = useState<HomeLoginRole>('admin');
+  const [selectedRole, setSelectedRole] = useState<HomeLoginRole>('staff');
   const [identifier, setIdentifier] = useState('');
   const [secret, setSecret] = useState('');
   const [showSecret, setShowSecret] = useState(false);
@@ -60,37 +64,65 @@ export default function XpeedoHomeLoginPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [infoMsg, setInfoMsg] = useState<string | null>(null);
 
-  // Brand 2-step state
+  // India Post Portal 2-step state
   const [brands] = useState(() =>
-    brandOwnerService.getAllBrandProfiles().filter((b) => b.status !== 'REJECTED')
+    brandOwnerService
+      .getAllBrandProfiles()
+      .filter(
+        (b) =>
+          b.status !== 'REJECTED' &&
+          (b.partnerSlug === 'india-post' || b.workspaceKey === 'INDIA_POST')
+      )
   );
   const [selectedBrandSlug, setSelectedBrandSlug] = useState<string>(
-    brands.find((b) => b.status === 'ACTIVE')?.partnerSlug || brands[0]?.partnerSlug || 'india-post'
+    brands[0]?.partnerSlug || 'india-post'
   );
   const [pendingBrandProfileId, setPendingBrandProfileId] = useState<string | null>(null);
   const [brandPin, setBrandPin] = useState('');
   const [brandConflict, setBrandConflict] = useState<string | null>(null);
 
-  // Partner state
+  // Bulk Hub Partner state
   const [partners] = useState(() =>
-    partnerBrandService.getAllPartners().filter((p) => p.status === 'Active')
+    partnerBrandService
+      .getAllPartners()
+      .filter(
+        (p) =>
+          p.status === 'Active' &&
+          (p.partnerSlug === 'india-post' || p.partnerSlug === 'bulk-customers')
+      )
   );
   const [selectedPartnerSlug, setSelectedPartnerSlug] = useState<string>(
     partners[0]?.partnerSlug || 'india-post'
   );
   const [partnerConflict, setPartnerConflict] = useState(false);
 
-  // Operational Staff 1..5 dropdown
-  const operationalStaffFive = useMemo(
-    () => staffPermissionService.getOperationalStaffFive(),
-    []
-  );
-  const [selectedStaffId, setSelectedStaffId] = useState<string>('');
+  // Progressive lookup match for Staff SSO (never exposes open staff lists)
+  const matchedStaffPreview = useMemo(() => {
+    if (selectedRole !== 'staff') return null;
+    const clean = identifier.trim();
+    if (clean.length < 3) return null;
+    const found = staffPermissionService.findStaffProfileByIdentifier(clean);
+    if (!found) return null;
+    const roleUpper = String(found.role || '').toUpperCase();
+    if (['OWNER', 'MASTER_ADMIN', 'SUPER_ADMIN', 'DEVELOPER'].includes(roleUpper)) return null;
+    if (found.status === 'Inactive' || found.permissions?.approvalStatus === 'Revoked') return null;
+    return found;
+  }, [selectedRole, identifier]);
 
   const brandSession = brandOwnerService.getActiveBrandOwnerSessionState().session;
   const partnerSession = partnerBrandService.getActivePartnerSession();
 
   useEffect(() => {
+    if (
+      userProfile &&
+      (location.pathname === '/' || location.pathname === '/home' || location.pathname === '/login')
+    ) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [userProfile, location.pathname, navigate]);
+
+  useEffect(() => {
+    clearError();
     setErrorMsg(null);
     setInfoMsg(null);
     setBrandConflict(null);
@@ -98,25 +130,34 @@ export default function XpeedoHomeLoginPage() {
     setPendingBrandProfileId(null);
     setBrandPin('');
     setSecret('');
-    setSelectedStaffId('');
 
     if (selectedRole === 'admin') {
-      setIdentifier('owner@xpokart.in');
+      setIdentifier('Ektamahenmeena@gmail.com');
     } else if (selectedRole === 'developer') {
-      setIdentifier('dev@xpokart.in');
+      setIdentifier('DEV-01');
     } else {
       setIdentifier('');
     }
-  }, [selectedRole]);
+  }, [selectedRole, clearError]);
 
   const roleMeta = ROLE_OPTIONS.find((r) => r.value === selectedRole) || ROLE_OPTIONS[0];
 
-  const handleStaffSlotChange = (staffId: string) => {
-    setSelectedStaffId(staffId);
-    const matched = operationalStaffFive.find((s) => s.id === staffId);
-    if (matched) {
-      setIdentifier(matched.employeeId || matched.contact || matched.email);
-      setSecret(DEFAULT_STAFF_FALLBACK_PASSWORD);
+  const handleActivateIndiaPostQuickEntry = (targetType: 'INDIA_POST_STAFF' | 'INDIA_POST_OWNER') => {
+    setErrorMsg(null);
+    setBrandConflict(null);
+    setPartnerConflict(false);
+    if (targetType === 'INDIA_POST_OWNER') {
+      setSelectedRole('brand');
+      setSelectedBrandSlug('india-post');
+      const ipBrand = brands.find((b) => b.partnerSlug === 'india-post');
+      setIdentifier(ipBrand?.loginId || 'BRD-INPOST-01');
+      setSecret('');
+      setInfoMsg('India Post Office / Division Owner selected. Enter password and 4–6 digit PIN.');
+    } else {
+      setSelectedRole('staff');
+      setIdentifier('');
+      setSecret('');
+      setInfoMsg('India Post All-Staff Single Sign-In active. Enter your Employee ID, Mobile, or Email.');
     }
   };
 
@@ -190,7 +231,10 @@ export default function XpeedoHomeLoginPage() {
     try {
       const ok = await signInWithPassword(identifier, secret);
       if (!ok) {
-        setErrorMsg('Authentication failed. Verify your Login ID / Mobile / Email and password.');
+        setErrorMsg(
+          authError ||
+            'Authentication failed. Verify your Employee ID / Mobile / Email and password (default: Post@1234 or Employee ID).'
+        );
         return;
       }
 
@@ -201,15 +245,12 @@ export default function XpeedoHomeLoginPage() {
       }
 
       const roleUpper = String(active.role || '').toUpperCase();
-      const isGovernance = ['OWNER', 'MASTER_ADMIN', 'DEVELOPER', 'SUPER_ADMIN', 'ADMIN'].includes(
-        roleUpper
-      );
 
       if (selectedRole === 'admin') {
         if (!['OWNER', 'MASTER_ADMIN', 'SUPER_ADMIN', 'ADMIN'].includes(roleUpper)) {
           await signOut();
           setErrorMsg(
-            'This account does not have Admin role privileges. Select Staff or Developer instead.'
+            'This account does not have Master Admin privileges. Select Staff or Developer instead.'
           );
           return;
         }
@@ -223,23 +264,10 @@ export default function XpeedoHomeLoginPage() {
           setErrorMsg('This account does not have Developer / Master Admin access.');
           return;
         }
-        navigate('/role-access-dashboard', { replace: true });
+        navigate('/dashboard', { replace: true });
         return;
       }
 
-      // staff role: strictly allow operational Staff 1..5
-      const inCoreFive = operationalStaffFive.some(
-        (s) =>
-          s.id === active.id ||
-          (s.employeeId && active.employeeId && s.employeeId === active.employeeId)
-      );
-      if (isGovernance || !inCoreFive) {
-        await signOut();
-        setErrorMsg(
-          'Staff sign-in is restricted to the 5 canonical operational staff slots (Staff 1–Staff 5). Use Admin or Developer mode for governance accounts.'
-        );
-        return;
-      }
       navigate('/dashboard', { replace: true });
     } finally {
       setIsSubmitting(false);
@@ -252,11 +280,11 @@ export default function XpeedoHomeLoginPage() {
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
       {/* Minimal 3-Zone Top Bar */}
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between gap-8">
-        <div className="text-base font-bold tracking-tight text-slate-900 whitespace-nowrap shrink-0">
-          Xpeedo Services
+        <div className="flex items-center gap-2.5 whitespace-nowrap shrink-0">
+          <IndiaPostLogo size="sm" subtitle="Operations &amp; Bulk Hub" />
         </div>
         <div className="text-xs text-slate-500 hidden sm:block whitespace-nowrap">
-          Multi-Brand Operations &amp; Client Workspace Gateway
+          Last-Mile Postal Operations &amp; Bulk Customer Hub
         </div>
         <div className="flex items-center gap-3 shrink-0 text-xs">
           {userProfile ? (
@@ -278,12 +306,15 @@ export default function XpeedoHomeLoginPage() {
               to={`/partner/workspace/${partnerSession.partnerSlug}`}
               className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold whitespace-nowrap shrink-0"
             >
-              Open Partner Workspace
+              Open Showcase Workspace
             </Link>
           ) : (
-            <span className="text-xs font-mono text-slate-500 whitespace-nowrap shrink-0">
-              Single-Device Session Lock
-            </span>
+            <Link
+              to="/indiapost-portal"
+              className="px-3.5 py-2 rounded-lg bg-[#991B1B] hover:bg-red-800 text-white font-semibold whitespace-nowrap shrink-0"
+            >
+              Public Bulk Showcase
+            </Link>
           )}
         </div>
       </header>
@@ -293,16 +324,34 @@ export default function XpeedoHomeLoginPage() {
           {/* Left Identity & Role Architecture Column */}
           <div className="lg:col-span-5 bg-slate-900 text-white p-7 sm:p-8 flex flex-col justify-between space-y-6">
             <div className="space-y-4">
-              <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-sm">
-                XP
-              </div>
+              <IndiaPostLogo size="md" variant="dark" subtitle="Department of Posts · India" />
               <div className="space-y-2">
-                <h1 className="text-2xl font-bold tracking-tight text-white">
-                  Xpeedo Services
-                </h1>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Unified operations gateway for platform leadership, brand owners, partner workspaces, engineering control, and the 5-member field staff unit.
+                  Unified operations gateway for Master Admin, Divisional &amp; Office Incharges, Bulk Customer Showcase coordinators, and beat-scoped postal staff.
                 </p>
+              </div>
+
+              {/* Direct India Post Single Sign-In Shortcut Card */}
+              <div className="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2.5 text-xs">
+                <div className="text-[11px] font-mono uppercase tracking-wider text-amber-300">
+                  Quick Access · India Post Kota Division
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleActivateIndiaPostQuickEntry('INDIA_POST_STAFF')}
+                    className="px-3 py-1.5 rounded-md bg-[#991B1B] hover:bg-red-800 text-white font-semibold cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    Staff Single Sign-In
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleActivateIndiaPostQuickEntry('INDIA_POST_OWNER')}
+                    className="px-3 py-1.5 rounded-md bg-slate-700 hover:bg-slate-600 text-white font-semibold cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    Division / Office Portal
+                  </button>
+                </div>
               </div>
 
               <div className="pt-2 space-y-2.5 border-t border-slate-800 text-xs">
@@ -317,10 +366,10 @@ export default function XpeedoHomeLoginPage() {
             <div className="pt-5 border-t border-slate-800 space-y-2 text-xs text-slate-300">
               <div className="flex items-center gap-2 font-medium text-white">
                 <ShieldCheck size={15} className="text-emerald-400 shrink-0" />
-                <span>Zero-Leakage Multi-Tenant Isolation</span>
+                <span>Progressive Credential Verification</span>
               </div>
               <p className="text-[11px] text-slate-400 leading-relaxed">
-                Public retail and storefront modules are currently dormant. All brand data, 5-staff allocations, and security PIN sessions stay strictly separated.
+                Staff directories are hidden on sign-in screens. Enter your Employee ID, Email, or Mobile to verify your post and beat assignment before entering your password.
               </p>
             </div>
           </div>
@@ -329,9 +378,9 @@ export default function XpeedoHomeLoginPage() {
           <div className="lg:col-span-7 p-7 sm:p-8 flex flex-col justify-center">
             <div className="space-y-5">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">Sign In to Xpeedo Services</h2>
+                <h2 className="text-lg font-bold text-slate-900">Sign In to India Post Operations</h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Choose one of the 5 operational roles below to continue.
+                  Select your India Post operational role and authenticate with your credentials.
                 </p>
               </div>
 
@@ -363,7 +412,7 @@ export default function XpeedoHomeLoginPage() {
 
               {partnerConflict && (
                 <div className="p-3.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-950 space-y-2">
-                  <div>Active partner session detected on another tab or device.</div>
+                  <div>Active showcase coordinator session detected on another tab or device.</div>
                   <button
                     type="button"
                     onClick={() => void handlePartnerAuth(true)}
@@ -375,38 +424,39 @@ export default function XpeedoHomeLoginPage() {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-                {/* STRICT 5-ROLE DROPDOWN */}
+                {/* 5-ROLE DROPDOWN */}
                 <div>
                   <label
-                    htmlFor="xpeedo-role-select"
+                    htmlFor="indiapost-role-select"
                     className="block font-semibold text-slate-700 mb-1.5"
                   >
-                    Login Role *
+                    Access Role *
                   </label>
                   <select
-                    id="xpeedo-role-select"
+                    id="indiapost-role-select"
                     value={selectedRole}
                     onChange={(e) => setSelectedRole(e.target.value as HomeLoginRole)}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg font-semibold text-slate-900 focus:outline-none focus:border-slate-900"
                   >
-                    <option value="admin">Admin — Company / Platform Owner</option>
-                    <option value="brand">Brand — Brand Workspace Owner</option>
-                    <option value="partner">Partner — Partner Brand Workspace</option>
-                    <option value="developer">Developer — Xpeedo Services Diagnostics &amp; Master Editor</option>
+                    {ROLE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
-                {/* Brand Workspace Selector */}
-                {selectedRole === 'brand' && !pendingBrandProfileId && (
+                {/* Portal Workspace Selector */}
+                {selectedRole === 'brand' && !pendingBrandProfileId && brands.length > 0 && (
                   <div>
                     <label
-                      htmlFor="xpeedo-brand-select"
+                      htmlFor="indiapost-brand-select"
                       className="block font-semibold text-slate-700 mb-1.5"
                     >
-                      Select Brand Workspace *
+                      Select India Post Workspace *
                     </label>
                     <select
-                      id="xpeedo-brand-select"
+                      id="indiapost-brand-select"
                       value={selectedBrandSlug}
                       onChange={(e) => {
                         setSelectedBrandSlug(e.target.value);
@@ -425,23 +475,23 @@ export default function XpeedoHomeLoginPage() {
                     </select>
                     {selectedBrandObj && (
                       <div className="mt-1 text-[11px] text-slate-500">
-                        Login ID: <span className="font-mono">{selectedBrandObj.loginId}</span> · Owner: {selectedBrandObj.ownerName}
+                        Login Code: <span className="font-mono">{selectedBrandObj.uniqueCode}</span> · Incharge: {selectedBrandObj.ownerName}
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* Partner Workspace Selector */}
-                {selectedRole === 'partner' && (
+                {/* Partner Showcase Selector */}
+                {selectedRole === 'partner' && partners.length > 0 && (
                   <div>
                     <label
-                      htmlFor="xpeedo-partner-select"
+                      htmlFor="indiapost-partner-select"
                       className="block font-semibold text-slate-700 mb-1.5"
                     >
-                      Select Partner Organization *
+                      Select India Post Unit *
                     </label>
                     <select
-                      id="xpeedo-partner-select"
+                      id="indiapost-partner-select"
                       value={selectedPartnerSlug}
                       onChange={(e) => setSelectedPartnerSlug(e.target.value)}
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg font-medium text-slate-900"
@@ -455,42 +505,16 @@ export default function XpeedoHomeLoginPage() {
                   </div>
                 )}
 
-                {/* Operational Staff 1..5 Selector */}
-                {selectedRole === 'staff' && (
-                  <div>
-                    <label
-                      htmlFor="xpeedo-staff-slot-select"
-                      className="block font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5"
-                    >
-                      <Users size={13} className="text-slate-600" />
-                      <span>Select Operational Staff Slot (Staff 1–Staff 5)</span>
-                    </label>
-                    <select
-                      id="xpeedo-staff-slot-select"
-                      value={selectedStaffId}
-                      onChange={(e) => handleStaffSlotChange(e.target.value)}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg font-medium text-slate-900"
-                    >
-                      <option value="">-- Choose Staff 1 to Staff 5 (or enter ID below) --</option>
-                      {operationalStaffFive.map((s, idx) => (
-                        <option key={s.id} value={s.id}>
-                          Staff {s.staffSlotNumber || idx + 1} — {s.name} ({s.employeeId || s.contact} · {s.beat || 'Assigned'})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
                 {selectedRole === 'brand' && pendingBrandProfileId ? (
                   <div>
                     <label
-                      htmlFor="xpeedo-brand-pin"
+                      htmlFor="indiapost-brand-pin"
                       className="block font-semibold text-slate-700 mb-1.5"
                     >
                       4–6 Digit Security Passcode (PIN) *
                     </label>
                     <input
-                      id="xpeedo-brand-pin"
+                      id="indiapost-brand-pin"
                       type="password"
                       inputMode="numeric"
                       maxLength={6}
@@ -498,7 +522,7 @@ export default function XpeedoHomeLoginPage() {
                       autoFocus
                       value={brandPin}
                       onChange={(e) => setBrandPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      placeholder="Enter 4–6 digit brand PIN"
+                      placeholder="Enter 4–6 digit security PIN"
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg font-mono tracking-widest text-base tabular-nums text-slate-900 focus:outline-none focus:border-slate-900"
                     />
                   </div>
@@ -506,46 +530,69 @@ export default function XpeedoHomeLoginPage() {
                   <>
                     <div>
                       <label
-                        htmlFor="xpeedo-login-id"
+                        htmlFor="indiapost-login-id"
                         className="block font-semibold text-slate-700 mb-1.5"
                       >
                         {selectedRole === 'brand'
-                          ? 'Brand Login ID, Unique Code, Mobile, or Email *'
+                          ? 'Portal Login ID, Unique Code, Mobile, or Email *'
                           : selectedRole === 'partner'
-                          ? 'Partner Email, 10-Digit Mobile, or Brand Code *'
+                          ? 'Coordinator Email, 10-Digit Mobile, or Hub Code *'
                           : 'Employee ID, Official Email, or 10-Digit Mobile *'}
                       </label>
                       <input
-                        id="xpeedo-login-id"
+                        id="indiapost-login-id"
                         type="text"
                         required
                         value={identifier}
                         onChange={(e) => setIdentifier(e.target.value)}
                         placeholder={
                           selectedRole === 'admin'
-                            ? 'owner@xpokart.in or OWNER-01'
+                            ? 'Ektamahenmeena@gmail.com or MASTER-ADMIN-01'
                             : selectedRole === 'developer'
-                            ? 'dev@xpokart.in or DEV-01'
+                            ? 'DEV-01 or Ektamahenmeena@gmail.com'
                             : selectedRole === 'brand'
-                            ? 'BRD-INPOST-01 or brand login ID'
+                            ? 'BRD-INPOST-01 or office.incharge@indiapost-portal.in'
                             : selectedRole === 'partner'
-                            ? 'partner@brand.in or 10-digit mobile'
-                            : 'Employee ID (e.g. 50457421) or 10-digit mobile'
+                            ? 'coordinator@indiapost-portal.in or 10-digit mobile'
+                            : 'Employee ID (e.g. 50457421), 10-digit mobile, or email'
                         }
                         className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-mono focus:outline-none focus:border-slate-900"
                       />
                     </div>
 
+                    {/* Progressive Verified Name + Post/Beat Badge for Staff SSO */}
+                    {selectedRole === 'staff' && identifier.trim().length >= 3 && (
+                      <div className="p-3 rounded-lg border bg-slate-50 border-slate-200">
+                        {matchedStaffPreview ? (
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <div className="flex items-center gap-2 text-emerald-800 font-semibold">
+                              <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+                              <span>{matchedStaffPreview.name}</span>
+                            </div>
+                            <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 font-mono text-[11px]">
+                              {matchedStaffPreview.designationType || matchedStaffPreview.role} ·{' '}
+                              {matchedStaffPreview.subOffice || 'Dadabari S.O.'} ·{' '}
+                              {matchedStaffPreview.beat || 'Assigned Beat'}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-slate-600">
+                            Enter your exact Employee ID, registered mobile number, or official email to verify your post.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <div>
                       <label
-                        htmlFor="xpeedo-login-secret"
+                        htmlFor="indiapost-login-secret"
                         className="block font-semibold text-slate-700 mb-1.5"
                       >
                         {selectedRole === 'partner' ? 'Password or Workspace Passcode *' : 'Password *'}
                       </label>
                       <div className="relative">
                         <input
-                          id="xpeedo-login-secret"
+                          id="indiapost-login-secret"
                           type={showSecret ? 'text' : 'password'}
                           required
                           value={secret}
@@ -583,14 +630,14 @@ export default function XpeedoHomeLoginPage() {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="flex-1 py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                    className="flex-1 py-2.5 px-4 rounded-lg bg-[#991B1B] hover:bg-red-800 text-white font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
                   >
                     {pendingBrandProfileId ? <Lock size={15} /> : <KeyRound size={15} />}
                     <span>
                       {isSubmitting
                         ? 'Signing In...'
                         : pendingBrandProfileId
-                        ? 'Verify PIN & Open Brand Workspace'
+                        ? 'Verify PIN & Open India Post Portal'
                         : 'Sign In'}
                     </span>
                     <ArrowRight size={15} />
@@ -599,22 +646,15 @@ export default function XpeedoHomeLoginPage() {
               </form>
 
               <div className="pt-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
-                <div className="flex items-center gap-3">
-                  <Link to="/brand-login" className="hover:text-slate-900 font-medium whitespace-nowrap">
-                    Brand Owner Portal
-                  </Link>
-                  <span aria-hidden="true">·</span>
-                  <Link to="/partner/login" className="hover:text-slate-900 font-medium whitespace-nowrap">
-                    Partner Login
-                  </Link>
-                  <span aria-hidden="true">·</span>
-                  <Link to="/brand-access" className="hover:text-slate-900 font-medium whitespace-nowrap">
-                    Brand Staff Access
-                  </Link>
-                </div>
+                <Link
+                  to="/login"
+                  className="hover:text-slate-900 font-medium whitespace-nowrap"
+                >
+                  Open Staff Registration / Password Reset →
+                </Link>
                 <span className="font-mono text-slate-400">
                   <Building2 size={12} className="inline mr-1" />
-                  5-Staff Roster Active
+                  India Post · Kota Division &amp; Pan-India
                 </span>
               </div>
             </div>

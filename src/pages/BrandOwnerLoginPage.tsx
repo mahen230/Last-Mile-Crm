@@ -278,12 +278,6 @@ export default function BrandOwnerLoginPage() {
             <Link to="/staff-gateway" className="hover:text-white transition font-medium">
               Master Admin / Staff Gateway
             </Link>
-            <Link
-              to={activeContextBrand ? `/brand-access/${activeContextBrand.partnerSlug}` : '/brand-access'}
-              className="hover:text-white transition font-medium text-blue-300"
-            >
-              Staff &amp; Customer Portal
-            </Link>
             <Link to="/b2b-partner" className="hover:text-white transition font-medium">
               B2B Inquiry Desk
             </Link>
@@ -416,7 +410,7 @@ export default function BrandOwnerLoginPage() {
                         required
                         value={loginId}
                         onChange={(e) => setLoginId(e.target.value)}
-                        placeholder="e.g. inpost.owner@brand.xpeedo.in, BRD-INPOST-01, or +91 98..."
+                        placeholder="e.g. office.incharge@indiapost-portal.in, BRD-INPOST-01, or +91 98..."
                         className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 font-mono focus:outline-none focus:border-blue-600"
                       />
                     </div>
@@ -457,22 +451,6 @@ export default function BrandOwnerLoginPage() {
                       <ArrowRight size={15} />
                     </button>
 
-                    {activeContextBrand && (
-                      <div className="pt-2 flex flex-wrap items-center justify-center gap-4 text-center">
-                        <Link
-                          to={`/brand-access/${activeContextBrand.partnerSlug}`}
-                          className="text-[11px] font-semibold text-blue-700 hover:underline"
-                        >
-                          Staff &amp; Customer Portal →
-                        </Link>
-                        <Link
-                          to={`/partner/login/${activeContextBrand.partnerSlug}`}
-                          className="text-[11px] font-semibold text-slate-600 hover:text-slate-900 hover:underline"
-                        >
-                          Open Team / Partner Portal for {activeContextBrand.brandName} →
-                        </Link>
-                      </div>
-                    )}
                   </form>
                 ) : (
                   <form onSubmit={handleStep2Submit} className="space-y-4 text-xs">
@@ -638,7 +616,7 @@ export default function BrandOwnerLoginPage() {
                       type="text"
                       value={regCategory}
                       onChange={(e) => setRegCategory(e.target.value)}
-                      placeholder="e.g. EV Mobility, Retail, Logistics"
+                      placeholder="e.g. Handicrafts, Books, Bulk Dispatch, IPPB"
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900"
                     />
                   </div>

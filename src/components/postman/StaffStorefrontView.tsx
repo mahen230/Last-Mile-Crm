@@ -329,10 +329,10 @@ export default function StaffStorefrontView() {
 
             {storeType === 'BRAND_FRANCHISE' && (
               <div className="p-4 bg-indigo-50/70 border border-indigo-200 rounded-2xl space-y-3">
-                <label className="block text-xs font-bold text-indigo-900">Brand Franchise Name / Outlet Title</label>
+                <label className="block text-xs font-bold text-indigo-900">Bulk Customer / Institutional Partner Title</label>
                 <input
                   type="text"
-                  placeholder="e.g. Domino's Pizza Dadabari, Reliance Smart Bazaar"
+                  placeholder="e.g. Kota Study Material Hub, Kaithoon Handloom Collective"
                   value={brandName}
                   onChange={(e) => setBrandName(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-white border border-indigo-300 rounded-xl text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -656,7 +656,7 @@ export default function StaffStorefrontView() {
               },
               {
                 id: 'ORD-94819',
-                store: 'Domino\'s Pizza Dadabari',
+                store: 'Dadabari Surgical & Pharmacy Distributors',
                 customer: 'Dr. R. K. Mehta (Patel Nagar)',
                 amount: '₹899 (Express Priority)',
                 status: 'Delivered Successfully',
@@ -678,7 +678,7 @@ export default function StaffStorefrontView() {
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-mono font-bold text-slate-900">{ord.amount}</span>
                   <button
-                    onClick={() => alert(`Fulfillment action initiated for order ${ord.id} in ${currentBeat}.`)}
+                    onClick={() => setSuccessMessage(`Fulfillment action initiated for order ${ord.id} in ${currentBeat}.`)}
                     className="px-3.5 py-2 bg-red-700 hover:bg-red-800 text-white rounded-xl text-xs font-bold cursor-pointer transition shadow-xs"
                   >
                     Process Delivery
